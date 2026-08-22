@@ -1,0 +1,1 @@
+Correction visuelle : la petite flèche du menu du compte est maintenant visible à côté du nom d’utilisateur et ouvre le menu Messenger.
