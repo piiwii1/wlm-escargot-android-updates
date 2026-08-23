@@ -1,8 +1,7 @@
-Mise à jour 3.0.100 :
+Mise à jour 3.0.101 :
 
-- Mises à jour GitHub : ajout de retries automatiques courts quand une requête vers la Latest Release échoue temporairement.
-- Ajout d’un paramètre anti-cache sur les métadonnées `update.json` pour réduire le risque de recevoir une ancienne Latest Release depuis un cache/CDN.
-- La lecture directe `releases/latest/download/update.json` reste prioritaire, avec l’API GitHub en secours.
-- Clins d’œil : le délai d’attente du contenu P2P passe de 8 à 15 secondes avant d’abandonner l’auto-play, afin de mieux tolérer les connexions lentes.
-- File FIFO, rendu WLM 2009, lecture inline et watchdog des Winks sont conservés.
+- Mises à jour GitHub : retour au cœur de l'Updater des versions 3.0.93/3.0.94, dernier chemin validé en réel.
+- Une vérification est maintenant relancée à chaque vrai retour de l'application au premier plan, au lieu de pouvoir attendre jusqu'à 12 heures.
+- « Plus tard » continue de masquer la même version, mais une version plus récente peut être détectée au prochain retour dans l'application.
+- Toutes les améliorations des clins d'œil de la 3.0.100 sont conservées.
 - Package et signature de la branche 3.0 restent inchangés.
