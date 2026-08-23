@@ -1,1 +1,6 @@
-Correction visuelle : la petite flèche du menu du compte est maintenant visible à côté du nom d’utilisateur et ouvre le menu Messenger.
+Mise à jour 3.0.68 :
+
+- Lorsqu’une version plus récente existe, Windows Live vérifie GitHub à chaque démarrage réel de l’application et affiche automatiquement la fenêtre « Nouvelle mise à jour disponible ».
+- La fenêtre propose directement « Mettre à jour » ou « Plus tard ».
+- « Plus tard » reste temporisé pour éviter de réafficher la même fenêtre en boucle.
+- Correction de la petite flèche du menu à côté du nom d’utilisateur : elle utilise maintenant l’asset WLM forcé en blanc et conserve un espace réservé pour rester visible.
