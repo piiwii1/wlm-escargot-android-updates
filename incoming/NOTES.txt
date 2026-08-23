@@ -1,8 +1,6 @@
-Mise à jour 3.0.69 :
+Mise à jour 3.0.96 :
 
-- La petite flèche du menu du compte n’est plus placée à côté du nom/pseudo.
-- L’adresse e-mail est affichée sur sa propre ligne dans l’en-tête du compte.
-- La flèche WLM est maintenant placée directement à côté de l’adresse e-mail.
-- Cliquer sur l’adresse e-mail ou sur la flèche ouvre le menu du compte.
-- Le message personnel reste affiché sur une ligne séparée et reste éditable.
-- Le système de popup automatique « Nouvelle mise à jour disponible » au démarrage est conservé.
+- Clins d’œil : plusieurs envois identiques reçus à la suite sont maintenant conservés comme plusieurs événements distincts dans la file FIFO.
+- Le téléchargement P2P d’un même contenu reste unique : on évite les transferts inutiles sans perdre les occurrences envoyées.
+- Mises à jour GitHub : « Plus tard » ne bloque plus la détection d’une version plus récente publiée entre-temps.
+- Package et signature de la branche 3.0 restent inchangés.
