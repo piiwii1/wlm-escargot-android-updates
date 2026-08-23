@@ -1,12 +1,11 @@
-Mise à jour 3.0.117 :
+Mise à jour 3.0.118 :
 
-- Correctif prioritaire de fiabilité des messages Android ↔ Android.
-- Les messages texte sont maintenant envoyés séquentiellement afin d'éviter les envois concurrents et les pertes intermittentes.
-- Un NAK reçu pour un message texte déclenche une retransmission contrôlée au lieu d'être ignoré.
-- Les offres et réceptions de photos/documents affichent maintenant un texte explicite dans la conversation/historique et une notification Android.
-- Les notifications de fichiers fonctionnent également lorsque l'application/conversation est en arrière-plan.
-- Détection des demandes de contact renforcée pour les relations RL et PL.
-- Chemin de notification de demande d'ami doublé avec protection anti-double-son.
-- Fidélité visuelle volontairement inchangée dans cette version (~87 % globalement).
-- UpdateManager, UpdateApkProvider, package et certificat de signature restent inchangés.
-- versionName 3.0.117 / versionCode 4173.
+- Passe de fidélité WLM 2009 n°5 centrée sur le bas de la liste de contacts.
+- La zone « Quoi de neuf » réapparaît sous les contacts, juste avant la publicité, comme dans Windows Live Messenger 2009.
+- Le flux « Quoi de neuf » utilise les informations déjà reçues d’Escargot : message personnel, musique en cours et présence des contacts.
+- Navigation précédente/suivante ajoutée dans le flux et toucher l’activité ouvre directement la conversation correspondante.
+- La recherche Web basse a été rapprochée du rendu PC : fond bleu-gris, champ blanc fin et bouton loupe bleu intégré à droite.
+- Les correctifs 3.0.117 sur les messages Android ↔ Android, transferts et notifications de demandes d’amis sont intégralement conservés.
+- UpdateManager, UpdateApkProvider, MessengerNetwork, KeepAliveService et NotificationHelper sont strictement inchangés par rapport à 3.0.117.
+- Package et certificat de signature de la branche 3.0 restent identiques.
+- versionName 3.0.118 / versionCode 4174.
