@@ -1,15 +1,16 @@
-Mise à jour 3.0.120 :
+Mise à jour 3.0.121 :
 
-- Refonte complète de l’écriture manuscrite pour se rapprocher du vrai Windows Live Messenger 2009.
-- Le bouton stylet ne lance plus une fenêtre séparée : il transforme directement la zone de saisie de la conversation en surface de dessin.
-- Ajout d’une barre Ink intégrée avec stylo, épaisseur, couleur, papier et gomme.
-- Correction du protocole : la 3.0.119 mélangeait un GIF avec le type application/x-ms-ink, qui correspond au format ISF. La 3.0.120 utilise le mode GIF Ink annoncé par RendersGIF : Content-Type image/gif et corps préfixé par base64:.
-- La capacité RendersISF n’est plus annoncée tant qu’un vrai codec Microsoft Ink Serialized Format n’est pas implémenté.
-- Les gros dessins restent découpés en multi-paquets WLM avec Message-ID, Chunks et Chunk, puis réassemblés côté réception.
-- Nouvel encodeur GIF89a compact sans extensions, validé localement par décodage complet.
-- L’envoi conserve l’attente d’ACK et la retransmission contrôlée sur NAK/timeout.
-- Tous les correctifs 3.0.117 et 3.0.118 sur messages, transferts et notifications sont conservés.
-- La passe visuelle Options / pop-ups reste volontairement en attente pendant la stabilisation des fonctions.
+- Nouvelle passe prioritaire sur l’écriture manuscrite WLM 2009, centrée à la fois sur la fidélité et l’interopérabilité Android ↔ PC.
+- Correction des capacités MSNP : le client s’annonce désormais comme WLM 14 avec RendersGIF + chunking, sans RendersISF.
+- Encodeur GIF Ink réécrit pour se rapprocher du client officiel : GIF89a, palette globale 256 couleurs, transparence blanche à l’index 251 et compression LZW standard.
+- Les dessins sont recadrés et exportés sur une toile 199 × 65, dimensions observées sur un échantillon WLM 2009 réel.
+- La réception image/gif accepte maintenant les paramètres MIME supplémentaires éventuels du client PC.
+- Fallback PC → Android : une petite pièce jointe exactement nommée ink.gif et contenant un GIF valide est reconnue comme écriture manuscrite, afin de supporter les passerelles qui convertissent l’Ink natif en image.
+- Barre manuscrite rapprochée de WLM 2009 avec icônes dédiées Épaisseur / Couleur / Papier / Gomme et onglets stylet puis A.
+- Menu Gomme complété avec Petite gomme, Grosse gomme, Trait entier et Tout effacer ; le mode Trait entier est maintenant fonctionnel.
+- Les mécanismes multi-paquets, ACK et retransmission introduits précédemment sont conservés.
+- Aucun test physique Android ↔ WLM PC n’a été effectué dans l’environnement de build ; cette version corrige les incohérences client identifiées et doit maintenant être validée sur les vrais appareils.
+- Options / pop-ups restent volontairement en attente.
 - UpdateManager et UpdateApkProvider sont strictement inchangés.
 - Package et certificat de signature de la branche 3.0 restent identiques.
-- versionName 3.0.120 / versionCode 4176.
+- versionName 3.0.121 / versionCode 4177.
