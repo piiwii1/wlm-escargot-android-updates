@@ -1,12 +1,12 @@
-Mise à jour 3.0.116 :
+Mise à jour 3.0.117 :
 
-- Passe de fidélité WLM 2009 n°4 limitée à la barre de recherche et aux commandes Ajouter / Disposition de la liste de contacts.
-- Le champ de recherche reprend davantage l’apparence du client PC : bordure fine, marges plus compactes et loupe intégrée à droite.
-- Quand une recherche est saisie, la loupe est remplacée par une croix permettant d’effacer immédiatement la recherche, comme sur WLM 2009.
-- L’icône Contacts retrouve ses proportions natives au lieu d’être agrandie.
-- Le bouton Ajouter un contact est désormais plus plat, avec sa petite flèche de menu, au lieu du gros bouton arrondi Android.
-- Le bouton Disposition/Trier est lui aussi rapproché du style de la barre WLM et continue d’ouvrir les options existantes.
-- Les améliorations 3.0.113 à 3.0.115 sont conservées.
-- Réseau, transferts Android ↔ Android, conversations, P2P, Winks, reconnexion, UpdateManager et UpdateApkProvider sont strictement inchangés.
-- Package et certificat de signature de la branche 3.0 restent identiques.
-- versionName 3.0.116 / versionCode 4172.
+- Correctif prioritaire de fiabilité des messages Android ↔ Android.
+- Les messages texte sont maintenant envoyés séquentiellement afin d'éviter les envois concurrents et les pertes intermittentes.
+- Un NAK reçu pour un message texte déclenche une retransmission contrôlée au lieu d'être ignoré.
+- Les offres et réceptions de photos/documents affichent maintenant un texte explicite dans la conversation/historique et une notification Android.
+- Les notifications de fichiers fonctionnent également lorsque l'application/conversation est en arrière-plan.
+- Détection des demandes de contact renforcée pour les relations RL et PL.
+- Chemin de notification de demande d'ami doublé avec protection anti-double-son.
+- Fidélité visuelle volontairement inchangée dans cette version (~87 % globalement).
+- UpdateManager, UpdateApkProvider, package et certificat de signature restent inchangés.
+- versionName 3.0.117 / versionCode 4173.
