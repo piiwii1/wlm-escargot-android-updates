@@ -1,11 +1,14 @@
-Mise à jour 3.0.118 :
+Mise à jour 3.0.119 :
 
-- Passe de fidélité WLM 2009 n°5 centrée sur le bas de la liste de contacts.
-- La zone « Quoi de neuf » réapparaît sous les contacts, juste avant la publicité, comme dans Windows Live Messenger 2009.
-- Le flux « Quoi de neuf » utilise les informations déjà reçues d’Escargot : message personnel, musique en cours et présence des contacts.
-- Navigation précédente/suivante ajoutée dans le flux et toucher l’activité ouvre directement la conversation correspondante.
-- La recherche Web basse a été rapprochée du rendu PC : fond bleu-gris, champ blanc fin et bouton loupe bleu intégré à droite.
-- Les correctifs 3.0.117 sur les messages Android ↔ Android, transferts et notifications de demandes d’amis sont intégralement conservés.
-- UpdateManager, UpdateApkProvider, MessengerNetwork, KeepAliveService et NotificationHelper sont strictement inchangés par rapport à 3.0.117.
+- Correctif fonctionnel prioritaire de l’écriture manuscrite WLM (Ink).
+- L’envoi utilise désormais le type MIME historique application/x-ms-ink avec Content-Transfer-Encoding: base64, au lieu de traiter le dessin comme une image GIF ordinaire.
+- Les gros dessins sont découpés en messages multi-paquets avec Message-ID, Chunks et Chunk, puis réassemblés avant décodage côté réception.
+- Réception compatible avec application/x-ms-ink, image/gif; format=ink et l’ancien image/gif des builds Android précédentes.
+- Un dessin n’est plus affiché comme envoyé immédiatement après l’écriture sur la socket : l’application attend maintenant un ACK du switchboard.
+- Un NAK ou une absence d’ACK provoque jusqu’à deux retransmissions contrôlées avant de signaler l’échec.
+- Tests locaux réussis : assemblage MIME multi-paquets, aller-retour d’un Ink de 7200 octets en 9 fragments, et scénario NAK -> retransmission -> ACK.
+- La passe visuelle Options / pop-ups prévue est volontairement laissée en attente.
+- Tous les correctifs 3.0.117/3.0.118 sont conservés ; seul MessengerNetwork.java change dans le code applicatif.
+- UpdateManager et UpdateApkProvider sont strictement inchangés.
 - Package et certificat de signature de la branche 3.0 restent identiques.
-- versionName 3.0.118 / versionCode 4174.
+- versionName 3.0.119 / versionCode 4175.
