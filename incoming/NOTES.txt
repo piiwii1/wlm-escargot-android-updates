@@ -1,11 +1,13 @@
-Mise à jour 3.0.114 :
+Mise à jour 3.0.115 :
 
-- Passe de fidélité WLM 2009 n°2 limitée à la partie haute de la liste de contacts.
-- Zone profil légèrement plus compacte pour mieux retrouver les proportions du client PC.
-- Statut affiché au format « (Disponible) » avec sa flèche, plus proche de Windows Live Messenger 2009.
-- La petite flèche du menu du compte est maintenant réellement collée à l’adresse e-mail au lieu d’être repoussée à droite de la zone.
-- Barre d’actions supérieure resserrée et utilisation des petites icônes de référence WLM pour Courrier, Couleurs et Options.
-- Espacements et séparateurs du haut de la fenêtre affinés.
-- Les lignes de contacts ne sont pas encore retouchées dans cette version.
+- Passe de fidélité WLM 2009 n°3 limitée aux lignes de contacts.
+- En-tête Favoris rapproché du client PC avec compteur contacts en ligne / total.
+- L’étoile reste dans l’en-tête Favoris et n’est plus répétée devant chaque pseudo.
+- Lignes de contacts légèrement plus compactes et espacements affinés.
+- Les avatars conservent leur cadre de statut et gagnent le petit voyant de présence WLM superposé.
+- Les contacts sans avatar utilisent le voyant de statut adapté : disponible, occupé, absent ou hors ligne.
+- Surbrillance discrète de la ligne lors de l’appui, proche de la sélection WLM.
+- Le haut de la liste de contacts amélioré en 3.0.114 est conservé.
 - Réseau, transferts Android ↔ Android, conversations, P2P, Winks, reconnexion et UpdateManager sont strictement inchangés.
-- Package et certificat de signature de la branche 3.0 restent identiques.
+- Package, version de signature et certificat de la branche 3.0 restent identiques.
+- versionName 3.0.115 / versionCode 4171.
