@@ -1,9 +1,9 @@
-Mise à jour 3.0.105 :
+Mise à jour 3.0.106 :
 
-- Transferts fichiers/images Android ↔ Android : le writer P2P du switchboard respecte maintenant strictement une fenêtre maximale de 12 paquets en attente d’ACK/NAK serveur.
-- L’ancien contournement qui dépassait cette fenêtre après 2,2 secondes d’ACK lents est supprimé : l’envoi se met réellement en pause au lieu de surcharger le switchboard.
-- Un NAK serveur n’est plus traité comme un ACK : le paquet P2P concerné est retransmis automatiquement jusqu’à 3 fois.
-- La fermeture de conversation nettoie explicitement la file P2P et les paquets encore en vol.
-- Le contexte WLM 574/v2 de la 3.0.103 et le BYE MSNSLP de la 3.0.104 sont conservés.
-- Le système de mise à jour revalidé en 3.0.101 et les clins d’œil sont strictement inchangés.
+- Transferts fichiers/images Android ↔ Android : le BYE MSNSLP de fin de transfert réutilise maintenant la branche du transfert au lieu d'en générer une nouvelle.
+- Le BYE contient désormais explicitement `SessionID`, conformément au format WLM/MSNSLP attendu.
+- Si l'ACK final P2Pv1 se perd mais que le BYE du destinataire arrive, Android considère maintenant ce BYE comme une confirmation positive de réception complète au lieu d'afficher un faux échec 60 secondes plus tard.
+- Les attentes d'ACK final associées sont nettoyées lorsqu'un BYE confirme déjà la réception, afin d'éviter les doublons de succès/échec.
+- La fenêtre switchboard 12 paquets + retransmission NAK de la 3.0.105 est conservée.
+- Le système de mise à jour revalidé en 3.0.101 et les clins d'œil sont strictement inchangés.
 - Package et signature de la branche 3.0 restent inchangés.
