@@ -1,9 +1,10 @@
-Mise à jour 3.0.106 :
+Mise à jour 3.0.107 :
 
-- Transferts fichiers/images Android ↔ Android : le BYE MSNSLP de fin de transfert réutilise maintenant la branche du transfert au lieu d'en générer une nouvelle.
-- Le BYE contient désormais explicitement `SessionID`, conformément au format WLM/MSNSLP attendu.
-- Si l'ACK final P2Pv1 se perd mais que le BYE du destinataire arrive, Android considère maintenant ce BYE comme une confirmation positive de réception complète au lieu d'afficher un faux échec 60 secondes plus tard.
-- Les attentes d'ACK final associées sont nettoyées lorsqu'un BYE confirme déjà la réception, afin d'éviter les doublons de succès/échec.
-- La fenêtre switchboard 12 paquets + retransmission NAK de la 3.0.105 est conservée.
-- Le système de mise à jour revalidé en 3.0.101 et les clins d'œil sont strictement inchangés.
+- Transferts multiples Android ↔ Android : chaque fichier est maintenant suivi par son SessionID P2P jusqu’à l’interface au lieu d’être identifié seulement par son nom.
+- Deux fichiers portant exactement le même nom peuvent désormais avoir chacun leur propre carte de progression, état, succès ou échec sans s’écraser.
+- Les offres entrantes ne sont plus limitées à une seule par conversation : elles sont conservées séparément et présentées l’une après l’autre.
+- Les callbacks offre/réception/progression/état/succès/échec transportent maintenant l’identifiant du transfert afin d’éviter les collisions entre transferts simultanés.
+- Le format WLM 574/v2, le BYE MSNSLP conforme et la régulation ACK/NAK des versions 3.0.103 à 3.0.106 sont conservés.
+- Le système de mise à jour revalidé en 3.0.101 est strictement inchangé et continue de vérifier automatiquement les nouvelles versions.
+- Les clins d’œil sont strictement inchangés.
 - Package et signature de la branche 3.0 restent inchangés.
