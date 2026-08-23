@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'incoming/WLM-Escargot-Android.apk'
-      - 'incoming/NOTES.txt'
   workflow_dispatch:
 
 permissions:
