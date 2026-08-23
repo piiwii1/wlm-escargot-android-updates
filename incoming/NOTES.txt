@@ -1,6 +1,7 @@
-Mise à jour 3.0.96 :
+Mise à jour 3.0.97 :
 
-- Clins d’œil : plusieurs envois identiques reçus à la suite sont maintenant conservés comme plusieurs événements distincts dans la file FIFO.
-- Le téléchargement P2P d’un même contenu reste unique : on évite les transferts inutiles sans perdre les occurrences envoyées.
-- Mises à jour GitHub : « Plus tard » ne bloque plus la détection d’une version plus récente publiée entre-temps.
-- Package et signature de la branche 3.0 restent inchangés.
+- Clins d’œil : la lecture automatique reste maintenant limitée à la zone de conversation, sans recouvrir toute l’application.
+- Le clic sur « Jouer » rejoint la file FIFO au lieu d’annuler les autres clins d’œil en attente.
+- Le transcript des clins d’œil est rapproché de WLM 2009 : libellé compact, miniature sous le texte, puis lien bleu « Jouer \"Nom\" ».
+- Les écrans de chargement techniques restent masqués pendant l’auto-play afin de conserver un comportement plus naturel.
+- Package, version de mise à jour et signature de la branche 3.0 restent compatibles.
