@@ -1,11 +1,11 @@
-Mise à jour 3.0.112 :
+Mise à jour 3.0.114 :
 
-- Transferts fichiers/images Android ↔ Android : les sessions entrantes terminées/refusées/annulées sont maintenant conservées temporairement comme SessionID retirés afin d’empêcher leur résurrection par des paquets tardifs.
-- Un fragment fichier P2Pv1 ou P2Pv2 n’est plus assemblé s’il n’appartient pas à une session entrante active et déjà acceptée.
-- Les données qui arrivent avant l’acceptation explicite du fichier sont ignorées au lieu de pouvoir détruire l’offre ou créer un état incohérent.
-- Un INVITE fichier dupliqué ou arrivé en retard avec un SessionID déjà terminé est refusé proprement au lieu de recréer une nouvelle carte/offre.
-- Les SessionID retirés expirent automatiquement après quelques minutes et le nettoyage reste ciblé afin de préserver les transferts simultanés valides.
-- Tous les correctifs 3.0.103 à 3.0.111 sont conservés : contexte WLM 574/v2, BYE conforme, régulation ACK/NAK, transferts multiples, annulation, refus/timeouts et purge des assemblages partiels.
-- Le système de mise à jour automatique revalidé en 3.0.101 est strictement inchangé, byte-for-byte, et continue de vérifier les nouvelles versions tout seul.
-- MainActivity, MessengerNetwork, UpdateManager, WlmWinkPlayer, KeepAlive et Siren7 sont strictement inchangés.
-- Package et signature de la branche 3.0 restent inchangés.
+- Passe de fidélité WLM 2009 n°2 limitée à la partie haute de la liste de contacts.
+- Zone profil légèrement plus compacte pour mieux retrouver les proportions du client PC.
+- Statut affiché au format « (Disponible) » avec sa flèche, plus proche de Windows Live Messenger 2009.
+- La petite flèche du menu du compte est maintenant réellement collée à l’adresse e-mail au lieu d’être repoussée à droite de la zone.
+- Barre d’actions supérieure resserrée et utilisation des petites icônes de référence WLM pour Courrier, Couleurs et Options.
+- Espacements et séparateurs du haut de la fenêtre affinés.
+- Les lignes de contacts ne sont pas encore retouchées dans cette version.
+- Réseau, transferts Android ↔ Android, conversations, P2P, Winks, reconnexion et UpdateManager sont strictement inchangés.
+- Package et certificat de signature de la branche 3.0 restent identiques.
