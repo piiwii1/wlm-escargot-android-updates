@@ -1,7 +1,8 @@
-Mise à jour 3.0.98 :
+Mise à jour 3.0.99 :
 
-- Clins d’œil : ajout d’un watchdog global de 18,5 s pour qu’un Wink bloqué ou un moteur Ruffle défaillant ne puisse plus retenir toute la file.
-- À l’expiration du watchdog, le lecteur est fermé proprement et le clin d’œil suivant démarre automatiquement.
-- Les échecs pendant l’auto-play sont maintenant totalement silencieux : aucun Toast ni message technique ne vient recouvrir la conversation.
-- La file FIFO, les Winks identiques successifs, la relecture via « Jouer » et le rendu compact proche de WLM 2009 sont conservés.
+- Mise à jour GitHub : la détection ne dépend plus en priorité de l’API publique GitHub.
+- L’application lit maintenant directement `releases/latest/download/update.json`, puis télécharge `WLM-Escargot-Android.apk` depuis la Latest Release.
+- L’ancienne API `api.github.com/.../releases/latest` reste disponible en secours pour compatibilité.
+- Les requêtes désactivent explicitement les caches HTTP afin d’éviter de conserver une ancienne Latest Release.
+- Toutes les améliorations des clins d’œil de la 3.0.98 sont conservées.
 - Package et signature de la branche 3.0 restent inchangés.
