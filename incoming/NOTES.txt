@@ -1,8 +1,8 @@
-Mise à jour 3.0.99 :
+Mise à jour 3.0.100 :
 
-- Mise à jour GitHub : la détection ne dépend plus en priorité de l’API publique GitHub.
-- L’application lit maintenant directement `releases/latest/download/update.json`, puis télécharge `WLM-Escargot-Android.apk` depuis la Latest Release.
-- L’ancienne API `api.github.com/.../releases/latest` reste disponible en secours pour compatibilité.
-- Les requêtes désactivent explicitement les caches HTTP afin d’éviter de conserver une ancienne Latest Release.
-- Toutes les améliorations des clins d’œil de la 3.0.98 sont conservées.
+- Mises à jour GitHub : ajout de retries automatiques courts quand une requête vers la Latest Release échoue temporairement.
+- Ajout d’un paramètre anti-cache sur les métadonnées `update.json` pour réduire le risque de recevoir une ancienne Latest Release depuis un cache/CDN.
+- La lecture directe `releases/latest/download/update.json` reste prioritaire, avec l’API GitHub en secours.
+- Clins d’œil : le délai d’attente du contenu P2P passe de 8 à 15 secondes avant d’abandonner l’auto-play, afin de mieux tolérer les connexions lentes.
+- File FIFO, rendu WLM 2009, lecture inline et watchdog des Winks sont conservés.
 - Package et signature de la branche 3.0 restent inchangés.
