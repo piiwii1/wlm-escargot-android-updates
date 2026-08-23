@@ -1,7 +1,7 @@
-Mise à jour 3.0.97 :
+Mise à jour 3.0.98 :
 
-- Clins d’œil : la lecture automatique reste maintenant limitée à la zone de conversation, sans recouvrir toute l’application.
-- Le clic sur « Jouer » rejoint la file FIFO au lieu d’annuler les autres clins d’œil en attente.
-- Le transcript des clins d’œil est rapproché de WLM 2009 : libellé compact, miniature sous le texte, puis lien bleu « Jouer \"Nom\" ».
-- Les écrans de chargement techniques restent masqués pendant l’auto-play afin de conserver un comportement plus naturel.
-- Package, version de mise à jour et signature de la branche 3.0 restent compatibles.
+- Clins d’œil : ajout d’un watchdog global de 18,5 s pour qu’un Wink bloqué ou un moteur Ruffle défaillant ne puisse plus retenir toute la file.
+- À l’expiration du watchdog, le lecteur est fermé proprement et le clin d’œil suivant démarre automatiquement.
+- Les échecs pendant l’auto-play sont maintenant totalement silencieux : aucun Toast ni message technique ne vient recouvrir la conversation.
+- La file FIFO, les Winks identiques successifs, la relecture via « Jouer » et le rendu compact proche de WLM 2009 sont conservés.
+- Package et signature de la branche 3.0 restent inchangés.
