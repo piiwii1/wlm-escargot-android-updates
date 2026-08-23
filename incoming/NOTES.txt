@@ -1,14 +1,15 @@
-Mise à jour 3.0.119 :
+Mise à jour 3.0.120 :
 
-- Correctif fonctionnel prioritaire de l’écriture manuscrite WLM (Ink).
-- L’envoi utilise désormais le type MIME historique application/x-ms-ink avec Content-Transfer-Encoding: base64, au lieu de traiter le dessin comme une image GIF ordinaire.
-- Les gros dessins sont découpés en messages multi-paquets avec Message-ID, Chunks et Chunk, puis réassemblés avant décodage côté réception.
-- Réception compatible avec application/x-ms-ink, image/gif; format=ink et l’ancien image/gif des builds Android précédentes.
-- Un dessin n’est plus affiché comme envoyé immédiatement après l’écriture sur la socket : l’application attend maintenant un ACK du switchboard.
-- Un NAK ou une absence d’ACK provoque jusqu’à deux retransmissions contrôlées avant de signaler l’échec.
-- Tests locaux réussis : assemblage MIME multi-paquets, aller-retour d’un Ink de 7200 octets en 9 fragments, et scénario NAK -> retransmission -> ACK.
-- La passe visuelle Options / pop-ups prévue est volontairement laissée en attente.
-- Tous les correctifs 3.0.117/3.0.118 sont conservés ; seul MessengerNetwork.java change dans le code applicatif.
+- Refonte complète de l’écriture manuscrite pour se rapprocher du vrai Windows Live Messenger 2009.
+- Le bouton stylet ne lance plus une fenêtre séparée : il transforme directement la zone de saisie de la conversation en surface de dessin.
+- Ajout d’une barre Ink intégrée avec stylo, épaisseur, couleur, papier et gomme.
+- Correction du protocole : la 3.0.119 mélangeait un GIF avec le type application/x-ms-ink, qui correspond au format ISF. La 3.0.120 utilise le mode GIF Ink annoncé par RendersGIF : Content-Type image/gif et corps préfixé par base64:.
+- La capacité RendersISF n’est plus annoncée tant qu’un vrai codec Microsoft Ink Serialized Format n’est pas implémenté.
+- Les gros dessins restent découpés en multi-paquets WLM avec Message-ID, Chunks et Chunk, puis réassemblés côté réception.
+- Nouvel encodeur GIF89a compact sans extensions, validé localement par décodage complet.
+- L’envoi conserve l’attente d’ACK et la retransmission contrôlée sur NAK/timeout.
+- Tous les correctifs 3.0.117 et 3.0.118 sur messages, transferts et notifications sont conservés.
+- La passe visuelle Options / pop-ups reste volontairement en attente pendant la stabilisation des fonctions.
 - UpdateManager et UpdateApkProvider sont strictement inchangés.
 - Package et certificat de signature de la branche 3.0 restent identiques.
-- versionName 3.0.119 / versionCode 4175.
+- versionName 3.0.120 / versionCode 4176.
