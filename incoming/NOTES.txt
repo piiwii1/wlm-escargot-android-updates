@@ -1,10 +1,11 @@
-Mise à jour 3.0.108 :
+Mise à jour 3.0.109 :
 
-- Transferts fichiers/images Android ↔ Android : fermeture explicite du moteur P2P quand une conversation est réellement fermée.
-- Tous les timers P2P encore actifs sont annulés immédiatement afin d’éviter les faux timeouts 60/90/120 secondes après une reconnexion.
-- Les sessions de fichiers entrantes/sortantes, ACK en attente, assemblages et états de progression sont nettoyés ensemble au lieu de survivre à l’ancienne conversation.
-- Un transfert interrompu par une vraie fermeture de conversation est signalé une seule fois comme interrompu, puis ne peut plus contaminer la session suivante.
-- Les transferts multiples par SessionID de la 3.0.107 sont conservés.
+- Transferts fichiers/images Android ↔ Android : ajout d’une vraie annulation utilisateur des transferts sortants depuis la carte WLM avec un lien « Annuler ».
+- L’annulation ferme proprement la session MSNSLP du fichier avec un BYE contenant le SessionID, au lieu de simplement masquer l’état dans l’interface.
+- Les fragments P2Pv1 du transfert encore en attente dans la file switchboard sont supprimés afin qu’un envoi annulé ne continue pas à partir en arrière-plan.
+- Le destinataire reconnaît le BYE d’annulation sur sa session entrante et ferme immédiatement son offre/transfert au lieu d’attendre un timeout.
+- Les cartes locales distinguent maintenant une annulation d’un véritable échec réseau.
+- Les transferts multiples par SessionID, le format WLM 574/v2, le BYE de réception et la régulation ACK/NAK des versions précédentes sont conservés.
 - Le système de mise à jour automatique revalidé en 3.0.101 est strictement inchangé, byte-for-byte, et continue de vérifier les nouvelles versions tout seul.
-- Les clins d’œil et l’interface générale sont strictement inchangés.
+- Les clins d’œil sont strictement inchangés.
 - Package et signature de la branche 3.0 restent inchangés.
