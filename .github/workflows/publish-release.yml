@@ -4,85 +4,132 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'incoming/WLM-Escargot-Android.apk'
+      - 'incoming/*.apk'
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: wlm-release
+  cancel-in-progress: false
+
 jobs:
   publish:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Vérifier que l'APK est présente
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f incoming/WLM-Escargot-Android.apk || { echo 'APK absente'; exit 1; }
-
-      - name: Lire et valider l'APK
+      - name: Choisir automatiquement l'APK la plus récente
         id: apk
         shell: bash
         run: |
           set -euo pipefail
-          APK='incoming/WLM-Escargot-Android.apk'
-          python3 tools/read_apk_info.py "$APK" > apk-info.json
           python3 - <<'PY'
-          import json, os
-          d=json.load(open('apk-info.json',encoding='utf-8'))
-          expected='ch.piiwii.escargot.test301c'
-          if d.get('package') != expected:
-              raise SystemExit(f"Package invalide: {d.get('package')} != {expected}")
-          if int(d.get('versionCode',0)) <= 0 or not d.get('versionName'):
-              raise SystemExit('Version APK invalide')
-          if 'android.permission.REQUEST_INSTALL_PACKAGES' not in d.get('permissions',[]):
-              raise SystemExit('Permission REQUEST_INSTALL_PACKAGES absente')
-          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write(f"version_code={d['versionCode']}\n")
-              f.write(f"version_name={d['versionName']}\n")
+          import glob, json, os, subprocess
+
+          expected = 'ch.piiwii.escargot.test301c'
+          candidates = []
+          for apk in glob.glob('incoming/*.apk'):
+              try:
+                  raw = subprocess.check_output(['python3', 'tools/read_apk_info.py', apk], text=True)
+                  info = json.loads(raw)
+              except Exception as exc:
+                  print(f'APK ignorée {apk}: {exc}')
+                  continue
+              if info.get('package') != expected:
+                  print(f'APK ignorée {apk}: mauvais package {info.get("package")}')
+                  continue
+              try:
+                  version_code = int(info.get('versionCode', 0))
+              except Exception:
+                  version_code = 0
+              version_name = str(info.get('versionName') or '').strip()
+              if version_code > 0 and version_name:
+                  candidates.append((version_code, apk, info))
+
+          if not candidates:
+              raise SystemExit('Aucune APK WLM valide trouvée dans incoming/')
+
+          candidates.sort(key=lambda x: x[0], reverse=True)
+          version_code, apk, info = candidates[0]
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+              f.write(f'apk_path={apk}\n')
+              f.write(f'version_code={version_code}\n')
+              f.write(f'version_name={info["versionName"]}\n')
+
+          print(f'APK sélectionnée: {apk} — {info["versionName"]} ({version_code})')
           PY
 
       - name: Préparer les métadonnées
         id: meta
         shell: bash
+        env:
+          APK_PATH: ${{ steps.apk.outputs.apk_path }}
+          VERSION_NAME: ${{ steps.apk.outputs.version_name }}
+          VERSION_CODE: ${{ steps.apk.outputs.version_code }}
         run: |
           set -euo pipefail
-          APK='incoming/WLM-Escargot-Android.apk'
-          SHA="$(sha256sum "$APK" | awk '{print $1}')"
-          cp "$APK" WLM-Escargot-Android.apk
+          cp "$APK_PATH" WLM-Escargot-Android.apk
+          SHA="$(sha256sum WLM-Escargot-Android.apk | awk '{print $1}')"
           printf '%s  %s\n' "$SHA" 'WLM-Escargot-Android.apk' > SHA256.txt
+
+          NOTES='Mise à jour Windows Live.'
+          if [ -f incoming/NOTES.txt ]; then
+            NOTES="$(cat incoming/NOTES.txt)"
+          fi
+          printf '%s\n' "$NOTES" > RELEASE_NOTES.txt
+
           python3 - <<'PY'
-          import hashlib, json
-          info=json.load(open('apk-info.json',encoding='utf-8'))
-          notes=open('incoming/NOTES.txt',encoding='utf-8').read().strip()
-          sha=hashlib.sha256(open('incoming/WLM-Escargot-Android.apk','rb').read()).hexdigest()
-          out={
-            'versionCode': int(info['versionCode']),
-            'versionName': info['versionName'],
+          import hashlib, json, os
+          notes = open('RELEASE_NOTES.txt', encoding='utf-8').read().strip()
+          sha = hashlib.sha256(open('WLM-Escargot-Android.apk', 'rb').read()).hexdigest()
+          out = {
+            'versionCode': int(os.environ['VERSION_CODE']),
+            'versionName': os.environ['VERSION_NAME'],
             'apk': 'WLM-Escargot-Android.apk',
             'sha256': sha,
-            'notes': notes
+            'notes': notes,
           }
-          json.dump(out,open('update.json','w',encoding='utf-8'),ensure_ascii=False,indent=2)
+          json.dump(out, open('update.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
           PY
-          echo "tag=v${{ steps.apk.outputs.version_name }}" >> "$GITHUB_OUTPUT"
 
-      - name: Créer ou mettre à jour la Release
+          echo "tag=v${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Créer ou mettre à jour la Release et la marquer Latest
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.meta.outputs.tag }}
+          VERSION_NAME: ${{ steps.apk.outputs.version_name }}
         shell: bash
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" WLM-Escargot-Android.apk update.json SHA256.txt --clobber
-            gh release edit "$TAG" --title "Windows Live ${{ steps.apk.outputs.version_name }}" --notes-file incoming/NOTES.txt
+            gh release edit "$TAG" --title "Windows Live ${VERSION_NAME}" --notes-file RELEASE_NOTES.txt --latest
           else
             gh release create "$TAG" WLM-Escargot-Android.apk update.json SHA256.txt \
-              --title "Windows Live ${{ steps.apk.outputs.version_name }}" \
-              --notes-file incoming/NOTES.txt \
+              --title "Windows Live ${VERSION_NAME}" \
+              --notes-file RELEASE_NOTES.txt \
               --latest
+          fi
+
+      - name: Remplacer automatiquement l'APK courante dans incoming
+        shell: bash
+        env:
+          APK_PATH: ${{ steps.apk.outputs.apk_path }}
+        run: |
+          set -euo pipefail
+          cp "$APK_PATH" incoming/WLM-Escargot-Android.apk
+          find incoming -maxdepth 1 -type f -name '*.apk' ! -name 'WLM-Escargot-Android.apk' -delete
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A incoming
+          if ! git diff --cached --quiet; then
+            git commit -m 'Mettre à jour automatiquement APK courante [skip release]'
+            git push
           fi
