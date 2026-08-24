@@ -1,11 +1,12 @@
-Mise à jour 3.0.138 :
+Mise à jour 3.0.139 :
 
-- Reprise de la fidélité visuelle de la fenêtre de conversation à partir de la capture WLM PC exacte fournie avec le projet.
-- La barre d’actions conserve les icônes WLM de référence mais avec des proportions plus compactes, plus proches du client PC.
-- Le sous-titre de la conversation peut maintenant afficher le message personnel ou média courant avant l’adresse du contact, comme sur Windows Live Messenger.
-- La poignée latérale des images perso est plus fine et les petites flèches sous les avatars sont replacées vers la droite.
-- Le libellé technique « Conversation active » n’est plus affiché en permanence ; les états de reconnexion et d’erreur restent visibles.
+- Nouvelle passe de fidélité Windows Live Messenger 2009 sur les menus, dialogues et Options.
+- Les menus sont plus compacts et proches du client PC : lignes plus fines, séparateurs, coches dans la marge gauche et flèches de sous-menu alignées à droite.
+- Les dialogues secondaires ont une barre de titre, un pied de fenêtre et des boutons plus proches du style Windows/WLM et moins Android.
+- Les listes de choix n'utilisent plus de grosses cartes bordées.
+- Outils > Options… ouvre maintenant une vraie fenêtre Options avec navigation latérale : Personnel, Disposition, Connexion, Messages, Alertes, Sons, Transfert de fichiers, Confidentialité, Sécurité et Application Android.
+- Les réglages existants sont réutilisés sans modifier le moteur réseau.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.138 / versionCode 4194.
-- Fidélité WLM PC estimée : ~90 % global, ~91 % pour la conversation.
+- versionName 3.0.139 / versionCode 4195.
+- Fidélité WLM PC estimée : ~91 % global, ~82 % pour Options / pop-ups.
