@@ -1,0 +1,1 @@
+StreamRadar 0.19.0 public-runner build payload. Source base: exact StreamRadar 0.18.0 build artifact. Patch: 0.19.0 visual identity + approved app icon. Temporary build-only files; do not merge into release channel unless intentionally needed.
