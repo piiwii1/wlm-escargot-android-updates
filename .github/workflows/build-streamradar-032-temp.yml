@@ -1,4 +1,4 @@
-name: Build StreamRadar 0.33.0 signed
+name: Build StreamRadar 0.33.0 installable side-by-side
 
 on:
   pull_request:
@@ -49,7 +49,7 @@ jobs:
           unzip -q /tmp/streamradar-src/android.zip -d /tmp/streamradar-src
           test -f /tmp/streamradar-src/android/app/build.gradle.kts
 
-      - name: Appliquer StreamRadar 0.33.0
+      - name: Appliquer StreamRadar 0.33.0 et nouveau package
         shell: bash
         run: |
           set -euo pipefail
@@ -57,8 +57,12 @@ jobs:
           cd /tmp/streamradar-src
           patch -p1 --dry-run < /tmp/streamradar033.patch
           patch -p1 < /tmp/streamradar033.patch
+          sed -i 's/applicationId = "ch.piiwii.streamradar"/applicationId = "ch.piiwii.streamradar2"/' android/app/build.gradle.kts
+          sed -i 's/android:label="StreamRadar"/android:label="StreamRadar 0.33"/' android/app/src/main/AndroidManifest.xml
+          grep -q 'applicationId = "ch.piiwii.streamradar2"' android/app/build.gradle.kts
           grep -q 'versionName = "0.33.0"' android/app/build.gradle.kts
           grep -q 'versionCode = 33' android/app/build.gradle.kts
+          grep -q 'android:label="StreamRadar 0.33"' android/app/src/main/AndroidManifest.xml
 
       - name: Compiler release
         working-directory: /tmp/streamradar-src/android
@@ -71,7 +75,7 @@ jobs:
             app/build/outputs/apk/release/app-release-unsigned.apk \
             /tmp/StreamRadar-0.33.0-aligned.apk
 
-      - name: Récupérer la clé exacte de StreamRadar 0.32.0
+      - name: Récupérer la clé StreamRadar nouvelle génération
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,7 +92,7 @@ jobs:
           test -f /tmp/streamradar-signing/StreamRadar-release.jks
           test -f /tmp/streamradar-signing/SIGNING.txt
 
-      - name: Signer réellement en V2 + V3 avec le certificat 0.32.0
+      - name: Signer V2 + V3 et vérifier package
         shell: bash
         run: |
           set -euo pipefail
@@ -106,21 +110,23 @@ jobs:
             --v1-signing-enabled false \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
-            --out /tmp/StreamRadar-0.33.0.apk \
+            --out /tmp/StreamRadar-0.33.0-INSTALLABLE.apk \
             /tmp/StreamRadar-0.33.0-aligned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs /tmp/StreamRadar-0.33.0.apk | tee /tmp/verify.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs /tmp/StreamRadar-0.33.0-INSTALLABLE.apk | tee /tmp/verify.txt
           grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' /tmp/verify.txt
           grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' /tmp/verify.txt
-          grep -qi 'Signer #1 certificate SHA-256 digest: dd7ba53a3fe59e22b8dac20251711929dd0cbc9e0cc211f1c1cac8499aca4bec' /tmp/verify.txt
-          sha256sum /tmp/StreamRadar-0.33.0.apk > /tmp/StreamRadar-0.33.0.apk.sha256
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/StreamRadar-0.33.0-INSTALLABLE.apk | head -n 3 | tee /tmp/package.txt
+          grep -q "package: name='ch.piiwii.streamradar2' versionCode='33' versionName='0.33.0'" /tmp/package.txt
+          sha256sum /tmp/StreamRadar-0.33.0-INSTALLABLE.apk > /tmp/StreamRadar-0.33.0-INSTALLABLE.apk.sha256
 
-      - name: Publier APK signée
+      - name: Publier APK réellement installable
         uses: actions/upload-artifact@v4
         with:
-          name: StreamRadar-0.33.0-SIGNED-V2-V3
+          name: StreamRadar-0.33.0-INSTALLABLE-SIDEBYSIDE
           path: |
-            /tmp/StreamRadar-0.33.0.apk
-            /tmp/StreamRadar-0.33.0.apk.sha256
+            /tmp/StreamRadar-0.33.0-INSTALLABLE.apk
+            /tmp/StreamRadar-0.33.0-INSTALLABLE.apk.sha256
             /tmp/verify.txt
+            /tmp/package.txt
           if-no-files-found: error
           retention-days: 1
