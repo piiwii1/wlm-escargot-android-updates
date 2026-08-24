@@ -1,13 +1,13 @@
-Mise à jour 3.0.125 :
+Mise à jour 3.0.126 :
 
-- Correctif ciblé écriture manuscrite après retour réel : Android → PC commence à fonctionner, PC → Android restait absent et des taps répétés pouvaient envoyer plusieurs fois le même dessin.
-- Réception PC → Android : ajout du bit de capacité RendersISF (0x08). Les capacités annoncées passent de 0xA63CC024 à 0xA63CC02C.
-- Le client Android annonce donc désormais RendersGIF + RendersISF + chunking, puisque son décodeur ISF est maintenant disponible.
-- Réception Ink rendue tolérante : le contenu réel est détecté comme ISF ou GIF même si le MIME image/gif / application/x-ms-ink est inversé ou réécrit par une passerelle.
-- Fallback supplémentaire : un payload Ink reconnaissable est détecté même si son Content-Type est atypique.
-- Anti-double envoi : verrou dans l’interface ET dans la session réseau. Plusieurs taps rapides ne peuvent plus lancer plusieurs envois Ink simultanés.
-- Test local du décodeur avec un paquet application/x-ms-ink capturé depuis WLM : 248 octets, 5 traits, 176 points décodés.
-- Le format Android → PC de la 3.0.124 (Fortified GIF + ISF) est conservé sans modification.
+- Correctif ciblé de l’écriture manuscrite WLM PC → Android.
+- Prise en charge du transport Ink MSNP2P utilisé par WLM en conversation 1-à-1 : SessionID 64 / Footer-AppID 3.
+- Réassemblage P2Pv1 puis décodage de l’enveloppe UTF-16LE application/x-ms-ink + base64:ISF.
+- Chemin P2Pv2 tolérant ajouté pour les conversations qui négocient P2Pv2.
+- Le flux ISF reçu est maintenant remis au codec Ink puis au callback de la conversation Android.
+- Le diagnostic écriture manuscrite inclut désormais la trace P2P.
+- Le chemin Android → PC Fortified GIF + ISF reste inchangé.
+- L’anti-double-envoi de 3.0.125 reste actif.
 - UpdateManager et UpdateApkProvider restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.125 / versionCode 4181.
+- versionName 3.0.126 / versionCode 4182.
