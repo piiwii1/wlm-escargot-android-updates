@@ -5,6 +5,11 @@ on:
     branches: [ streamradar-build-032 ]
     paths:
       - 'temp-streamradar-build/source.b64'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'temp-streamradar-build/**'
+      - '.github/workflows/build-streamradar-032-temp.yml'
 
 permissions:
   contents: read
