@@ -19,12 +19,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-4160-81f4-b702-35509fa6ea43/raw?se=2026-08-24T14%3A22%3A57Z&sp=r&sv=2026-02-06&sr=b&scid=9398e572-d7b8-5081-8f30-45fc897a88ee&skoid=c30e7ce7-1f51-4051-a377-288cdba21c02&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-24T09%3A38%3A11Z&ske=2026-08-25T09%3A38%3A11Z&sks=b&skv=2026-02-06&sig=toX3BeyA27v1ad0zAKGol6sYBZyc5r0DUrAJsgh0B5s%3D' -o /tmp/base-artifact.zip
-          mkdir -p /tmp/base-artifact /tmp/sr-source
-          unzip -q /tmp/base-artifact.zip -d /tmp/base-artifact
-          SRCZIP="$(find /tmp/base-artifact -maxdepth 2 -type f -name 'StreamRadar-0.18.0-SOURCE-COMPLET.zip' | head -1)"
-          test -n "$SRCZIP"
-          unzip -q "$SRCZIP" -d /tmp/sr-source
+          ROOT="$GITHUB_WORKSPACE/streamradar-0.19.0-public-build"
+          cat "$ROOT"/base018-0{0,1,2,3,4,5,6,7,8}.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/StreamRadar-0.18.0-SOURCE-COMPLET.zip
+          echo '075368d3c09a6c4b0d9ae38a1f80aaeead7871498e62062665104935f8f0d325  /tmp/StreamRadar-0.18.0-SOURCE-COMPLET.zip' | sha256sum -c -
+          rm -rf /tmp/sr-source
+          mkdir -p /tmp/sr-source
+          unzip -q /tmp/StreamRadar-0.18.0-SOURCE-COMPLET.zip -d /tmp/sr-source
           cd /tmp/sr-source/StreamRadar-0.18.0
           git init -q
           git config user.email build@streamradar.local
@@ -44,7 +44,7 @@ jobs:
           PY
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
-          cp "$GITHUB_WORKSPACE/streamradar-0.19.0-public-build/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
+          cp "$ROOT/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
           grep -q 'versionCode = 19' android/app/build.gradle.kts
           grep -q 'versionName = "0.19.0"' android/app/build.gradle.kts
           grep -q 'android:icon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
