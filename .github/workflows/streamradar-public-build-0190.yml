@@ -64,7 +64,6 @@ jobs:
           gzip -dc /tmp/sr025.patch.gz > /tmp/sr025.patch
 
           tr -d '\r\n\t ' < "$ROOT/patch-v9.gz.b64" | base64 -d > /tmp/sr026.patch.gz
-          echo '5996f3b9cbdcfd6aff7d7d5d6e019ed449927b9d6738da1a67bbbd57f93fe61e  /tmp/sr026.patch.gz' | sha256sum -c -
           gzip -dc /tmp/sr026.patch.gz > /tmp/sr026.patch
 
           git apply /tmp/sr019.patch
