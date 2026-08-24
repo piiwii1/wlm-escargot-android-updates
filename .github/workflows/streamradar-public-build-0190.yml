@@ -1,4 +1,4 @@
-name: StreamRadar Public Build 0.22.0
+name: StreamRadar Public Build 0.23.0
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rebuild through 0.22.0
+      - name: Rebuild through 0.23.0
         shell: bash
         run: |
           set -euo pipefail
@@ -40,6 +40,7 @@ jobs:
               ('patch-v3.gz.b64', '/tmp/sr020.patch'),
               ('patch-v4.gz.b64', '/tmp/sr021.patch'),
               ('patch-v5.gz.b64', '/tmp/sr022.patch'),
+              ('patch-v6.gz.b64', '/tmp/sr023.patch'),
           ]
           for source, target in patches:
               txt = (root / source).read_text(encoding='utf-8', errors='ignore')
@@ -52,11 +53,9 @@ jobs:
           mkdir -p android/app/src/main/res/drawable-nodpi
           cp "$ROOT/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
           git apply /tmp/sr020.patch
-          git add -A
-          git commit -qm v020
+          git add -A && git commit -qm v020
           git apply /tmp/sr021.patch
-          git add -A
-          git commit -qm v021
+          git add -A && git commit -qm v021
           git apply /tmp/sr022.patch
           python3 - <<'PY'
           from pathlib import Path
@@ -66,18 +65,20 @@ jobs:
               s = s.replace('import androidx.compose.foundation.Image\n', 'import androidx.compose.foundation.Image\nimport androidx.compose.foundation.BorderStroke\n')
           p.write_text(s)
           PY
-          grep -q 'versionCode = 22' android/app/build.gradle.kts
-          grep -q 'versionName = "0.22.0"' android/app/build.gradle.kts
-          grep -q 'PremiumBottomBar' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
-          grep -q 'CalendarMonthCard' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
-          grep -q 'PremiumSearchResultCard' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          git add -A && git commit -qm v022
+          git apply /tmp/sr023.patch
+          grep -q 'versionCode = 23' android/app/build.gradle.kts
+          grep -q 'versionName = "0.23.0"' android/app/build.gradle.kts
+          grep -q 'RemoteBackdropCandidates' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'displayDistinct' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'CompactSearchFilterChip' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'Mes 3 alertes' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
-          grep -q 'import androidx.compose.foundation.BorderStroke' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'navigationBarsPadding' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'android:icon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
           ICON=android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
           echo '65dbf44e4a589a6553ea8217c13547e873cae107b26341204c5cce4005b84188  '"$ICON" | sha256sum -c -
           cd /tmp/sr-source
-          mv StreamRadar-0.18.0 StreamRadar-0.22.0
+          mv StreamRadar-0.18.0 StreamRadar-0.23.0
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -100,18 +101,18 @@ jobs:
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
 
       - name: Compile APK
-        working-directory: /tmp/sr-source/StreamRadar-0.22.0/android
+        working-directory: /tmp/sr-source/StreamRadar-0.23.0/android
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
-          APK=/tmp/sr-source/StreamRadar-0.22.0/android/app/build/outputs/apk/debug/app-debug.apk
+          APK=/tmp/sr-source/StreamRadar-0.23.0/android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='22' versionName='0.22.0'"
-          cp "$APK" /tmp/StreamRadar-0.22.0-UNSIGNED-FOR-STABLE-RESIGN.apk
-          sha256sum /tmp/StreamRadar-0.22.0-UNSIGNED-FOR-STABLE-RESIGN.apk > /tmp/StreamRadar-0.22.0-BUILD-SHA256.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='23' versionName='0.23.0'"
+          cp "$APK" /tmp/StreamRadar-0.23.0-UNSIGNED-FOR-STABLE-RESIGN.apk
+          sha256sum /tmp/StreamRadar-0.23.0-UNSIGNED-FOR-STABLE-RESIGN.apk > /tmp/StreamRadar-0.23.0-BUILD-SHA256.txt
           mkdir -p /tmp/apksigner-tools/lib
           cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/apksigner-tools/apksigner
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-tools/lib/apksigner.jar
@@ -120,16 +121,16 @@ jobs:
         shell: bash
         run: |
           cd /tmp/sr-source
-          zip -qr /tmp/StreamRadar-0.22.0-SOURCE-COMPLET.zip StreamRadar-0.22.0 -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          zip -qr /tmp/StreamRadar-0.23.0-SOURCE-COMPLET.zip StreamRadar-0.23.0 -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
 
       - name: Upload APK and source
         uses: actions/upload-artifact@v4
         with:
-          name: StreamRadar-0.22.0-PublicBuild
+          name: StreamRadar-0.23.0-PublicBuild
           path: |
-            /tmp/StreamRadar-0.22.0-UNSIGNED-FOR-STABLE-RESIGN.apk
-            /tmp/StreamRadar-0.22.0-BUILD-SHA256.txt
-            /tmp/StreamRadar-0.22.0-SOURCE-COMPLET.zip
+            /tmp/StreamRadar-0.23.0-UNSIGNED-FOR-STABLE-RESIGN.apk
+            /tmp/StreamRadar-0.23.0-BUILD-SHA256.txt
+            /tmp/StreamRadar-0.23.0-SOURCE-COMPLET.zip
             /tmp/apksigner-tools
           if-no-files-found: error
           retention-days: 14
