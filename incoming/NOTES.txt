@@ -1,12 +1,13 @@
-Mise à jour 3.0.141 :
+Mise à jour 3.0.142 :
 
-- Nouvelle passe de fidélité Windows Live Messenger 2009 sur Options et les pop-ups.
-- La fenêtre Options reprend désormais les boutons PC OK / Annuler / Appliquer / Aide.
-- Appliquer met à jour l'interface sans fermer la fenêtre.
-- Le rail des catégories est plus compact et plus proche du bleu Windows/WLM d'origine.
-- La catégorie Application Android a été retirée de la fenêtre Options PC ; elle reste disponible depuis le menu principal.
-- Le dernier AlertDialog Android natif visible, Couleur de Messenger, a été remplacé par la fenêtre WLM commune.
+- Nouvelle passe de fidélité Windows Live Messenger sur Wizz, clins d’œil et émoticônes.
+- Le sélecteur d’émoticônes est beaucoup plus compact : grille 8 colonnes proche du popup PC, sans grands libellés sous chaque icône.
+- Le panneau de clins d’œil reprend la structure classique : proposés, mes clins d’œil, utilisés récemment et liens discrets.
+- Les cartes de clin d’œil dans la conversation ont un aperçu plus grand et un lien « Rejouer le clin d’œil ».
+- Les messages Wizz utilisent les formulations historiques « vient de vous envoyer » / « venez d’envoyer » avec un rendu discret en italique.
+- Les écrans techniques du lecteur de clin d’œil sont masqués derrière des libellés simples ; les diagnostics restent dans les logs.
+- Les émoticônes personnalisées sont également affichées dans une grille plus compacte.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.141 / versionCode 4197.
-- Fidélité WLM PC estimée : ~93 % global, ~89 % pour Options / pop-ups.
+- versionName 3.0.142 / versionCode 4198.
+- Fidélité WLM PC estimée : ~94 % global, ~94 % pour Wizz / Winks / contenus riches.
