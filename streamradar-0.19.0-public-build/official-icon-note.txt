@@ -1,0 +1,1 @@
+Official StreamRadar launcher icon source is derived directly from the user-provided icon image. Binary asset is attached through Git blob/tree in the build commit.
