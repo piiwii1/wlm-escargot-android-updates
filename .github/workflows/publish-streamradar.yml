@@ -6,6 +6,7 @@ on:
     paths:
       - 'incoming-streamradar/*.apk'
       - 'incoming-streamradar/NOTES.txt'
+      - 'incoming-streamradar/REMOTE_URL.txt'
   workflow_dispatch:
 
 permissions:
@@ -22,6 +23,21 @@ jobs:
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
+
+      - name: Importer un artefact distant si demandé
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s incoming-streamradar/REMOTE_URL.txt ]; then
+            URL="$(cat incoming-streamradar/REMOTE_URL.txt)"
+            echo 'Téléchargement de l’artefact StreamRadar distant…'
+            curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/streamradar-artifact.zip
+            unzip -t /tmp/streamradar-artifact.zip
+            APK_ENTRY="$(unzip -Z1 /tmp/streamradar-artifact.zip | grep -E '(^|/)StreamRadar-[^/]*\.apk$|(^|/)[^/]*\.apk$' | head -n 1)"
+            test -n "$APK_ENTRY"
+            unzip -p /tmp/streamradar-artifact.zip "$APK_ENTRY" > incoming-streamradar/Remote-StreamRadar.apk
+            test -s incoming-streamradar/Remote-StreamRadar.apk
+          fi
 
       - name: Choisir automatiquement l'APK StreamRadar la plus récente
         id: apk
@@ -70,22 +86,26 @@ jobs:
           set -euo pipefail
           mkdir -p streamradar
           cp "$APK_PATH" streamradar/StreamRadar.apk
-          SHA="$(sha256sum streamradar/StreamRadar.apk | awk '{print $1}')"
           NOTES='Mise à jour StreamRadar.'
-          if [ -f incoming-streamradar/NOTES.txt ]; then
+          if [ -f incoming-streamradar/REMOTE_NOTES.txt ]; then
+            NOTES="$(cat incoming-streamradar/REMOTE_NOTES.txt)"
+          elif [ -f incoming-streamradar/NOTES.txt ]; then
             NOTES="$(cat incoming-streamradar/NOTES.txt)"
           fi
+          export NOTES
           python3 - <<'PY'
-          import json, os
+          import json, os, subprocess
+          sha = subprocess.check_output(['sha256sum', 'streamradar/StreamRadar.apk'], text=True).split()[0]
           out = {
             'versionCode': int(os.environ['VERSION_CODE']),
             'versionName': os.environ['VERSION_NAME'],
             'apkUrl': 'https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/main/streamradar/StreamRadar.apk',
-            'sha256': os.popen("sha256sum streamradar/StreamRadar.apk | awk '{print $1}'").read().strip(),
+            'sha256': sha,
             'changelog': os.environ.get('NOTES', 'Mise à jour StreamRadar.'),
             'mandatory': False,
           }
           json.dump(out, open('streamradar/latest.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+          print(json.dumps(out, ensure_ascii=False, indent=2))
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -95,7 +115,7 @@ jobs:
             git push
           fi
 
-      - name: Garder seulement l'APK courante dans incoming-streamradar
+      - name: Garder seulement l'APK courante et nettoyer l'import distant
         shell: bash
         env:
           APK_PATH: ${{ steps.apk.outputs.apk_path }}
@@ -104,6 +124,7 @@ jobs:
           mkdir -p incoming-streamradar
           cp "$APK_PATH" incoming-streamradar/StreamRadar.apk
           find incoming-streamradar -maxdepth 1 -type f -name '*.apk' ! -name 'StreamRadar.apk' -delete
+          rm -f incoming-streamradar/REMOTE_URL.txt incoming-streamradar/REMOTE_NOTES.txt
           git add -A incoming-streamradar
           if ! git diff --cached --quiet; then
             git commit -m 'Mettre à jour automatiquement APK StreamRadar courante [skip streamradar release]'
