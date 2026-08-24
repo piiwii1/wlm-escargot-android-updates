@@ -15,11 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rebuild 0.18.0 and apply tested 0.19.0
+      - name: Rebuild 0.18.0 and apply 0.19.0
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-f820-81f4-b0b8-eaf1d9e16c92/raw?se=2026-08-24T13%3A40%3A06Z&sp=r&sv=2026-02-06&sr=b&scid=58cfa27f-30e9-5a6c-81cf-8f9a213b4bf9&skoid=6658dbdd-f305-4d30-8f6b-d62218202cb9&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-24T04%3A46%3A26Z&ske=2026-08-25T04%3A46%3A26Z&sks=b&skv=2026-02-06&sig=io0ok0OPJFW9mheRBO%2BPVcaFSqvLnyvzGjHntllUYqM%3D' -o /tmp/base-artifact.zip
+          curl -fL 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-4160-81f4-b702-35509fa6ea43/raw?se=2026-08-24T14%3A22%3A57Z&sp=r&sv=2026-02-06&sr=b&scid=9398e572-d7b8-5081-8f30-45fc897a88ee&skoid=c30e7ce7-1f51-4051-a377-288cdba21c02&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-24T09%3A38%3A11Z&ske=2026-08-25T09%3A38%3A11Z&sks=b&skv=2026-02-06&sig=toX3BeyA27v1ad0zAKGol6sYBZyc5r0DUrAJsgh0B5s%3D' -o /tmp/base-artifact.zip
           mkdir -p /tmp/base-artifact /tmp/sr-source
           unzip -q /tmp/base-artifact.zip -d /tmp/base-artifact
           SRCZIP="$(find /tmp/base-artifact -maxdepth 2 -type f -name 'StreamRadar-0.18.0-SOURCE-COMPLET.zip' | head -1)"
@@ -32,35 +32,27 @@ jobs:
           git add .
           git commit -qm base
           python3 - <<'PY'
-          import base64, gzip, hashlib, re
+          import base64, gzip, re
           from pathlib import Path
-          root = Path(__import__('os').environ['GITHUB_WORKSPACE']) / 'streamradar-0.19.0-public-build'
+          import os
+          root = Path(os.environ['GITHUB_WORKSPACE']) / 'streamradar-0.19.0-public-build'
           txt = (root / 'patch-v2.gz.b64').read_text(encoding='utf-8', errors='ignore')
           clean = re.sub(r'[^A-Za-z0-9+/=]', '', txt)
           patch = gzip.decompress(base64.b64decode(clean))
           Path('/tmp/sr019.patch').write_bytes(patch)
-          chunks = ''.join(p.read_text(encoding='utf-8', errors='ignore') for p in sorted(root.glob('iconv2-[0-9][0-9]')))
-          clean_icon = re.sub(r'[^A-Za-z0-9+/=]', '', chunks)
-          icon = base64.b64decode(clean_icon)
-          digest = hashlib.sha256(icon).hexdigest()
-          expected = '0e10780606e0244fabfee1d5ead0f900718c5c6c330787d797008939fcef9a0e'
-          if len(icon) != 17310:
-              raise SystemExit(f'Icon size mismatch: {len(icon)} != 17310')
-          if digest != expected:
-              raise SystemExit(f'Icon SHA mismatch: {digest} != {expected}')
-          out = Path('android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg')
-          out.parent.mkdir(parents=True, exist_ok=True)
-          out.write_bytes(icon)
-          print('patch bytes', len(patch), 'icon bytes', len(icon), 'icon sha256', digest)
+          print('patch bytes', len(patch))
           PY
           git apply /tmp/sr019.patch
+          mkdir -p android/app/src/main/res/drawable-nodpi
+          cp "$GITHUB_WORKSPACE/streamradar-0.19.0-public-build/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
           grep -q 'versionCode = 19' android/app/build.gradle.kts
           grep -q 'versionName = "0.19.0"' android/app/build.gradle.kts
           grep -q 'android:icon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
           grep -q 'android:roundIcon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
           grep -q 'Films • Séries • Dernières sorties' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
-          test -s android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
-          file android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg | grep -q '256x256'
+          ICON=android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
+          echo '65dbf44e4a589a6553ea8217c13547e873cae107b26341204c5cce4005b84188  '"$ICON" | sha256sum -c -
+          file "$ICON" | grep -q '192x192'
           cd /tmp/sr-source
           mv StreamRadar-0.18.0 StreamRadar-0.19.0
 
@@ -91,8 +83,11 @@ jobs:
       - name: Verify APK
         shell: bash
         run: |
-          test -f /tmp/sr-source/StreamRadar-0.19.0/android/app/build/outputs/apk/debug/app-debug.apk
-          cp /tmp/sr-source/StreamRadar-0.19.0/android/app/build/outputs/apk/debug/app-debug.apk /tmp/StreamRadar-0.19.0.apk
+          set -euo pipefail
+          APK=/tmp/sr-source/StreamRadar-0.19.0/android/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          aapt dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='19' versionName='0.19.0'"
+          cp "$APK" /tmp/StreamRadar-0.19.0.apk
           sha256sum /tmp/StreamRadar-0.19.0.apk > /tmp/StreamRadar-0.19.0-SHA256.txt
 
       - name: Package source
