@@ -1,0 +1,101 @@
+name: FannyArchive 1.4.1 Fast Publish
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'fannyarchive-template/**'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Reconstruct source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin fannyarchive-stable-131-final --depth=1
+          rm -rf /tmp/fanny141 /tmp/fanny-patches
+          mkdir -p /tmp/fanny141 /tmp/fanny-patches
+          for n in 00 01 02 03 04 05 06; do git show origin/fannyarchive-stable-131-final:fannyarchive-ci/source-v131-part${n}.txt; done | tr -d '\r\n' | base64 --decode > /tmp/FannyArchive-v1.3.1-source-STABLE.zip
+          echo "f78f787484eefdf3f12a6a5c9864949de3d09e0d6136cd3d2cfe3ff7bff9c9c4  /tmp/FannyArchive-v1.3.1-source-STABLE.zip" | sha256sum -c -
+          unzip -q /tmp/FannyArchive-v1.3.1-source-STABLE.zip -d /tmp/fanny141
+          SRC=/tmp/fanny141/FannyArchive-v1.3-source
+          cat fannyarchive-template/patches-part*.txt | tr -d '\r\n' | base64 --decode > /tmp/fanny-patches.zip
+          echo "42c9241faaf9ea4e5461170bcf5c291dc11799b0dc14b14eb3250d369b645332  /tmp/fanny-patches.zip" | sha256sum -c -
+          unzip -q /tmp/fanny-patches.zip -d /tmp/fanny-patches
+          cp /tmp/fanny-patches/app-build.gradle.kts "$SRC/app/build.gradle.kts"
+          cp /tmp/fanny-patches/AndroidManifest.xml "$SRC/app/src/main/AndroidManifest.xml"
+          cp /tmp/fanny-patches/MainViewModel.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/MainViewModel.kt"
+          cp /tmp/fanny-patches/MainActivity.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/ui/MainActivity.kt"
+          cp /tmp/fanny-patches/WhatsAppZipImporter.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/importer/WhatsAppZipImporter.kt"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/fanny141/FannyArchive-v1.3-source/app/src/main/java/ch/piiwii/fannyarchive/ui/MainActivity.kt')
+          s = p.read_text()
+          old1 = 'BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {\n        Column(Modifier.fillMaxWidth(), horizontalAlignment = align) {'
+          new1 = 'BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {\n        val bubbleMaxWidth = maxWidth * 0.88f\n        Column(Modifier.fillMaxWidth(), horizontalAlignment = align) {'
+          old2 = 'modifier = Modifier.widthIn(max = maxWidth * 0.88f).clickable { onClick() }'
+          new2 = 'modifier = Modifier.widthIn(max = bubbleMaxWidth).clickable { onClick() }'
+          if old1 not in s or old2 not in s:
+              raise SystemExit('Expected MainActivity hotfix targets not found')
+          p.write_text(s.replace(old1, new1, 1).replace(old2, new2, 1))
+          PY
+          mkdir -p "$SRC/app/src/main/assets" "$SRC/signing"
+          python - <<'PY'
+          import struct
+          with open('/tmp/fanny141/FannyArchive-v1.3-source/app/src/main/assets/fanny_messages.bin','wb') as out:
+              out.write(b'FNY1')
+              out.write(struct.pack('>I', 0))
+          PY
+          rm -f "$SRC/signing/fannyarchive-release.jks"
+          keytool -genkeypair -keystore "$SRC/signing/fannyarchive-release.jks" -storepass TemplateOnly2026 -keypass TemplateOnly2026 -alias fannyarchive -keyalg RSA -keysize 2048 -validity 30 -dname "CN=Template Only,O=PiiWii,C=CH"
+          cat > "$SRC/keystore.properties" <<'EOF'
+          storeFile=signing/fannyarchive-release.jks
+          storePassword=TemplateOnly2026
+          keyAlias=fannyarchive
+          keyPassword=TemplateOnly2026
+          EOF
+          sed -i '/^org.gradle.jvmargs=/d' "$SRC/gradle.properties"
+          printf '\norg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\norg.gradle.workers.max=2\n' >> "$SRC/gradle.properties"
+
+      - name: Build release
+        working-directory: /tmp/fanny141/FannyArchive-v1.3-source
+        run: gradle --no-daemon --max-workers=2 :app:assembleRelease
+
+      - name: Publish APK
+        shell: bash
+        run: |
+          mkdir -p /tmp/fanny-fast
+          cp /tmp/fanny141/FannyArchive-v1.3-source/app/build/outputs/apk/release/app-release.apk /tmp/fanny-fast/FannyArchive-1.4.1-TEMPLATE.apk
+          sha256sum /tmp/fanny-fast/FannyArchive-1.4.1-TEMPLATE.apk > /tmp/fanny-fast/template.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FannyArchive-1.4.1-FAST-TEMPLATE
+          path: /tmp/fanny-fast/
+          retention-days: 7
