@@ -1,11 +1,11 @@
-Mise à jour 3.0.149 :
+Mise à jour 3.0.150 :
 
-- Passe de finition sur les menus contextuels Windows Live Messenger.
-- Les menus WLM utilisent une largeur adaptée à leur contenu au lieu d'une largeur fixe trop grande.
-- Les lignes, icônes et flèches de sous-menu sont légèrement plus compactes.
-- Le menu sous l'image perso du contact reprend : Bloquer / Carte de visite / Taille / Masquer les images perso.
-- Le panneau « Vos images perso » est resserré : largeur, miniatures et lignes plus proches du client PC.
+- Micro-finitions de fidélité Windows Live Messenger sur contacts, Ink, Wizz et clins d’œil.
+- L’en-tête Favoris n’affiche plus une étoile Unicode en plus de l’asset WLM.
+- Les vignettes Ink se rapprochent du format historique 199×65 sans devenir de grandes images mobiles.
+- Les événements Wizz sont légèrement plus compacts.
+- Le panneau des clins d’œil est resserré et la vue « Tous les clins d’œil » n’utilise plus de grosses cases bordées Android.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.149 / versionCode 4205.
-- Fidélité WLM PC estimée : ~98 % global, ~98 % pour Options / pop-ups.
+- versionName 3.0.150 / versionCode 4206.
+- Fidélité WLM PC estimée : ~98,5 % global.
