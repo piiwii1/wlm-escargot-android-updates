@@ -1,11 +1,12 @@
-Mise à jour 3.0.143 :
+Mise à jour 3.0.144 :
 
-- Nouvelle passe de fidélité Windows Live Messenger 2009 sur Accueil / liste de contacts.
-- Les Favoris et les autres contacts disposent maintenant de tailles d’affichage indépendantes, comme sur le client PC.
-- Le menu Disposition propose séparément Taille des Favoris et Taille des autres contacts (Statut uniquement / Petite / Moyenne / Grande).
-- Options > Disposition permet aussi d’afficher/masquer la barre d’onglets et la liste « Quoi de neuf ».
-- Les en-têtes Favoris/groupes utilisent désormais les assets WLM étoile + chevron au lieu de caractères Unicode.
+- Nouvelle passe de fidélité Windows Live Messenger sur Options / pop-ups.
+- Options > Disposition affiche maintenant directement les principaux réglages, comme sur le client PC, au lieu de renvoyer vers plusieurs sous-menus.
+- Les Favoris et les autres contacts ont chacun un sélecteur visuel à 4 tailles avec aperçu + bouton radio.
+- Favoris, groupes, barre d’onglets et « Quoi de neuf » sont regroupés comme dans la fenêtre Options WLM.
+- Le tri Par statut / Alphabétiquement devient réellement fonctionnel.
+- La demande de contact utilise maintenant les boutons et le chrome WLM communs au lieu de gros boutons Android natifs.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.143 / versionCode 4199.
-- Fidélité WLM PC estimée : ~95 % global, ~96 % pour Accueil / contacts.
+- versionName 3.0.144 / versionCode 4200.
+- Fidélité WLM PC estimée : ~95,5 % global, ~96 % pour Options / pop-ups.
