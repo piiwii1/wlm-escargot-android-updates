@@ -86,7 +86,7 @@ jobs:
           set -euo pipefail
           APK=/tmp/sr-source/StreamRadar-0.19.0/android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
-          aapt dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='19' versionName='0.19.0'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='19' versionName='0.19.0'"
           cp "$APK" /tmp/StreamRadar-0.19.0.apk
           sha256sum /tmp/StreamRadar-0.19.0.apk > /tmp/StreamRadar-0.19.0-SHA256.txt
 
