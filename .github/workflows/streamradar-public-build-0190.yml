@@ -58,12 +58,21 @@ jobs:
           git add -A
           git commit -qm v021
           git apply /tmp/sr022.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt')
+          s = p.read_text()
+          if 'import androidx.compose.foundation.BorderStroke\n' not in s:
+              s = s.replace('import androidx.compose.foundation.Image\n', 'import androidx.compose.foundation.Image\nimport androidx.compose.foundation.BorderStroke\n')
+          p.write_text(s)
+          PY
           grep -q 'versionCode = 22' android/app/build.gradle.kts
           grep -q 'versionName = "0.22.0"' android/app/build.gradle.kts
           grep -q 'PremiumBottomBar' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'CalendarMonthCard' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'PremiumSearchResultCard' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'Mes 3 alertes' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'import androidx.compose.foundation.BorderStroke' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'android:icon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
           ICON=android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
           echo '65dbf44e4a589a6553ea8217c13547e873cae107b26341204c5cce4005b84188  '"$ICON" | sha256sum -c -
