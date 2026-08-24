@@ -190,7 +190,7 @@ public class MainActivityV042 extends MainActivity {
                 lines++;
                 if (parseStart(normalize(line)) != null) hits++;
             }
-            rank += hits * 100_000L;
+            rank += hits * 1_000_000L;
         } catch (Exception ignored) {
         } finally {
             try { if (r != null) r.close(); } catch (Exception ignored) {}
@@ -242,17 +242,22 @@ public class MainActivityV042 extends MainActivity {
         BufferedReader r = openTextReader(chat);
         db.beginTransaction();
         long count = 0;
+        long physicalLines = 0;
+        long timestampLike = 0;
         String date = null, time = null, sender = null, lastDate = null;
         boolean system = false;
         StringBuilder body = null;
         ArrayList<String> sample = new ArrayList<>();
+        ArrayList<String> missed = new ArrayList<>();
         try {
             String line;
             while ((line = r.readLine()) != null) {
+                physicalLines++;
                 line = normalize(line);
                 if (!line.isEmpty() && sample.size() < 4) sample.add(line);
                 Start s = parseStart(line);
                 if (s != null) {
+                    timestampLike++;
                     if (body != null) {
                         insert(db, date, time, sender, body.toString(), system, lastDate == null || !lastDate.equals(date));
                         lastDate = date;
@@ -263,8 +268,12 @@ public class MainActivityV042 extends MainActivity {
                     sender = s.sender;
                     system = s.system;
                     body = new StringBuilder(s.body);
-                } else if (body != null) {
-                    body.append('\n').append(line);
+                } else {
+                    if (looksLikeMessagePrefix(line)) {
+                        timestampLike++;
+                        if (missed.size() < 3) missed.add(line);
+                    }
+                    if (body != null) body.append('\n').append(line);
                 }
             }
             if (body != null) {
@@ -277,16 +286,24 @@ public class MainActivityV042 extends MainActivity {
             db.close();
             r.close();
         }
+
         if (count == 0) {
             String preview = sample.isEmpty() ? "fichier vide" : shorten(sample.get(0));
-            throw new IOException("Texte trouvé mais timestamp non reconnu. Début : " + preview);
+            throw new IOException("Texte trouvé mais aucun début de message reconnu. Début : " + preview);
+        }
+
+        if (chat.length() > 16L * 1024L && count < 5) {
+            String preview = !missed.isEmpty() ? shorten(missed.get(0)) : (sample.isEmpty() ? "?" : shorten(sample.get(0)));
+            deleteDatabase(DB_NAME);
+            throw new IOException("Découpage incomplet : seulement " + count + " messages reconnus sur " + physicalLines
+                    + " lignes. Exemple non reconnu : " + preview);
         }
         return count;
     }
 
     private String shorten(String s) {
         s = s.replace('\n', ' ').replace('\r', ' ').trim();
-        return s.length() > 90 ? s.substring(0, 90) + "…" : s;
+        return s.length() > 120 ? s.substring(0, 120) + "…" : s;
     }
 
     private void insert(SQLiteDatabase db, String date, String time, String sender, String body, boolean system, boolean showDate) {
@@ -316,61 +333,35 @@ public class MainActivityV042 extends MainActivity {
                 .replace("\u2068", "")
                 .replace("\u2069", "")
                 .replace("\ufeff", "")
+                .replace('\t', ' ')
                 .trim();
     }
 
     private Start parseStart(String line) {
         if (line == null || line.isEmpty()) return null;
 
-        String stamp = null;
-        String rest = null;
+        Matcher dm = DATE_ANY.matcher(line);
+        if (!dm.find() || dm.start() > 4) return null;
 
-        if (line.startsWith("[")) {
-            int close = line.indexOf(']');
-            if (close > 6 && close < 90) {
-                String candidate = line.substring(1, close).trim();
-                if (looksLikeTimestamp(candidate)) {
-                    stamp = candidate;
-                    rest = line.substring(close + 1).trim();
-                    rest = stripLeadingSeparator(rest);
-                }
-            }
-        }
+        Matcher tm = TIME_ANY.matcher(line);
+        if (!tm.find(dm.end())) return null;
+        if (tm.start() - dm.end() > 32 || tm.end() > 110) return null;
 
-        if (stamp == null) {
-            int cut = findTimestampSeparator(line);
-            if (cut > 6) {
-                String candidate = line.substring(0, cut).trim();
-                if (looksLikeTimestamp(candidate)) {
-                    stamp = candidate;
-                    rest = line.substring(skipSeparator(line, cut)).trim();
-                }
-            }
-        }
-
-        if (stamp == null) {
-            Matcher fallback = PREFIX_FALLBACK.matcher(line);
-            if (fallback.matches()) {
-                stamp = fallback.group(1) + " " + fallback.group(2);
-                rest = fallback.group(3).trim();
-            }
-        }
-
-        if (stamp == null || rest == null) return null;
-
-        Matcher dm = DATE_ANY.matcher(stamp);
-        Matcher tm = TIME_ANY.matcher(stamp);
-        if (!dm.find() || !tm.find()) return null;
         String date = dm.group().trim();
         String time = tm.group().trim().replaceAll("(?i)\\s+", " ");
+        String rest = line.substring(tm.end()).trim();
+        rest = stripAfterTimestamp(rest);
 
         String sender = null;
         String body = rest;
         boolean system = true;
         int sep = senderSeparator(rest);
-        if (sep > 0 && sep < 180) {
+        if (sep > 0 && sep < 220) {
             String possible = rest.substring(0, sep).trim();
-            if (!possible.isEmpty() && !possible.startsWith("http://") && !possible.startsWith("https://")) {
+            if (!possible.isEmpty()
+                    && !possible.startsWith("http://")
+                    && !possible.startsWith("https://")
+                    && possible.length() <= 180) {
                 sender = possible;
                 body = rest.substring(sep + 1).trim();
                 system = false;
@@ -379,16 +370,39 @@ public class MainActivityV042 extends MainActivity {
         return new Start(date, time, sender, body, system);
     }
 
+    private boolean looksLikeMessagePrefix(String line) {
+        if (line == null || line.isEmpty()) return false;
+        Matcher dm = DATE_ANY.matcher(line);
+        if (!dm.find() || dm.start() > 8) return false;
+        Matcher tm = TIME_ANY.matcher(line);
+        return tm.find(dm.end()) && tm.start() - dm.end() < 48;
+    }
+
+    private String stripAfterTimestamp(String s) {
+        int i = 0;
+        while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
+        while (i < s.length()) {
+            char c = s.charAt(i);
+            if (c == ']' || c == ')' || c == '-' || c == '–' || c == '—' || c == '|' || c == '·') {
+                i++;
+                while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
+                continue;
+            }
+            break;
+        }
+        return s.substring(Math.min(i, s.length())).trim();
+    }
+
     private boolean looksLikeTimestamp(String s) {
         return DATE_ANY.matcher(s).find() && TIME_ANY.matcher(s).find();
     }
 
     private int findTimestampSeparator(String line) {
-        String[] seps = {" - ", " – ", " — ", " – ", " — "};
+        String[] seps = {" - ", " – ", " — ", " | ", " · ", " – ", " — "};
         int best = -1;
         for (String sep : seps) {
             int p = line.indexOf(sep);
-            if (p >= 0 && p < 100 && (best < 0 || p < best)) best = p;
+            if (p >= 0 && p < 120 && (best < 0 || p < best)) best = p;
         }
         return best;
     }
@@ -396,17 +410,13 @@ public class MainActivityV042 extends MainActivity {
     private int skipSeparator(String line, int cut) {
         int i = cut;
         while (i < line.length() && Character.isWhitespace(line.charAt(i))) i++;
-        if (i < line.length() && (line.charAt(i) == '-' || line.charAt(i) == '–' || line.charAt(i) == '—')) i++;
+        if (i < line.length() && (line.charAt(i) == '-' || line.charAt(i) == '–' || line.charAt(i) == '—' || line.charAt(i) == '|')) i++;
         while (i < line.length() && Character.isWhitespace(line.charAt(i))) i++;
         return i;
     }
 
     private String stripLeadingSeparator(String s) {
-        int i = 0;
-        while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
-        if (i < s.length() && (s.charAt(i) == '-' || s.charAt(i) == '–' || s.charAt(i) == '—')) i++;
-        while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
-        return s.substring(i);
+        return stripAfterTimestamp(s);
     }
 
     private int senderSeparator(String rest) {
