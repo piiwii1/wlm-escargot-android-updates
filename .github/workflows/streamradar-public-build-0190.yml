@@ -58,9 +58,8 @@ jobs:
           tr -d '\r\n\t ' < "$ROOT/patch-v10.gz.b64" | base64 -d > /tmp/sr027.patch.gz
           echo '606068e10eb169e1882c7dfa59c93692038f6e58fd258e4517bd06c0a19ebce7  /tmp/sr027.patch.gz' | sha256sum -c -
           gzip -dc /tmp/sr027.patch.gz > /tmp/sr027.patch
-          tr -d '\r\n\t ' < "$ROOT/patch-v11.gz.b64" | base64 -d > /tmp/sr028.patch.gz
-          echo '8d10096b13cd5946894babfa130811706d0007a1aabcfb852481aabdc5c1ac00  /tmp/sr028.patch.gz' | sha256sum -c -
-          gzip -dc /tmp/sr028.patch.gz > /tmp/sr028.patch
+          cat "$ROOT/patch-v11-a.patch" "$ROOT/patch-v11-b.patch" > /tmp/sr028.patch
+          echo '19f50656afbc5ad8f5196e6b12db57dacb0f75cda3efab3578d4b6e60b06f8ab  /tmp/sr028.patch' | sha256sum -c -
 
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
