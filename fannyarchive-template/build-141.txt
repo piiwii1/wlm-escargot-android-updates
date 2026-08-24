@@ -1,0 +1,1 @@
+FannyArchive 1.4.1 ergonomics, safe areas, adaptive bubbles, clickable links, omitted-media UI. No private conversation data in this branch.
