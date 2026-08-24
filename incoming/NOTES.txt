@@ -1,12 +1,12 @@
-Mise à jour 3.0.139 :
+Mise à jour 3.0.140 :
 
-- Nouvelle passe de fidélité Windows Live Messenger 2009 sur les menus, dialogues et Options.
-- Les menus sont plus compacts et proches du client PC : lignes plus fines, séparateurs, coches dans la marge gauche et flèches de sous-menu alignées à droite.
-- Les dialogues secondaires ont une barre de titre, un pied de fenêtre et des boutons plus proches du style Windows/WLM et moins Android.
-- Les listes de choix n'utilisent plus de grosses cartes bordées.
-- Outils > Options… ouvre maintenant une vraie fenêtre Options avec navigation latérale : Personnel, Disposition, Connexion, Messages, Alertes, Sons, Transfert de fichiers, Confidentialité, Sécurité et Application Android.
-- Les réglages existants sont réutilisés sans modifier le moteur réseau.
+- Nouvelle passe de fidélité Windows Live Messenger 2009 sur l’écran de connexion.
+- La composition est maintenant calée sur le client PC final : grand titre « Se connecter à Windows Live Messenger », image perso à gauche et identifiant/mot de passe à droite.
+- Les libellés Android verticaux ont été remplacés par les champs compacts de la fenêtre PC, avec lien « Mot de passe oublié ? » et sélecteur de statut sous les champs.
+- La mémorisation utilise une ligne unique « Mémoriser mon identifiant et mon mot de passe » et la connexion automatique reprend la présentation WLM avec un lien Options.
+- Les boutons Connexion / Annuler, la ligne d’inscription et le pied de fenêtre Confidentialité / Conditions d’utilisation / État du service / À propos ont été ajoutés au bon endroit.
+- Le mécanisme de connexion Escargot et la mémorisation sécurisée restent inchangés.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.139 / versionCode 4195.
-- Fidélité WLM PC estimée : ~91 % global, ~82 % pour Options / pop-ups.
+- versionName 3.0.140 / versionCode 4196.
+- Fidélité WLM PC estimée : ~92 % global, ~94 % pour la connexion.
