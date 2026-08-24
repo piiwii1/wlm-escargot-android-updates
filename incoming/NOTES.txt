@@ -1,11 +1,12 @@
-Mise à jour 3.0.133 :
+Mise à jour 3.0.134 :
 
-- Nettoyage renforcé lorsqu’une conversation se ferme pendant un transfert.
-- Les états/offres de transfert restés orphelins sont nettoyés après les callbacks P2P normaux et leurs notifications sont annulées.
-- Les échecs et annulations de transfert sont maintenant conservés dans l’historique local, même lorsque la conversation n’est pas affichée.
-- Une erreur terminale gérée en arrière-plan ne laisse plus une session morte référencée dans KeepAliveService.
-- Un callback d’échec reçu juste après une fermeture ne remet plus à tort le bandeau sur « Conversation active ».
+- Fiabilité renforcée pour les messages vocaux WLM reçus.
+- L’annonce d’un clip vocal n’est plus ignorée : l’application suit maintenant l’attente du contenu P2P.
+- Si le clip est reçu normalement, l’attente est annulée immédiatement et le comportement de lecture/historique reste inchangé.
+- Si le contenu n’arrive pas dans le délai de réception, l’interruption est conservée dans l’historique et notifiée au lieu de disparaître silencieusement.
+- Une attente de clip vocal commencée en arrière-plan est transférée à MainActivity si la conversation est ouverte pendant la récupération, sans faux échec.
+- La fermeture d’une conversation détenue par le service nettoie également les clips vocaux encore en attente.
 - MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Le transport Ink PC ↔ Android reste inchangé.
 - Package et certificat identiques.
-- versionName 3.0.133 / versionCode 4189.
+- versionName 3.0.134 / versionCode 4190.
