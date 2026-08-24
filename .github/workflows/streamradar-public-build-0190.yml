@@ -1,4 +1,4 @@
-name: StreamRadar Public Build 0.29.0
+name: StreamRadar Public Build 0.30.0
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Rebuild through 0.29.0
+      - name: Rebuild through 0.30.0
         shell: bash
         run: |
           set -euo pipefail
@@ -61,6 +61,9 @@ jobs:
           cat "$ROOT/patch-v11-a.patch" "$ROOT/patch-v11-b.patch" > /tmp/sr028.patch
           echo '19f50656afbc5ad8f5196e6b12db57dacb0f75cda3efab3578d4b6e60b06f8ab  /tmp/sr028.patch' | sha256sum -c -
           echo 'e6fca778fe64b403e5e42b0f0bee5d1fa100f25efb98235df731d6c72a04b6df  '"$ROOT"'/patch-v12.patch' | sha256sum -c -
+          tr -d '\r\n\t ' < "$ROOT/patch-v13.gz.b64" | base64 -d > /tmp/sr030.patch.gz
+          echo '6ac86d59b54494c8ebeaf0814ffba58a95675b7be1362ef3fe60a0c1fd470129  /tmp/sr030.patch.gz' | sha256sum -c -
+          gzip -dc /tmp/sr030.patch.gz > /tmp/sr030.patch
 
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
@@ -103,18 +106,23 @@ jobs:
           git apply /tmp/sr028.patch
           git add -A && git commit -qm v028
           git apply "$ROOT/patch-v12.patch"
+          git add -A && git commit -qm v029
+          git apply /tmp/sr030.patch
 
-          grep -q 'versionCode = 29' android/app/build.gradle.kts
-          grep -q 'versionName = "0.29.0"' android/app/build.gradle.kts
+          grep -q 'versionCode = 30' android/app/build.gradle.kts
+          grep -q 'versionName = "0.30.0"' android/app/build.gradle.kts
           grep -q 'HeroPagerControls' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'CalendarSelectedDaySummary' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'RecentSearchVisualCard' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'activeFilterCount' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'alertCount' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'PremiumDetailSection' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'Affiche encore introuvable' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'onRetry = onRefresh' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'recentSearches' android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt
           grep -q 'android:icon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
           cd /tmp/sr-source
-          mv StreamRadar-0.18.0 StreamRadar-0.29.0
+          mv StreamRadar-0.18.0 StreamRadar-0.30.0
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -132,32 +140,32 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile APK
-        working-directory: /tmp/sr-source/StreamRadar-0.29.0/android
+        working-directory: /tmp/sr-source/StreamRadar-0.30.0/android
         run: gradle :app:assembleDebug --stacktrace
       - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
-          APK=/tmp/sr-source/StreamRadar-0.29.0/android/app/build/outputs/apk/debug/app-debug.apk
+          APK=/tmp/sr-source/StreamRadar-0.30.0/android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='29' versionName='0.29.0'"
-          cp "$APK" /tmp/StreamRadar-0.29.0.apk
-          sha256sum /tmp/StreamRadar-0.29.0.apk > /tmp/StreamRadar-0.29.0-BUILD-SHA256.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='30' versionName='0.30.0'"
+          cp "$APK" /tmp/StreamRadar-0.30.0.apk
+          sha256sum /tmp/StreamRadar-0.30.0.apk > /tmp/StreamRadar-0.30.0-BUILD-SHA256.txt
           mkdir -p /tmp/apksigner-tools/lib
           cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/apksigner-tools/apksigner
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-tools/lib/apksigner.jar
       - name: Package source
         run: |
           cd /tmp/sr-source
-          zip -qr /tmp/StreamRadar-0.29.0-SOURCE-COMPLET.zip StreamRadar-0.29.0 -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          zip -qr /tmp/StreamRadar-0.30.0-SOURCE-COMPLET.zip StreamRadar-0.30.0 -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
       - name: Upload APK and source
         uses: actions/upload-artifact@v4
         with:
-          name: StreamRadar-0.29.0-PublicBuild
+          name: StreamRadar-0.30.0-PublicBuild
           path: |
-            /tmp/StreamRadar-0.29.0.apk
-            /tmp/StreamRadar-0.29.0-BUILD-SHA256.txt
-            /tmp/StreamRadar-0.29.0-SOURCE-COMPLET.zip
+            /tmp/StreamRadar-0.30.0.apk
+            /tmp/StreamRadar-0.30.0-BUILD-SHA256.txt
+            /tmp/StreamRadar-0.30.0-SOURCE-COMPLET.zip
             /tmp/apksigner-tools
           if-no-files-found: error
           retention-days: 14
