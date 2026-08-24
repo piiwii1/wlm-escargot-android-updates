@@ -1,12 +1,11 @@
-Mise à jour 3.0.145 :
+Mise à jour 3.0.146 :
 
-- Nouvelle passe de fidélité Windows Live Messenger 2009 sur la fenêtre de conversation.
-- La zone de saisie a été ramenée aux proportions du client PC : elle occupe moins de hauteur et laisse davantage de place à l’historique.
-- Le bouton Envoyer ainsi que les commandes recherche/webcam de la ligne inférieure sont plus compacts.
-- Les messages texte utilisent maintenant la formulation historique « Nom a écrit : » et le nom Messenger local pour les messages envoyés.
-- Taille, espacement et retrait des messages ont été resserrés pour se rapprocher de la densité WLM PC.
-- Les messages système utilisent un rendu gris italique discret au lieu d’un message orange centré.
+- Passe de finitions fidélité Windows Live Messenger sur connexion, Ink et clins d’œil.
+- Le vrai logo Windows Live Messenger est désormais visible dans le bandeau de connexion au lieu d’un grand espace vide à gauche du titre.
+- Les messages Ink utilisent maintenant le même en-tête gris « Nom a écrit : » que les messages texte du client PC.
+- Les vignettes Ink sont légèrement agrandies pour retrouver une présence plus proche du format historique.
+- Le panneau de clins d’œil a une bordure fine WLM et les miniatures ne sont plus enfermées dans de grosses cases Android.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.145 / versionCode 4201.
-- Fidélité WLM PC estimée : ~96 % global, ~95 % pour la conversation.
+- versionName 3.0.146 / versionCode 4202.
+- Fidélité WLM PC estimée : ~96,5 % global.
