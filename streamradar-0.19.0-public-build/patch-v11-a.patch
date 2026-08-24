@@ -1,0 +1,143 @@
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index dc7f573..7d52252 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -12,8 +12,8 @@ android {
+         applicationId = "ch.piiwii.streamradar"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 27
+-        versionName = "0.27.0"
++        versionCode = 28
++        versionName = "0.28.0"
+ 
+         buildConfigField("String", "STREAMRADAR_API_URL", "\"http://10.0.2.2:8000/\"")
+     }
+diff --git a/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt b/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+index 8a73cf3..c87ee73 100644
+--- a/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
++++ b/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+@@ -97,6 +97,7 @@ fun StreamRadarApp() {
+ 
+     var tab by remember { mutableStateOf(Tab.HOME) }
+     var query by remember { mutableStateOf("") }
++    var searchTypePreset by remember { mutableStateOf<String?>(null) }
+     var releases by remember { mutableStateOf<List<Release>>(emptyList()) }
+     var syncing by remember { mutableStateOf(false) }
+     var offlineFallback by remember { mutableStateOf(false) }
+@@ -198,6 +199,7 @@ fun StreamRadarApp() {
+                         onFollow = { id -> scope.launch { store.toggleFollow(id) } },
+                         onOpen = { selectedRelease = it },
+                         onOpenTab = { tab = it },
++                        onOpenSearchType = { type -> searchTypePreset = type; tab = Tab.SEARCH },
+                         onOpenNews = { showNews = true },
+                         profileImageUri = prefs.profileImageUri,
+                         onProfileClick = { showProfileEditor = true }
+@@ -205,7 +207,9 @@ fun StreamRadarApp() {
+                     Tab.CALENDAR -> CalendarScreen(
+                         modifier = Modifier.padding(padding), releases = visibleReleases, followed = prefs.followedIds, prefs = prefs,
+                         onFollow = { id -> scope.launch { store.toggleFollow(id) } }, onOpen = { selectedRelease = it },
+-                        onOpenAlertSettings = { tab = Tab.SETTINGS }
++                        onOpenAlertSettings = { tab = Tab.SETTINGS },
++                        profileImageUri = prefs.profileImageUri,
++                        onProfileClick = { showProfileEditor = true }
+                     )
+                     Tab.SEARCH -> SearchScreen(
+                         modifier = Modifier.padding(padding), query = query, onQuery = { query = it },
+@@ -214,7 +218,13 @@ fun StreamRadarApp() {
+                         onOpen = { selectedRelease = it },
+                         profileImageUri = prefs.profileImageUri,
+                         onProfileClick = { showProfileEditor = true },
+-                        onAlertsClick = { tab = Tab.FOLLOWED }
++                        onAlertsClick = { tab = Tab.FOLLOWED },
++                        initialTypePreset = searchTypePreset,
++                        onPresetConsumed = { searchTypePreset = null },
++                        recentSearches = prefs.recentSearches,
++                        onAddRecentSearch = { value -> scope.launch { store.addRecentSearch(value) } },
++                        onRemoveRecentSearch = { value -> scope.launch { store.removeRecentSearch(value) } },
++                        onClearRecentSearches = { scope.launch { store.clearRecentSearches() } }
+                     )
+                     Tab.FOLLOWED -> FollowedScreen(
+                         modifier = Modifier.padding(padding),
+@@ -223,7 +233,9 @@ fun StreamRadarApp() {
+                         prefs = prefs,
+                         onFollow = { id -> scope.launch { store.toggleFollow(id) } },
+                         onOpen = { selectedRelease = it },
+-                        onOpenAlertSettings = { tab = Tab.SETTINGS }
++                        onOpenAlertSettings = { tab = Tab.SETTINGS },
++                        profileImageUri = prefs.profileImageUri,
++                        onProfileClick = { showProfileEditor = true }
+                     )
+                     Tab.SETTINGS -> SettingsScreen(
+                         modifier = Modifier.padding(padding), prefs = prefs, offlineFallback = offlineFallback,
+@@ -387,7 +399,7 @@ private fun AccentStat(label: String, value: String, accent: Color) {
+ private fun HomeScreen(
+     modifier: Modifier, releases: List<Release>, prefs: UserPreferences, syncing: Boolean,
+     offlineFallback: Boolean, onRefresh: () -> Unit, onFollow: (String) -> Unit, onOpen: (Release) -> Unit,
+-    onOpenTab: (Tab) -> Unit, onOpenNews: () -> Unit, profileImageUri: String?, onProfileClick: () -> Unit
++    onOpenTab: (Tab) -> Unit, onOpenSearchType: (String) -> Unit, onOpenNews: () -> Unit, profileImageUri: String?, onProfileClick: () -> Unit
+ ) {
+     val today = LocalDate.now()
+     fun parsed(r: Release) = r.releaseDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+@@ -421,8 +433,8 @@ private fun HomeScreen(
+         item {
+             Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+-                    QuickShortcut(Icons.Default.Movie, "Films", "Découvrir", Color(0xFF23C7FF), Modifier.weight(1f)) { onOpenTab(Tab.SEARCH) }
+-                    QuickShortcut(Icons.Default.LiveTv, "Séries", "Explorer", Color(0xFFB467FF), Modifier.weight(1f)) { onOpenTab(Tab.SEARCH) }
++                    QuickShortcut(Icons.Default.Movie, "Films", "Découvrir", Color(0xFF23C7FF), Modifier.weight(1f)) { onOpenSearchType("Films") }
++                    QuickShortcut(Icons.Default.LiveTv, "Séries", "Explorer", Color(0xFFB467FF), Modifier.weight(1f)) { onOpenSearchType("Séries") }
+                     QuickShortcut(Icons.Default.NewReleases, "Sorties récentes", "Nouveautés", Color(0xFFFF5A8A), Modifier.weight(1f)) { onOpenNews() }
+                 }
+                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+@@ -868,7 +880,9 @@ private fun CalendarScreen(
+     prefs: UserPreferences,
+     onFollow: (String) -> Unit,
+     onOpen: (Release) -> Unit,
+-    onOpenAlertSettings: () -> Unit
++    onOpenAlertSettings: () -> Unit,
++    profileImageUri: String?,
++    onProfileClick: () -> Unit
+ ) {
+     val today = LocalDate.now()
+     var month by remember { mutableStateOf(YearMonth.from(today)) }
+@@ -906,9 +920,15 @@ private fun CalendarScreen(
+         contentPadding = PaddingValues(bottom = 22.dp)
+     ) {
+         item {
+-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+-                Text("Calendrier", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+-                Text("Sorties à venir", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFB7C2CC))
++            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 14.dp, top = 14.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
++                Column(Modifier.weight(1f)) {
++                    Text("Calendrier", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
++                    Text("Sorties à venir", style = MaterialTheme.typography.bodyLarge, color = Color(0xFFB7C2CC))
++                }
++                if (selectedDate != today || month != YearMonth.from(today)) {
++                    TextButton(onClick = { selectedDate = today; month = YearMonth.from(today) }) { Text("Aujourd’hui") }
++                }
++                ProfileAvatar(profileImageUri = profileImageUri, onClick = onProfileClick, modifier = Modifier.size(40.dp))
+             }
+         }
+         item {
+@@ -1191,7 +1211,8 @@ private fun CalendarReleaseRow(date: LocalDate, release: Release, followed: Bool
+ private fun SearchScreen(
+     modifier: Modifier, query: String, onQuery: (String) -> Unit, releases: List<Release>, followed: Set<String>,
+     onFollow: (String) -> Unit, onOpen: (Release) -> Unit, profileImageUri: String?, onProfileClick: () -> Unit,
+-    onAlertsClick: () -> Unit
++    onAlertsClick: () -> Unit, initialTypePreset: String?, onPresetConsumed: () -> Unit,
++    recentSearches: List<String>, onAddRecentSearch: (String) -> Unit, onRemoveRecentSearch: (String) -> Unit, onClearRecentSearches: () -> Unit
+ ) {
+     var typeFilter by remember { mutableStateOf("Tous") }
+     var extraPanel by remember { mutableStateOf<String?>(null) }
+@@ -1200,8 +1221,20 @@ private fun SearchScreen(
+     var yearFilter by remember { mutableStateOf<String?>(null) }
+     var sortMode by remember { mutableStateOf("Pertinence") }
+     var sortExpanded by remember { mutableStateOf(false) }
+-    val history = remember { mutableStateListOf<String>() }
+     val trimmed = query.trim()
++
++    LaunchedEffect(initialTypePreset) {
++        initialTypePreset?.let { preset ->
++            if (preset == "Films" || preset == "Séries") {
++                typeFilter = preset
