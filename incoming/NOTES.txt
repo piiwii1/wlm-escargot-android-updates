@@ -1,11 +1,13 @@
-Mise à jour 3.0.153 :
+Mise à jour 3.0.154 :
 
-- Nouvelle passe de fidélité basée directement sur les quatre photos PC de la discussion.
-- Les palettes Émoticônes / Clins d’œil / Modifier la police / Arrière-plans s’ouvrent maintenant au-dessus du bouton de la barre basse qui les appelle, comme sur WLM PC, au lieu d’être des dialogues Android centrés.
-- Le voile sombre Android est supprimé pour ces palettes et le bouton appelant reste visuellement encadré tant que la palette est ouverte.
-- La barre basse de conversation a été corrigée : séparateur vertical avant la Police et suppression du bouton supplémentaire après Arrière-plan qui n’apparaît pas sur la référence PC.
-- La palette Arrière-plans retrouve la grande zone blanche sous « Partager l’arrière-plan actuel », visible sur la photo PC réelle.
+- Passe corrective de fidélité basée directement sur les quatre photos PC du 24.08.2026.
+- Les palettes Émoticônes / Clins d’œil / Arrière-plans sont maintenant alignées par leur bord droit sur le bouton actif, comme sur le client PC, au lieu d’être centrées sur l’icône.
+- Le positionnement des palettes tient compte de la zone réellement visible de l’écran Android.
+- « Modifier la police » redevient une vraie boîte de dialogue Windows indépendante : la 3.0.153 l’avait à tort traitée comme une palette attachée.
+- Les listes Police / Style / Taille utilisent des lignes compactes de type Windows au lieu des grandes lignes Android.
+- Le choix Couleur de la boîte Police s’ouvre comme un petit menu WLM ancré au champ.
+- L’état visuel du bouton actif dans la barre basse est plus rectangulaire et plus proche de la référence PC.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.153 / versionCode 4209.
-- Fidélité WLM PC estimée : ~98,2 % global. Aucun test physique Android n’a été effectué ici.
+- versionName 3.0.154 / versionCode 4210.
+- Fidélité WLM PC estimée : ~98,4 % global. Aucun test physique Android n’a été effectué ici.
