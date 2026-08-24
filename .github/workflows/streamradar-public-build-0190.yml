@@ -15,11 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rebuild 0.18.0 and apply 0.19.0
+      - name: Rebuild 0.18.0 and apply tested 0.19.0
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL 'https://sdmntprnorthcentralus.oaiusercontent.com/files/00000000-e7b8-822f-9f37-5b9bee35f1dc/raw?se=2026-08-24T13%3A13%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=8663bb4d-d64a-55f7-b072-f0801265b4d0&skoid=1d6acb5b-b3f4-43ec-a5ec-b05c4a7708c8&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-24T08%3A22%3A41Z&ske=2026-08-25T08%3A22%3A41Z&sks=b&skv=2026-02-06&sig=a6isGKC6guKJChEeEF8bS9%2BTObJZsr25in0vOw/2/NQ%3D' -o /tmp/base-artifact.zip
+          curl -fL 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-1a08-81f4-870b-e2dad1d81738/raw?se=2026-08-24T13%3A19%3A09Z&sp=r&sv=2026-02-06&sr=b&scid=32050398-1ab4-5614-b6e3-1dd259a44b78&skoid=1d6acb5b-b3f4-43ec-a5ec-b05c4a7708c8&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-24T08%3A22%3A36Z&ske=2026-08-25T08%3A22%3A36Z&sks=b&skv=2026-02-06&sig=4G8KGoAtiZ/OOfQFPa80utQheehAqLgU/cSzCcBCt%2BM%3D' -o /tmp/base-artifact.zip
           mkdir -p /tmp/base-artifact /tmp/sr-source
           unzip -q /tmp/base-artifact.zip -d /tmp/base-artifact
           SRCZIP="$(find /tmp/base-artifact -maxdepth 2 -type f -name 'StreamRadar-0.18.0-SOURCE-COMPLET.zip' | head -1)"
@@ -31,9 +31,8 @@ jobs:
           git config user.name StreamRadarBuild
           git add .
           git commit -qm base
-          cat "$GITHUB_WORKSPACE"/streamradar-0.19.0-public-build/patch-* > /tmp/sr019.patch
+          base64 -d "$GITHUB_WORKSPACE"/streamradar-0.19.0-public-build/patch-v2.gz.b64 | gzip -dc > /tmp/sr019.patch
           git apply /tmp/sr019.patch
-          sed -i 's#@drawable/streamradar_brand_round#@drawable/streamradar_brand#' android/app/src/main/AndroidManifest.xml
           mkdir -p android/app/src/main/res/drawable-nodpi
           cat "$GITHUB_WORKSPACE"/streamradar-0.19.0-public-build/icon-* | tr -d '\n\r' | base64 -d > android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
           grep -q 'versionCode = 19' android/app/build.gradle.kts
@@ -42,6 +41,7 @@ jobs:
           grep -q 'android:roundIcon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
           grep -q 'Films • Séries • Dernières sorties' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           test -s android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
+          file android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg | grep -q '512x512'
           cd /tmp/sr-source
           mv StreamRadar-0.18.0 StreamRadar-0.19.0
 
