@@ -1,11 +1,9 @@
-Mise à jour 3.0.130 :
+Mise à jour 3.0.131 :
 
-- Fiabilité renforcée pour les conversations reçues quand l’interface Android n’est pas ouverte.
-- Les invitations d’appel audio/vidéo WLM reçues en arrière-plan sont maintenant enregistrées dans l’historique, font sonner l’application et génèrent une notification.
-- Les signaux d’appel reçus en arrière-plan sont maintenant conservés dans l’historique.
-- Les invitations de jeu/activité WLM reçues en arrière-plan sont maintenant enregistrées et notifiées.
-- Le transport Ink PC ↔ Android reste strictement inchangé.
-- La continuité des transferts de 3.0.128 et la persistance des clins d’œil/émoticônes de 3.0.129 restent inchangées.
+- Les messages hors connexion (OIM) reçus quand l’interface Android n’est pas ouverte ne reposent plus uniquement sur la notification.
+- Le service en arrière-plan enregistre maintenant le message dans l’historique de la bonne conversation avant d’afficher la notification.
+- Si l’interface est ouverte, le chemin existant reste inchangé afin d’éviter tout doublon d’historique.
+- Le transport Ink, les transferts, les clins d’œil, les émoticônes, les appels et jeux des versions précédentes restent inchangés.
 - MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.130 / versionCode 4186.
+- versionName 3.0.131 / versionCode 4187.
