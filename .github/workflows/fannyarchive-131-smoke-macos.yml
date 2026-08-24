@@ -8,7 +8,7 @@ on:
 
 jobs:
   verify-apk:
-    runs-on: macos-14
+    runs-on: macos-15-intel
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -41,30 +41,20 @@ jobs:
           disable-animations: false
           emulator-boot-timeout: 600
           script: |
-            set -e
             adb install -r /tmp/fanny131apk/FannyArchive-1.3.1-STABLE.apk | tee /tmp/install131.txt
             grep -q 'Success' /tmp/install131.txt
             adb logcat -c
             adb shell am force-stop ch.piiwii.fannyarchive.stable
             adb shell am start -n ch.piiwii.fannyarchive.stable/ch.piiwii.fannyarchive.MainActivity | tee /tmp/start131.txt
-            sleep 10
-            ok=0
-            for i in $(seq 1 24); do
-              PID=$(adb shell pidof ch.piiwii.fannyarchive.stable 2>/dev/null | tr -d '\r' || true)
-              if [ -n "$PID" ]; then
-                adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-                adb pull /sdcard/window.xml /tmp/window131.xml >/dev/null 2>&1 || true
-                if grep -Fq 'Archive Fanny' /tmp/window131.xml 2>/dev/null; then
-                  echo "UI_OK pid=$PID"
-                  ok=1
-                  break
-                fi
-              fi
-              sleep 3
-            done
-            test "$ok" = 1
+            sleep 25
+            adb shell pidof ch.piiwii.fannyarchive.stable | tee /tmp/pid131.txt
+            test -s /tmp/pid131.txt
+            adb shell uiautomator dump /sdcard/window.xml
+            adb pull /sdcard/window.xml /tmp/window131.xml
+            grep -Fq 'Archive Fanny' /tmp/window131.xml
             adb shell dumpsys activity activities | grep -F 'ch.piiwii.fannyarchive.stable/ch.piiwii.fannyarchive.MainActivity'
-            ! adb logcat -d -v brief | grep -E 'FATAL EXCEPTION|AndroidRuntime' | grep -F 'ch.piiwii.fannyarchive.stable'
+            adb logcat -d -v brief > /tmp/logcat131.txt
+            if grep -E 'FATAL EXCEPTION|AndroidRuntime' /tmp/logcat131.txt | grep -Fq 'ch.piiwii.fannyarchive.stable'; then exit 1; else exit 0; fi
             adb exec-out screencap -p > /tmp/FannyArchive-1.3.1-STABLE-macos.png
             echo 'INSTALL_LAUNCH_UI=PASS'
 
@@ -76,7 +66,9 @@ jobs:
           path: |
             /tmp/install131.txt
             /tmp/start131.txt
+            /tmp/pid131.txt
             /tmp/window131.xml
+            /tmp/logcat131.txt
             /tmp/FannyArchive-1.3.1-STABLE-macos.png
           if-no-files-found: ignore
           retention-days: 7
