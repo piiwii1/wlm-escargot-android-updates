@@ -53,10 +53,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat temp-streamradar-034/patch.part* | base64 -d | gzip -d > /tmp/streamradar034.patch
+          cat temp-streamradar-034/patch.part* | base64 -d | gzip -d > /tmp/streamradar034-full.patch
+          awk '
+            /^diff --git a\/android\// { keep=1 }
+            /^diff --git a\// && $0 !~ /^diff --git a\/android\// { keep=0 }
+            keep { print }
+          ' /tmp/streamradar034-full.patch > /tmp/streamradar034-android.patch
+          test -s /tmp/streamradar034-android.patch
           cd /tmp/streamradar-src
-          patch -p1 --dry-run < /tmp/streamradar034.patch
-          patch -p1 < /tmp/streamradar034.patch
+          patch -p1 --dry-run < /tmp/streamradar034-android.patch
+          patch -p1 < /tmp/streamradar034-android.patch
           grep -q 'applicationId = "ch.piiwii.streamradar2"' android/app/build.gradle.kts
           grep -q 'versionName = "0.34.0"' android/app/build.gradle.kts
           grep -q 'versionCode = 34' android/app/build.gradle.kts
