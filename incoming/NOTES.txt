@@ -1,11 +1,11 @@
-Mise à jour 3.0.146 :
+Mise à jour 3.0.147 :
 
-- Passe de finitions fidélité Windows Live Messenger sur connexion, Ink et clins d’œil.
-- Le vrai logo Windows Live Messenger est désormais visible dans le bandeau de connexion au lieu d’un grand espace vide à gauche du titre.
-- Les messages Ink utilisent maintenant le même en-tête gris « Nom a écrit : » que les messages texte du client PC.
-- Les vignettes Ink sont légèrement agrandies pour retrouver une présence plus proche du format historique.
-- Le panneau de clins d’œil a une bordure fine WLM et les miniatures ne sont plus enfermées dans de grosses cases Android.
-- MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
+- Nouvelle passe de fidélité Windows Live Messenger sur la conversation et ses contenus secondaires.
+- La barre d’actions supérieure est plus compacte et plus proche des proportions du client PC.
+- Les transferts de fichiers ne prennent plus la forme d’une grande carte mobile : miniature, texte, progression et actions sont resserrés dans le flux de conversation.
+- Les clips vocaux reprennent le même en-tête gris « Nom a écrit : » que les messages texte et Ink, avec commandes plus compactes.
+- Le pied « Dernier message reçu » a été légèrement resserré.
+- Le moteur de transfert de fichiers, le codec vocal, MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.146 / versionCode 4202.
-- Fidélité WLM PC estimée : ~96,5 % global.
+- versionName 3.0.147 / versionCode 4203.
+- Fidélité WLM PC estimée : ~97 % global, ~97 % pour la conversation.
