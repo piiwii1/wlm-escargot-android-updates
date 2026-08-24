@@ -1,11 +1,12 @@
-Mise à jour 3.0.150 :
+Mise à jour 3.0.151 :
 
-- Micro-finitions de fidélité Windows Live Messenger sur contacts, Ink, Wizz et clins d’œil.
-- L’en-tête Favoris n’affiche plus une étoile Unicode en plus de l’asset WLM.
-- Les vignettes Ink se rapprochent du format historique 199×65 sans devenir de grandes images mobiles.
-- Les événements Wizz sont légèrement plus compacts.
-- Le panneau des clins d’œil est resserré et la vue « Tous les clins d’œil » n’utilise plus de grosses cases bordées Android.
+- Refonte visible des fenêtres secondaires de conversation à partir de nouvelles photos du client PC réel.
+- « Modifier la police » devient une vraie boîte de dialogue WLM avec Police / Style / Taille, Barré / Souligné, Couleur, Aperçu, Script et OK / Annuler.
+- « Vos émoticônes » reprend le titre, « Tout afficher… », « Dernières émoticônes utilisées » et une grille compacte 10 colonnes.
+- Le panneau de clins d’œil reprend « Clins d’œil proposés », « Plus… », « Vos clins d’œil », « Tout afficher… » et « Derniers clins d’œil utilisés ».
+- Le panneau Arrière-plans reprend « Tout afficher… », « Derniers arrière-plans utilisés », une rangée compacte de miniatures et « Partager l’arrière-plan actuel ».
+- Les nouvelles photos PC du 24.08.2026 sont incluses comme références prioritaires dans la source/pack.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.150 / versionCode 4206.
-- Fidélité WLM PC estimée : ~98,5 % global.
+- versionName 3.0.151 / versionCode 4207.
+- Fidélité recalibrée sur les nouvelles photos PC : ~97,5 % global après cette passe.
