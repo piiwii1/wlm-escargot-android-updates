@@ -1,0 +1,111 @@
+name: Publier la mise à jour StreamRadar
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'incoming-streamradar/*.apk'
+      - 'incoming-streamradar/NOTES.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: streamradar-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Choisir automatiquement l'APK StreamRadar la plus récente
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob, json, os, subprocess
+          expected = 'ch.piiwii.streamradar'
+          candidates = []
+          for apk in glob.glob('incoming-streamradar/*.apk'):
+              try:
+                  raw = subprocess.check_output(['python3', 'tools/read_apk_info.py', apk], text=True)
+                  info = json.loads(raw)
+              except Exception as exc:
+                  print(f'APK ignorée {apk}: {exc}')
+                  continue
+              if info.get('package') != expected:
+                  print(f'APK ignorée {apk}: mauvais package {info.get("package")}')
+                  continue
+              try:
+                  version_code = int(info.get('versionCode', 0))
+              except Exception:
+                  version_code = 0
+              version_name = str(info.get('versionName') or '').strip()
+              if version_code > 0 and version_name:
+                  candidates.append((version_code, apk, info))
+          if not candidates:
+              raise SystemExit('Aucune APK StreamRadar valide trouvée dans incoming-streamradar/')
+          candidates.sort(key=lambda x: x[0], reverse=True)
+          version_code, apk, info = candidates[0]
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
+              f.write(f'apk_path={apk}\n')
+              f.write(f'version_code={version_code}\n')
+              f.write(f'version_name={info["versionName"]}\n')
+          print(f'APK sélectionnée: {apk} — {info["versionName"]} ({version_code})')
+          PY
+
+      - name: Mettre à jour le canal public StreamRadar
+        shell: bash
+        env:
+          APK_PATH: ${{ steps.apk.outputs.apk_path }}
+          VERSION_NAME: ${{ steps.apk.outputs.version_name }}
+          VERSION_CODE: ${{ steps.apk.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          mkdir -p streamradar
+          cp "$APK_PATH" streamradar/StreamRadar.apk
+          SHA="$(sha256sum streamradar/StreamRadar.apk | awk '{print $1}')"
+          NOTES='Mise à jour StreamRadar.'
+          if [ -f incoming-streamradar/NOTES.txt ]; then
+            NOTES="$(cat incoming-streamradar/NOTES.txt)"
+          fi
+          python3 - <<'PY'
+          import json, os
+          out = {
+            'versionCode': int(os.environ['VERSION_CODE']),
+            'versionName': os.environ['VERSION_NAME'],
+            'apkUrl': 'https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/main/streamradar/StreamRadar.apk',
+            'sha256': os.popen("sha256sum streamradar/StreamRadar.apk | awk '{print $1}'").read().strip(),
+            'changelog': os.environ.get('NOTES', 'Mise à jour StreamRadar.'),
+            'mandatory': False,
+          }
+          json.dump(out, open('streamradar/latest.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add streamradar/StreamRadar.apk streamradar/latest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Publier StreamRadar ${VERSION_NAME} [skip streamradar release]"
+            git push
+          fi
+
+      - name: Garder seulement l'APK courante dans incoming-streamradar
+        shell: bash
+        env:
+          APK_PATH: ${{ steps.apk.outputs.apk_path }}
+        run: |
+          set -euo pipefail
+          mkdir -p incoming-streamradar
+          cp "$APK_PATH" incoming-streamradar/StreamRadar.apk
+          find incoming-streamradar -maxdepth 1 -type f -name '*.apk' ! -name 'StreamRadar.apk' -delete
+          git add -A incoming-streamradar
+          if ! git diff --cached --quiet; then
+            git commit -m 'Mettre à jour automatiquement APK StreamRadar courante [skip streamradar release]'
+            git push
+          fi
