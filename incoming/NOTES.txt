@@ -1,11 +1,11 @@
-Mise à jour 3.0.148 :
+Mise à jour 3.0.149 :
 
-- Nouvelle passe de fidélité Windows Live Messenger sur le bandeau de conversation.
-- Le titre de conversation affiche maintenant l’état réel du contact au lieu du logo général Messenger.
-- Le nom, le message personnel / média courant et l’adresse du contact sont maintenant réellement reliés au bandeau et peuvent se mettre à jour pendant la conversation.
-- Le format du sous-titre reste fidèle à WLM : message personnel puis <adresse>.
-- Le bandeau et les boutons réduire / agrandir / fermer ont été légèrement resserrés pour se rapprocher de la capture PC exacte.
+- Passe de finition sur les menus contextuels Windows Live Messenger.
+- Les menus WLM utilisent une largeur adaptée à leur contenu au lieu d'une largeur fixe trop grande.
+- Les lignes, icônes et flèches de sous-menu sont légèrement plus compactes.
+- Le menu sous l'image perso du contact reprend : Bloquer / Carte de visite / Taille / Masquer les images perso.
+- Le panneau « Vos images perso » est resserré : largeur, miniatures et lignes plus proches du client PC.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.148 / versionCode 4204.
-- Fidélité WLM PC estimée : ~97,5 % global, ~98 % pour la conversation.
+- versionName 3.0.149 / versionCode 4205.
+- Fidélité WLM PC estimée : ~98 % global, ~98 % pour Options / pop-ups.
