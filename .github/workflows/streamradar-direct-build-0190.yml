@@ -1,0 +1,82 @@
+name: StreamRadar Direct Build 0.19.0
+
+on:
+  pull_request:
+    paths:
+      - 'streamradar-0.19.0-direct/**'
+      - '.github/workflows/streamradar-direct-build-0190.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unpack exact 0.19.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRCZIP="$GITHUB_WORKSPACE/streamradar-0.19.0-direct/StreamRadar-0.19.0-DIRECT-SOURCE.zip"
+          test -f "$SRCZIP"
+          echo 'f46e9ffafc6a15da7f01087753b14e344c73bc38d4b435f99887b99bbd402520  '"$SRCZIP" | sha256sum -c -
+          rm -rf /tmp/sr019
+          mkdir -p /tmp/sr019
+          unzip -q "$SRCZIP" -d /tmp/sr019
+          test -f /tmp/sr019/StreamRadar-0.19.0/android/app/build.gradle.kts
+          grep -q 'versionCode = 19' /tmp/sr019/StreamRadar-0.19.0/android/app/build.gradle.kts
+          grep -q 'versionName = "0.19.0"' /tmp/sr019/StreamRadar-0.19.0/android/app/build.gradle.kts
+          grep -q 'android:icon="@drawable/streamradar_brand"' /tmp/sr019/StreamRadar-0.19.0/android/app/src/main/AndroidManifest.xml
+          grep -q 'android:roundIcon="@drawable/streamradar_brand"' /tmp/sr019/StreamRadar-0.19.0/android/app/src/main/AndroidManifest.xml
+          ICON=/tmp/sr019/StreamRadar-0.19.0/android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
+          test -f "$ICON"
+          echo '65dbf44e4a589a6553ea8217c13547e873cae107b26341204c5cce4005b84188  '"$ICON" | sha256sum -c -
+          file "$ICON" | grep -q '192x192'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Compile APK
+        working-directory: /tmp/sr019/StreamRadar-0.19.0/android
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/sr019/StreamRadar-0.19.0/android/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          aapt dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='19' versionName='0.19.0'"
+          cp "$APK" /tmp/StreamRadar-0.19.0.apk
+          sha256sum /tmp/StreamRadar-0.19.0.apk > /tmp/StreamRadar-0.19.0-SHA256.txt
+          cp "$GITHUB_WORKSPACE/streamradar-0.19.0-direct/StreamRadar-0.19.0-DIRECT-SOURCE.zip" /tmp/StreamRadar-0.19.0-SOURCE-COMPLET.zip
+
+      - name: Upload APK and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreamRadar-0.19.0-DirectBuild
+          path: |
+            /tmp/StreamRadar-0.19.0.apk
+            /tmp/StreamRadar-0.19.0-SHA256.txt
+            /tmp/StreamRadar-0.19.0-SOURCE-COMPLET.zip
+          if-no-files-found: error
+          retention-days: 14
