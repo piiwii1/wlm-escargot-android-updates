@@ -1,12 +1,11 @@
-Mise à jour 3.0.122 :
+Mise à jour 3.0.123 :
 
-- Écriture manuscrite reconstruite à partir des captures PC et Android réelles.
-- Barre WLM fidèle : stylet, gomme, annuler, rétablir, palette, papier/grille et smiley.
-- Onglets A / stylet replacés en bas à gauche sous la zone de saisie.
-- Annuler/rétablir et gomme « Trait entier » fonctionnels.
-- Dessins manuscrits compacts dans l’historique avec le vrai nom de l’expéditeur (« Nom a écrit : »).
-- GIF Ink rapproché du paquet WLM 2009 observé : 199×65, GIF89a, palette globale 256 couleurs et aucune extension avant l’image.
-- Transport GIF Ink : Content-Type image/gif, corps base64: et commande MSG en mode N, multi-paquets conservé.
-- Le système de mise à jour GitHub, UpdateManager, UpdateApkProvider, package et certificat restent inchangés.
-- Aucun test physique Android ↔ PC n’a été effectué dans l’environnement de build. Si l’Ink échoue encore, la passerelle Escargot/Tachyon devra être diagnostiquée avant toute nouvelle modification du format.
-- versionName 3.0.122 / versionCode 4178.
+- Version diagnostic prioritaire pour l’écriture manuscrite après l’échec confirmé de la 3.0.122 Android ↔ WLM PC.
+- Aucun nouveau changement arbitraire du format GIF Ink.
+- Nouveau diagnostic dans les options de conversation : Content-Type MIME entrants, Ink natifs valides/invalides, fragments sortants, NAK serveur, taille/dimensions/SHA-256 du GIF envoyé, offres et réceptions ink.gif.
+- Bouton Copier pour transmettre le diagnostic après un test dans chaque sens.
+- Le diagnostic ne journalise pas le texte des conversations.
+- Fallback passerelle : une offre exactement nommée ink.gif peut maintenant être auto-acceptée même si sa taille annoncée vaut 0 (taille inconnue), avec limite de sécurité à 1 Mio.
+- UpdateManager et UpdateApkProvider sont strictement inchangés.
+- Package et certificat de signature identiques.
+- versionName 3.0.123 / versionCode 4179.
