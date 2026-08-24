@@ -1,8 +1,8 @@
 {
-  "versionCode": 11,
-  "versionName": "0.11.0",
+  "versionCode": 18,
+  "versionName": "0.18.0",
   "apkUrl": "https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/main/streamradar/StreamRadar.apk",
-  "sha256": "70326db1a18006a975472978d79386599133e573c3e655d33f921d0e875d42a8",
-  "changelog": "Validation du cycle de mise à jour automatique 0.10.0 vers 0.11.0.",
+  "sha256": "f9c30b5272776097054a876eb3250d563de5b5e2fd34d0c9b433fcd85441c58b",
+  "changelog": "StreamRadar 0.18.0 : état détaillé des sources, dernière synchronisation visible, et vérification SHA-256 de l’APK téléchargée avant installation.",
   "mandatory": false
 }
