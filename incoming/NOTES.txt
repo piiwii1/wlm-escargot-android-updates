@@ -1,12 +1,11 @@
-Mise à jour 3.0.152 :
+Mise à jour 3.0.153 :
 
-- Deuxième passe visible sur les quatre fenêtres PC photographiées : Police, Émoticônes, Clins d’œil et Arrière-plans.
-- « Modifier la police » affiche maintenant les champs de sélection au-dessus des listes Police / Style / Taille, comme la boîte Windows d’origine.
-- Le popup « Vos émoticônes » n’utilise plus une grande hauteur fixe : en mode normal il épouse son contenu, avec 9 emplacements récents et 4 rangées visibles.
-- « Tout afficher… » agrandit réellement la zone de grille et révèle les émoticônes personnalisées, au lieu de laisser de l’espace vide.
-- Les 8 clins d’œil proposés et les 8 récents ont été resserrés pour tenir sur une ligne comme sur la photo PC.
-- Les 7 miniatures d’arrière-plans tiennent maintenant sur une seule ligne au lieu de se comporter comme un carrousel mobile.
+- Nouvelle passe de fidélité basée directement sur les quatre photos PC de la discussion.
+- Les palettes Émoticônes / Clins d’œil / Modifier la police / Arrière-plans s’ouvrent maintenant au-dessus du bouton de la barre basse qui les appelle, comme sur WLM PC, au lieu d’être des dialogues Android centrés.
+- Le voile sombre Android est supprimé pour ces palettes et le bouton appelant reste visuellement encadré tant que la palette est ouverte.
+- La barre basse de conversation a été corrigée : séparateur vertical avant la Police et suppression du bouton supplémentaire après Arrière-plan qui n’apparaît pas sur la référence PC.
+- La palette Arrière-plans retrouve la grande zone blanche sous « Partager l’arrière-plan actuel », visible sur la photo PC réelle.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.152 / versionCode 4208.
-- Fidélité recalibrée sur les photos PC : ~98 % global.
+- versionName 3.0.153 / versionCode 4209.
+- Fidélité WLM PC estimée : ~98,2 % global. Aucun test physique Android n’a été effectué ici.
