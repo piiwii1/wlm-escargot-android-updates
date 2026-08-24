@@ -1,11 +1,12 @@
-Mise à jour 3.0.135 :
+Mise à jour 3.0.136 :
 
-- Les contenus riches reçus ne disparaissent plus silencieusement lorsque leurs données sont invalides ou impossibles à enregistrer.
-- Un clin d’œil dont le CAB ne peut pas être décodé ou sauvegardé laisse désormais une trace dans l’historique et génère une notification hors conversation.
-- Une émoticône personnalisée impossible à décoder ou sauvegarder suit le même traitement.
-- Le comportement couvre les conversations ouvertes, garées et gérées entièrement en arrière-plan par KeepAliveService.
-- Les chemins de succès restent inchangés.
-- MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
-- Le transport Ink PC ↔ Android reste inchangé.
+- Les échecs de récupération P2P des contenus riches ne restent plus seulement dans les logs internes.
+- Refus, timeout ou validation P2P échouée d’un clin d’œil : historique + affichage/notification explicite.
+- Même traitement pour les émoticônes personnalisées et les clips vocaux.
+- Un clip vocal dont le P2P échoue est retiré immédiatement de la file d’attente au lieu d’attendre le timeout de 20 secondes.
+- Les annonces de clin d’œil ou d’émoticône personnalisée invalides/vides ne sont plus ignorées silencieusement.
+- Les raccourcis d’émoticônes en attente sont nettoyés si leur récupération P2P échoue.
+- MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
+- MessengerNetwork.java est modifié uniquement pour relayer ces erreurs vers les listeners ; le transport P2P lui-même n’est pas modifié.
 - Package et certificat identiques.
-- versionName 3.0.135 / versionCode 4191.
+- versionName 3.0.136 / versionCode 4192.
