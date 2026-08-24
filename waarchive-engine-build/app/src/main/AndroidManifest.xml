@@ -6,7 +6,7 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
-            android:name=".MainActivityV043"
+            android:name=".MainActivityV045"
             android:exported="true"
             android:launchMode="singleTop"
             android:screenOrientation="portrait">
