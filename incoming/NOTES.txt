@@ -1,12 +1,10 @@
-Mise à jour 3.0.136 :
+Mise à jour 3.0.137 :
 
-- Les échecs de récupération P2P des contenus riches ne restent plus seulement dans les logs internes.
-- Refus, timeout ou validation P2P échouée d’un clin d’œil : historique + affichage/notification explicite.
-- Même traitement pour les émoticônes personnalisées et les clips vocaux.
-- Un clip vocal dont le P2P échoue est retiré immédiatement de la file d’attente au lieu d’attendre le timeout de 20 secondes.
-- Les annonces de clin d’œil ou d’émoticône personnalisée invalides/vides ne sont plus ignorées silencieusement.
-- Les raccourcis d’émoticônes en attente sont nettoyés si leur récupération P2P échoue.
+- Fiabilité renforcée pour les invitations d’appel audio/vidéo WLM.
+- Les invitations et signaux d’appel reçus via text/x-msmsgsinvite passent désormais par la file d’événements de la conversation au lieu d’appeler directement le listener courant.
+- Un appel reçu pendant une transition d’écran ou de listener peut ainsi être conservé puis rejoué quand le listener final est attaché.
+- Les handlers d’appel existants de MainActivity et KeepAliveService restent inchangés.
 - MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
-- MessengerNetwork.java est modifié uniquement pour relayer ces erreurs vers les listeners ; le transport P2P lui-même n’est pas modifié.
+- MessengerNetwork.java est modifié uniquement sur la continuité/dispatch des événements d’appel ; le transport P2P n’est pas modifié.
 - Package et certificat identiques.
-- versionName 3.0.136 / versionCode 4192.
+- versionName 3.0.137 / versionCode 4193.
