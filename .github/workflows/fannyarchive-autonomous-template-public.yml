@@ -49,6 +49,7 @@ jobs:
           cp /tmp/fanny-patches/WhatsAppZipImporter.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/importer/WhatsAppZipImporter.kt"
           mkdir -p "$SRC/app/src/main/assets" "$SRC/signing"
           printf 'PLACEHOLDER_PRIVATE_CONVERSATION' > "$SRC/app/src/main/assets/fanny_messages.bin"
+          rm -f "$SRC/signing/fannyarchive-release.jks"
           keytool -genkeypair -v -keystore "$SRC/signing/fannyarchive-release.jks" -storepass TemplateOnly2026 -keypass TemplateOnly2026 -alias fannyarchive -keyalg RSA -keysize 2048 -validity 30 -dname "CN=Template Only,O=PiiWii,C=CH"
           cat > "$SRC/keystore.properties" <<'EOF'
           storeFile=signing/fannyarchive-release.jks
