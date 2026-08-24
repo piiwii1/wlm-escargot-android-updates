@@ -1,0 +1,94 @@
+name: StreamRadar Public Build 0.19.0
+
+on:
+  pull_request:
+    paths:
+      - 'streamradar-0.19.0-public-build/**'
+      - '.github/workflows/streamradar-public-build-0190.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild 0.18.0 and apply 0.19.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL 'https://sdmntprnorthcentralus.oaiusercontent.com/files/00000000-e7b8-822f-9f37-5b9bee35f1dc/raw?se=2026-08-24T13%3A13%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=8663bb4d-d64a-55f7-b072-f0801265b4d0&skoid=1d6acb5b-b3f4-43ec-a5ec-b05c4a7708c8&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-24T08%3A22%3A41Z&ske=2026-08-25T08%3A22%3A41Z&sks=b&skv=2026-02-06&sig=a6isGKC6guKJChEeEF8bS9%2BTObJZsr25in0vOw/2/NQ%3D' -o /tmp/base-artifact.zip
+          mkdir -p /tmp/base-artifact /tmp/sr-source
+          unzip -q /tmp/base-artifact.zip -d /tmp/base-artifact
+          SRCZIP="$(find /tmp/base-artifact -maxdepth 2 -type f -name 'StreamRadar-0.18.0-SOURCE-COMPLET.zip' | head -1)"
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/sr-source
+          cd /tmp/sr-source/StreamRadar-0.18.0
+          git init -q
+          git config user.email build@streamradar.local
+          git config user.name StreamRadarBuild
+          git add .
+          git commit -qm base
+          cat "$GITHUB_WORKSPACE"/streamradar-0.19.0-public-build/patch-* > /tmp/sr019.patch
+          git apply /tmp/sr019.patch
+          sed -i 's#@drawable/streamradar_brand_round#@drawable/streamradar_brand#' android/app/src/main/AndroidManifest.xml
+          mkdir -p android/app/src/main/res/drawable-nodpi
+          cat "$GITHUB_WORKSPACE"/streamradar-0.19.0-public-build/icon-* | tr -d '\n\r' | base64 -d > android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
+          grep -q 'versionCode = 19' android/app/build.gradle.kts
+          grep -q 'versionName = "0.19.0"' android/app/build.gradle.kts
+          grep -q 'android:icon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:roundIcon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
+          grep -q 'Films • Séries • Dernières sorties' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          test -s android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
+          cd /tmp/sr-source
+          mv StreamRadar-0.18.0 StreamRadar-0.19.0
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Compile APK
+        working-directory: /tmp/sr-source/StreamRadar-0.19.0/android
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          test -f /tmp/sr-source/StreamRadar-0.19.0/android/app/build/outputs/apk/debug/app-debug.apk
+          cp /tmp/sr-source/StreamRadar-0.19.0/android/app/build/outputs/apk/debug/app-debug.apk /tmp/StreamRadar-0.19.0.apk
+          sha256sum /tmp/StreamRadar-0.19.0.apk > /tmp/StreamRadar-0.19.0-SHA256.txt
+
+      - name: Package source
+        shell: bash
+        run: |
+          cd /tmp/sr-source
+          zip -qr /tmp/StreamRadar-0.19.0-SOURCE-COMPLET.zip StreamRadar-0.19.0 -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+
+      - name: Upload APK and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreamRadar-0.19.0-PublicBuild
+          path: |
+            /tmp/StreamRadar-0.19.0.apk
+            /tmp/StreamRadar-0.19.0-SHA256.txt
+            /tmp/StreamRadar-0.19.0-SOURCE-COMPLET.zip
+          if-no-files-found: error
+          retention-days: 14
