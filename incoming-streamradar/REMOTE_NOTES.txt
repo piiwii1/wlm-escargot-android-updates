@@ -1,1 +1,0 @@
-StreamRadar 0.18.0 : état détaillé des sources, dernière synchronisation visible, et vérification SHA-256 de l’APK téléchargée avant installation.
