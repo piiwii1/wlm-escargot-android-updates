@@ -1,0 +1,77 @@
+name: FannyArchive 1.4 Template Public Safe
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'fannyarchive-template/**'
+
+jobs:
+  build-template:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android
+        uses: android-actions/setup-android@v3
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Reconstruct template source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin fannyarchive-stable-131-final --depth=1
+          rm -rf /tmp/fanny140 /tmp/fanny-patches
+          mkdir -p /tmp/fanny140 /tmp/fanny-patches
+          for n in 00 01 02 03 04 05 06; do git show origin/fannyarchive-stable-131-final:fannyarchive-ci/source-v131-part${n}.txt; done | tr -d '\r\n' | base64 --decode > /tmp/FannyArchive-v1.3.1-source-STABLE.zip
+          echo "f78f787484eefdf3f12a6a5c9864949de3d09e0d6136cd3d2cfe3ff7bff9c9c4  /tmp/FannyArchive-v1.3.1-source-STABLE.zip" | sha256sum -c -
+          unzip -q /tmp/FannyArchive-v1.3.1-source-STABLE.zip -d /tmp/fanny140
+          SRC=/tmp/fanny140/FannyArchive-v1.3-source
+          tr -d '\r\n' < fannyarchive-template/patches.b64 | base64 --decode > /tmp/fanny-patches.zip
+          echo "15018751dfe16c93aeead310f15799739988532056b943bea1798ffe09ea1c7e  /tmp/fanny-patches.zip" | sha256sum -c -
+          unzip -q /tmp/fanny-patches.zip -d /tmp/fanny-patches
+          cp /tmp/fanny-patches/app-build.gradle.kts "$SRC/app/build.gradle.kts"
+          cp /tmp/fanny-patches/AndroidManifest.xml "$SRC/app/src/main/AndroidManifest.xml"
+          cp /tmp/fanny-patches/MainViewModel.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/MainViewModel.kt"
+          cp /tmp/fanny-patches/MainActivity.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/ui/MainActivity.kt"
+          cp /tmp/fanny-patches/WhatsAppZipImporter.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/importer/WhatsAppZipImporter.kt"
+          mkdir -p "$SRC/app/src/main/assets" "$SRC/signing"
+          printf 'PLACEHOLDER_PRIVATE_CONVERSATION' > "$SRC/app/src/main/assets/fanny_messages.bin"
+          keytool -genkeypair -v -keystore "$SRC/signing/fannyarchive-release.jks" -storepass TemplateOnly2026 -keypass TemplateOnly2026 -alias fannyarchive -keyalg RSA -keysize 2048 -validity 30 -dname "CN=Template Only,O=PiiWii,C=CH"
+          cat > "$SRC/keystore.properties" <<'EOF'
+          storeFile=signing/fannyarchive-release.jks
+          storePassword=TemplateOnly2026
+          keyAlias=fannyarchive
+          keyPassword=TemplateOnly2026
+          EOF
+          sed -i '/^org.gradle.jvmargs=/d' "$SRC/gradle.properties"
+          printf '\norg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\norg.gradle.workers.max=2\n' >> "$SRC/gradle.properties"
+      - name: Build release template
+        working-directory: /tmp/fanny140/FannyArchive-v1.3-source
+        run: gradle --no-daemon --max-workers=2 :app:assembleRelease
+      - name: Package template and Android signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fanny-template
+          cp /tmp/fanny140/FannyArchive-v1.3-source/app/build/outputs/apk/release/app-release.apk /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk
+          tar -C "$ANDROID_HOME/build-tools" -czf /tmp/fanny-template/android-build-tools-35.0.0.tar.gz 35.0.0
+          sha256sum /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk > /tmp/fanny-template/template.sha256
+      - name: Upload template
+        uses: actions/upload-artifact@v4
+        with:
+          name: FannyArchive-1.4.0-TEMPLATE-LOCAL-INJECT
+          path: /tmp/fanny-template/
+          retention-days: 7
