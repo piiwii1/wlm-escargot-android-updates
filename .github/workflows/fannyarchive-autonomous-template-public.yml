@@ -47,6 +47,19 @@ jobs:
           cp /tmp/fanny-patches/MainViewModel.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/MainViewModel.kt"
           cp /tmp/fanny-patches/MainActivity.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/ui/MainActivity.kt"
           cp /tmp/fanny-patches/WhatsAppZipImporter.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/importer/WhatsAppZipImporter.kt"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/fanny141/FannyArchive-v1.3-source/app/src/main/java/ch/piiwii/fannyarchive/ui/MainActivity.kt')
+          s = p.read_text()
+          old1 = 'BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {\n        Column(Modifier.fillMaxWidth(), horizontalAlignment = align) {'
+          new1 = 'BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {\n        val bubbleMaxWidth = maxWidth * 0.88f\n        Column(Modifier.fillMaxWidth(), horizontalAlignment = align) {'
+          old2 = 'modifier = Modifier.widthIn(max = maxWidth * 0.88f).clickable { onClick() }'
+          new2 = 'modifier = Modifier.widthIn(max = bubbleMaxWidth).clickable { onClick() }'
+          if old1 not in s or old2 not in s:
+              raise SystemExit('Expected MainActivity hotfix targets not found')
+          s = s.replace(old1, new1, 1).replace(old2, new2, 1)
+          p.write_text(s)
+          PY
           mkdir -p "$SRC/app/src/main/assets" "$SRC/signing"
           python - <<'PY'
           import struct
