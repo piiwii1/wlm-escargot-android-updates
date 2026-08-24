@@ -1,10 +1,11 @@
-Mise à jour 3.0.137 :
+Mise à jour 3.0.138 :
 
-- Fiabilité renforcée pour les invitations d’appel audio/vidéo WLM.
-- Les invitations et signaux d’appel reçus via text/x-msmsgsinvite passent désormais par la file d’événements de la conversation au lieu d’appeler directement le listener courant.
-- Un appel reçu pendant une transition d’écran ou de listener peut ainsi être conservé puis rejoué quand le listener final est attaché.
-- Les handlers d’appel existants de MainActivity et KeepAliveService restent inchangés.
-- MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
-- MessengerNetwork.java est modifié uniquement sur la continuité/dispatch des événements d’appel ; le transport P2P n’est pas modifié.
+- Reprise de la fidélité visuelle de la fenêtre de conversation à partir de la capture WLM PC exacte fournie avec le projet.
+- La barre d’actions conserve les icônes WLM de référence mais avec des proportions plus compactes, plus proches du client PC.
+- Le sous-titre de la conversation peut maintenant afficher le message personnel ou média courant avant l’adresse du contact, comme sur Windows Live Messenger.
+- La poignée latérale des images perso est plus fine et les petites flèches sous les avatars sont replacées vers la droite.
+- Le libellé technique « Conversation active » n’est plus affiché en permanence ; les états de reconnexion et d’erreur restent visibles.
+- MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.137 / versionCode 4193.
+- versionName 3.0.138 / versionCode 4194.
+- Fidélité WLM PC estimée : ~90 % global, ~91 % pour la conversation.
