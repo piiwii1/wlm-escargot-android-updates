@@ -1,13 +1,12 @@
-Mise à jour 3.0.126 :
+Mise à jour 3.0.127 :
 
-- Correctif ciblé de l’écriture manuscrite WLM PC → Android.
-- Prise en charge du transport Ink MSNP2P utilisé par WLM en conversation 1-à-1 : SessionID 64 / Footer-AppID 3.
-- Réassemblage P2Pv1 puis décodage de l’enveloppe UTF-16LE application/x-ms-ink + base64:ISF.
-- Chemin P2Pv2 tolérant ajouté pour les conversations qui négocient P2Pv2.
-- Le flux ISF reçu est maintenant remis au codec Ink puis au callback de la conversation Android.
-- Le diagnostic écriture manuscrite inclut désormais la trace P2P.
-- Le chemin Android → PC Fortified GIF + ISF reste inchangé.
-- L’anti-double-envoi de 3.0.125 reste actif.
+- Fiabilité renforcée quand l'application Android est en arrière-plan.
+- Les écritures manuscrites reçues par le service sont maintenant sauvegardées, ajoutées à l'historique et notifiées au lieu d'être perdues si la conversation n'est pas ouverte.
+- Le fallback passerelle ink.gif est aussi pris en charge en arrière-plan.
+- Les messages, Wizz, clins d'œil, messages vocaux et fichiers effectivement reçus en arrière-plan sont persistés dans l'historique.
+- Les photos/documents effectivement reçus sont sauvegardés dans received_files avant notification.
+- Les demandes de contact sont indexées avec une adresse canonique en minuscules pour éviter doublons/ratés liés à la casse.
+- Le transport Ink PC ↔ Android de 3.0.126 et l'anti-double-envoi restent inchangés.
 - UpdateManager et UpdateApkProvider restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.126 / versionCode 4182.
+- versionName 3.0.127 / versionCode 4183.
