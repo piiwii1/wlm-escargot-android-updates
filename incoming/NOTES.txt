@@ -1,11 +1,11 @@
-Mise à jour 3.0.132 :
+Mise à jour 3.0.133 :
 
-- Continuité renforcée pour les transferts de fichiers quand la conversation n’est pas affichée.
-- La progression et l’état d’un transfert sont maintenant conservés en mémoire quand on change de conversation, puis la carte de transfert est reconstruite au retour.
-- Les conversations « garées » écoutent désormais aussi les callbacks de progression et d’état de transfert.
-- Un fichier accepté directement depuis la notification en arrière-plan conserve son état dans KeepAliveService jusqu’à la réouverture de la conversation.
-- Les états de transfert détenus par KeepAliveService sont transférés proprement à MainActivity lors de la reprise de la conversation.
+- Nettoyage renforcé lorsqu’une conversation se ferme pendant un transfert.
+- Les états/offres de transfert restés orphelins sont nettoyés après les callbacks P2P normaux et leurs notifications sont annulées.
+- Les échecs et annulations de transfert sont maintenant conservés dans l’historique local, même lorsque la conversation n’est pas affichée.
+- Une erreur terminale gérée en arrière-plan ne laisse plus une session morte référencée dans KeepAliveService.
+- Un callback d’échec reçu juste après une fermeture ne remet plus à tort le bandeau sur « Conversation active ».
 - MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Le transport Ink PC ↔ Android reste inchangé.
 - Package et certificat identiques.
-- versionName 3.0.132 / versionCode 4188.
+- versionName 3.0.133 / versionCode 4189.
