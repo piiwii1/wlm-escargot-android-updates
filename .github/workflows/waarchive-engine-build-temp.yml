@@ -1,4 +1,4 @@
-name: WA Archive Engine 0.4.0 Build
+name: WA Archive Engine 0.4.2 Build
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,14 +41,14 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WAArchive-0.4.0-unsigned
+          name: WAArchive-0.4.2-unsigned
           path: waarchive-engine-build/app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 3
           if-no-files-found: error
       - name: Upload source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: WAArchive-0.4.0-source
+          name: WAArchive-0.4.2-source
           path: waarchive-engine-build
           retention-days: 7
           if-no-files-found: error
@@ -59,3 +59,13 @@ jobs:
           path: ${{ env.ANDROID_HOME }}/build-tools/35.0.0/lib/apksigner.jar
           retention-days: 1
           if-no-files-found: error
+      - name: Record successful run id
+        if: success()
+        run: |
+          mkdir -p ci-state
+          printf '%s\n%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > ci-state/waarchive-latest-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ci-state/waarchive-latest-run.txt
+          git commit -m "Record WA archive build run [skip ci]" || true
+          git push origin HEAD:waarchive-engine-build
