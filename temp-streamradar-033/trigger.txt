@@ -1,1 +1,1 @@
-build 0.33.0
+build 0.33.0 side-by-side 2
