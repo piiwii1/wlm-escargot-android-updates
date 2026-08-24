@@ -1,4 +1,4 @@
-name: FannyArchive 1.4 Template Public Safe
+name: FannyArchive 1.4.1 Template Public Safe
 
 on:
   pull_request:
@@ -33,14 +33,14 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin fannyarchive-stable-131-final --depth=1
-          rm -rf /tmp/fanny140 /tmp/fanny-patches
-          mkdir -p /tmp/fanny140 /tmp/fanny-patches
+          rm -rf /tmp/fanny141 /tmp/fanny-patches
+          mkdir -p /tmp/fanny141 /tmp/fanny-patches
           for n in 00 01 02 03 04 05 06; do git show origin/fannyarchive-stable-131-final:fannyarchive-ci/source-v131-part${n}.txt; done | tr -d '\r\n' | base64 --decode > /tmp/FannyArchive-v1.3.1-source-STABLE.zip
           echo "f78f787484eefdf3f12a6a5c9864949de3d09e0d6136cd3d2cfe3ff7bff9c9c4  /tmp/FannyArchive-v1.3.1-source-STABLE.zip" | sha256sum -c -
-          unzip -q /tmp/FannyArchive-v1.3.1-source-STABLE.zip -d /tmp/fanny140
-          SRC=/tmp/fanny140/FannyArchive-v1.3-source
+          unzip -q /tmp/FannyArchive-v1.3.1-source-STABLE.zip -d /tmp/fanny141
+          SRC=/tmp/fanny141/FannyArchive-v1.3-source
           cat fannyarchive-template/patches-part*.txt | tr -d '\r\n' | base64 --decode > /tmp/fanny-patches.zip
-          echo "15018751dfe16c93aeead310f15799739988532056b943bea1798ffe09ea1c7e  /tmp/fanny-patches.zip" | sha256sum -c -
+          echo "42c9241faaf9ea4e5461170bcf5c291dc11799b0dc14b14eb3250d369b645332  /tmp/fanny-patches.zip" | sha256sum -c -
           unzip -q /tmp/fanny-patches.zip -d /tmp/fanny-patches
           cp /tmp/fanny-patches/app-build.gradle.kts "$SRC/app/build.gradle.kts"
           cp /tmp/fanny-patches/AndroidManifest.xml "$SRC/app/src/main/AndroidManifest.xml"
@@ -50,7 +50,7 @@ jobs:
           mkdir -p "$SRC/app/src/main/assets" "$SRC/signing"
           python - <<'PY'
           import struct
-          out = open('/tmp/fanny140/FannyArchive-v1.3-source/app/src/main/assets/fanny_messages.bin','wb')
+          out = open('/tmp/fanny141/FannyArchive-v1.3-source/app/src/main/assets/fanny_messages.bin','wb')
           out.write(b'FNY1')
           out.write(struct.pack('>I', 117379))
           for i in range(117379):
@@ -68,16 +68,16 @@ jobs:
           sed -i '/^org.gradle.jvmargs=/d' "$SRC/gradle.properties"
           printf '\norg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\norg.gradle.workers.max=2\n' >> "$SRC/gradle.properties"
       - name: Build release template
-        working-directory: /tmp/fanny140/FannyArchive-v1.3-source
+        working-directory: /tmp/fanny141/FannyArchive-v1.3-source
         run: gradle --no-daemon --max-workers=2 :app:assembleRelease
       - name: Package template and Android signing tools
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/fanny-template
-          cp /tmp/fanny140/FannyArchive-v1.3-source/app/build/outputs/apk/release/app-release.apk /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk
+          cp /tmp/fanny141/FannyArchive-v1.3-source/app/build/outputs/apk/release/app-release.apk /tmp/fanny-template/FannyArchive-1.4.1-TEMPLATE.apk
           tar -C "$ANDROID_HOME/build-tools" -czf /tmp/fanny-template/android-build-tools-35.0.0.tar.gz 35.0.0
-          sha256sum /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk > /tmp/fanny-template/template.sha256
+          sha256sum /tmp/fanny-template/FannyArchive-1.4.1-TEMPLATE.apk > /tmp/fanny-template/template.sha256
       - name: Android 15 autonomous smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -86,7 +86,7 @@ jobs:
           profile: pixel_6
           emulator-boot-timeout: 900
           script: |
-            adb install -r /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk | tee /tmp/fanny-template/install.txt
+            adb install -r /tmp/fanny-template/FannyArchive-1.4.1-TEMPLATE.apk | tee /tmp/fanny-template/install.txt
             grep -q 'Success' /tmp/fanny-template/install.txt
             adb logcat -c
             adb shell am force-stop ch.piiwii.fannyarchive.stable
@@ -103,6 +103,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: FannyArchive-1.4.0-TEMPLATE-LOCAL-INJECT
+          name: FannyArchive-1.4.1-TEMPLATE-LOCAL-INJECT
           path: /tmp/fanny-template/
           retention-days: 7
