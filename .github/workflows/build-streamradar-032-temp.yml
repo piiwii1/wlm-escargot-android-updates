@@ -72,7 +72,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat temp-streamradar-035/patch.part* | base64 -d | gzip -d > /tmp/streamradar035.patch
+          cat temp-streamradar-035/patch.small.* | tr -d '\n\r' | base64 -d | gzip -d > /tmp/streamradar035.patch
+          test -s /tmp/streamradar035.patch
           cd /tmp/streamradar-src
           patch -p1 --dry-run < /tmp/streamradar035.patch
           patch -p1 < /tmp/streamradar035.patch
