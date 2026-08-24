@@ -1,12 +1,12 @@
-Mise à jour 3.0.155 :
+Mise à jour 3.0.156 :
 
-- Micro-finitions visuelles sur la barre basse et les fenêtres secondaires de conversation, basées sur les quatre photos PC réelles du 24.08.2026.
-- Les petites flèches des boutons Émoticônes / Clins d’œil / Wizz / Arrière-plans sont maintenant placées à droite des icônes et centrées verticalement, comme sur le client PC.
-- La barre de mise en forme est encadrée par une bordure Windows fine et carrée.
-- Les cellules des clins d’œil proposés/récents récupèrent un quadrillage très léger, sans grosses cartes Android.
-- « Modifier la police » possède maintenant des groupes Effets / Aperçu encadrés, avec Couleur / Script plus compacts.
-- « Vos émoticônes » reçoit une séparation fine sous l’en-tête.
+- Nouvelle passe de micro-finitions visuelles sur les fenêtres secondaires de conversation, basée sur les photos PC réelles du 24.08.2026.
+- Dans « Modifier la police », Barré / Souligné utilisent maintenant de petites cases carrées Windows au lieu des CheckBox Android natives.
+- Le champ Couleur affiche un vrai échantillon coloré, le nom de la couleur et une flèche séparée.
+- Le champ Script est plus compact et sa flèche est séparée.
+- La boîte Police est légèrement moins large pour conserver des marges latérales proches de la fenêtre PC.
+- Les palettes Clins d’œil / Arrière-plans / Émoticônes ont des marges et espacements encore resserrés.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.155 / versionCode 4211.
-- Fidélité WLM PC estimée : ~98,6 % global. Aucun test physique Android n’a été effectué ici.
+- versionName 3.0.156 / versionCode 4212.
+- Fidélité WLM PC estimée : ~98,8 % global. Aucun test physique Android n’a été effectué ici.
