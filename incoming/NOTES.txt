@@ -1,12 +1,12 @@
-Mise à jour 3.0.144 :
+Mise à jour 3.0.145 :
 
-- Nouvelle passe de fidélité Windows Live Messenger sur Options / pop-ups.
-- Options > Disposition affiche maintenant directement les principaux réglages, comme sur le client PC, au lieu de renvoyer vers plusieurs sous-menus.
-- Les Favoris et les autres contacts ont chacun un sélecteur visuel à 4 tailles avec aperçu + bouton radio.
-- Favoris, groupes, barre d’onglets et « Quoi de neuf » sont regroupés comme dans la fenêtre Options WLM.
-- Le tri Par statut / Alphabétiquement devient réellement fonctionnel.
-- La demande de contact utilise maintenant les boutons et le chrome WLM communs au lieu de gros boutons Android natifs.
+- Nouvelle passe de fidélité Windows Live Messenger 2009 sur la fenêtre de conversation.
+- La zone de saisie a été ramenée aux proportions du client PC : elle occupe moins de hauteur et laisse davantage de place à l’historique.
+- Le bouton Envoyer ainsi que les commandes recherche/webcam de la ligne inférieure sont plus compacts.
+- Les messages texte utilisent maintenant la formulation historique « Nom a écrit : » et le nom Messenger local pour les messages envoyés.
+- Taille, espacement et retrait des messages ont été resserrés pour se rapprocher de la densité WLM PC.
+- Les messages système utilisent un rendu gris italique discret au lieu d’un message orange centré.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.144 / versionCode 4200.
-- Fidélité WLM PC estimée : ~95,5 % global, ~96 % pour Options / pop-ups.
+- versionName 3.0.145 / versionCode 4201.
+- Fidélité WLM PC estimée : ~96 % global, ~95 % pour la conversation.
