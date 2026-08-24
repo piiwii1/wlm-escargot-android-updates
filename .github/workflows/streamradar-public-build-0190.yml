@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Rebuild through 0.24.0
         shell: bash
@@ -31,6 +33,7 @@ jobs:
           git config user.name StreamRadarBuild
           git add .
           git commit -qm base
+
           python3 - <<'PY'
           import base64, gzip, re, os
           from pathlib import Path
@@ -48,9 +51,22 @@ jobs:
               Path(target).write_bytes(patch)
               print(source, len(patch), 'bytes')
           PY
+
           cat "$ROOT/patch-v6-hex-a.txt" "$ROOT/patch-v6-hex-b.txt" | tr -d '\r\n\t ' | xxd -r -p | gzip -dc > /tmp/sr023.patch
-          cat "$ROOT/patch-v7-fixed-hex-1.txt" "$ROOT/patch-v7-fixed-hex-2.txt" "$ROOT/patch-v7-fixed-hex-3.txt" "$ROOT/patch-v7-fixed-hex-4.txt" | tr -d '\r\n\t ' | xxd -r -p | gzip -dc > /tmp/sr024.patch
-          echo '9e5c04fe6c8b89664baf984c596f2729e2976f8a703aa6d97bf82532bcc3fc9c  /tmp/sr024.patch.gz' > /dev/null
+
+          # Reuse the last known-good 0.24 payload from the commit that built far enough
+          # to reach Kotlin compilation. The later edited payload was CRC-damaged.
+          git --git-dir="$GITHUB_WORKSPACE/.git" show 9853422896510903af4c049bb5992ef57f9c0151:streamradar-0.19.0-public-build/patch-v7.gz.b64 > /tmp/sr024.b64
+          python3 - <<'PY'
+          import base64, gzip, re
+          from pathlib import Path
+          txt = Path('/tmp/sr024.b64').read_text(encoding='utf-8', errors='ignore')
+          clean = re.sub(r'[^A-Za-z0-9+/=]', '', txt)
+          patch = gzip.decompress(base64.b64decode(clean))
+          Path('/tmp/sr024.patch').write_bytes(patch)
+          print('0.24 patch', len(patch), 'bytes')
+          PY
+
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
           cp "$ROOT/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
@@ -71,6 +87,29 @@ jobs:
           git apply /tmp/sr023.patch
           git add -A && git commit -qm v023
           git apply /tmp/sr024.patch
+
+          # Repair only invalid Kotlin escapes introduced in the 0.24 regex helpers.
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          files = [
+              Path('android/app/src/main/java/ch/piiwii/streamradar/data/AppleMovieEnricher.kt'),
+              Path('android/app/src/main/java/ch/piiwii/streamradar/data/TvMazeEnricher.kt'),
+          ]
+          for p in files:
+              s = p.read_text()
+              out = []
+              for line in s.splitlines(True):
+                  if 'Regex(' in line or '.replace(' in line or '.split(' in line:
+                      line = re.sub(r'(?<!\\)\\([^tbnr"\'\\$u])', r'\\\\\1', line)
+                  out.append(line)
+              p.write_text(''.join(out))
+              print('\n---', p, '---')
+              for i, line in enumerate(p.read_text().splitlines(), 1):
+                  if 80 <= i <= 145:
+                      print(f'{i:4}: {line}')
+          PY
+
           grep -q 'versionCode = 24' android/app/build.gradle.kts
           grep -q 'versionName = "0.24.0"' android/app/build.gradle.kts
           grep -q 'Mes alertes' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
@@ -115,8 +154,8 @@ jobs:
           APK=/tmp/sr-source/StreamRadar-0.24.0/android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='24' versionName='0.24.0'"
-          cp "$APK" /tmp/StreamRadar-0.24.0-UNSIGNED-FOR-STABLE-RESIGN.apk
-          sha256sum /tmp/StreamRadar-0.24.0-UNSIGNED-FOR-STABLE-RESIGN.apk > /tmp/StreamRadar-0.24.0-BUILD-SHA256.txt
+          cp "$APK" /tmp/StreamRadar-0.24.0.apk
+          sha256sum /tmp/StreamRadar-0.24.0.apk > /tmp/StreamRadar-0.24.0-BUILD-SHA256.txt
           mkdir -p /tmp/apksigner-tools/lib
           cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/apksigner-tools/apksigner
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-tools/lib/apksigner.jar
@@ -132,7 +171,7 @@ jobs:
         with:
           name: StreamRadar-0.24.0-PublicBuild
           path: |
-            /tmp/StreamRadar-0.24.0-UNSIGNED-FOR-STABLE-RESIGN.apk
+            /tmp/StreamRadar-0.24.0.apk
             /tmp/StreamRadar-0.24.0-BUILD-SHA256.txt
             /tmp/StreamRadar-0.24.0-SOURCE-COMPLET.zip
             /tmp/apksigner-tools
