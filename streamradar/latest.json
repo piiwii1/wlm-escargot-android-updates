@@ -1,0 +1,8 @@
+{
+  "versionCode": 10,
+  "versionName": "0.10.0",
+  "apkUrl": "https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/main/streamradar/StreamRadar.apk",
+  "sha256": "",
+  "changelog": "Première version de StreamRadar avec système de mise à jour automatique GitHub.",
+  "mandatory": false
+}
