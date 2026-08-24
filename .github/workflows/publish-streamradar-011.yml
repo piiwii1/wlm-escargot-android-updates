@@ -1,0 +1,52 @@
+name: Publier StreamRadar 0.11.0
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'streamradar-trigger-011.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Télécharger l'artefact 0.11.0
+        shell: bash
+        env:
+          ARTIFACT_URL: "https://sdmntprsoutheastus3.oaiusercontent.com/files/00000000-7094-820c-b3a0-41ab79894386/raw?se=2026-08-24T10%3A26%3A46Z&sp=r&sv=2026-02-06&sr=b&scid=0c62b90d-6ce0-514f-b8d5-c339ad8b443d&skoid=3804227d-1b52-417d-afd9-9ffbb50fa53e&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-23T22%3A40%3A03Z&ske=2026-08-24T22%3A40%3A03Z&sks=b&skv=2026-02-06&sig=5RBmNV64IG8evyyNrc3uuw4jTMwEcDYeE0Yx0T8Mj/o%3D"
+        run: |
+          set -euo pipefail
+          curl -fL "$ARTIFACT_URL" -o /tmp/streamradar-artifact.zip
+          rm -rf /tmp/sr011 && mkdir -p /tmp/sr011
+          unzip -q /tmp/streamradar-artifact.zip -d /tmp/sr011
+          test -f /tmp/sr011/StreamRadar-0.11.0.apk
+          mkdir -p streamradar
+          cp /tmp/sr011/StreamRadar-0.11.0.apk streamradar/StreamRadar.apk
+          SHA=$(sha256sum streamradar/StreamRadar.apk | awk '{print $1}')
+          test "$SHA" = "70326db1a18006a975472978d79386599133e573c3e655d33f921d0e875d42a8"
+          cat > streamradar/latest.json <<EOF
+          {
+            "versionCode": 11,
+            "versionName": "0.11.0",
+            "apkUrl": "https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/main/streamradar/StreamRadar.apk",
+            "sha256": "$SHA",
+            "changelog": "Validation du cycle de mise à jour automatique 0.10.0 vers 0.11.0.",
+            "mandatory": false
+          }
+          EOF
+
+      - name: Publier dans le dépôt
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add streamradar/StreamRadar.apk streamradar/latest.json
+          git commit -m 'Publier StreamRadar 0.11.0'
+          git push
