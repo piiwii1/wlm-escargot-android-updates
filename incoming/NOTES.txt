@@ -1,12 +1,11 @@
-Mise à jour 3.0.134 :
+Mise à jour 3.0.135 :
 
-- Fiabilité renforcée pour les messages vocaux WLM reçus.
-- L’annonce d’un clip vocal n’est plus ignorée : l’application suit maintenant l’attente du contenu P2P.
-- Si le clip est reçu normalement, l’attente est annulée immédiatement et le comportement de lecture/historique reste inchangé.
-- Si le contenu n’arrive pas dans le délai de réception, l’interruption est conservée dans l’historique et notifiée au lieu de disparaître silencieusement.
-- Une attente de clip vocal commencée en arrière-plan est transférée à MainActivity si la conversation est ouverte pendant la récupération, sans faux échec.
-- La fermeture d’une conversation détenue par le service nettoie également les clips vocaux encore en attente.
+- Les contenus riches reçus ne disparaissent plus silencieusement lorsque leurs données sont invalides ou impossibles à enregistrer.
+- Un clin d’œil dont le CAB ne peut pas être décodé ou sauvegardé laisse désormais une trace dans l’historique et génère une notification hors conversation.
+- Une émoticône personnalisée impossible à décoder ou sauvegarder suit le même traitement.
+- Le comportement couvre les conversations ouvertes, garées et gérées entièrement en arrière-plan par KeepAliveService.
+- Les chemins de succès restent inchangés.
 - MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Le transport Ink PC ↔ Android reste inchangé.
 - Package et certificat identiques.
-- versionName 3.0.134 / versionCode 4190.
+- versionName 3.0.135 / versionCode 4191.
