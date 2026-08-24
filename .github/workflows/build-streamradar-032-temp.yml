@@ -1,4 +1,4 @@
-name: Build StreamRadar 0.37.0 installable
+name: Build StreamRadar 0.38.0 installable
 
 on:
   pull_request:
@@ -9,6 +9,7 @@ on:
       - 'temp-streamradar-035/**'
       - 'temp-streamradar-036/**'
       - 'temp-streamradar-037/**'
+      - 'temp-streamradar-038/**'
       - '.github/workflows/build-streamradar-032-temp.yml'
 
 permissions:
@@ -52,53 +53,55 @@ jobs:
           unzip -q /tmp/streamradar-src/android.zip -d /tmp/streamradar-src
           test -f /tmp/streamradar-src/android/app/build.gradle.kts
 
-      - name: Appliquer StreamRadar 0.34.0
+      - name: Appliquer 0.34.0
         shell: bash
         run: |
           set -euo pipefail
-          cat temp-streamradar-034/patch.part* | base64 -d | gzip -d > /tmp/streamradar034-full.patch
-          awk '
-            /^diff --git a\/android\// { keep=1 }
-            /^diff --git a\// && $0 !~ /^diff --git a\/android\// { keep=0 }
-            keep { print }
-          ' /tmp/streamradar034-full.patch > /tmp/streamradar034-android.patch
-          test -s /tmp/streamradar034-android.patch
+          cat temp-streamradar-034/patch.part* | base64 -d | gzip -d > /tmp/p034-full.patch
+          awk '/^diff --git a\/android\// { keep=1 } /^diff --git a\// && $0 !~ /^diff --git a\/android\// { keep=0 } keep { print }' /tmp/p034-full.patch > /tmp/p034.patch
           cd /tmp/streamradar-src
-          patch -p1 --dry-run < /tmp/streamradar034-android.patch
-          patch -p1 < /tmp/streamradar034-android.patch
+          patch -p1 --dry-run < /tmp/p034.patch
+          patch -p1 < /tmp/p034.patch
 
-      - name: Appliquer StreamRadar 0.35.0
+      - name: Appliquer 0.35.0
         shell: bash
         run: |
           set -euo pipefail
-          cat temp-streamradar-035/patch.small.* | tr -d '\n\r' | base64 -d | gzip -d > /tmp/streamradar035.patch
-          test -s /tmp/streamradar035.patch
+          cat temp-streamradar-035/patch.small.* | tr -d '\n\r' | base64 -d | gzip -d > /tmp/p035.patch
           cd /tmp/streamradar-src
-          patch -p1 --dry-run < /tmp/streamradar035.patch
-          patch -p1 < /tmp/streamradar035.patch
+          patch -p1 --dry-run < /tmp/p035.patch
+          patch -p1 < /tmp/p035.patch
 
-      - name: Appliquer StreamRadar 0.36.0
+      - name: Appliquer 0.36.0
         shell: bash
         run: |
           set -euo pipefail
-          tr -d '\n\r' < temp-streamradar-036/patch.b64 | base64 -d | gzip -d > /tmp/streamradar036.patch
-          test -s /tmp/streamradar036.patch
+          tr -d '\n\r' < temp-streamradar-036/patch.b64 | base64 -d | gzip -d > /tmp/p036.patch
           cd /tmp/streamradar-src
-          patch -p1 --dry-run < /tmp/streamradar036.patch
-          patch -p1 < /tmp/streamradar036.patch
+          patch -p1 --dry-run < /tmp/p036.patch
+          patch -p1 < /tmp/p036.patch
 
-      - name: Appliquer StreamRadar 0.37.0
+      - name: Appliquer 0.37.0
         shell: bash
         run: |
           set -euo pipefail
-          tr -d '\n\r' < temp-streamradar-037/patch.b64 | base64 -d | gzip -d > /tmp/streamradar037.patch
-          test -s /tmp/streamradar037.patch
+          tr -d '\n\r' < temp-streamradar-037/patch.b64 | base64 -d | gzip -d > /tmp/p037.patch
           cd /tmp/streamradar-src
-          patch -p1 --dry-run < /tmp/streamradar037.patch
-          patch -p1 < /tmp/streamradar037.patch
+          patch -p1 --dry-run < /tmp/p037.patch
+          patch -p1 < /tmp/p037.patch
+
+      - name: Appliquer 0.38.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\n\r' < temp-streamradar-038/patch.b64 | base64 -d | gzip -d > /tmp/p038.patch
+          test -s /tmp/p038.patch
+          cd /tmp/streamradar-src
+          patch -p1 --dry-run < /tmp/p038.patch
+          patch -p1 < /tmp/p038.patch
           grep -q 'applicationId = "ch.piiwii.streamradar2"' android/app/build.gradle.kts
-          grep -q 'versionName = "0.37.0"' android/app/build.gradle.kts
-          grep -q 'versionCode = 37' android/app/build.gradle.kts
+          grep -q 'versionName = "0.38.0"' android/app/build.gradle.kts
+          grep -q 'versionCode = 38' android/app/build.gradle.kts
 
       - name: Compiler release
         working-directory: /tmp/streamradar-src/android
@@ -109,7 +112,7 @@ jobs:
           test -f app/build/outputs/apk/release/app-release-unsigned.apk
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 \
             app/build/outputs/apk/release/app-release-unsigned.apk \
-            /tmp/StreamRadar-0.37.0-aligned.apk
+            /tmp/StreamRadar-0.38.0-aligned.apk
 
       - name: Récupérer la clé StreamRadar nouvelle génération
         shell: bash
@@ -135,9 +138,6 @@ jobs:
           STOREPASS="$(sed -n 's/^storePassword=//p' /tmp/streamradar-signing/SIGNING.txt)"
           KEYPASS="$(sed -n 's/^keyPassword=//p' /tmp/streamradar-signing/SIGNING.txt)"
           ALIAS="$(sed -n 's/^alias=//p' /tmp/streamradar-signing/SIGNING.txt)"
-          test -n "$STOREPASS"
-          test -n "$KEYPASS"
-          test -n "$ALIAS"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
             --ks /tmp/streamradar-signing/StreamRadar-release.jks \
             --ks-key-alias "$ALIAS" \
@@ -146,23 +146,23 @@ jobs:
             --v1-signing-enabled false \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
-            --out /tmp/StreamRadar-0.37.0-INSTALLABLE.apk \
-            /tmp/StreamRadar-0.37.0-aligned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs /tmp/StreamRadar-0.37.0-INSTALLABLE.apk | tee /tmp/verify.txt
+            --out /tmp/StreamRadar-0.38.0-INSTALLABLE.apk \
+            /tmp/StreamRadar-0.38.0-aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs /tmp/StreamRadar-0.38.0-INSTALLABLE.apk | tee /tmp/verify.txt
           grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' /tmp/verify.txt
           grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' /tmp/verify.txt
           grep -qi 'Signer #1 certificate SHA-256 digest: dd7ba53a3fe59e22b8dac20251711929dd0cbc9e0cc211f1c1cac8499aca4bec' /tmp/verify.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/StreamRadar-0.37.0-INSTALLABLE.apk | head -n 3 | tee /tmp/package.txt
-          grep -q "package: name='ch.piiwii.streamradar2' versionCode='37' versionName='0.37.0'" /tmp/package.txt
-          sha256sum /tmp/StreamRadar-0.37.0-INSTALLABLE.apk > /tmp/StreamRadar-0.37.0-INSTALLABLE.apk.sha256
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/StreamRadar-0.38.0-INSTALLABLE.apk | head -n 3 | tee /tmp/package.txt
+          grep -q "package: name='ch.piiwii.streamradar2' versionCode='38' versionName='0.38.0'" /tmp/package.txt
+          sha256sum /tmp/StreamRadar-0.38.0-INSTALLABLE.apk > /tmp/StreamRadar-0.38.0-INSTALLABLE.apk.sha256
 
       - name: Publier APK installable
         uses: actions/upload-artifact@v4
         with:
-          name: StreamRadar-0.37.0-INSTALLABLE
+          name: StreamRadar-0.38.0-INSTALLABLE
           path: |
-            /tmp/StreamRadar-0.37.0-INSTALLABLE.apk
-            /tmp/StreamRadar-0.37.0-INSTALLABLE.apk.sha256
+            /tmp/StreamRadar-0.38.0-INSTALLABLE.apk
+            /tmp/StreamRadar-0.38.0-INSTALLABLE.apk.sha256
             /tmp/verify.txt
             /tmp/package.txt
           if-no-files-found: error
