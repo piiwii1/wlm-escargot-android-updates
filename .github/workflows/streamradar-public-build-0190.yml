@@ -1,4 +1,4 @@
-name: StreamRadar Public Build 0.27.0
+name: StreamRadar Public Build 0.28.0
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Rebuild through 0.27.0
+      - name: Rebuild through 0.28.0
         shell: bash
         run: |
           set -euo pipefail
@@ -33,7 +33,7 @@ jobs:
           git config user.name StreamRadarBuild
           git add . && git commit -qm base
 
-          python3 - <<'PY'
+          python3 - <<'PY2'
           import base64, gzip, re, os
           from pathlib import Path
           root = Path(os.environ['GITHUB_WORKSPACE']) / 'streamradar-0.19.0-public-build'
@@ -45,19 +45,22 @@ jobs:
           ]:
               clean = re.sub(r'[^A-Za-z0-9+/=]', '', (root/source).read_text(encoding='utf-8', errors='ignore'))
               Path(target).write_bytes(gzip.decompress(base64.b64decode(clean)))
-          PY
+          PY2
           cat "$ROOT/patch-v6-hex-a.txt" "$ROOT/patch-v6-hex-b.txt" | tr -d '\r\n\t ' | xxd -r -p | gzip -dc > /tmp/sr023.patch
           git --git-dir="$GITHUB_WORKSPACE/.git" show 9853422896510903af4c049bb5992ef57f9c0151:streamradar-0.19.0-public-build/patch-v7.gz.b64 > /tmp/sr024.b64
-          python3 - <<'PY'
+          python3 - <<'PY2'
           import base64,gzip,re
           from pathlib import Path
           clean=re.sub(r'[^A-Za-z0-9+/=]','',Path('/tmp/sr024.b64').read_text(encoding='utf-8',errors='ignore'))
           Path('/tmp/sr024.patch').write_bytes(gzip.decompress(base64.b64decode(clean)))
-          PY
+          PY2
           tr -d '\r\n\t ' < "$ROOT/patch-v8.gz.b64" | base64 -d | gzip -dc > /tmp/sr025.patch
           tr -d '\r\n\t ' < "$ROOT/patch-v10.gz.b64" | base64 -d > /tmp/sr027.patch.gz
           echo '606068e10eb169e1882c7dfa59c93692038f6e58fd258e4517bd06c0a19ebce7  /tmp/sr027.patch.gz' | sha256sum -c -
           gzip -dc /tmp/sr027.patch.gz > /tmp/sr027.patch
+          tr -d '\r\n\t ' < "$ROOT/patch-v11.gz.b64" | base64 -d > /tmp/sr028.patch.gz
+          echo '8d10096b13cd5946894babfa130811706d0007a1aabcfb852481aabdc5c1ac00  /tmp/sr028.patch.gz' | sha256sum -c -
+          gzip -dc /tmp/sr028.patch.gz > /tmp/sr028.patch
 
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
@@ -67,19 +70,19 @@ jobs:
           git apply /tmp/sr021.patch
           git add -A && git commit -qm v021
           git apply /tmp/sr022.patch
-          python3 - <<'PY'
+          python3 - <<'PY2'
           from pathlib import Path
           p=Path('android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt')
           s=p.read_text()
           if 'import androidx.compose.foundation.BorderStroke\n' not in s:
               s=s.replace('import androidx.compose.foundation.Image\n','import androidx.compose.foundation.Image\nimport androidx.compose.foundation.BorderStroke\n')
           p.write_text(s)
-          PY
+          PY2
           git add -A && git commit -qm v022
           git apply /tmp/sr023.patch
           git add -A && git commit -qm v023
           git apply /tmp/sr024.patch
-          python3 - <<'PY'
+          python3 - <<'PY2'
           import re
           from pathlib import Path
           for p in [Path('android/app/src/main/java/ch/piiwii/streamradar/data/AppleMovieEnricher.kt'),Path('android/app/src/main/java/ch/piiwii/streamradar/data/TvMazeEnricher.kt')]:
@@ -89,23 +92,26 @@ jobs:
                       line=re.sub(r'(?<!\\)\\([^tbnr"\'\\$u])',r'\\\\\1',line)
                   out.append(line)
               p.write_text(''.join(out))
-          PY
+          PY2
           git add -A && git commit -qm v024
           git apply /tmp/sr025.patch
           git add -A && git commit -qm v025
           python3 "$ROOT/apply-profile-026.py"
           git add -A && git commit -qm v026
           git apply /tmp/sr027.patch
+          git add -A && git commit -qm v027
+          git apply /tmp/sr028.patch
 
-          grep -q 'versionCode = 27' android/app/build.gradle.kts
-          grep -q 'versionName = "0.27.0"' android/app/build.gradle.kts
-          grep -q 'AlertMiniCard' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
-          grep -q 'Mon profil' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
-          grep -q 'onAlertsClick' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
-          grep -q 'profileImageUri' android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt
+          grep -q 'versionCode = 28' android/app/build.gradle.kts
+          grep -q 'versionName = "0.28.0"' android/app/build.gradle.kts
+          grep -q 'recentSearches' android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt
+          grep -q 'addRecentSearch' android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt
+          grep -q 'onOpenSearchType' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'Aujourd’hui' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          grep -q 'ProfileAvatar(profileImageUri = profileImageUri' android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
           grep -q 'android:icon="@drawable/streamradar_brand"' android/app/src/main/AndroidManifest.xml
           cd /tmp/sr-source
-          mv StreamRadar-0.18.0 StreamRadar-0.27.0
+          mv StreamRadar-0.18.0 StreamRadar-0.28.0
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -123,32 +129,32 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile APK
-        working-directory: /tmp/sr-source/StreamRadar-0.27.0/android
+        working-directory: /tmp/sr-source/StreamRadar-0.28.0/android
         run: gradle :app:assembleDebug --stacktrace
       - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
-          APK=/tmp/sr-source/StreamRadar-0.27.0/android/app/build/outputs/apk/debug/app-debug.apk
+          APK=/tmp/sr-source/StreamRadar-0.28.0/android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='27' versionName='0.27.0'"
-          cp "$APK" /tmp/StreamRadar-0.27.0.apk
-          sha256sum /tmp/StreamRadar-0.27.0.apk > /tmp/StreamRadar-0.27.0-BUILD-SHA256.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "package: name='ch.piiwii.streamradar' versionCode='28' versionName='0.28.0'"
+          cp "$APK" /tmp/StreamRadar-0.28.0.apk
+          sha256sum /tmp/StreamRadar-0.28.0.apk > /tmp/StreamRadar-0.28.0-BUILD-SHA256.txt
           mkdir -p /tmp/apksigner-tools/lib
           cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/apksigner-tools/apksigner
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-tools/lib/apksigner.jar
       - name: Package source
         run: |
           cd /tmp/sr-source
-          zip -qr /tmp/StreamRadar-0.27.0-SOURCE-COMPLET.zip StreamRadar-0.27.0 -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          zip -qr /tmp/StreamRadar-0.28.0-SOURCE-COMPLET.zip StreamRadar-0.28.0 -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
       - name: Upload APK and source
         uses: actions/upload-artifact@v4
         with:
-          name: StreamRadar-0.27.0-PublicBuild
+          name: StreamRadar-0.28.0-PublicBuild
           path: |
-            /tmp/StreamRadar-0.27.0.apk
-            /tmp/StreamRadar-0.27.0-BUILD-SHA256.txt
-            /tmp/StreamRadar-0.27.0-SOURCE-COMPLET.zip
+            /tmp/StreamRadar-0.28.0.apk
+            /tmp/StreamRadar-0.28.0-BUILD-SHA256.txt
+            /tmp/StreamRadar-0.28.0-SOURCE-COMPLET.zip
             /tmp/apksigner-tools
           if-no-files-found: error
           retention-days: 14
