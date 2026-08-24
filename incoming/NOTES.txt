@@ -1,11 +1,13 @@
-Mise à jour 3.0.123 :
+Mise à jour 3.0.124 :
 
-- Version diagnostic prioritaire pour l’écriture manuscrite après l’échec confirmé de la 3.0.122 Android ↔ WLM PC.
-- Aucun nouveau changement arbitraire du format GIF Ink.
-- Nouveau diagnostic dans les options de conversation : Content-Type MIME entrants, Ink natifs valides/invalides, fragments sortants, NAK serveur, taille/dimensions/SHA-256 du GIF envoyé, offres et réceptions ink.gif.
-- Bouton Copier pour transmettre le diagnostic après un test dans chaque sens.
-- Le diagnostic ne journalise pas le texte des conversations.
-- Fallback passerelle : une offre exactement nommée ink.gif peut maintenant être auto-acceptée même si sa taille annoncée vaut 0 (taille inconnue), avec limite de sécurité à 1 Mio.
-- UpdateManager et UpdateApkProvider sont strictement inchangés.
-- Package et certificat de signature identiques.
-- versionName 3.0.123 / versionCode 4179.
+- Correctif prioritaire de l’écriture manuscrite WLM Android ↔ PC.
+- Le dessin n’est plus envoyé comme simple GIF raster : la 3.0.124 crée un véritable Fortified GIF Windows Ink, avec le flux Microsoft ISF des traits embarqué dans une extension Comment du GIF.
+- InkCanvasView conserve désormais les gestes vectoriels nécessaires à l’ISF.
+- Nouveau codec ISF minimal avec coordonnées HIMETRIC et données de traits X/Y.
+- Réception application/x-ms-ink renforcée : décodage ISF et rendu Android.
+- Réception image/gif : détection de l’ISF fortifié intégrée au diagnostic.
+- Un dessin dépourvu d’ISF n’est plus annoncé comme envoyé avec succès.
+- Le diagnostic Ink introduit en 3.0.123 reste disponible.
+- UpdateManager et UpdateApkProvider restent strictement inchangés.
+- Package et certificat identiques.
+- versionName 3.0.124 / versionCode 4180.
