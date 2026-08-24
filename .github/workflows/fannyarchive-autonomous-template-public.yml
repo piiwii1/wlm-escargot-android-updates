@@ -9,7 +9,7 @@ on:
 jobs:
   build-template:
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,7 +48,15 @@ jobs:
           cp /tmp/fanny-patches/MainActivity.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/ui/MainActivity.kt"
           cp /tmp/fanny-patches/WhatsAppZipImporter.kt "$SRC/app/src/main/java/ch/piiwii/fannyarchive/importer/WhatsAppZipImporter.kt"
           mkdir -p "$SRC/app/src/main/assets" "$SRC/signing"
-          printf 'PLACEHOLDER_PRIVATE_CONVERSATION' > "$SRC/app/src/main/assets/fanny_messages.bin"
+          python - <<'PY'
+          import struct
+          out = open('/tmp/fanny140/FannyArchive-v1.3-source/app/src/main/assets/fanny_messages.bin','wb')
+          out.write(b'FNY1')
+          out.write(struct.pack('>I', 117379))
+          for i in range(117379):
+              out.write(bytes([21, 1, 1, 0, 0, i & 1, 0]))
+          out.close()
+          PY
           rm -f "$SRC/signing/fannyarchive-release.jks"
           keytool -genkeypair -v -keystore "$SRC/signing/fannyarchive-release.jks" -storepass TemplateOnly2026 -keypass TemplateOnly2026 -alias fannyarchive -keyalg RSA -keysize 2048 -validity 30 -dname "CN=Template Only,O=PiiWii,C=CH"
           cat > "$SRC/keystore.properties" <<'EOF'
@@ -70,7 +78,29 @@ jobs:
           cp /tmp/fanny140/FannyArchive-v1.3-source/app/build/outputs/apk/release/app-release.apk /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk
           tar -C "$ANDROID_HOME/build-tools" -czf /tmp/fanny-template/android-build-tools-35.0.0.tar.gz 35.0.0
           sha256sum /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk > /tmp/fanny-template/template.sha256
+      - name: Android 15 autonomous smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          emulator-boot-timeout: 900
+          script: |
+            adb install -r /tmp/fanny-template/FannyArchive-1.4.0-TEMPLATE.apk | tee /tmp/fanny-template/install.txt
+            grep -q 'Success' /tmp/fanny-template/install.txt
+            adb logcat -c
+            adb shell am force-stop ch.piiwii.fannyarchive.stable
+            adb shell am start -n ch.piiwii.fannyarchive.stable/ch.piiwii.fannyarchive.MainActivity | tee /tmp/fanny-template/start.txt
+            sleep 120
+            adb shell pidof ch.piiwii.fannyarchive.stable | tee /tmp/fanny-template/pid.txt
+            test -s /tmp/fanny-template/pid.txt
+            adb shell uiautomator dump /sdcard/fanny.xml
+            adb pull /sdcard/fanny.xml /tmp/fanny-template/fanny.xml
+            grep -F '117379 messages archivés' /tmp/fanny-template/fanny.xml | tee /tmp/fanny-template/ui-proof.txt
+            adb logcat -d -v brief > /tmp/fanny-template/logcat.txt
+            ! grep -E 'FATAL EXCEPTION|AndroidRuntime' /tmp/fanny-template/logcat.txt | grep -F 'ch.piiwii.fannyarchive.stable'
       - name: Upload template
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: FannyArchive-1.4.0-TEMPLATE-LOCAL-INJECT
