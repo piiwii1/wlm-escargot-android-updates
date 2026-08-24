@@ -1,4 +1,4 @@
-name: WA Archive Engine 0.3.2 Build
+name: WA Archive Engine 0.3.3 Build
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WAArchive-0.3.2-unsigned
+          name: WAArchive-0.3.3-unsigned
           path: waarchive-engine-build/app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 3
           if-no-files-found: error
