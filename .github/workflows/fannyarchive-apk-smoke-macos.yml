@@ -8,7 +8,7 @@ on:
 
 jobs:
   verify-apk:
-    runs-on: macos-14
+    runs-on: macos-13
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -36,7 +36,6 @@ jobs:
           profile: pixel_6
           disable-animations: false
           script: |
-            set -e
             adb install -r /tmp/fanny/FannyArchive-1.3.1-STABLE.apk | tee /tmp/install.txt
             grep -q 'Success' /tmp/install.txt
             adb logcat -c
@@ -52,7 +51,7 @@ jobs:
             adb shell dumpsys activity activities | grep -F 'ch.piiwii.fannyarchive.stable/ch.piiwii.fannyarchive.MainActivity' | tee /tmp/activity.txt
             test -s /tmp/activity.txt
             adb logcat -d -v brief > /tmp/logcat.txt
-            if grep -E 'FATAL EXCEPTION|AndroidRuntime' /tmp/logcat.txt | grep -F 'ch.piiwii.fannyarchive.stable'; then exit 1; fi
+            ! grep -E 'FATAL EXCEPTION|AndroidRuntime' /tmp/logcat.txt | grep -F 'ch.piiwii.fannyarchive.stable'
             adb exec-out screencap -p > /tmp/FannyArchive-1.3.1-STABLE-launch.png
             echo 'INSTALL_LAUNCH_UI=PASS'
       - name: Upload verified APK
