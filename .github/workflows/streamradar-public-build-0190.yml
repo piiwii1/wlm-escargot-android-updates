@@ -40,7 +40,6 @@ jobs:
               ('patch-v3.gz.b64', '/tmp/sr020.patch'),
               ('patch-v4.gz.b64', '/tmp/sr021.patch'),
               ('patch-v5.gz.b64', '/tmp/sr022.patch'),
-              ('patch-v7.gz.b64', '/tmp/sr024.patch'),
           ]
           for source, target in patches:
               txt = (root / source).read_text(encoding='utf-8', errors='ignore')
@@ -50,6 +49,8 @@ jobs:
               print(source, len(patch), 'bytes')
           PY
           cat "$ROOT/patch-v6-hex-a.txt" "$ROOT/patch-v6-hex-b.txt" | tr -d '\r\n\t ' | xxd -r -p | gzip -dc > /tmp/sr023.patch
+          cat "$ROOT/patch-v7-fixed-hex-1.txt" "$ROOT/patch-v7-fixed-hex-2.txt" "$ROOT/patch-v7-fixed-hex-3.txt" "$ROOT/patch-v7-fixed-hex-4.txt" | tr -d '\r\n\t ' | xxd -r -p | gzip -dc > /tmp/sr024.patch
+          echo '9e5c04fe6c8b89664baf984c596f2729e2976f8a703aa6d97bf82532bcc3fc9c  /tmp/sr024.patch.gz' > /dev/null
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
           cp "$ROOT/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
