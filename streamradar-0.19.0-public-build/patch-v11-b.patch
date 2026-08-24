@@ -1,0 +1,144 @@
++                extraPanel = null
++                platformFilter = null
++                genreFilter = null
++                yearFilter = null
++            }
++            onPresetConsumed()
++        }
++    }
+     val searchReleases = remember(releases) { displayDistinct(releases) }
+ 
+     fun yearOf(r: Release): String? = (r.releaseDate ?: r.firstAirDate)?.take(4)?.takeIf { it.all(Char::isDigit) }
+@@ -1345,23 +1378,23 @@ private fun SearchScreen(
+                 }
+             }
+         }
+-        if (history.isNotEmpty()) {
++        if (recentSearches.isNotEmpty()) {
+             item {
+                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                     Icon(Icons.Default.History, null, tint = Color(0xFFDCE4EA), modifier = Modifier.size(20.dp))
+                     Spacer(Modifier.width(8.dp))
+                     Text("Recherches récentes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+-                    TextButton(onClick = { history.clear() }) { Text("TOUT EFFACER", color = MaterialTheme.colorScheme.secondary) }
++                    TextButton(onClick = onClearRecentSearches) { Text("TOUT EFFACER", color = MaterialTheme.colorScheme.secondary) }
+                 }
+             }
+             item {
+                 LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+-                    items(history.take(6)) { title ->
++                    items(recentSearches.take(6), key = { "recent-$it" }) { title ->
+                         Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF0A1723), border = BorderStroke(1.dp, Color(0xFF2C3F50))) {
+                             Row(Modifier.clickable { onQuery(title) }.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                 Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 130.dp), style = MaterialTheme.typography.bodySmall)
+                                 Spacer(Modifier.width(8.dp))
+-                                Icon(Icons.Default.Close, "Supprimer", tint = Color(0xFFAAB6C0), modifier = Modifier.size(16.dp).clickable { history.remove(title) })
++                                Icon(Icons.Default.Close, "Supprimer", tint = Color(0xFFAAB6C0), modifier = Modifier.size(16.dp).clickable { onRemoveRecentSearch(title) })
+                             }
+                         }
+                     }
+@@ -1392,9 +1425,7 @@ private fun SearchScreen(
+                 followed = release.id in followed,
+                 onFollow = onFollow,
+                 onOpen = {
+-                    history.remove(release.title)
+-                    history.add(0, release.title)
+-                    while (history.size > 10) history.removeAt(history.lastIndex)
++                    onAddRecentSearch(release.title)
+                     onOpen(release)
+                 }
+             )
+@@ -1455,7 +1486,9 @@ private fun FollowedScreen(
+     prefs: UserPreferences,
+     onFollow: (String) -> Unit,
+     onOpen: (Release) -> Unit,
+-    onOpenAlertSettings: () -> Unit
++    onOpenAlertSettings: () -> Unit,
++    profileImageUri: String?,
++    onProfileClick: () -> Unit
+ ) {
+     val today = LocalDate.now()
+     val list = releases.filter { it.id in followed }
+@@ -1473,7 +1506,13 @@ private fun FollowedScreen(
+         modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF05101A), Color(0xFF071421), Color(0xFF050C14)))),
+         contentPadding = PaddingValues(bottom = 24.dp)
+     ) {
+-        item { ScreenTitle("Mes suivis", "${list.size} titre${if (list.size > 1) "s" else ""} suivi${if (list.size > 1) "s" else ""}") }
++        item {
++            ScreenTitle(
++                "Mes suivis",
++                "${list.size} titre${if (list.size > 1) "s" else ""} suivi${if (list.size > 1) "s" else ""}",
++                action = { ProfileAvatar(profileImageUri = profileImageUri, onClick = onProfileClick, modifier = Modifier.size(40.dp)) }
++            )
++        }
+         item {
+             Card(
+                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+diff --git a/android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt b/android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt
+index d7c43fd..b180fd5 100644
+--- a/android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt
++++ b/android/app/src/main/java/ch/piiwii/streamradar/data/AppStore.kt
+@@ -22,7 +22,8 @@ data class UserPreferences(
+     val afterReminderEnabled: Boolean = true,
+     val afterReminderMonths: Int = 1,
+     val region: String = "CH",
+-    val profileImageUri: String? = null
++    val profileImageUri: String? = null,
++    val recentSearches: List<String> = emptyList()
+ ) {
+     // Alias conservé pour compatibilité avec l'ancien code et les préférences 0.19.
+     val monthAfterReminder: Boolean get() = afterReminderEnabled
+@@ -43,6 +44,7 @@ class AppStore(private val context: Context) {
+         val legacyMonthReminder = booleanPreferencesKey("month_after_reminder")
+         val region = stringPreferencesKey("region")
+         val profileImageUri = stringPreferencesKey("profile_image_uri")
++        val recentSearches = stringPreferencesKey("recent_searches")
+     }
+ 
+     val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
+@@ -61,7 +63,14 @@ class AppStore(private val context: Context) {
+             afterReminderEnabled = prefs[Keys.afterEnabled] ?: prefs[Keys.legacyMonthReminder] ?: true,
+             afterReminderMonths = (prefs[Keys.afterMonths] ?: 1).coerceIn(1, 12),
+             region = prefs[Keys.region] ?: "CH",
+-            profileImageUri = prefs[Keys.profileImageUri]?.takeIf { it.isNotBlank() }
++            profileImageUri = prefs[Keys.profileImageUri]?.takeIf { it.isNotBlank() },
++            recentSearches = prefs[Keys.recentSearches]
++                ?.split("\u001F")
++                ?.map { it.trim() }
++                ?.filter { it.isNotBlank() }
++                ?.distinct()
++                ?.take(10)
++                ?: emptyList()
+         )
+     }
+ 
+@@ -96,6 +105,29 @@ class AppStore(private val context: Context) {
+         if (uri.isNullOrBlank()) prefs.remove(Keys.profileImageUri) else prefs[Keys.profileImageUri] = uri
+     }
+ 
++    suspend fun addRecentSearch(value: String) = context.dataStore.edit { prefs ->
++        val clean = value.trim().replace("\u001F", " ").take(120)
++        if (clean.isBlank()) return@edit
++        val current = prefs[Keys.recentSearches]
++            ?.split("\u001F")
++            ?.filter { it.isNotBlank() }
++            ?.toMutableList()
++            ?: mutableListOf()
++        current.removeAll { it.equals(clean, ignoreCase = true) }
++        current.add(0, clean)
++        prefs[Keys.recentSearches] = current.take(10).joinToString("\u001F")
++    }
++
++    suspend fun removeRecentSearch(value: String) = context.dataStore.edit { prefs ->
++        val current = prefs[Keys.recentSearches]
++            ?.split("\u001F")
++            ?.filter { it.isNotBlank() && !it.equals(value, ignoreCase = true) }
++            ?: emptyList()
++        if (current.isEmpty()) prefs.remove(Keys.recentSearches) else prefs[Keys.recentSearches] = current.joinToString("\u001F")
++    }
++
++    suspend fun clearRecentSearches() = context.dataStore.edit { prefs -> prefs.remove(Keys.recentSearches) }
++
+     // Compatibilité source : ancien nom utilisé en 0.19.
+     suspend fun setMonthReminder(enabled: Boolean) = setAfterReminderEnabled(enabled)
+ }
