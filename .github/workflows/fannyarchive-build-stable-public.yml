@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - 'fannyarchive-ci/source-v131.b64'
+      - 'fannyarchive-ci/source-v131-part*.txt'
       - 'fannyarchive-ci/build-v131.txt'
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
 
       - name: Reconstruct stable source
         run: |
-          base64 -d fannyarchive-ci/source-v131.b64 > /tmp/FannyArchive-v1.3.1-source-STABLE.zip
+          cat fannyarchive-ci/source-v131-part*.txt | base64 -d > /tmp/FannyArchive-v1.3.1-source-STABLE.zip
           echo 'f78f787484eefdf3f12a6a5c9864949de3d09e0d6136cd3d2cfe3ff7bff9c9c4  /tmp/FannyArchive-v1.3.1-source-STABLE.zip' | sha256sum -c -
           mkdir -p /tmp/fanny131
           unzip -q /tmp/FannyArchive-v1.3.1-source-STABLE.zip -d /tmp/fanny131
