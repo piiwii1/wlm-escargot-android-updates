@@ -63,9 +63,6 @@ jobs:
           echo 'cac9a6fd48fe4e3327eb01bb96699bc0756b0465b54207ce7d4a011bde2be18f  /tmp/sr025.patch.gz' | sha256sum -c -
           gzip -dc /tmp/sr025.patch.gz > /tmp/sr025.patch
 
-          tr -d '\r\n\t ' < "$ROOT/patch-v9.gz.b64" | base64 -d > /tmp/sr026.patch.gz
-          gzip -dc /tmp/sr026.patch.gz > /tmp/sr026.patch
-
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
           cp "$ROOT/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
@@ -106,7 +103,8 @@ jobs:
           git add -A && git commit -qm v024
           git apply /tmp/sr025.patch
           git add -A && git commit -qm v025
-          git apply /tmp/sr026.patch
+
+          python3 "$ROOT/apply-profile-026.py"
 
           grep -q 'versionCode = 26' android/app/build.gradle.kts
           grep -q 'versionName = "0.26.0"' android/app/build.gradle.kts
