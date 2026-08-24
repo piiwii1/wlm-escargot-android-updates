@@ -1,12 +1,13 @@
-Mise à jour 3.0.127 :
+Mise à jour 3.0.128 :
 
-- Fiabilité renforcée quand l'application Android est en arrière-plan.
-- Les écritures manuscrites reçues par le service sont maintenant sauvegardées, ajoutées à l'historique et notifiées au lieu d'être perdues si la conversation n'est pas ouverte.
-- Le fallback passerelle ink.gif est aussi pris en charge en arrière-plan.
-- Les messages, Wizz, clins d'œil, messages vocaux et fichiers effectivement reçus en arrière-plan sont persistés dans l'historique.
-- Les photos/documents effectivement reçus sont sauvegardés dans received_files avant notification.
-- Les demandes de contact sont indexées avec une adresse canonique en minuscules pour éviter doublons/ratés liés à la casse.
-- Le transport Ink PC ↔ Android de 3.0.126 et l'anti-double-envoi restent inchangés.
-- UpdateManager et UpdateApkProvider restent strictement inchangés.
+- Fiabilité renforcée pour les photos/documents reçus lorsque l'application est en arrière-plan.
+- Une conversation créée par le service peut maintenant être réclamée par MainActivity au lieu d'ouvrir un second switchboard.
+- Les offres de fichiers encore en attente suivent cette même session lors du retour dans l'interface.
+- Les notifications de transfert reçues en arrière-plan proposent désormais Accepter et Refuser directement.
+- Accepter depuis la notification conserve la vraie session P2P et lance la réception dans le service ; le fichier reçu est ensuite sauvegardé dans l'historique.
+- Refuser depuis la notification décline l'offre sur la session d'origine et nettoie la notification.
+- Ouvrir la notification ou le contact annule la notification d'offre et affiche le dialogue WLM sur la session déjà existante.
+- Le transport Ink PC ↔ Android de 3.0.126/127 reste inchangé.
+- MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.127 / versionCode 4183.
+- versionName 3.0.128 / versionCode 4184.
