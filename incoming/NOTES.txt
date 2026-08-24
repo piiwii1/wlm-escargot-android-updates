@@ -1,11 +1,11 @@
-Mise à jour 3.0.129 :
+Mise à jour 3.0.130 :
 
-- Fiabilité renforcée pour les contenus riches reçus lorsque l'application/conversation n'est pas ouverte.
-- Les données réelles des clins d'œil reçus en arrière-plan ne sont plus perdues : le CAB est sauvegardé dans WinkStore et peut être rejoué après ouverture de la conversation.
-- Les émoticônes personnalisées reçues en arrière-plan sont maintenant persistées dans CustomEmoticonStore pour le bon contact.
-- Les événements/historiques existants restent inchangés ; cette version corrige la conservation du contenu associé.
-- Le transport Ink PC ↔ Android de 3.0.126/127 reste inchangé.
-- La continuité des transferts et les actions Accepter/Refuser de 3.0.128 restent inchangées.
+- Fiabilité renforcée pour les conversations reçues quand l’interface Android n’est pas ouverte.
+- Les invitations d’appel audio/vidéo WLM reçues en arrière-plan sont maintenant enregistrées dans l’historique, font sonner l’application et génèrent une notification.
+- Les signaux d’appel reçus en arrière-plan sont maintenant conservés dans l’historique.
+- Les invitations de jeu/activité WLM reçues en arrière-plan sont maintenant enregistrées et notifiées.
+- Le transport Ink PC ↔ Android reste strictement inchangé.
+- La continuité des transferts de 3.0.128 et la persistance des clins d’œil/émoticônes de 3.0.129 restent inchangées.
 - MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.129 / versionCode 4185.
+- versionName 3.0.130 / versionCode 4186.
