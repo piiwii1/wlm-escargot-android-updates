@@ -48,7 +48,7 @@ jobs:
               Path(target).write_bytes(patch)
               print(source, len(patch), 'bytes')
           PY
-          gzip -dc "$ROOT/patch-v6.gz" > /tmp/sr023.patch
+          cat "$ROOT/patch-v6-hex-a.txt" "$ROOT/patch-v6-hex-b.txt" | tr -d '\r\n\t ' | xxd -r -p | gzip -dc > /tmp/sr023.patch
           git apply /tmp/sr019.patch
           mkdir -p android/app/src/main/res/drawable-nodpi
           cp "$ROOT/official-icon.jpg" android/app/src/main/res/drawable-nodpi/streamradar_brand.jpg
