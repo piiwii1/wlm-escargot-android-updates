@@ -1,12 +1,12 @@
-Mise à jour 3.0.140 :
+Mise à jour 3.0.141 :
 
-- Nouvelle passe de fidélité Windows Live Messenger 2009 sur l’écran de connexion.
-- La composition est maintenant calée sur le client PC final : grand titre « Se connecter à Windows Live Messenger », image perso à gauche et identifiant/mot de passe à droite.
-- Les libellés Android verticaux ont été remplacés par les champs compacts de la fenêtre PC, avec lien « Mot de passe oublié ? » et sélecteur de statut sous les champs.
-- La mémorisation utilise une ligne unique « Mémoriser mon identifiant et mon mot de passe » et la connexion automatique reprend la présentation WLM avec un lien Options.
-- Les boutons Connexion / Annuler, la ligne d’inscription et le pied de fenêtre Confidentialité / Conditions d’utilisation / État du service / À propos ont été ajoutés au bon endroit.
-- Le mécanisme de connexion Escargot et la mémorisation sécurisée restent inchangés.
+- Nouvelle passe de fidélité Windows Live Messenger 2009 sur Options et les pop-ups.
+- La fenêtre Options reprend désormais les boutons PC OK / Annuler / Appliquer / Aide.
+- Appliquer met à jour l'interface sans fermer la fenêtre.
+- Le rail des catégories est plus compact et plus proche du bleu Windows/WLM d'origine.
+- La catégorie Application Android a été retirée de la fenêtre Options PC ; elle reste disponible depuis le menu principal.
+- Le dernier AlertDialog Android natif visible, Couleur de Messenger, a été remplacé par la fenêtre WLM commune.
 - MessengerNetwork.java, MsnP2P.java, KeepAliveService.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
 - Package et certificat identiques.
-- versionName 3.0.140 / versionCode 4196.
-- Fidélité WLM PC estimée : ~92 % global, ~94 % pour la connexion.
+- versionName 3.0.141 / versionCode 4197.
+- Fidélité WLM PC estimée : ~93 % global, ~89 % pour Options / pop-ups.
