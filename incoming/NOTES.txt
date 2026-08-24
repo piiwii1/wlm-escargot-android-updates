@@ -1,9 +1,11 @@
-Mise à jour 3.0.131 :
+Mise à jour 3.0.132 :
 
-- Les messages hors connexion (OIM) reçus quand l’interface Android n’est pas ouverte ne reposent plus uniquement sur la notification.
-- Le service en arrière-plan enregistre maintenant le message dans l’historique de la bonne conversation avant d’afficher la notification.
-- Si l’interface est ouverte, le chemin existant reste inchangé afin d’éviter tout doublon d’historique.
-- Le transport Ink, les transferts, les clins d’œil, les émoticônes, les appels et jeux des versions précédentes restent inchangés.
+- Continuité renforcée pour les transferts de fichiers quand la conversation n’est pas affichée.
+- La progression et l’état d’un transfert sont maintenant conservés en mémoire quand on change de conversation, puis la carte de transfert est reconstruite au retour.
+- Les conversations « garées » écoutent désormais aussi les callbacks de progression et d’état de transfert.
+- Un fichier accepté directement depuis la notification en arrière-plan conserve son état dans KeepAliveService jusqu’à la réouverture de la conversation.
+- Les états de transfert détenus par KeepAliveService sont transférés proprement à MainActivity lors de la reprise de la conversation.
 - MessengerNetwork.java, MsnP2P.java, UpdateManager.java et UpdateApkProvider.java restent strictement inchangés.
+- Le transport Ink PC ↔ Android reste inchangé.
 - Package et certificat identiques.
-- versionName 3.0.131 / versionCode 4187.
+- versionName 3.0.132 / versionCode 4188.
