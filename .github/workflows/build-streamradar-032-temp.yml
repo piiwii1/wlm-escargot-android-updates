@@ -41,7 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/streamradar-src
-          cat temp-streamradar-build/source.b64.part* | base64 -d > /tmp/streamradar-src/android.zip
+          grep -hv '^#' temp-streamradar-build/source.b64.part* | tr -d '\n\r' | base64 -d > /tmp/streamradar-src/android.zip
+          unzip -t /tmp/streamradar-src/android.zip
           unzip -q /tmp/streamradar-src/android.zip -d /tmp/streamradar-src
           test -f /tmp/streamradar-src/android/app/build.gradle.kts
 
