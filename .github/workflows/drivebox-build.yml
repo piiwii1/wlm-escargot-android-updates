@@ -19,7 +19,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/drivebox-src
-          cat drivebox-ci/source.part*.b64 | base64 -d > /tmp/drivebox-source.zip
+          for f in drivebox-ci/source.part*.b64; do
+            echo "Checking $f ($(wc -c < "$f") chars)"
+            if grep -n '[^A-Za-z0-9+/=[:space:]]' "$f"; then
+              echo "Invalid Base64 character found in $f"
+              exit 2
+            fi
+          done
+          cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
+          unzip -t /tmp/drivebox-source.zip
           unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
           test -f /tmp/drivebox-src/app/build.gradle
           sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
