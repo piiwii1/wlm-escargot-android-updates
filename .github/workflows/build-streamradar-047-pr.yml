@@ -105,19 +105,19 @@ jobs:
           set -euo pipefail
           cat temp-streamradar-047/patch.part1 temp-streamradar-047/patch.part2 | tr -d '\n\r' | base64 -d | gzip -d > /tmp/p047.patch
           test -s /tmp/p047.patch
-          cd /tmp/streamradar-src/android
+          cd /tmp/streamradar-src
           patch -p1 --dry-run < /tmp/p047.patch
           patch -p1 < /tmp/p047.patch
-          grep -q 'applicationId = "ch.piiwii.streamradar2"' app/build.gradle.kts
-          grep -q 'versionName = "0.47.0"' app/build.gradle.kts
-          grep -q 'versionCode = 47' app/build.gradle.kts
-          grep -q 'androidx.room:room-runtime:2.6.1' app/build.gradle.kts
-          test -f app/src/main/java/ch/piiwii/streamradar/data/CatalogCacheDatabase.kt
-          grep -q 'CatalogCacheDatabase.getInstance' app/src/main/java/ch/piiwii/streamradar/data/CatalogCache.kt
-          grep -q 'lookupById' app/src/main/java/ch/piiwii/streamradar/data/AppleMovieEnricher.kt
-          grep -q 'lookupById' app/src/main/java/ch/piiwii/streamradar/data/AppleTvArtworkEnricher.kt
-          grep -q 'lookupById' app/src/main/java/ch/piiwii/streamradar/data/TvMazeEnricher.kt
-          grep -q 'lookupById' app/src/main/java/ch/piiwii/streamradar/data/ImdbArtworkEnricher.kt
+          grep -q 'applicationId = "ch.piiwii.streamradar2"' android/app/build.gradle.kts
+          grep -q 'versionName = "0.47.0"' android/app/build.gradle.kts
+          grep -q 'versionCode = 47' android/app/build.gradle.kts
+          grep -q 'androidx.room:room-runtime:2.6.1' android/app/build.gradle.kts
+          test -f android/app/src/main/java/ch/piiwii/streamradar/data/CatalogCacheDatabase.kt
+          grep -q 'CatalogCacheDatabase.get' android/app/src/main/java/ch/piiwii/streamradar/data/CatalogCache.kt
+          grep -q 'lookupById' android/app/src/main/java/ch/piiwii/streamradar/data/AppleMovieEnricher.kt
+          grep -q 'lookupById' android/app/src/main/java/ch/piiwii/streamradar/data/AppleTvArtworkEnricher.kt
+          grep -q 'lookupById' android/app/src/main/java/ch/piiwii/streamradar/data/TvMazeEnricher.kt
+          grep -q 'lookupById' android/app/src/main/java/ch/piiwii/streamradar/data/ImdbArtworkEnricher.kt
 
       - name: Compiler release
         working-directory: /tmp/streamradar-src/android
