@@ -1,0 +1,101 @@
+diff --git a/a/app/build.gradle.kts b/b/app/build.gradle.kts
+index c0bf148..332e3c1 100644
+--- a/a/app/build.gradle.kts
++++ b/b/app/build.gradle.kts
+@@ -13,8 +13,8 @@ android {
+         applicationId = "ch.piiwii.streamradar2"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 52
+-        versionName = "0.52.0"
++        versionCode = 54
++        versionName = "0.54.0"
+ 
+         buildConfigField("String", "STREAMRADAR_API_URL", "\"http://10.0.2.2:8000/\"")
+     }
+diff --git a/a/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt b/b/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+index 28c5ee9..c765b17 100644
+--- a/a/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
++++ b/b/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+@@ -1153,7 +1153,7 @@ private fun PremiumHomeHeader(syncing: Boolean, alertCount: Int, onSearchClick:
+ private fun HeroFeatureCard(release: Release, followed: Boolean, current: Int, total: Int, onFollow: (String) -> Unit, onOpen: (Release) -> Unit) {
+     val heroDate = release.releaseDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+     Card(
+-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp).aspectRatio(2.45f),
++        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp).aspectRatio(2.28f),
+         shape = RoundedCornerShape(20.dp),
+         colors = CardDefaults.cardColors(containerColor = Color(0xFF091722)),
+         border = BorderStroke(1.dp, Color(0xFF42515D))
+@@ -1334,9 +1334,9 @@ private fun PremiumSectionTitle(title: String, actionLabel: String, onAction: ()
+ private fun PremiumPosterRail(releases: List<Release>, followed: Set<String>, onOpen: (Release) -> Unit, showRating: Boolean = false) {
+     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+         items(releases, key = { "premium-${it.id}" }) { release ->
+-            // 0.52 : les rails de l'accueil étaient beaucoup trop petits (62 dp).
+-            // On agrandit uniquement les fiches/posters, sans grossir les textes.
+-            Column(Modifier.width(92.dp).clickable { onOpen(release) }) {
++            // 0.54 : on agrandit encore légèrement les posters des rails d'accueil.
++            // Largeur 108 dp au lieu de 92 dp, sans grossir les textes.
++            Column(Modifier.width(108.dp).clickable { onOpen(release) }) {
+                 Box {
+                     Poster(release.posterUrl, release.type, Modifier.fillMaxWidth().aspectRatio(0.78f), titleHint = release.title, releaseId = release.id, fallbackUrls = release.posterFallbackUrls, requestSize = PosterRequestSize.CARD)
+                     if (showRating && release.voteAverage != null) {
+@@ -1565,10 +1565,10 @@ private fun CalendarScreen(
+         typeOk && platformOk
+     }.sortedBy { it.first }
+ 
+-    val dayRows = if (mode == "Mois") {
+-        val selectedRows = filtered.filter { it.first == selectedDate }
+-        if (selectedRows.isNotEmpty()) selectedRows else filtered.take(8)
+-    } else filtered.take(12)
++    // 0.54 : en mode Mois, on affiche la liste de tout le mois filtré.
++    // Avant, l'écran ne montrait souvent que la date sélectionnée, ce qui donnait
++    // l'impression de n'avoir que 2 sorties alors qu'il y en avait beaucoup plus dans le mois.
++    val dayRows = if (mode == "Mois") filtered.take(80) else filtered.take(12)
+ 
+     LazyColumn(
+         modifier = modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF040D16), Color(0xFF06131F), Color(0xFF040B12)))),
+@@ -1700,9 +1700,12 @@ private fun CalendarScreen(
+         }
+         item {
+             PremiumSectionTitle(
+-                title = if (mode == "Mois" && filtered.any { it.first == selectedDate }) {
+-                    selectedDate.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)).replaceFirstChar { it.uppercase() }
+-                } else "À venir",
++                title = when {
++                    mode == "Mois" -> "Sorties de " + month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.FRENCH)).replaceFirstChar { it.uppercase() }
++                    mode == "Semaine" -> "À venir cette semaine"
++                    mode == "Mes suivis" -> "Mes suivis à venir"
++                    else -> "À venir"
++                },
+                 actionLabel = "VOIR TOUT",
+                 onAction = { category = "Tous"; platformFilter = null }
+             )
+@@ -1962,14 +1965,20 @@ private fun CalendarReleaseRow(date: LocalDate, release: Release, followed: Bool
+         colors = CardDefaults.cardColors(containerColor = Color(0xFF0A1723)),
+         border = BorderStroke(1.dp, Color(0xFF263A4B))
+     ) {
+-        Row(Modifier.height(58.dp), verticalAlignment = Alignment.CenterVertically) {
+-            Box(Modifier.width(124.dp).fillMaxHeight()) {
+-                val imageCandidates = (listOfNotNull(release.backdropUrl, release.posterUrl) + release.posterFallbackUrls).distinct()
+-                if (imageCandidates.isNotEmpty()) RemoteBackdropCandidates(imageCandidates, Modifier.fillMaxSize()) else Poster(release.posterUrl, release.type, Modifier.fillMaxSize(), titleHint = release.title, releaseId = release.id, fallbackUrls = release.posterFallbackUrls, requestSize = PosterRequestSize.SMALL)
+-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Transparent, Color(0xFF0A1723).copy(alpha = 0.55f)))))
+-            }
+-            Column(Modifier.weight(1f).padding(horizontal = 9.dp, vertical = 6.dp)) {
+-                Text(release.title, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
++        Row(Modifier.height(92.dp), verticalAlignment = Alignment.CenterVertically) {
++            Box(Modifier.width(66.dp).fillMaxHeight().padding(start = 7.dp, top = 7.dp, bottom = 7.dp)) {
++                Poster(
++                    release.posterUrl,
++                    release.type,
++                    Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
++                    titleHint = release.title,
++                    releaseId = release.id,
++                    fallbackUrls = release.posterFallbackUrls,
++                    requestSize = PosterRequestSize.CARD
++                )
++            }
++            Column(Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp)) {
++                Text(release.title, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 2, lineHeight = 13.sp, overflow = TextOverflow.Ellipsis)
+                 release.season?.let { Text(it, fontSize = 8.sp, color = Color(0xFFB6C1CB), maxLines = 1) }
+                 Spacer(Modifier.height(2.dp))
+                 Row(verticalAlignment = Alignment.CenterVertically) {
