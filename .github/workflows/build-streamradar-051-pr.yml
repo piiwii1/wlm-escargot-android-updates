@@ -98,6 +98,12 @@ jobs:
           base64 -d < /tmp/p051.b64 | gzip -d > /tmp/p051.patch
           patch -p1 --dry-run < /tmp/p051.patch && patch -p1 < /tmp/p051.patch
 
+          # Compatibilité avec la chaîne historique 0.50 : un ancien appel du backdrop
+          # existe encore dans la reconstruction cumulative, alors que le registre 0.50+
+          # expose markTimeout/markFailure. On le neutralise avant compilation.
+          sed -i 's/PosterFailureRegistry\.markHardFailure(currentUrl)/PosterFailureRegistry.markTimeout(currentUrl)/g' app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+          ! grep -q 'PosterFailureRegistry\.markHardFailure' app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+
           grep -q 'applicationId = "ch.piiwii.streamradar2"' app/build.gradle.kts
           grep -q 'versionName = "0.51.0"' app/build.gradle.kts
           grep -q 'versionCode = 51' app/build.gradle.kts
