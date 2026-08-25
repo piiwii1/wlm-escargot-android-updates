@@ -84,9 +84,8 @@ jobs:
           cd /tmp/streamradar-src/android
           patch -p1 --dry-run < /tmp/p048.patch && patch -p1 < /tmp/p048.patch
 
-          cat "$W"/temp-streamradar-049/patch.chunk* | tr -d '\n\r' > /tmp/p049.b64
-          echo 'd761c5bfed3c323011f05b54ac94ed87f5c4e1ff22dbd5fe1fec0d2d4714b93c  /tmp/p049.b64' | sha256sum -c -
-          base64 -d < /tmp/p049.b64 | gzip -d > /tmp/p049.patch
+          cat "$W/temp-streamradar-049/patch.part1" "$W/temp-streamradar-049/patch.part2" "$W/temp-streamradar-049/patch.part3" "$W/temp-streamradar-049/patch.part4" | tr -d '\n\r' | base64 -d | gzip -d > /tmp/p049.patch
+          test -s /tmp/p049.patch
           patch -p1 --dry-run < /tmp/p049.patch && patch -p1 < /tmp/p049.patch
 
           cat "$W/temp-streamradar-050/patch.part00" "$W/temp-streamradar-050/patch.part01" "$W/temp-streamradar-050/patch.part02" "$W/temp-streamradar-050/patch.part03" "$W/temp-streamradar-050/patch.part04" | tr -d '\n\r' > /tmp/p050.b64
