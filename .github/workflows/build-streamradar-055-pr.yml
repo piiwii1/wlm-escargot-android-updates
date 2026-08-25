@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           tr -d '\n\r' < "$GITHUB_WORKSPACE/temp-streamradar-055/patch.b64" > /tmp/p055.b64
-          echo '890e471331865b23082fc7780fcc3e63061451c1ccf194761164173b51c3ec68  /tmp/p055.b64' | sha256sum -c -
+          echo '8aa94586ef824a5e4b45a77778af5e979c11c5812ead9b2b4b2d686846a6643b  /tmp/p055.b64' | sha256sum -c -
           base64 -d < /tmp/p055.b64 | gzip -d > /tmp/p055.patch
           cd /tmp/streamradar-src/android
           patch -p1 --dry-run < /tmp/p055.patch
