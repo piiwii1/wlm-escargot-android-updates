@@ -1,0 +1,2 @@
+WA Archive Engine 0.4.7
+Contextual WhatsApp-style search, adaptive launcher icon, Fanny/user profile assets.
