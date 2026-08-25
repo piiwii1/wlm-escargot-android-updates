@@ -7,8 +7,15 @@
         android:label="Archive WhatsApp"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
+
+        <provider
+            android:name=".ArchiveFileProvider"
+            android:authorities="ch.piiwii.waarchive.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <activity
-            android:name=".MainActivityV047"
+            android:name=".MainActivityV048"
             android:exported="true"
             android:launchMode="singleTop"
             android:screenOrientation="portrait">
