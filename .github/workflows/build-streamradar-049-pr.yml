@@ -129,7 +129,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tr -d '\n\r' < temp-streamradar-049/patch.b64 | base64 -d | gzip -d > /tmp/p049.patch
+          cat temp-streamradar-049/patch.part1 temp-streamradar-049/patch.part2 temp-streamradar-049/patch.part3 temp-streamradar-049/patch.part4 | tr -d '\n\r' | base64 -d | gzip -d > /tmp/p049.patch
           test -s /tmp/p049.patch
           cd /tmp/streamradar-src/android
           patch -p1 --dry-run < /tmp/p049.patch
