@@ -1,0 +1,32 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "ch.piiwii.streamradar2"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 51
+-        versionName = "0.51.0"
++        versionCode = 52
++        versionName = "0.52.0"
+ 
+         buildConfigField("String", "STREAMRADAR_API_URL", "\"http://10.0.2.2:8000/\"")
+     }
+--- a/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
++++ b/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+@@ -1332,11 +1332,13 @@
+ 
+ @Composable
+ private fun PremiumPosterRail(releases: List<Release>, followed: Set<String>, onOpen: (Release) -> Unit, showRating: Boolean = false) {
+-    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+         items(releases, key = { "premium-${it.id}" }) { release ->
+-            Column(Modifier.width(62.dp).clickable { onOpen(release) }) {
++            // 0.52 : les rails de l'accueil étaient beaucoup trop petits (62 dp).
++            // On agrandit uniquement les fiches/posters, sans grossir les textes.
++            Column(Modifier.width(92.dp).clickable { onOpen(release) }) {
+                 Box {
+-                    Poster(release.posterUrl, release.type, Modifier.fillMaxWidth().aspectRatio(0.78f), titleHint = release.title, releaseId = release.id, fallbackUrls = release.posterFallbackUrls, requestSize = PosterRequestSize.SMALL)
++                    Poster(release.posterUrl, release.type, Modifier.fillMaxWidth().aspectRatio(0.78f), titleHint = release.title, releaseId = release.id, fallbackUrls = release.posterFallbackUrls, requestSize = PosterRequestSize.CARD)
+                     if (showRating && release.voteAverage != null) {
+                         Surface(Modifier.padding(5.dp), shape = RoundedCornerShape(8.dp), color = Color(0xE6092B22), border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))) {
+                             Text("${(release.voteAverage * 10).toInt()}%", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), color = MaterialTheme.colorScheme.primary, fontSize = 9.sp, fontWeight = FontWeight.Black)
