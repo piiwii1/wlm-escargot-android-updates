@@ -61,6 +61,7 @@ jobs:
           cd /tmp/streamradar-src/android
           patch -p1 --dry-run < /tmp/p055.patch
           patch -p1 < /tmp/p055.patch
+          cp "$GITHUB_WORKSPACE/temp-streamradar-055/RecommendationEngine.kt" app/src/main/java/ch/piiwii/streamradar/data/RecommendationEngine.kt
 
           grep -q 'applicationId = "ch.piiwii.streamradar2"' app/build.gradle.kts
           grep -q 'versionName = "0.55.0"' app/build.gradle.kts
