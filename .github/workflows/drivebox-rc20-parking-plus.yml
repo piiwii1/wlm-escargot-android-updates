@@ -56,7 +56,7 @@ jobs:
           grep -q 'PHOTO DE LA PLACE' "$JAVA"
           grep -q 'DURÉE & ALARME' "$JAVA"
           grep -q 'Prix par heure en CHF' "$JAVA"
-          grep -q 'Garé depuis' "$JAVA"
+          grep -q 'GARÉ DEPUIS' "$JAVA"
           grep -q 'PREF_PARK_DRAFT_FREE' "$JAVA"
           grep -q 'parkingCarousel' "$JAVA"
           test -f app/src/main/java/ch/clubvwsuisse/drivebox/ParkingAlarmReceiver.java
