@@ -1,2 +1,3 @@
 DriveBox RC7 build trigger
 Exact official icon + simplified UI
+Rebuild 2026-08-26 exact user-provided icon
