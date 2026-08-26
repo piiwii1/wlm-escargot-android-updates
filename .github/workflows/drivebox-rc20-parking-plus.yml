@@ -46,6 +46,7 @@ jobs:
           cat drivebox-ci/rc20-part{1..8}.b64 | tr -d '\r\n' | base64 -d | gzip -d > /tmp/rc20.patch
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc20.patch
+          printf 'android.useAndroidX=true\nandroid.enableJetifier=true\n' > gradle.properties
           JAVA=app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           MANIFEST=app/src/main/AndroidManifest.xml
           grep -q 'versionCode 29' app/build.gradle
