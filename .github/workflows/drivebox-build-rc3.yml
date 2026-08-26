@@ -1,0 +1,211 @@
+name: Build DriveBox RC3 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/**'
+      - '.github/workflows/drivebox-build-rc3.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct DriveBox source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/drivebox-src
+          mkdir -p /tmp/drivebox-src
+          cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
+          unzip -t /tmp/drivebox-source.zip
+          unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
+          test -f /tmp/drivebox-src/app/build.gradle
+
+      - name: Apply RC2 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          y = Path('.github/workflows/drivebox-build.yml').read_text(encoding='utf-8')
+          marker = '      - name: Apply DriveBox RC2 cleanup\n'
+          start = y.index(marker)
+          run_marker = '        run: |\n'
+          run_start = y.index(run_marker, start) + len(run_marker)
+          end = y.index('      - name: Set up Java 17\n', run_start)
+          block = y[run_start:end]
+          lines = []
+          for line in block.splitlines():
+              lines.append(line[10:] if line.startswith('          ') else line)
+          script = '\n'.join(lines) + '\n'
+          Path('/tmp/apply-drivebox-rc2.sh').write_text(script, encoding='utf-8')
+          subprocess.run(['bash', '/tmp/apply-drivebox-rc2.sh'], check=True)
+          PY
+
+      - name: Apply DriveBox RC3 cleanup and official icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d drivebox-ci/official-icon.b64 > /tmp/drivebox-official.png
+          test -s /tmp/drivebox-official.png
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text(encoding='utf-8')
+
+          def replace_between(src, start, next_start, new):
+              a = src.index(start)
+              b = src.index(next_start, a)
+              return src[:a] + new + '\n\n    ' + src[b:]
+
+          s = s.replace('Les infos et outils auto utiles, sans blabla.', 'Les infos et outils auto utiles, sans superflu.')
+          s = s.replace('DriveBox 1.0.0 RC2 • by Club VW Suisse', 'DriveBox 1.0.0 RC3 • by Club VW Suisse')
+
+          # Remove the very basic shortcuts the user explicitly does not want.
+          for line in [
+              '        x.add(new CatalogItem("💡", "Éclairage", "Contrôle rapide avant de partir", "phares feux stop clignotant eclairage ampoule", this::lightingGuide));\n',
+              '        x.add(new CatalogItem("💧", "Essuie-glaces & lave-glace", "Visibilité, balais et liquide", "essuie glace essuie-glace lave glace visibilite balais pare brise", this::wipersGuide));\n',
+              '        x.add(new CatalogItem("🌬", "Désembuage & climatisation", "Retrouver rapidement une bonne visibilité", "buée buee desembuage climatisation pare brise ventilation air", this::demistGuide));\n',
+              '        x.add(new CatalogItem("🦺", "Crevaison & bord de route", "Se mettre en sécurité avant de réparer", "crevaison panne bord route securite gilet triangle roue secours", this::roadsideSafetyGuide));\n'
+          ]:
+              s = s.replace(line, '')
+
+          new_maintenance = '''private void maintenanceHome() {
+              LinearLayout root = page("🔧", "Entretien", "Les repères qui valent vraiment la peine d'être gardés sous la main.");
+              root.addView(sectionTitle("MOTEUR & NIVEAUX"));
+              root.addView(wideCard("🛢", "Niveau d'huile", "Méthode de lecture de la jauge et erreurs à éviter", ORANGE, this::oilGuide));
+              root.addView(wideCard("🌡", "Liquide de refroidissement", "Niveau, sécurité à chaud et baisse anormale", BLUE, this::coolantGuide));
+              root.addView(wideCard("🔋", "Batterie 12 V", "Tension au repos et signes de faiblesse", GREEN, this::batteryGuide));
+              root.addView(sectionTitle("DIAGNOSTIC & DÉPANNAGE"), lp(-1, -2, 0, 14, 0, 8));
+              root.addView(wideCard("🛑", "Freins", "Symptômes qui justifient un contrôle", RED, this::brakeGuide));
+              root.addView(wideCard("⚠", "Voyants", "Priorité par couleur et conduite à tenir", ORANGE, this::warningLightsGuide));
+              root.addView(wideCard("⚡", "Câbles / booster", "Ordre de branchement et précautions", RED, this::jumpStartGuide));
+              root.addView(wideCard("⛽", "Carburants E5 / E10 / B7 / XTL", "Comprendre les marquages à la pompe", GREEN, this::fuelLabelsGuide));
+              setScrollablePage(root);
+          }'''
+          s = replace_between(s, 'private void maintenanceHome() {', 'private void oilGuide() {', new_maintenance)
+
+          # Convoi: remove picnic / obvious checks and keep useful coordination.
+          s = s.replace(
+              'String[] mech = {"Niveaux faits (huile, LDR, lave-glace)", "Pression des pneus (roue de secours incluse)", "Plein de carburant effectué", "Éclairage contrôlé (phares, clignotants)"};',
+              'String[] mech = {"Niveaux utiles contrôlés", "Pression et état des pneus vérifiés", "Autonomie suffisante jusqu’au prochain ravitaillement", "Assistance / roue de secours / kit anti-crevaison vérifié"};'
+          )
+          s = s.replace(
+              'String[] log = {"Application Zello installée et connectée", "Téléphone chargé à 100% (+ câble auto)", "Vignette autoroutière valide", "Boissons et/ou pique-nique embarqués"};',
+              'String[] log = {"Canal Zello / communication testé", "Point de rendez-vous et heure confirmés", "Ouvreur / fermeur et ordre du convoi définis", "Vignettes, péages et itinéraire vérifiés"};'
+          )
+
+          # Long trip: keep non-obvious preparation instead of kindergarten checks.
+          s = s.replace(
+              'String[] vehicle = {"Niveaux contrôlés (huile, refroidissement, lave-glace)", "Pression et état des pneus vérifiés", "Éclairage et essuie-glaces testés", "Carburant / autonomie suffisante pour le départ"};',
+              'String[] vehicle = {"Niveaux utiles et éventuelles fuites contrôlés", "Pression, état et âge des pneus vérifiés", "Autonomie / ravitaillements principaux anticipés", "Assistance, roue de secours ou kit anti-crevaison vérifié"};'
+          )
+          s = s.replace(
+              'String[] comfort = {"Itinéraire et pauses principales prévus", "Eau / boissons embarquées", "Médicaments et affaires personnelles indispensables", "Bagages fixés pour ne pas devenir des projectiles"};',
+              'String[] comfort = {"Itinéraire, zones à péage et restrictions vérifiés", "Pauses / relais conducteur prévus si nécessaire", "Étapes sensibles téléchargées hors ligne", "Charge et bagages répartis correctement"};'
+          )
+
+          java.write_text(s, encoding='utf-8')
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text(encoding='utf-8')
+          g = g.replace('versionCode 11', 'versionCode 12').replace("versionName '1.0.0-rc2'", "versionName '1.0.0-rc3'")
+          gradle.write_text(g, encoding='utf-8')
+          PY
+
+          if ! command -v convert >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y imagemagick
+          fi
+
+          RES=/tmp/drivebox-src/app/src/main/res
+          mkdir -p "$RES/drawable-nodpi"
+          rm -f "$RES/drawable/ic_launcher_foreground.xml" "$RES/drawable/drivebox_logo.xml" "$RES/mipmap/ic_launcher.xml"
+          cp /tmp/drivebox-official.png "$RES/drawable-nodpi/drivebox_logo.png"
+
+          # Adaptive foreground: keep the complete official icon inside Android's safe zone.
+          convert -size 432x432 xc:none /tmp/drivebox-official.png -resize 300x300 -gravity center -composite "$RES/drawable-nodpi/ic_launcher_foreground.png"
+
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          XML
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+
+          for spec in \
+            "mipmap-mdpi 48" \
+            "mipmap-hdpi 72" \
+            "mipmap-xhdpi 96" \
+            "mipmap-xxhdpi 144" \
+            "mipmap-xxxhdpi 192"; do
+            set -- $spec
+            folder=$1
+            size=$2
+            mkdir -p "$RES/$folder"
+            convert /tmp/drivebox-official.png -resize ${size}x${size} "$RES/$folder/ic_launcher.png"
+            cp "$RES/$folder/ic_launcher.png" "$RES/$folder/ic_launcher_round.png"
+          done
+
+          grep -q 'versionCode 12' /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc3'" /tmp/drivebox-src/app/build.gradle
+          grep -q 'DriveBox 1.0.0 RC3' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          ! grep -q '"Éclairage", "Contrôle rapide avant de partir"' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          ! grep -q '"Désembuage & climatisation"' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: /tmp/drivebox-src
+        shell: bash
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify and stage APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$APK" | head -n 20
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC3-debug.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC3-debug.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC3-debug.apk.sha256.txt"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC3-APK
+          path: |
+            DriveBox-1.0.0-RC3-debug.apk
+            DriveBox-1.0.0-RC3-debug.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7

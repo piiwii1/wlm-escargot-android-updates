@@ -1,0 +1,239 @@
+name: Build DriveBox RC6 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/rc6-trigger.txt'
+      - '.github/workflows/drivebox-rc6.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct base
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/drivebox-src
+          mkdir -p /tmp/drivebox-src
+          cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
+          unzip -t /tmp/drivebox-source.zip
+          unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
+          test -f /tmp/drivebox-src/app/build.gradle
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+      - name: Reuse validated RC2 RC4 RC5 transformations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          def extract(path, step_name, out):
+              text = Path(path).read_text()
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - name:', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('.github/workflows/drivebox-build.yml', 'Apply DriveBox RC2 cleanup', '/tmp/rc2.sh')
+          extract('.github/workflows/drivebox-rc4-build.yml', 'Apply RC4 cleanup, exact icon, stable signing', '/tmp/rc4.sh')
+          extract('.github/workflows/drivebox-rc4-final.yml', 'Force clean-install identity and RC5 version', '/tmp/rc5.sh')
+          PY
+          bash /tmp/rc2.sh
+          bash /tmp/rc4.sh
+          bash /tmp/rc5.sh
+          keytool -list -keystore /tmp/drivebox-src/drivebox-dev.keystore -storepass DriveBoxDev2026 -alias drivebox | grep -qi drivebox
+
+      - name: Apply RC6 drastic cleanup and robust launcher icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+
+          # Version label.
+          s = s.replace('DriveBox 1.0.0 RC5', 'DriveBox 1.0.0 RC6')
+          s = s.replace('DriveBox 1.0.0 RC4', 'DriveBox 1.0.0 RC6')
+          s = s.replace('Les infos et outils auto utiles, sans superflu.', 'Références et outils auto essentiels.')
+          s = s.replace("L'essentiel utile, sans évidences.", 'Mécanique et diagnostic utiles.')
+
+          # Remove low-value catalog entries entirely from search/favorites.
+          banned = [
+              'Éclairage', 'Essuie-glaces', 'Désembuage', 'Crevaison', 'Étiquettes carburant',
+              'Check-list convoi', 'Check-list long trajet', 'Mon véhicule', 'Temps de trajet',
+              'Consommation'
+          ]
+          lines = []
+          for line in s.splitlines():
+              if 'x.add(new CatalogItem(' in line and any(word in line for word in banned):
+                  continue
+              lines.append(line)
+          s = '\n'.join(lines) + '\n'
+
+          def replace_between(src, start, next_start, new):
+              a = src.index(start)
+              b = src.index(next_start, a)
+              return src[:a] + new + "\n\n    " + src[b:]
+
+          # Home: only four categories. No secondary wall of cards.
+          start = 'Runnable renderDefault = () -> {'
+          a = s.index(start)
+          end_marker = '        };\n        renderDefault.run();'
+          b = s.index(end_marker, a)
+          new_default = '''Runnable renderDefault = () -> {
+              results.removeAllViews();
+              if (favoriteCount() > 0) {
+                  results.addView(wideCard("★", "Mes favoris", favoriteCount() + " raccourci(s)", ORANGE, this::favoritesScreen));
+              }
+              TextView foot = text("DriveBox 1.0.0 RC6 • by Club VW Suisse", 11, MUTED, false);
+              foot.setGravity(Gravity.CENTER);
+              results.addView(foot, lp(-1, -2, 0, 18, 0, 0));
+          };'''
+          s = s[:a] + new_default + s[b+len('        };'):]
+
+          # Maintenance: only genuinely useful mechanical references.
+          new_maintenance = '''private void maintenanceHome() {
+              LinearLayout root = page("🔧", "Entretien", "Mécanique et diagnostic utiles.");
+              root.addView(wideCard("🛢", "Niveau d'huile", "Lecture correcte de la jauge", ORANGE, this::oilGuide));
+              root.addView(wideCard("🌡", "Liquide de refroidissement", "Contrôle à froid et anomalies", BLUE, this::coolantGuide));
+              root.addView(wideCard("🔋", "Batterie 12 V", "Tension, faiblesse et diagnostic", GREEN, this::batteryGuide));
+              root.addView(wideCard("🛑", "Freins", "Symptômes, usure et alertes", RED, this::brakeGuide));
+              root.addView(wideCard("⚠", "Voyants", "Priorité et gravité des alertes", ORANGE, this::warningLightsGuide));
+              root.addView(wideCard("⚡", "Câbles / booster", "Branchement et précautions", RED, this::jumpStartGuide));
+              setScrollablePage(root);
+          }'''
+          s = replace_between(s, 'private void maintenanceHome() {', 'private void oilGuide() {', new_maintenance)
+
+          # Tools: keep only the compact set with real everyday value.
+          new_tools = '''private void toolsScreen() {
+              LinearLayout root = page("🧰", "Outils", "Conversions et calculs utiles.");
+              root.addView(wideCard("⇄", "km / miles", "Distance et vitesse", BLUE, this::converterScreen));
+              root.addView(wideCard("💨", "bar / psi", "Pression des pneus", BLUE, this::pressureConverterScreen));
+              root.addView(wideCard("⛽", "Frais de route", "Carburant et partage du coût", GREEN, this::costCalculatorScreen));
+              root.addView(wideCard("⛽", "Autonomie", "Estimation à partir du carburant restant", PURPLE, this::rangeCalculatorScreen));
+              root.addView(wideCard("🛞", "Dimensions de pneus", "Comparer diamètre et circonférence", BLUE, this::tyreSizeComparatorScreen));
+              setScrollablePage(root);
+          }'''
+          s = replace_between(s, 'private void toolsScreen() {', 'private void converterScreen() {', new_tools)
+
+          java.write_text(s)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text()
+          g = g.replace('versionCode 14', 'versionCode 15')
+          g = g.replace("versionName '1.0.0-rc5'", "versionName '1.0.0-rc6'")
+          gradle.write_text(g)
+          PY
+
+          # Official full icon supplied by the user. Build all launcher resources BEFORE signing.
+          base64 -d drivebox-ci/rc3-icon-192.b64 > /tmp/drivebox-official.png
+          file /tmp/drivebox-official.png | grep -qi PNG
+          mkdir -p /tmp/drivebox-src/app/src/main/res/drawable-nodpi
+          cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/drawable-nodpi/drivebox_logo.png
+          cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png
+
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p "/tmp/drivebox-src/app/src/main/res/mipmap-$d"
+            cp /tmp/drivebox-official.png "/tmp/drivebox-src/app/src/main/res/mipmap-$d/ic_launcher.png"
+            cp /tmp/drivebox-official.png "/tmp/drivebox-src/app/src/main/res/mipmap-$d/ic_launcher_round.png"
+          done
+
+          mkdir -p /tmp/drivebox-src/app/src/main/res/drawable
+          cat > /tmp/drivebox-src/app/src/main/res/drawable/ic_launcher_adaptive_foreground.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <inset xmlns:android="http://schemas.android.com/apk/res/android"
+              android:drawable="@drawable/ic_launcher_foreground"
+              android:inset="16%" />
+          XML
+
+          mkdir -p /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26
+          cat > /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_adaptive_foreground" />
+          </adaptive-icon>
+          XML
+          cp /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+          # Ensure black icon background for adaptive launchers.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/drivebox-src/app/src/main/res/values/colors.xml')
+          s = p.read_text()
+          if 'launcher_background' in s:
+              import re
+              s = re.sub(r'<color name="launcher_background">.*?</color>', '<color name="launcher_background">#0D1117</color>', s)
+          else:
+              s = s.replace('</resources>', '    <color name="launcher_background">#0D1117</color>\n</resources>')
+          p.write_text(s)
+          PY
+
+          grep -q "applicationId 'ch.clubvwsuisse.drivebox.v1'" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionCode 15" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc6'" /tmp/drivebox-src/app/build.gradle
+          grep -q "DriveBox 1.0.0 RC6" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          ! grep -q 'new CatalogItem(.*Éclairage' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          ! grep -q 'new CatalogItem(.*Essuie-glaces' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify signed APK and launcher resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='15'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          grep -q "application-icon-160:'res/mipmap-mdpi-v4/ic_launcher.png'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'res/mipmap-mdpi-v4/ic_launcher.png'
+          unzip -l "$APK" | grep -q 'res/mipmap-xxxhdpi-v4/ic_launcher.png'
+          unzip -l "$APK" | grep -q 'res/mipmap-anydpi-v26/ic_launcher.xml'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC6.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC6.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC6.apk.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC6
+          path: |
+            DriveBox-1.0.0-RC6.apk
+            DriveBox-1.0.0-RC6.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
