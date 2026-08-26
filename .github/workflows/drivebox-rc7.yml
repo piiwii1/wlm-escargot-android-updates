@@ -84,23 +84,6 @@ jobs:
               lines.append(line)
           s = '\n'.join(lines) + '\n'
 
-          # Home: preserve the four category tiles above, remove the secondary card wall below.
-          a = s.index('Runnable renderDefault = () -> {')
-          run_pos = s.index('renderDefault.run();', a)
-          block_end = s.rfind('        };', a, run_pos)
-          if block_end < 0:
-              raise RuntimeError('renderDefault block end not found')
-          new_default = '''Runnable renderDefault = () -> {
-              results.removeAllViews();
-              if (favoriteCount() > 0) {
-                  results.addView(wideCard("★", "Mes favoris", favoriteCount() + " raccourci(s)", ORANGE, this::favoritesScreen));
-              }
-              TextView foot = text("DriveBox 1.0.0 RC7 • by Club VW Suisse", 11, MUTED, false);
-              foot.setGravity(Gravity.CENTER);
-              results.addView(foot, lp(-1, -2, 0, 18, 0, 0));
-          };'''
-          s = s[:a] + new_default + s[block_end + len('        };'):]
-
           new_maintenance = '''private void maintenanceHome() {
               LinearLayout root = page("🔧", "Entretien", "Mécanique et diagnostic utiles.");
               root.addView(wideCard("🛢", "Niveau d'huile", "Lecture correcte de la jauge", ORANGE, this::oilGuide));
