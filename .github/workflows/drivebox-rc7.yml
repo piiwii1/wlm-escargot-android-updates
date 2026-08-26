@@ -106,6 +106,8 @@ jobs:
               setScrollablePage(root);
           }'''
           s = replace_between(s, 'private void toolsScreen() {', 'private void converterScreen() {', new_tools)
+          # Legacy hidden checklist pages remain in source for compatibility, but no longer have their removed submenu.
+          s = s.replace('this::checklistsScreen', 'this::toolsScreen')
           java.write_text(s)
 
           gradle = Path('/tmp/drivebox-src/app/build.gradle')
