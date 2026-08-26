@@ -6,10 +6,7 @@ on:
     paths:
       - '.github/workflows/drivebox-rc16-country-light.yml'
       - '.github/workflows/drivebox-rc15-icons.yml'
-      - 'drivebox-ci/rc16-mainactivity.part00.b64'
-      - 'drivebox-ci/rc16-mainactivity.part01.b64'
-      - 'drivebox-ci/rc16-mainactivity.part02.b64'
-      - 'drivebox-ci/rc16-mainactivity.part03.b64'
+      - 'drivebox-ci/rc16-mainactivity.patch.gz.b64'
       - 'drivebox-ci/rc16-trigger.txt'
   workflow_dispatch:
 
@@ -51,7 +48,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat drivebox-ci/rc16-mainactivity.part*.b64 | tr -d '\r\n\t ' | base64 -d | gzip -d > /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          cat drivebox-ci/rc16-mainactivity.patch.gz.b64 | tr -d '\r\n\t ' | base64 -d | gzip -d > /tmp/rc16-mainactivity.patch
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc16-mainactivity.patch
 
           python3 - <<'PY'
           from pathlib import Path
