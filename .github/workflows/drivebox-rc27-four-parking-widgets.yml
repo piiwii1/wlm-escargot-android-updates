@@ -1,0 +1,132 @@
+name: Build DriveBox RC27 Four Parking Widgets
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/drivebox-rc27-four-parking-widgets.yml'
+      - 'drivebox-ci/rc27-four-widgets.patch.gz.b64'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct validated RC25 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc25-parking-readable.yml').read_text()
+          names = [
+              'Reconstruct validated RC18 source',
+              'Apply validated RC20 parking module',
+              'Apply validated RC21 parking ergonomics',
+              'Apply validated RC22 parking cleanup',
+              'Apply validated RC23 single-screen parking UX',
+              'Apply validated RC24 tariff and free-period alarm UX',
+              'Apply RC25 parking readability UX',
+          ]
+          def extract(name, out):
+              marker = '      - name: ' + name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          for i, name in enumerate(names): extract(name, f'/tmp/rc25-step-{i}.sh')
+          PY
+          for f in /tmp/rc25-step-*.sh; do bash "$f"; done
+          grep -q 'versionCode 34' /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc25'" /tmp/drivebox-src/app/build.gradle
+
+      - name: Apply RC27 four-widget system
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d "$GITHUB_WORKSPACE/drivebox-ci/rc27-four-widgets.patch.gz.b64" | gzip -d > /tmp/rc27.patch
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc27.patch
+          JAVA=app/src/main/java/ch/clubvwsuisse/drivebox
+          RES=app/src/main/res
+          grep -q 'versionCode 36' app/build.gradle
+          grep -q "versionName '1.0.0-rc27'" app/build.gradle
+          test -f "$JAVA/DriveBoxParkingWidget.java"
+          test -f "$JAVA/DriveBoxParkingSquareWidget.java"
+          test -f "$JAVA/DriveBoxParkingBarWidget.java"
+          test -f "$JAVA/DriveBoxParkingFullWidget.java"
+          test -f "$JAVA/ParkingWidgetRenderer.java"
+          test -f "$RES/layout/widget_parking_mini_preview.xml"
+          test -f "$RES/layout/widget_parking_square_preview.xml"
+          test -f "$RES/layout/widget_parking_bar_preview.xml"
+          test -f "$RES/layout/widget_parking_full_preview.xml"
+          grep -q 'android:targetCellWidth="1"' "$RES/xml/parking_widget_info.xml"
+          grep -q 'android:targetCellHeight="1"' "$RES/xml/parking_widget_info.xml"
+          grep -q 'android:previewLayout="@layout/widget_parking_mini_preview"' "$RES/xml/parking_widget_info.xml"
+          grep -q 'android:previewLayout="@layout/widget_parking_square_preview"' "$RES/xml/parking_widget_square_info.xml"
+          grep -q 'android:previewLayout="@layout/widget_parking_bar_preview"' "$RES/xml/parking_widget_bar_info.xml"
+          grep -q 'android:previewLayout="@layout/widget_parking_full_preview"' "$RES/xml/parking_widget_full_info.xml"
+          grep -q 'DriveBoxParkingSquareWidget' app/src/main/AndroidManifest.xml
+          grep -q 'DriveBoxParkingBarWidget' app/src/main/AndroidManifest.xml
+          grep -q 'DriveBoxParkingFullWidget' app/src/main/AndroidManifest.xml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC27
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC27
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='36'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc27'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'classes.dex'
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC27-FOUR-PARKING-WIDGETS
+          path: |
+            DriveBox-1.0.0-RC27.apk
+            DriveBox-1.0.0-RC27.apk.sha256.txt
+            DriveBox-1.0.0-RC27-source.zip
+            DriveBox-1.0.0-RC27-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
