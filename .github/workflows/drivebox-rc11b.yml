@@ -1,11 +1,11 @@
 name: Build DriveBox RC13 APK
 
 on:
+  pull_request:
+    branches: [ main ]
+    types: [reopened, synchronize]
   push:
     branches: [ drivebox-ci-temp ]
-    paths:
-      - 'drivebox-ci/rc13-trigger.txt'
-      - '.github/workflows/drivebox-rc11b.yml'
   workflow_dispatch:
 
 jobs:
