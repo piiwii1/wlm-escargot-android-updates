@@ -1,0 +1,351 @@
+name: Build DriveBox RC8 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/rc8-trigger.txt'
+      - '.github/workflows/drivebox-rc8.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct base
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/drivebox-src
+          mkdir -p /tmp/drivebox-src
+          cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
+          unzip -t /tmp/drivebox-source.zip
+          unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
+          test -f /tmp/drivebox-src/app/build.gradle
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+      - name: Reuse RC7 app and exact icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          def extract(path, step_name, out):
+              text = Path(path).read_text()
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - name:', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('.github/workflows/drivebox-build.yml', 'Apply DriveBox RC2 cleanup', '/tmp/rc2.sh')
+          extract('.github/workflows/drivebox-rc4-build.yml', 'Apply RC4 cleanup, exact icon, stable signing', '/tmp/rc4.sh')
+          extract('.github/workflows/drivebox-rc7.yml', 'Apply RC7 simplified app and exact official icon', '/tmp/rc7.sh')
+          PY
+          bash /tmp/rc2.sh
+          bash /tmp/rc4.sh
+          bash /tmp/rc7.sh
+          keytool -list -keystore /tmp/drivebox-src/drivebox-dev.keystore -storepass DriveBoxDev2026 -alias drivebox | grep -qi drivebox
+
+      - name: Apply RC8 country redesign
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+
+          def replace_between(src, start, next_start, new):
+              a = src.index(start)
+              b = src.index(next_start, a)
+              return src[:a] + new + "\n\n    " + src[b:]
+
+          s = s.replace('DriveBox 1.0.0 RC7', 'DriveBox 1.0.0 RC8')
+
+          countries = r'''private void countriesScreen() {
+              LinearLayout root = page("🌍", "Route & pays", "Vitesses, autoroutes et obligations utiles.", () -> showHome(false), "Route & pays");
+              root.addView(infoStrip("i", "Fiches pensées pour une voiture particulière. Les panneaux sur place priment toujours.", BLUE));
+
+              root.addView(countryCard("🇨🇭", "Suisse", "VERT", "50 • 80 • 100 • 120", Color.rgb(14, 123, 70), () -> countryDetail(
+                      "🇨🇭", "Suisse", Color.rgb(14, 123, 70), "VERT",
+                      "50", "80", "100", "120", "120",
+                      "Vignette autoroutière obligatoire jusqu'à 3,5 t • CHF 40 • 2026 valable 01.12.2025–31.01.2027.",
+                      new String[]{
+                              "OBLIGATOIRE|Triangle de panne|À bord du véhicule.",
+                              "RECOMMANDÉ|Gilet haute visibilité|Pas obligatoire en Suisse, mais fortement conseillé.",
+                              "RECOMMANDÉ|Trousse de secours|Pas obligatoire pour une voiture particulière.",
+                              "RECOMMANDÉ|Extincteur|Pas obligatoire pour une voiture particulière.",
+                              "SORTIE DU PAYS|Autocollant CH|Obligatoire à l'arrière d'un véhicule suisse qui circule à l'étranger."
+                      },
+                      "Pas d'obligation générale de pneus hiver, mais le véhicule doit rester maîtrisable. La signalisation locale peut imposer des chaînes.",
+                      "112 : urgence générale.")));
+
+              root.addView(countryCard("🇫🇷", "France", "BLEU", "50 • 80 • 110 • 130", Color.rgb(0, 87, 184), () -> countryDetail(
+                      "🇫🇷", "France", Color.rgb(0, 87, 184), "BLEU",
+                      "50", "80", "110", "130", "130",
+                      "Pas de vignette autoroutière nationale. De nombreux axes sont à péage.",
+                      new String[]{
+                              "OBLIGATOIRE|Gilet haute visibilité|Au moins un, rangé à portée de main.",
+                              "OBLIGATOIRE|Triangle de présignalisation|À bord ; à utiliser si l'arrêt crée un danger.",
+                              "NON OBLIGATOIRE|Éthylotest|Plus obligatoire à bord.",
+                              "RECOMMANDÉ|Ampoules de rechange|Conseillées, pas une obligation générale à bord.",
+                              "VÉHICULE SUISSE|Autocollant CH|À conserver à l'arrière du véhicule lors du voyage."
+                      },
+                      "Du 1er novembre au 31 mars, équipement hiver obligatoire dans certaines zones montagneuses signalées.",
+                      "112 : urgence européenne.")));
+
+              root.addView(countryCard("🇩🇪", "Allemagne", "BLEU", "50 • 100 • 130 conseillé", Color.rgb(0, 87, 184), () -> countryDetail(
+                      "🇩🇪", "Allemagne", Color.rgb(0, 87, 184), "BLEU",
+                      "50", "100", "—", "130", "130 CONSEILLÉ",
+                      "Pas de péage autoroutier général pour les voitures particulières.",
+                      new String[]{
+                              "VÉHICULE ALLEMAND|Gilet haute visibilité|Au moins un gilet dans la voiture.",
+                              "VÉHICULE ALLEMAND|Triangle|Obligatoire à bord.",
+                              "VÉHICULE ALLEMAND|Trousse de secours|Matériel DIN 13164 ou équivalent prévu par la réglementation.",
+                              "NON OBLIGATOIRE|Extincteur|Pas d'obligation générale pour une voiture particulière.",
+                              "VÉHICULE SUISSE|Autocollant CH|Obligatoire à l'arrière lors du voyage à l'étranger."
+                      },
+                      "Pneus hiver 3PMSF obligatoires lorsque les conditions sont hivernales (neige, neige fondue, verglas ou givre).",
+                      "112 : secours • 110 : police.")));
+
+              root.addView(countryCard("🇮🇹", "Italie", "VERT", "50 • 90 • 110 • 130", Color.rgb(14, 123, 70), () -> countryDetail(
+                      "🇮🇹", "Italie", Color.rgb(14, 123, 70), "VERT",
+                      "50", "90", "110", "130", "130",
+                      "Beaucoup d'autoroutes sont à péage selon l'axe et la distance.",
+                      new String[]{
+                              "OBLIGATOIRE|Triangle|Le véhicule doit en être équipé.",
+                              "À PORTER|Gilet haute visibilité|Obligatoire pour sortir du véhicule dans les situations de panne prévues par le code.",
+                              "NON OBLIGATOIRE|Trousse de secours|Pas d'obligation générale pour une voiture particulière.",
+                              "NON OBLIGATOIRE|Extincteur|Pas d'obligation générale pour une voiture particulière.",
+                              "VÉHICULE SUISSE|Autocollant CH|Obligatoire à l'arrière lors du voyage à l'étranger."
+                      },
+                      "Les obligations hiver varient selon les régions et les routes ; pneus hiver ou chaînes peuvent être imposés.",
+                      "112 : urgence européenne.")));
+
+              root.addView(countryCard("🇦🇹", "Autriche", "BLEU", "50 • 100 • 100 • 130", Color.rgb(0, 87, 184), () -> countryDetail(
+                      "🇦🇹", "Autriche", Color.rgb(0, 87, 184), "BLEU",
+                      "50", "100", "100", "130", "130",
+                      "Vignette sur la plupart des autoroutes/voies rapides jusqu'à 3,5 t + certaines sections à péage séparé.",
+                      new String[]{
+                              "OBLIGATOIRE|Triangle|À bord d'une voiture particulière.",
+                              "OBLIGATOIRE|Gilet haute visibilité|À bord et à porter avant de quitter le véhicule en cas de panne/accident.",
+                              "OBLIGATOIRE|Trousse de secours|Matériel de premiers secours protégé de la poussière et de la saleté.",
+                              "NON OBLIGATOIRE|Extincteur|Pas d'obligation générale pour une voiture particulière.",
+                              "VÉHICULE SUISSE|Autocollant CH|Obligatoire à l'arrière lors du voyage à l'étranger."
+                      },
+                      "Du 1er novembre au 15 avril, pneus hiver obligatoires sur toutes les roues lorsqu'il y a des conditions hivernales.",
+                      "112 : urgence européenne.")));
+
+              root.addView(infoStrip("✓", "Données de voyage revues le 26.08.2026 • résumé pratique, la signalisation locale prime.", GREEN), lp(-1, -2, 0, 12, 0, 0));
+              setScrollablePage(root);
+          }'''
+
+          detail = r'''private void countryDetail(String flag, String country, int signColor, String signColorName,
+                                     String city, String rural, String expressway, String motorway,
+                                     String motorwayBadge, String toll, String[] equipment,
+                                     String winter, String emergency) {
+              LinearLayout root = page(flag, country, "Fiche route • voiture particulière", this::countriesScreen);
+              root.addView(countrySignCard(signColorName, signColor));
+
+              root.addView(sectionTitle("LIMITATIONS"), lp(-1, -2, 0, 18, 0, 8));
+              LinearLayout speeds1 = row(Gravity.CENTER);
+              speeds1.addView(speedCard(city, "Ville"), new LinearLayout.LayoutParams(0, dp(132), 1));
+              speeds1.addView(speedCard(rural, "Hors agglo"), lpFlex(1, dp(132), 8, 0, 0, 0));
+              root.addView(speeds1);
+              LinearLayout speeds2 = row(Gravity.CENTER);
+              speeds2.addView(speedCard(expressway, "Voie rapide"), new LinearLayout.LayoutParams(0, dp(132), 1));
+              speeds2.addView(speedCard(motorway, "Autoroute"), lpFlex(1, dp(132), 8, 0, 0, 0));
+              root.addView(speeds2, lp(-1, -2, 0, 8, 0, 0));
+              if ("Allemagne".equals(country)) {
+                  root.addView(infoStrip("i", "Sur Autobahn sans limitation affichée, 130 km/h est la vitesse recommandée (Richtgeschwindigkeit), pas une limitation générale.", BLUE));
+              }
+
+              root.addView(sectionTitle("AUTOROUTE / PÉAGE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("🛣", motorwayBadge + " • " + toll, signColor));
+
+              root.addView(sectionTitle("ÉQUIPEMENT / OBLIGATIONS"), lp(-1, -2, 0, 18, 0, 8));
+              for (String item : equipment) {
+                  String[] p = item.split("\\|", 3);
+                  root.addView(equipmentRow(p[0], p[1], p[2]));
+              }
+
+              root.addView(sectionTitle("HIVER"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("❄", winter, ORANGE));
+              root.addView(sectionTitle("URGENCE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("☎", emergency, RED));
+              root.addView(infoStrip("!", "Résumé pratique pour préparer un trajet. Vérifiez toujours la signalisation et les règles officielles avant le départ.", MUTED), lp(-1, -2, 0, 14, 0, 0));
+              setScrollablePage(root);
+          }'''
+
+          signcard = r'''private View countrySignCard(String colorName, int signColor) {
+              LinearLayout c = column();
+              c.setGravity(Gravity.CENTER);
+              c.setPadding(dp(16), dp(14), dp(16), dp(14));
+              c.setBackground(round(PANEL, 18));
+              MotorwaySignView sign = new MotorwaySignView(this, signColor);
+              sign.setContentDescription("Panneau autoroute " + colorName.toLowerCase(Locale.ROOT));
+              c.addView(sign, lp(-1, dp(145), 0, 0, 0, 8));
+              TextView label = text("SIGNALISATION AUTOROUTE • " + colorName, 12, MUTED, true);
+              label.setGravity(Gravity.CENTER);
+              c.addView(label);
+              return c;
+          }
+
+          private View speedCard(String value, String label) {
+              LinearLayout c = column();
+              c.setGravity(Gravity.CENTER);
+              c.setPadding(dp(8), dp(8), dp(8), dp(8));
+              c.setBackground(round(PANEL, 15));
+              if ("—".equals(value)) {
+                  TextView dash = text("—", 38, MUTED, true);
+                  dash.setGravity(Gravity.CENTER);
+                  c.addView(dash, lp(-1, dp(78), 0, 0, 0, 0));
+              } else {
+                  SpeedSignView sign = new SpeedSignView(this, value);
+                  sign.setContentDescription("Panneau limitation " + value + " kilomètres heure");
+                  c.addView(sign, lp(-1, dp(82), 0, 0, 0, 0));
+              }
+              TextView t = text(label, 12, TEXT, true);
+              t.setGravity(Gravity.CENTER);
+              c.addView(t);
+              return c;
+          }
+
+          private View equipmentRow(String status, String title, String detail) {
+              LinearLayout c = column();
+              c.setPadding(dp(13), dp(11), dp(13), dp(11));
+              c.setBackground(round(PANEL, 14));
+              int color = status.contains("OBLIGATOIRE") || status.contains("À PORTER") || status.contains("SORTIE") ? GREEN :
+                          status.contains("NON") ? MUTED : ORANGE;
+              c.addView(pill(status, Color.WHITE, color), lp(-2, -2, 0, 0, 0, 6));
+              c.addView(text(title, 15, TEXT, true));
+              c.addView(text(detail, 12, MUTED, false), lp(-1, -2, 0, 4, 0, 0));
+              return withMargins(c, 0, 0, 0, 8);
+          }'''
+
+          s = replace_between(s, 'private void countriesScreen() {', 'private void countryDetail(', countries)
+          s = replace_between(s, 'private void countryDetail(', 'private View countrySignCard(', detail)
+          s = replace_between(s, 'private View countrySignCard(', 'private View countryCard(', signcard)
+
+          # Add speed sign class before motorway sign class and replace motorway drawing with a cleaner road-sign style.
+          marker = '    private class MotorwaySignView extends View {'
+          speed_class = r'''    private class SpeedSignView extends View {
+              private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+              private final String value;
+              SpeedSignView(Context c, String value) { super(c); this.value = value; }
+              @Override protected void onDraw(Canvas canvas) {
+                  super.onDraw(canvas);
+                  float w=getWidth(), h=getHeight();
+                  float r=Math.min(w,h)*0.39f, cx=w/2f, cy=h/2f;
+                  p.setStyle(Paint.Style.FILL); p.setColor(Color.WHITE); canvas.drawCircle(cx,cy,r,p);
+                  p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(7)); p.setColor(Color.rgb(210,28,36)); canvas.drawCircle(cx,cy,r-dp(3.5f),p);
+                  p.setStyle(Paint.Style.FILL); p.setColor(Color.rgb(20,20,20)); p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextAlign(Paint.Align.CENTER);
+                  p.setTextSize(value.length()>=3 ? dp(26) : dp(30));
+                  Paint.FontMetrics fm=p.getFontMetrics();
+                  canvas.drawText(value,cx,cy-(fm.ascent+fm.descent)/2f,p);
+              }
+          }
+
+'''
+          s = s.replace(marker, speed_class + marker)
+
+          old_start = '    private class MotorwaySignView extends View {'
+          old_end = '    private class RoadsideIllustrationView extends View {'
+          a=s.index(old_start); b=s.index(old_end,a)
+          motorway = r'''    private class MotorwaySignView extends View {
+              private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+              private final int signColor;
+              MotorwaySignView(Context c, int signColor) { super(c); this.signColor=signColor; }
+              @Override protected void onDraw(Canvas canvas) {
+                  super.onDraw(canvas);
+                  float w=getWidth(), h=getHeight();
+                  RectF board=new RectF(w*0.17f,h*0.07f,w*0.83f,h*0.93f);
+                  p.setStyle(Paint.Style.FILL); p.setColor(signColor); canvas.drawRoundRect(board,dp(12),dp(12),p);
+                  p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(Color.WHITE); canvas.drawRoundRect(new RectF(board.left+dp(6),board.top+dp(6),board.right-dp(6),board.bottom-dp(6)),dp(8),dp(8),p);
+                  p.setStrokeCap(Paint.Cap.SQUARE); p.setStrokeWidth(dp(7));
+                  // Canonical motorway silhouette: two carriageways opening toward the viewer.
+                  canvas.drawLine(w*0.43f,h*0.23f,w*0.35f,h*0.78f,p);
+                  canvas.drawLine(w*0.57f,h*0.23f,w*0.65f,h*0.78f,p);
+                  p.setStrokeWidth(dp(5));
+                  canvas.drawLine(w*0.50f,h*0.20f,w*0.50f,h*0.82f,p);
+                  // Bridge / overpass bar and supports.
+                  p.setStrokeWidth(dp(7));
+                  canvas.drawLine(w*0.32f,h*0.43f,w*0.68f,h*0.43f,p);
+                  p.setStrokeWidth(dp(5));
+                  canvas.drawLine(w*0.37f,h*0.43f,w*0.37f,h*0.55f,p);
+                  canvas.drawLine(w*0.63f,h*0.43f,w*0.63f,h*0.55f,p);
+              }
+          }
+
+'''
+          s = s[:a] + motorway + s[b:]
+
+          java.write_text(s)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text()
+          g = g.replace('versionCode 16', 'versionCode 17')
+          g = g.replace("versionName '1.0.0-rc7'", "versionName '1.0.0-rc8'")
+          gradle.write_text(g)
+          PY
+
+          grep -q "versionCode 17" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc8'" /tmp/drivebox-src/app/build.gradle
+          grep -q "DriveBox 1.0.0 RC8" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "class SpeedSignView" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "Autocollant CH" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify RC8
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='17'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc8'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon-from-apk.webp
+          test "$(sha256sum /tmp/icon-from-apk.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC8
+          path: |
+            DriveBox-1.0.0-RC8.apk
+            DriveBox-1.0.0-RC8.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
