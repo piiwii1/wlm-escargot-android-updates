@@ -47,6 +47,16 @@ jobs:
           bash /tmp/rc4.sh
           bash /tmp/rc7.sh
           bash /tmp/rc8.sh
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = p.read_text()
+          s = s.replace('lpFlex(1, dp(132), 8, 0, 0, 0)', 'new LinearLayout.LayoutParams(0, dp(132), 1)')
+          s = s.replace('dp(3.5f)', 'dp(4)')
+          p.write_text(s)
+          PY
+
           keytool -list -keystore /tmp/drivebox-src/drivebox-dev.keystore -storepass DriveBoxDev2026 -alias drivebox | grep -qi drivebox
 
       - uses: actions/setup-java@v4
