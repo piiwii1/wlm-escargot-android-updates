@@ -73,7 +73,6 @@ jobs:
           s = s.replace('Des contrôles simples pour tout le monde.', 'Mécanique et diagnostic utiles.')
           s = s.replace('Des contrôles simples, expliqués sans jargon.', 'Mécanique et diagnostic utiles.')
 
-          # Search/favorites: retain only useful technical references and calculators.
           banned = [
               'Éclairage', 'Essuie-glaces', 'Désembuage', 'Crevaison', 'Étiquettes carburant',
               'Check-list convoi', 'Check-list long trajet', 'Mon véhicule', 'Temps de trajet', 'Consommation'
@@ -85,11 +84,12 @@ jobs:
               lines.append(line)
           s = '\n'.join(lines) + '\n'
 
-          # Home: the four category tiles are enough. No wall of secondary cards.
-          start = 'Runnable renderDefault = () -> {'
-          a = s.index(start)
-          end_marker = '        };\n        renderDefault.run();'
-          b = s.index(end_marker, a)
+          # Home: preserve the four category tiles above, remove the secondary card wall below.
+          a = s.index('Runnable renderDefault = () -> {')
+          run_pos = s.index('renderDefault.run();', a)
+          block_end = s.rfind('        };', a, run_pos)
+          if block_end < 0:
+              raise RuntimeError('renderDefault block end not found')
           new_default = '''Runnable renderDefault = () -> {
               results.removeAllViews();
               if (favoriteCount() > 0) {
@@ -99,9 +99,8 @@ jobs:
               foot.setGravity(Gravity.CENTER);
               results.addView(foot, lp(-1, -2, 0, 18, 0, 0));
           };'''
-          s = s[:a] + new_default + s[b+len('        };'):]
+          s = s[:a] + new_default + s[block_end + len('        };'):]
 
-          # Technical maintenance only.
           new_maintenance = '''private void maintenanceHome() {
               LinearLayout root = page("🔧", "Entretien", "Mécanique et diagnostic utiles.");
               root.addView(wideCard("🛢", "Niveau d'huile", "Lecture correcte de la jauge", ORANGE, this::oilGuide));
@@ -114,7 +113,6 @@ jobs:
           }'''
           s = replace_between(s, 'private void maintenanceHome() {', 'private void oilGuide() {', new_maintenance)
 
-          # Compact toolbox only.
           new_tools = '''private void toolsScreen() {
               LinearLayout root = page("🧰", "Outils", "Conversions et calculs utiles.");
               root.addView(wideCard("⇄", "km / miles", "Distance et vitesse", BLUE, this::converterScreen));
@@ -135,7 +133,6 @@ jobs:
           gradle.write_text(g)
           PY
 
-          # Exact artwork supplied by the user, only resized/compressed for Android. No substitute vector.
           base64 -d drivebox-ci/rc7-icon-192.webp.b64 > /tmp/drivebox-official.webp
           file /tmp/drivebox-official.webp | grep -qi WebP
           test "$(sha256sum /tmp/drivebox-official.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
@@ -149,7 +146,6 @@ jobs:
           cp /tmp/drivebox-official.webp "$RES/drawable-nodpi/ic_launcher_foreground.webp"
           cp /tmp/drivebox-official.webp "$RES/drawable-nodpi/drivebox_logo.webp"
 
-          # Legacy launcher resources on purpose: avoids Android selecting an obsolete/empty adaptive foreground.
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p "$RES/mipmap-$d"
             rm -f "$RES/mipmap-$d/ic_launcher."* "$RES/mipmap-$d/ic_launcher_round."*
