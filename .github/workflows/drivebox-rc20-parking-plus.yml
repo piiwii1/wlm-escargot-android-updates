@@ -1,0 +1,134 @@
+name: Build DriveBox RC20 Parking Plus
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/drivebox-rc20-parking-plus.yml'
+      - '.github/workflows/drivebox-rc18-countries-compact.yml'
+      - 'drivebox-ci/rc20-part*.b64'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct validated RC18 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc18-countries-compact.yml').read_text()
+          def extract(step_name, out):
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('Reconstruct validated RC17 source', '/tmp/rc18-base.sh')
+          extract('Apply RC18 countries and compact motorway signs', '/tmp/rc18-apply.sh')
+          PY
+          bash /tmp/rc18-base.sh
+          bash /tmp/rc18-apply.sh
+          grep -q "versionCode 27" /tmp/drivebox-src/app/build.gradle
+          grep -q "1.0.0-rc18" /tmp/drivebox-src/app/build.gradle
+
+      - name: Apply RC20 parking improvements
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat drivebox-ci/rc20-part{1..8}.b64 | tr -d '\r\n' | base64 -d | gzip -d > /tmp/rc20.patch
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc20.patch
+          JAVA=app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          MANIFEST=app/src/main/AndroidManifest.xml
+          grep -q 'versionCode 29' app/build.gradle
+          grep -q "versionName '1.0.0-rc20'" app/build.gradle
+          grep -q "androidx.core:core:1.15.0" app/build.gradle
+          grep -q 'ME LOCALISER' "$JAVA"
+          grep -q 'Autoriser la localisation' "$JAVA"
+          grep -q 'PHOTO DE LA PLACE' "$JAVA"
+          grep -q 'DURÉE & ALARME' "$JAVA"
+          grep -q 'Prix par heure en CHF' "$JAVA"
+          grep -q 'Garé depuis' "$JAVA"
+          grep -q 'PREF_PARK_DRAFT_FREE' "$JAVA"
+          grep -q 'parkingCarousel' "$JAVA"
+          test -f app/src/main/java/ch/clubvwsuisse/drivebox/ParkingAlarmReceiver.java
+          test -f app/src/main/java/ch/clubvwsuisse/drivebox/DriveBoxParkingWidget.java
+          test -f app/src/main/res/drawable/ic_parking.xml
+          test -f app/src/main/res/layout/widget_parking.xml
+          test -f app/src/main/res/xml/parking_widget_info.xml
+          test -f app/src/main/res/xml/file_paths.xml
+          grep -q 'POST_NOTIFICATIONS' "$MANIFEST"
+          grep -q 'ACCESS_FINE_LOCATION' "$MANIFEST"
+          grep -q 'RECEIVE_BOOT_COMPLETED' "$MANIFEST"
+          grep -q 'FileProvider' "$MANIFEST"
+          grep -q 'DriveBoxParkingWidget' "$MANIFEST"
+          grep -q 'ParkingAlarmReceiver' "$MANIFEST"
+          if grep -q 'android.permission.INTERNET' "$MANIFEST"; then echo 'Unexpected INTERNET permission'; exit 1; fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC20
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC20
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='29'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc20'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_COARSE_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.POST_NOTIFICATIONS' /tmp/perms.txt
+          grep -q 'android.permission.RECEIVE_BOOT_COMPLETED' /tmp/perms.txt
+          if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'classes.dex'
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC20.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC20-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC20.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC20.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC20-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC20-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC20-PARKING-PLUS
+          path: |
+            DriveBox-1.0.0-RC20.apk
+            DriveBox-1.0.0-RC20.apk.sha256.txt
+            DriveBox-1.0.0-RC20-source.zip
+            DriveBox-1.0.0-RC20-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
