@@ -9,7 +9,7 @@ on:
       - '.github/workflows/drivebox-rc18-countries-compact.yml'
       - 'drivebox-ci/rc20-part*.b64'
       - 'drivebox-ci/rc21-parking-ergonomy.patch.gz.b64'
-      - 'drivebox-ci/rc22-parking-cleanup.patch.gz.b64'
+      - 'drivebox-ci/rc22-part*.b64'
   workflow_dispatch:
 
 jobs:
@@ -63,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d "$GITHUB_WORKSPACE/drivebox-ci/rc22-parking-cleanup.patch.gz.b64" | gzip -d > /tmp/rc22.patch
+          cat "$GITHUB_WORKSPACE"/drivebox-ci/rc22-part{1..5}.b64 | tr -d '\r\n' | base64 -d | gzip -d > /tmp/rc22.patch
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc22.patch
           JAVA=app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
