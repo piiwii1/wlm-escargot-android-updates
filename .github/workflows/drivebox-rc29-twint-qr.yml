@@ -1,6 +1,11 @@
 name: Build DriveBox RC29 TWINT QR Phase 1
 
 on:
+  push:
+    branches: [ drivebox-rc29-twint ]
+    paths:
+      - '.github/workflows/drivebox-rc29-twint-qr.yml'
+      - 'drivebox-ci/rc29-twint-part*.b64'
   pull_request:
     branches: [ main ]
     paths:
