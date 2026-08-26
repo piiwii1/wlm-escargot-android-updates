@@ -83,12 +83,9 @@ jobs:
           cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png
           cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/drawable-nodpi/drivebox_logo.png
 
-          for spec in 'mipmap-mdpi 48' 'mipmap-hdpi 72' 'mipmap-xhdpi 96' 'mipmap-xxhdpi 144' 'mipmap-xxxhdpi 192'; do
-            set -- $spec
-            folder=$1
-            size=$2
+          for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
             mkdir -p /tmp/drivebox-src/app/src/main/res/$folder
-            convert /tmp/drivebox-official.png -resize ${size}x${size} /tmp/drivebox-src/app/src/main/res/$folder/ic_launcher.png
+            cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/$folder/ic_launcher.png
           done
 
           cat > /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
