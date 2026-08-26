@@ -1,12 +1,8 @@
-name: Build DriveBox RC7 APK
+name: Build DriveBox RC8 APK
 
 on:
   pull_request:
     branches: [ main ]
-    paths:
-      - 'drivebox-ci/rc7-trigger.txt'
-      - 'drivebox-ci/rc7-icon-192.webp.b64'
-      - '.github/workflows/drivebox-rc7.yml'
   workflow_dispatch:
 
 jobs:
@@ -15,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct base
+      - name: Prepare RC8 source
         shell: bash
         run: |
           set -euo pipefail
@@ -24,14 +20,11 @@ jobs:
           cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
           unzip -t /tmp/drivebox-source.zip
           unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
-          test -f /tmp/drivebox-src/app/build.gradle
           sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
 
-      - name: Reuse stable RC2 and RC4 base
-        shell: bash
-        run: |
-          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/2c2572d232667d228ffb123a44ca2d2b1d333c7b/.github/workflows/drivebox-rc7.yml -o /tmp/rc7-base.yml
+
           python3 - <<'PY'
           from pathlib import Path
           def extract(path, step_name, out):
@@ -46,102 +39,15 @@ jobs:
               Path(out).write_text('\n'.join(lines) + '\n')
           extract('.github/workflows/drivebox-build.yml', 'Apply DriveBox RC2 cleanup', '/tmp/rc2.sh')
           extract('.github/workflows/drivebox-rc4-build.yml', 'Apply RC4 cleanup, exact icon, stable signing', '/tmp/rc4.sh')
+          extract('/tmp/rc7-base.yml', 'Apply RC7 simplified app and exact official icon', '/tmp/rc7.sh')
+          extract('.github/workflows/drivebox-rc8.yml', 'Apply RC8 country redesign', '/tmp/rc8.sh')
           PY
+
           bash /tmp/rc2.sh
           bash /tmp/rc4.sh
+          bash /tmp/rc7.sh
+          bash /tmp/rc8.sh
           keytool -list -keystore /tmp/drivebox-src/drivebox-dev.keystore -storepass DriveBoxDev2026 -alias drivebox | grep -qi drivebox
-
-      - name: Apply RC7 simplified app and exact official icon
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
-          s = java.read_text()
-
-          def replace_between(src, start, next_start, new):
-              a = src.index(start)
-              b = src.index(next_start, a)
-              return src[:a] + new + "\n\n    " + src[b:]
-
-          s = s.replace('DriveBox 1.0.0 RC4', 'DriveBox 1.0.0 RC7')
-          s = s.replace('DriveBox 1.0.0 RC2', 'DriveBox 1.0.0 RC7')
-          s = s.replace('Les infos et outils auto utiles, sans superflu.', 'L’essentiel automobile, sans remplissage.')
-          s = s.replace('Les infos et outils auto utiles, sans blabla.', 'L’essentiel automobile, sans remplissage.')
-          s = s.replace('Des contrôles simples pour tout le monde.', 'Mécanique et diagnostic utiles.')
-          s = s.replace('Des contrôles simples, expliqués sans jargon.', 'Mécanique et diagnostic utiles.')
-
-          banned = [
-              'Éclairage', 'Essuie-glaces', 'Désembuage', 'Crevaison', 'Étiquettes carburant',
-              'Check-list convoi', 'Check-list long trajet', 'Mon véhicule', 'Temps de trajet', 'Consommation'
-          ]
-          lines = []
-          for line in s.splitlines():
-              if 'x.add(new CatalogItem(' in line and any(word in line for word in banned):
-                  continue
-              lines.append(line)
-          s = '\n'.join(lines) + '\n'
-
-          new_maintenance = '''private void maintenanceHome() {
-              LinearLayout root = page("🔧", "Entretien", "Mécanique et diagnostic utiles.");
-              root.addView(wideCard("🛢", "Niveau d'huile", "Lecture correcte de la jauge", ORANGE, this::oilGuide));
-              root.addView(wideCard("🌡", "Liquide de refroidissement", "Contrôle à froid et anomalies", BLUE, this::coolantGuide));
-              root.addView(wideCard("🔋", "Batterie 12 V", "Tension, faiblesse et diagnostic", GREEN, this::batteryGuide));
-              root.addView(wideCard("🛑", "Freins", "Symptômes, usure et alertes", RED, this::brakeGuide));
-              root.addView(wideCard("⚠", "Voyants", "Priorité et gravité des alertes", ORANGE, this::warningLightsGuide));
-              root.addView(wideCard("⚡", "Câbles / booster", "Branchement et précautions", RED, this::jumpStartGuide));
-              setScrollablePage(root);
-          }'''
-          s = replace_between(s, 'private void maintenanceHome() {', 'private void oilGuide() {', new_maintenance)
-
-          new_tools = '''private void toolsScreen() {
-              LinearLayout root = page("🧰", "Outils", "Conversions et calculs utiles.");
-              root.addView(wideCard("⇄", "km / miles", "Distance et vitesse", BLUE, this::converterScreen));
-              root.addView(wideCard("💨", "bar / psi", "Pression des pneus", BLUE, this::pressureConverterScreen));
-              root.addView(wideCard("⛽", "Frais de route", "Carburant et partage du coût", GREEN, this::costCalculatorScreen));
-              root.addView(wideCard("⛽", "Autonomie", "Estimation à partir du carburant restant", PURPLE, this::rangeCalculatorScreen));
-              root.addView(wideCard("🛞", "Dimensions de pneus", "Comparer diamètre et circonférence", BLUE, this::tyreSizeComparatorScreen));
-              setScrollablePage(root);
-          }'''
-          s = replace_between(s, 'private void toolsScreen() {', 'private void converterScreen() {', new_tools)
-          # Legacy hidden checklist pages remain in source for compatibility, but no longer have their removed submenu.
-          s = s.replace('this::checklistsScreen', 'this::toolsScreen')
-          java.write_text(s)
-
-          gradle = Path('/tmp/drivebox-src/app/build.gradle')
-          g = gradle.read_text()
-          g = g.replace("applicationId 'ch.clubvwsuisse.drivebox'", "applicationId 'ch.clubvwsuisse.drivebox.v1'")
-          g = g.replace('versionCode 13', 'versionCode 16')
-          g = g.replace("versionName '1.0.0-rc4'", "versionName '1.0.0-rc7'")
-          gradle.write_text(g)
-          PY
-
-          base64 -d drivebox-ci/rc7-icon-192.webp.b64 > /tmp/drivebox-official.webp
-          file /tmp/drivebox-official.webp | grep -qi WebP
-          test "$(sha256sum /tmp/drivebox-official.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
-
-          RES=/tmp/drivebox-src/app/src/main/res
-          rm -f "$RES/drawable/ic_launcher_foreground.xml" "$RES/drawable/drivebox_logo.xml" "$RES/drawable/ic_launcher_adaptive_foreground.xml"
-          rm -rf "$RES/mipmap-anydpi-v26"
-          rm -f "$RES/mipmap/ic_launcher.xml"
-          mkdir -p "$RES/drawable-nodpi"
-          rm -f "$RES/drawable-nodpi/ic_launcher_foreground."* "$RES/drawable-nodpi/drivebox_logo."*
-          cp /tmp/drivebox-official.webp "$RES/drawable-nodpi/ic_launcher_foreground.webp"
-          cp /tmp/drivebox-official.webp "$RES/drawable-nodpi/drivebox_logo.webp"
-
-          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            mkdir -p "$RES/mipmap-$d"
-            rm -f "$RES/mipmap-$d/ic_launcher."* "$RES/mipmap-$d/ic_launcher_round."*
-            cp /tmp/drivebox-official.webp "$RES/mipmap-$d/ic_launcher.webp"
-            cp /tmp/drivebox-official.webp "$RES/mipmap-$d/ic_launcher_round.webp"
-          done
-
-          grep -q "applicationId 'ch.clubvwsuisse.drivebox.v1'" /tmp/drivebox-src/app/build.gradle
-          grep -q "versionCode 16" /tmp/drivebox-src/app/build.gradle
-          grep -q "versionName '1.0.0-rc7'" /tmp/drivebox-src/app/build.gradle
-          grep -q "DriveBox 1.0.0 RC7" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
 
       - uses: actions/setup-java@v4
         with:
@@ -164,7 +70,7 @@ jobs:
         working-directory: /tmp/drivebox-src
         run: gradle --no-daemon clean :app:assembleDebug
 
-      - name: Verify signature package and exact icon
+      - name: Verify RC8
         shell: bash
         run: |
           set -euo pipefail
@@ -174,23 +80,20 @@ jobs:
           grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
           grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
-          grep -q "versionCode='16'" /tmp/badging.txt
+          grep -q "versionCode='17'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc8'" /tmp/badging.txt
           grep -q "application-label:'DriveBox'" /tmp/badging.txt
           unzip -t "$APK"
-          unzip -l "$APK" | grep -q 'res/mipmap-xxxhdpi-v4/ic_launcher.webp'
-          unzip -l "$APK" | grep -q 'res/drawable-nodpi-v4/drivebox_logo.webp'
           unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon-from-apk.webp
-          unzip -p "$APK" res/drawable-nodpi-v4/drivebox_logo.webp > /tmp/logo-from-apk.webp
           test "$(sha256sum /tmp/icon-from-apk.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
-          test "$(sha256sum /tmp/logo-from-apk.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
-          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC7.apk"
-          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC7.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC7.apk.sha256.txt"
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk.sha256.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveBox-1.0.0-RC7
+          name: DriveBox-1.0.0-RC8
           path: |
-            DriveBox-1.0.0-RC7.apk
-            DriveBox-1.0.0-RC7.apk.sha256.txt
+            DriveBox-1.0.0-RC8.apk
+            DriveBox-1.0.0-RC8.apk.sha256.txt
           if-no-files-found: error
           retention-days: 7
