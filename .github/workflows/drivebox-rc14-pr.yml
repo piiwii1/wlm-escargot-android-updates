@@ -5,11 +5,14 @@ on:
     branches: [ main ]
     paths:
       - '.github/workflows/drivebox-rc14-pr.yml'
-      - '.github/workflows/drivebox-rc25-parking-readable.yml'
       - 'drivebox-ci/rc27-four-widgets.patch.gz.b64'
       - 'drivebox-ci/rc28-widget-silent-photo.patch.gz.b64'
       - 'drivebox-ci/rc28-widget-previews.zip.b64'
   workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   build:
@@ -17,34 +20,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct validated RC25 source
+      - name: Restore validated RC25 source artifact
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          text = Path('.github/workflows/drivebox-rc25-parking-readable.yml').read_text()
-          names = [
-              'Reconstruct validated RC18 source',
-              'Apply validated RC20 parking module',
-              'Apply validated RC21 parking ergonomics',
-              'Apply validated RC22 parking cleanup',
-              'Apply validated RC23 single-screen parking UX',
-              'Apply validated RC24 tariff and free-period alarm UX',
-              'Apply RC25 parking readability UX',
-          ]
-          def extract(name, out):
-              marker = '      - name: ' + name + '\n'
-              start = text.index(marker)
-              run_start = text.index('        run: |\n', start) + len('        run: |\n')
-              end = text.find('\n      - ', run_start)
-              if end < 0: end = len(text)
-              block = text[run_start:end]
-              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
-              Path(out).write_text('\n'.join(lines) + '\n')
-          for i, name in enumerate(names): extract(name, f'/tmp/rc25-step-{i}.sh')
-          PY
-          for f in /tmp/rc25-step-*.sh; do bash "$f"; done
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9623919367/zip" \
+            -o /tmp/rc25-artifact.zip
+          unzip -t /tmp/rc25-artifact.zip
+          rm -rf /tmp/rc25-artifact /tmp/drivebox-src
+          mkdir -p /tmp/rc25-artifact /tmp/drivebox-src
+          unzip -oq /tmp/rc25-artifact.zip -d /tmp/rc25-artifact
+          test -s /tmp/rc25-artifact/DriveBox-1.0.0-RC25-source.zip
+          unzip -oq /tmp/rc25-artifact/DriveBox-1.0.0-RC25-source.zip -d /tmp/drivebox-src
           grep -q 'versionCode 34' /tmp/drivebox-src/app/build.gradle
           grep -q "versionName '1.0.0-rc25'" /tmp/drivebox-src/app/build.gradle
 
