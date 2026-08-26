@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           cat drivebox-ci/rc29-twint-part{00..03}.b64 | tr -d '\r\n' | base64 -d | gzip -d > /tmp/rc29.patch
-          test "$(sha256sum /tmp/rc29.patch | awk '{print $1}')" = '900dd447ba55e9a671cdb764d7b4cf6b50b29a0b70ae230d4ac3303a5488cde8'
+          test "$(sha256sum /tmp/rc29.patch | awk '{print $1}')" = '5b387253398656b5f21c3da3e3d6bcddd5fa57858207af4872664c90ebae0c54'
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc29.patch
           grep -q 'versionCode 38' app/build.gradle
