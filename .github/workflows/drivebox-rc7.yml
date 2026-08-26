@@ -32,7 +32,7 @@ jobs:
               marker = '      - name: ' + step_name + '\n'
               start = text.index(marker)
               run_start = text.index('        run: |\n', start) + len('        run: |\n')
-              end = text.find('\n      - name:', run_start)
+              end = text.find('\n      - ', run_start)
               if end < 0: end = len(text)
               block = text[run_start:end]
               lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
