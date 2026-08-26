@@ -1,0 +1,237 @@
+name: Build DriveBox RC13 APK
+
+on:
+  push:
+    branches: [ drivebox-ci-temp ]
+    paths:
+      - '.github/workflows/drivebox-rc11b.yml'
+      - 'drivebox-ci/rc13-run.txt'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct pinned verified RC9 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          HIST=c4911f1d223fcf3a9dca0e7fd8d6dc3a1833e977
+          git fetch --no-tags --depth=1 origin "$HIST"
+          rm -rf /tmp/drivebox-hist /tmp/drivebox-src
+          git worktree add --detach /tmp/drivebox-hist "$HIST"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          def extract(path, step_name, out):
+              text = Path(path).read_text()
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('/tmp/drivebox-hist/.github/workflows/drivebox-rc7.yml', 'Prepare RC8 source', '/tmp/prepare-rc8.sh')
+          extract('/tmp/drivebox-hist/.github/workflows/drivebox-rc9b.yml', 'Download official motorway signs', '/tmp/signs.sh')
+          extract('/tmp/drivebox-hist/.github/workflows/drivebox-rc9b.yml', 'Apply RC9 UI changes', '/tmp/apply-rc9.sh')
+          PY
+
+          cd /tmp/drivebox-hist
+          bash /tmp/prepare-rc8.sh
+          bash /tmp/signs.sh
+          bash /tmp/apply-rc9.sh
+          grep -q "DriveBox 1.0.0 RC9" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 18" /tmp/drivebox-src/app/build.gradle
+
+      - name: Apply final RC13 improvements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+
+          def replace_method(src, signature_start, new_method):
+              a = src.index(signature_start)
+              brace = src.index('{', a)
+              depth = 0
+              i = brace
+              while i < len(src):
+                  if src[i] == '{': depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return src[:a] + new_method + src[i+1:]
+                  i += 1
+              raise RuntimeError('Unbalanced method: ' + signature_start)
+
+          s = s.replace('DriveBox 1.0.0 RC9', 'DriveBox 1.0.0 RC13')
+
+          country_card = r'''private View countryCard(String flag, String country, String colorName, String note, int signColor, Runnable action) {
+              LinearLayout c = row(Gravity.CENTER_VERTICAL);
+              c.setPadding(dp(14), dp(11), dp(14), dp(11));
+              c.setBackground(round(PANEL, 18));
+              c.setClickable(true);
+              c.setFocusable(true);
+              c.setOnClickListener(v -> action.run());
+
+              TextView f = text(flag, 28, TEXT, false);
+              f.setGravity(Gravity.CENTER);
+              c.addView(f, lp(dp(42), dp(54), 0, 0, 10, 0));
+
+              LinearLayout labels = column();
+              labels.addView(text(country, 17, TEXT, true));
+              labels.addView(text(note, 12, MUTED, false), lp(-2, -2, 0, 3, 0, 0));
+              c.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+
+              boolean green = "Suisse".equals(country) || "Italie".equals(country);
+              int tabColor = green ? Color.rgb(18, 132, 72) : Color.rgb(24, 93, 188);
+              TextView colorBlock = text("", 1, Color.TRANSPARENT, false);
+              colorBlock.setBackground(round(tabColor, 12));
+              colorBlock.setContentDescription("Signalisation autoroute " + (green ? "verte" : "bleue") + " - " + country);
+              c.addView(colorBlock, lp(dp(72), dp(44), 10, 0, 0, 0));
+              return withMargins(c, 0, 0, 0, 10);
+          }'''
+          s = replace_method(s, 'private View countryCard(', country_card)
+
+          equipment = r'''private View equipmentRow(String status, String title, String detail) {
+              LinearLayout c = column();
+              c.setPadding(dp(13), dp(11), dp(13), dp(11));
+              c.setBackground(round(PANEL, 14));
+              String st = status == null ? "" : status.toUpperCase(Locale.ROOT);
+              int statusColor;
+              if (st.contains("OBLIGATOIRE") && !st.contains("NON")) statusColor = Color.rgb(150, 58, 65);
+              else if (st.contains("RECOMMAND")) statusColor = Color.rgb(38, 103, 171);
+              else if (st.contains("NON")) statusColor = Color.rgb(72, 78, 88);
+              else statusColor = Color.rgb(162, 108, 35);
+              TextView state = pill(status, Color.WHITE, statusColor);
+              state.setContentDescription("Statut : " + status);
+              c.addView(state, lp(-2, -2, 0, 0, 0, 6));
+              c.addView(text(title, 15, TEXT, true));
+              c.addView(text(detail, 12, MUTED, false), lp(-1, -2, 0, 4, 0, 0));
+              return withMargins(c, 0, 0, 0, 8);
+          }'''
+          s = replace_method(s, 'private View equipmentRow(', equipment)
+
+          country_detail = r'''private void countryDetail(String flag, String country, int signColor, String signColorName,
+                                     String speed, String toll, String winter, String emergency) {
+              LinearLayout root = page(flag, country, "Fiche route rapide • voiture particulière", this::countriesScreen);
+              root.addView(countrySignCard(country));
+              root.addView(sectionTitle("VITESSE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("km/h", speed, signColor));
+              root.addView(sectionTitle("AUTOROUTE / PÉAGE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("€", toll, BLUE));
+
+              if ("Suisse".equals(country)) {
+                  root.addView(infoStrip("✓", "E-vignette officielle : CHF 40 • achat lié à la plaque d'immatriculation.", GREEN), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(officialWebButton("Acheter l’e-vignette officielle", "https://www.e-vignette.ch/"), lp(-1, dp(48), 0, 8, 0, 0));
+              } else if ("Autriche".equals(country)) {
+                  root.addView(infoStrip("✓", "Vignette numérique officielle disponible en ligne auprès d’ASFINAG.", GREEN), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(infoStrip("!", "Attention au délai de validité selon le type de vignette et le mode d'achat : vérifiez la date affichée avant paiement.", ORANGE), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(officialWebButton("Acheter la vignette ASFINAG", "https://shop.asfinag.at/fr/produits/vignette-numerique/"), lp(-1, dp(48), 0, 8, 0, 0));
+              }
+
+              root.addView(sectionTitle("HIVER"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("❄", winter, ORANGE));
+              root.addView(sectionTitle("URGENCE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("☎", emergency, RED));
+              root.addView(infoStrip("!", "Résumé pratique, pas un texte juridique. Avant un voyage, vérifiez les règles officielles et la signalisation locale.", MUTED), lp(-1, -2, 0, 14, 0, 0));
+              setScrollablePage(root);
+          }'''
+          s = replace_method(s, 'private void countryDetail(', country_detail)
+
+          helper = r'''private View officialWebButton(String label, String url) {
+              TextView b = text(label + "  ↗", 14, Color.WHITE, true);
+              b.setGravity(Gravity.CENTER);
+              b.setPadding(dp(14), 0, dp(14), 0);
+              b.setBackground(round(BLUE, 14));
+              b.setClickable(true);
+              b.setFocusable(true);
+              b.setContentDescription(label + ". Ouvre le site officiel dans le navigateur.");
+              b.setOnClickListener(v -> {
+                  try {
+                      android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+                      startActivity(intent);
+                  } catch (Exception ex) {
+                      android.widget.Toast.makeText(this, "Impossible d’ouvrir le navigateur.", android.widget.Toast.LENGTH_SHORT).show();
+                  }
+              });
+              return b;
+          }
+
+          '''
+          marker = 'private View countrySignCard(String country) {'
+          if 'private View officialWebButton(' not in s:
+              s = s.replace(marker, helper + marker, 1)
+
+          java.write_text(s)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text().replace('versionCode 18', 'versionCode 22').replace("versionName '1.0.0-rc9'", "versionName '1.0.0-rc13'")
+          gradle.write_text(g)
+          PY
+
+          grep -q "DriveBox 1.0.0 RC13" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 22" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc13'" /tmp/drivebox-src/app/build.gradle
+          grep -q '"Suisse".equals(country) || "Italie".equals(country)' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'e-vignette.ch' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'shop.asfinag.at' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build real APK
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify installable RC13
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='22'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc13'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'resources.arsc'
+          unzip -l "$APK" | grep -q 'classes.dex'
+          for f in ch fr de it at; do unzip -l "$APK" | grep -q "res/drawable-nodpi-v4/motorway_${f}.png"; done
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | grep -q 'android.permission.INTERNET'; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC13-FIXED
+          path: |
+            DriveBox-1.0.0-RC13.apk
+            DriveBox-1.0.0-RC13.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
