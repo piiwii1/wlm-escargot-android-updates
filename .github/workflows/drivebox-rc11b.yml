@@ -5,8 +5,6 @@ on:
     branches: [ main ]
     paths:
       - '.github/workflows/drivebox-rc11b.yml'
-      - 'drivebox-ci/rc11-user-green.b64'
-      - 'drivebox-ci/rc11-user-blue.b64'
   workflow_dispatch:
 
 jobs:
@@ -15,14 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct RC12 source
+      - name: Reconstruct RC11 and apply RC12
         shell: bash
         run: |
           set -euo pipefail
+          curl -L --fail -o /tmp/rc11b-old.yml https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/b7569f6356d81d470d4a0ed25365d847134de4bc/.github/workflows/drivebox-rc11b.yml
           python3 - <<'PY'
           from pathlib import Path
-          text = Path('.github/workflows/drivebox-rc12.yml').read_text()
-          def extract(step_name, out):
+          def extract(text, step_name, out):
               marker = '      - name: ' + step_name + '\n'
               start = text.index(marker)
               run_start = text.index('        run: |\n', start) + len('        run: |\n')
@@ -31,11 +29,19 @@ jobs:
               block = text[run_start:end]
               lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
               Path(out).write_text('\n'.join(lines) + '\n')
-          extract('Prepare RC11 source', '/tmp/prepare.sh')
-          extract('Apply RC12 country improvements', '/tmp/apply.sh')
+          old = Path('/tmp/rc11b-old.yml').read_text()
+          extract(old, 'Prepare RC10 source', '/tmp/a.sh')
+          extract(old, 'Integrate supplied tab artwork', '/tmp/b.sh')
+          extract(old, 'Apply RC11 integration', '/tmp/c.sh')
+          rc12 = Path('.github/workflows/drivebox-rc12.yml').read_text()
+          extract(rc12, 'Apply RC12 country improvements', '/tmp/d.sh')
           PY
-          bash /tmp/prepare.sh
-          bash /tmp/apply.sh
+          bash /tmp/a.sh
+          bash /tmp/b.sh
+          bash /tmp/c.sh
+          bash /tmp/d.sh
+          grep -q "DriveBox 1.0.0 RC12" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 21" /tmp/drivebox-src/app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
