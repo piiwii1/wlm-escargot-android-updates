@@ -1,4 +1,4 @@
-name: Build DriveBox RC4 Final APK
+name: Build DriveBox RC5 Clean Install APK
 
 on:
   pull_request:
@@ -48,6 +48,26 @@ jobs:
           bash /tmp/rc4.sh
           keytool -list -keystore /tmp/drivebox-src/drivebox-dev.keystore -storepass DriveBoxDev2026 -alias drivebox | grep -qi drivebox
 
+      - name: Force clean-install identity and RC5 version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          g = Path('/tmp/drivebox-src/app/build.gradle')
+          s = g.read_text()
+          s = s.replace("applicationId 'ch.clubvwsuisse.drivebox'", "applicationId 'ch.clubvwsuisse.drivebox.v1'")
+          s = s.replace('versionCode 13', 'versionCode 14')
+          s = s.replace("versionName '1.0.0-rc4'", "versionName '1.0.0-rc5'")
+          g.write_text(s)
+          j = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          t = j.read_text().replace('DriveBox 1.0.0 RC4', 'DriveBox 1.0.0 RC5')
+          j.write_text(t)
+          PY
+          grep -q "applicationId 'ch.clubvwsuisse.drivebox.v1'" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionCode 14" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc5'" /tmp/drivebox-src/app/build.gradle
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -67,24 +87,28 @@ jobs:
 
       - name: Build
         working-directory: /tmp/drivebox-src
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon clean :app:assembleDebug
 
       - name: Verify and stage
         shell: bash
         run: |
           set -euo pipefail
           APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
           grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
-          unzip -l "$APK" | grep -q 'ic_launcher.png'
-          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC4-debug.apk"
-          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC4-debug.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC4-debug.apk.sha256.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC5-CLEAN-INSTALL.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC5-CLEAN-INSTALL.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC5-CLEAN-INSTALL.apk.sha256.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveBox-1.0.0-RC4-FINAL-APK
+          name: DriveBox-1.0.0-RC5-CLEAN-INSTALL
           path: |
-            DriveBox-1.0.0-RC4-debug.apk
-            DriveBox-1.0.0-RC4-debug.apk.sha256.txt
+            DriveBox-1.0.0-RC5-CLEAN-INSTALL.apk
+            DriveBox-1.0.0-RC5-CLEAN-INSTALL.apk.sha256.txt
           if-no-files-found: error
           retention-days: 7
