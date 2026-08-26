@@ -68,7 +68,7 @@ jobs:
                                      String motorwayBadge, String toll, String[] equipment,
                                      String winter, String emergency) {
               LinearLayout root = page(flag, country, "Fiche route rapide • voiture particulière", this::countriesScreen);
-              root.addView(countrySignCard(signColorName, signColor));
+              root.addView(countrySignCard(country));
 
               root.addView(sectionTitle("LIMITATIONS"), lp(-1, -2, 0, 18, 0, 8));
               LinearLayout speeds1 = row(Gravity.CENTER);
@@ -114,6 +114,7 @@ jobs:
           grep -q "DriveBox 1.0.0 RC14" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'renderQuickTools(results)' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'String city, String rural, String expressway, String motorway' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'countrySignCard(country)' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q "versionCode 23" /tmp/drivebox-src/app/build.gradle
 
       - uses: actions/setup-java@v4
