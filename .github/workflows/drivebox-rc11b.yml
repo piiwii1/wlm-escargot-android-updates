@@ -14,13 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare verified RC11 source
+      - name: Prepare valid RC12 source
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          text = Path('.github/workflows/drivebox-rc11.yml').read_text()
+          text = Path('.github/workflows/drivebox-rc12.yml').read_text()
           def extract(step_name, out):
               marker = '      - name: ' + step_name + '\n'
               start = text.index(marker)
@@ -30,159 +30,98 @@ jobs:
               block = text[run_start:end]
               lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
               Path(out).write_text('\n'.join(lines) + '\n')
-          extract('Prepare RC10 source', '/tmp/prepare-rc10.sh')
-          extract('Integrate supplied motorway tab images', '/tmp/integrate-tabs.sh')
+          extract('Prepare RC11 source', '/tmp/prepare-rc11.sh')
+          extract('Apply RC12 country improvements', '/tmp/apply-rc12.sh')
           PY
-          bash /tmp/prepare-rc10.sh
-          bash /tmp/integrate-tabs.sh
-
-          python3 - <<'PY'
-          from pathlib import Path
-          text = Path('.github/workflows/drivebox-rc10.yml').read_text()
-          marker = '      - name: Apply RC10 harmonization\n'
-          start = text.index(marker)
-          run_start = text.index('        run: |\n', start) + len('        run: |\n')
-          end = text.find('\n      - ', run_start)
-          block = text[run_start:end]
-          lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
-          Path('/tmp/apply-rc10.sh').write_text('\n'.join(lines) + '\n')
-          PY
-          bash /tmp/apply-rc10.sh
-
-          python3 - <<'PY'
-          from pathlib import Path
-          text = Path('.github/workflows/drivebox-rc11.yml').read_text()
-          marker = '      - name: Integrate supplied motorway tab images\n'
-          # RC11 integration is applied later in that same step; source is already RC10 here.
-          PY
-
-          python3 - <<'PY'
-          from pathlib import Path
-          java=Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
-          s=java.read_text()
-          def replace_method(src, signature_start, new_method):
-              a=src.index(signature_start); brace=src.index('{',a); depth=0; i=brace
-              while i < len(src):
-                  if src[i]=='{': depth+=1
-                  elif src[i]=='}':
-                      depth-=1
-                      if depth==0: return src[:a]+new_method+src[i+1:]
-                  i+=1
-              raise RuntimeError('Unbalanced method')
-          s=s.replace('DriveBox 1.0.0 RC10','DriveBox 1.0.0 RC11')
-          country_card=r'''private View countryCard(String flag, String name, String signColorName, String speedSummary, int accent, Runnable action) {
-              LinearLayout c = row(Gravity.CENTER_VERTICAL);
-              c.setPadding(dp(14), dp(11), dp(14), dp(11));
-              c.setBackground(round(PANEL, 18));
-              c.setClickable(true);
-              c.setFocusable(true);
-              c.setOnClickListener(v -> action.run());
-              TextView f = text(flag, 28, TEXT, false);
-              f.setGravity(Gravity.CENTER);
-              c.addView(f, lp(dp(42), dp(54), 0, 0, 10, 0));
-              LinearLayout labels = column();
-              labels.addView(text(name, 17, TEXT, true));
-              labels.addView(text(speedSummary, 12, MUTED, false), lp(-2, -2, 0, 3, 0, 0));
-              c.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
-              android.widget.ImageView sign = new android.widget.ImageView(this);
-              boolean green = signColorName != null && signColorName.toUpperCase(Locale.ROOT).contains("VERT");
-              sign.setImageResource(green ? R.drawable.tab_motorway_green : R.drawable.tab_motorway_blue);
-              sign.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-              sign.setAdjustViewBounds(true);
-              c.addView(sign, lp(dp(74), dp(68), 10, 0, 0, 0));
-              return withMargins(c, 0, 0, 0, 10);
-          }'''
-          s=replace_method(s,'private View countryCard(',country_card)
-          java.write_text(s)
-          gradle=Path('/tmp/drivebox-src/app/build.gradle')
-          g=gradle.read_text().replace('versionCode 19','versionCode 20').replace("versionName '1.0.0-rc10'","versionName '1.0.0-rc11'")
-          gradle.write_text(g)
-          PY
-          grep -q "DriveBox 1.0.0 RC11" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
-
-      - name: Apply RC12 improvements
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          text = Path('.github/workflows/drivebox-rc12.yml').read_text()
-          marker='      - name: Apply RC12 country improvements\n'
-          start=text.index(marker); run_start=text.index('        run: |\n',start)+len('        run: |\n'); end=text.find('\n      - ',run_start)
-          block=text[run_start:end]
-          lines=[line[10:] if line.startswith('          ') else line for line in block.splitlines()]
-          Path('/tmp/apply-rc12.sh').write_text('\n'.join(lines)+'\n')
-          PY
+          bash /tmp/prepare-rc11.sh
           bash /tmp/apply-rc12.sh
           grep -q "DriveBox 1.0.0 RC12" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 21" /tmp/drivebox-src/app/build.gradle
 
-      - name: Apply RC13 color-only tabs
+      - name: Apply RC13 color-only country tabs
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          java=Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
-          s=java.read_text()
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
           def replace_method(src, signature_start, new_method):
-              a=src.index(signature_start); brace=src.index('{',a); depth=0; i=brace
+              a = src.index(signature_start)
+              brace = src.index('{', a)
+              depth = 0
+              i = brace
               while i < len(src):
-                  if src[i]=='{': depth+=1
-                  elif src[i]=='}':
-                      depth-=1
-                      if depth==0: return src[:a]+new_method+src[i+1:]
-                  i+=1
+                  if src[i] == '{': depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return src[:a] + new_method + src[i+1:]
+                  i += 1
               raise RuntimeError('Unbalanced method')
-          s=s.replace('DriveBox 1.0.0 RC12','DriveBox 1.0.0 RC13')
-          country_card=r'''private View countryCard(String flag, String country, String colorName, String note, int signColor, Runnable action) {
+
+          s = s.replace('DriveBox 1.0.0 RC12', 'DriveBox 1.0.0 RC13')
+          country_card = r'''private View countryCard(String flag, String country, String colorName, String note, int signColor, Runnable action) {
               LinearLayout c = row(Gravity.CENTER_VERTICAL);
               c.setPadding(dp(14), dp(11), dp(14), dp(11));
               c.setBackground(round(PANEL, 18));
               c.setClickable(true);
               c.setFocusable(true);
               c.setOnClickListener(v -> action.run());
+
               TextView f = text(flag, 28, TEXT, false);
               f.setGravity(Gravity.CENTER);
               c.addView(f, lp(dp(42), dp(54), 0, 0, 10, 0));
+
               LinearLayout labels = column();
               labels.addView(text(country, 17, TEXT, true));
               labels.addView(text(note, 12, MUTED, false), lp(-2, -2, 0, 3, 0, 0));
               c.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+
               boolean green = "Suisse".equals(country) || "Italie".equals(country);
-              int tabColor = green ? Color.rgb(28, 128, 72) : Color.rgb(22, 92, 180);
-              TextView swatch = text("", 1, Color.TRANSPARENT, false);
-              swatch.setBackground(round(tabColor, 12));
-              swatch.setContentDescription("Autoroute " + (green ? "verte" : "bleue") + " - " + country);
-              c.addView(swatch, lp(dp(72), dp(44), 10, 0, 0, 0));
+              int tabColor = green ? Color.rgb(18, 132, 72) : Color.rgb(24, 93, 188);
+              TextView colorBlock = text("", 1, Color.TRANSPARENT, false);
+              colorBlock.setBackground(round(tabColor, 12));
+              colorBlock.setContentDescription("Signalisation autoroute " + (green ? "verte" : "bleue") + " - " + country);
+              c.addView(colorBlock, lp(dp(72), dp(44), 10, 0, 0, 0));
+
               return withMargins(c, 0, 0, 0, 10);
           }'''
-          s=replace_method(s,'private View countryCard(',country_card)
+          s = replace_method(s, 'private View countryCard(', country_card)
           java.write_text(s)
-          gradle=Path('/tmp/drivebox-src/app/build.gradle')
-          g=gradle.read_text().replace('versionCode 21','versionCode 22').replace("versionName '1.0.0-rc12'","versionName '1.0.0-rc13'")
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text()
+          g = g.replace('versionCode 21', 'versionCode 22')
+          g = g.replace("versionName '1.0.0-rc12'", "versionName '1.0.0-rc13'")
           gradle.write_text(g)
           PY
+          grep -q "DriveBox 1.0.0 RC13" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q "versionCode 22" /tmp/drivebox-src/app/build.gradle
           grep -q "versionName '1.0.0-rc13'" /tmp/drivebox-src/app/build.gradle
-          grep -q "DriveBox 1.0.0 RC13" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: android-actions/setup-android@v3
+
       - name: Install SDK
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
       - name: Build
         working-directory: /tmp/drivebox-src
         run: gradle --no-daemon clean :app:assembleDebug
-      - name: Verify RC13
+
+      - name: Verify installable RC13
         shell: bash
         run: |
           set -euo pipefail
@@ -194,14 +133,18 @@ jobs:
           grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
           grep -q "versionCode='22'" /tmp/badging.txt
           grep -q "versionName='1.0.0-rc13'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
           unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'resources.arsc'
+          unzip -l "$APK" | grep -q 'classes.dex'
           unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
           test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
           cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk"
           sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk.sha256.txt"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveBox-1.0.0-RC13
+          name: DriveBox-1.0.0-RC13-FIXED
           path: |
             DriveBox-1.0.0-RC13.apk
             DriveBox-1.0.0-RC13.apk.sha256.txt
