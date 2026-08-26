@@ -3,9 +3,7 @@ name: Build DriveBox RC13 APK
 on:
   pull_request:
     branches: [ main ]
-    types: [reopened, synchronize]
-  push:
-    branches: [ drivebox-ci-temp ]
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
 
 jobs:
