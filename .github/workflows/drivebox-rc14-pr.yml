@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare RC14 source
+      - name: Prepare fixed RC14 source
         shell: bash
         run: |
           set -euo pipefail
@@ -32,9 +32,20 @@ jobs:
               Path(out).write_text('\n'.join(lines) + '\n')
           extract('Reconstruct verified RC13 source', '/tmp/reconstruct.sh')
           extract('Apply RC14 quick tools favorites', '/tmp/rc14.sh')
+
+          p = Path('/tmp/rc14.sh')
+          script = p.read_text()
+          old = '''home_marker = 'Runnable renderDefault = () -> {\\n              results.removeAllViews();'\nif home_marker not in s:\n    raise RuntimeError('Home renderDefault marker not found')\ns = s.replace(home_marker, home_marker + '\\n              renderQuickTools(results);', 1)'''
+          new = '''home_start = s.index('Runnable renderDefault = () -> {')\nremove_end = s.index('results.removeAllViews();', home_start) + len('results.removeAllViews();')\ns = s[:remove_end] + '\\n              renderQuickTools(results);' + s[remove_end:]'''
+          if old not in script:
+              raise RuntimeError('RC14 patch block to fix was not found')
+          p.write_text(script.replace(old, new, 1))
           PY
           bash /tmp/reconstruct.sh
           bash /tmp/rc14.sh
+          grep -q "DriveBox 1.0.0 RC14" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'renderQuickTools(results)' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 23" /tmp/drivebox-src/app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
