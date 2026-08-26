@@ -1,4 +1,4 @@
-name: Build DriveBox RC27 Four Parking Widgets
+name: Build DriveBox RC28 Widget Silent Start + Photo
 
 on:
   pull_request:
@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/drivebox-rc27-four-parking-widgets.yml'
       - 'drivebox-ci/rc27-four-widgets.patch.gz.b64'
+      - 'drivebox-ci/rc28-widget-silent-photo.patch.gz.b64'
+      - 'drivebox-ci/rc28-widget-previews.zip.b64'
   workflow_dispatch:
 
 jobs:
@@ -45,7 +47,7 @@ jobs:
           grep -q 'versionCode 34' /tmp/drivebox-src/app/build.gradle
           grep -q "versionName '1.0.0-rc25'" /tmp/drivebox-src/app/build.gradle
 
-      - name: Apply RC27 four-widget system
+      - name: Apply validated RC27 four-widget system
         shell: bash
         run: |
           set -euo pipefail
@@ -67,13 +69,41 @@ jobs:
           test -f "$RES/layout/widget_parking_full_preview.xml"
           grep -q 'android:targetCellWidth="1"' "$RES/xml/parking_widget_info.xml"
           grep -q 'android:targetCellHeight="1"' "$RES/xml/parking_widget_info.xml"
-          grep -q 'android:previewLayout="@layout/widget_parking_mini_preview"' "$RES/xml/parking_widget_info.xml"
-          grep -q 'android:previewLayout="@layout/widget_parking_square_preview"' "$RES/xml/parking_widget_square_info.xml"
-          grep -q 'android:previewLayout="@layout/widget_parking_bar_preview"' "$RES/xml/parking_widget_bar_info.xml"
-          grep -q 'android:previewLayout="@layout/widget_parking_full_preview"' "$RES/xml/parking_widget_full_info.xml"
           grep -q 'DriveBoxParkingSquareWidget' app/src/main/AndroidManifest.xml
           grep -q 'DriveBoxParkingBarWidget' app/src/main/AndroidManifest.xml
           grep -q 'DriveBoxParkingFullWidget' app/src/main/AndroidManifest.xml
+
+      - name: Apply RC28 silent widget start and photo UX
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d "$GITHUB_WORKSPACE/drivebox-ci/rc28-widget-silent-photo.patch.gz.b64" | gzip -d > /tmp/rc28.patch
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc28.patch
+          mkdir -p app/src/main/res/drawable-nodpi
+          base64 -d "$GITHUB_WORKSPACE/drivebox-ci/rc28-widget-previews.zip.b64" > /tmp/rc28-previews.zip
+          unzip -oq /tmp/rc28-previews.zip -d app/src/main/res/drawable-nodpi
+
+          JAVA=app/src/main/java/ch/clubvwsuisse/drivebox
+          RES=app/src/main/res
+          MANIFEST=app/src/main/AndroidManifest.xml
+          grep -q 'versionCode 37' app/build.gradle
+          grep -q "versionName '1.0.0-rc28'" app/build.gradle
+          test -f "$JAVA/WidgetQuickStartActivity.java"
+          grep -q 'WidgetQuickStartActivity' "$MANIFEST"
+          grep -q 'FLAG_ACTIVITY_NO_ANIMATION' "$JAVA/ParkingWidgetRenderer.java"
+          grep -q 'R.id.square_photo' "$JAVA/ParkingWidgetRenderer.java"
+          grep -q 'android:id="@+id/square_photo"' "$RES/layout/widget_parking_square.xml"
+          grep -q 'android:previewImage="@drawable/widget_preview_mini"' "$RES/xml/parking_widget_info.xml"
+          grep -q 'android:previewImage="@drawable/widget_preview_square"' "$RES/xml/parking_widget_square_info.xml"
+          grep -q 'android:previewImage="@drawable/widget_preview_bar"' "$RES/xml/parking_widget_bar_info.xml"
+          grep -q 'android:previewImage="@drawable/widget_preview_full"' "$RES/xml/parking_widget_full_info.xml"
+          test -s "$RES/drawable-nodpi/widget_preview_mini.png"
+          test -s "$RES/drawable-nodpi/widget_preview_square.png"
+          test -s "$RES/drawable-nodpi/widget_preview_bar.png"
+          test -s "$RES/drawable-nodpi/widget_preview_full.png"
+          if grep -q 'android.permission.ACCESS_BACKGROUND_LOCATION' "$MANIFEST"; then echo 'Unexpected background location permission'; exit 1; fi
+          if grep -q 'android.permission.INTERNET' "$MANIFEST"; then echo 'Unexpected INTERNET permission'; exit 1; fi
 
       - uses: actions/setup-java@v4
         with:
@@ -92,11 +122,11 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build RC27
+      - name: Build RC28
         working-directory: /tmp/drivebox-src
         run: gradle --no-daemon clean :app:assembleDebug
 
-      - name: Verify and package RC27
+      - name: Verify and package RC28
         shell: bash
         run: |
           set -euo pipefail
@@ -105,28 +135,34 @@ jobs:
           grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
           grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
-          grep -q "versionCode='36'" /tmp/badging.txt
-          grep -q "versionName='1.0.0-rc27'" /tmp/badging.txt
+          grep -q "versionCode='37'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc28'" /tmp/badging.txt
           grep -q "application-label:'DriveBox'" /tmp/badging.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_COARSE_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.POST_NOTIFICATIONS' /tmp/perms.txt
+          if grep -q 'android.permission.ACCESS_BACKGROUND_LOCATION' /tmp/perms.txt; then echo 'Unexpected background location permission'; exit 1; fi
           if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
           unzip -t "$APK"
           unzip -l "$APK" | grep -q 'classes.dex'
+          unzip -l "$APK" | grep -q 'widget_preview_full.png'
+          unzip -l "$APK" | grep -q 'widget_preview_square.png'
           unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
           test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
-          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC28.apk"
           rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
-          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27-source.zip" .)
-          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27.apk.sha256.txt"
-          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC27-source.zip.sha256.txt"
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC28-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC28.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC28.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC28-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC28-source.zip.sha256.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveBox-1.0.0-RC27-FOUR-PARKING-WIDGETS
+          name: DriveBox-1.0.0-RC28-WIDGET-SILENT-PHOTO
           path: |
-            DriveBox-1.0.0-RC27.apk
-            DriveBox-1.0.0-RC27.apk.sha256.txt
-            DriveBox-1.0.0-RC27-source.zip
-            DriveBox-1.0.0-RC27-source.zip.sha256.txt
+            DriveBox-1.0.0-RC28.apk
+            DriveBox-1.0.0-RC28.apk.sha256.txt
+            DriveBox-1.0.0-RC28-source.zip
+            DriveBox-1.0.0-RC28-source.zip.sha256.txt
           if-no-files-found: error
           retention-days: 7
