@@ -7,7 +7,6 @@ on:
       - '.github/workflows/drivebox-rc14-pr.yml'
       - 'drivebox-ci/rc27-four-widgets.patch.gz.b64'
       - 'drivebox-ci/rc28-widget-silent-photo.patch.gz.b64'
-      - 'drivebox-ci/rc28-widget-previews.zip.b64'
   workflow_dispatch:
 
 permissions:
@@ -68,8 +67,64 @@ jobs:
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc28.patch
           mkdir -p app/src/main/res/drawable-nodpi
-          base64 -d "$GITHUB_WORKSPACE/drivebox-ci/rc28-widget-previews.zip.b64" > /tmp/rc28-previews.zip
-          unzip -oq /tmp/rc28-previews.zip -d app/src/main/res/drawable-nodpi
+
+          python3 - <<'PY'
+          import os, struct, zlib
+          out='app/src/main/res/drawable-nodpi'
+          os.makedirs(out, exist_ok=True)
+          font={
+          '0':[14,17,19,21,25,17,14],'1':[4,12,4,4,4,4,14],'2':[14,17,1,2,4,8,31],'3':[30,1,1,14,1,1,30],'4':[2,6,10,18,31,2,2],
+          '5':[31,16,16,30,1,1,30],'6':[14,16,16,30,17,17,14],'7':[31,1,2,4,8,8,8],'8':[14,17,17,14,17,17,14],'9':[14,17,17,15,1,1,14],
+          ':':[0,4,4,0,4,4,0], ' ':[0,0,0,0,0,0,0], '-':[0,0,0,31,0,0,0],
+          'A':[14,17,17,31,17,17,17],'C':[14,17,16,16,16,17,14],'D':[30,17,17,17,17,17,30],'E':[31,16,16,30,16,16,31],
+          'F':[31,16,16,30,16,16,16],'G':[14,17,16,23,17,17,15],'I':[14,4,4,4,4,4,14],'L':[16,16,16,16,16,16,31],
+          'M':[17,27,21,21,17,17,17],'N':[17,25,21,19,17,17,17],'O':[14,17,17,17,17,17,14],'P':[30,17,17,30,16,16,16],
+          'R':[30,17,17,30,20,18,17],'S':[15,16,16,14,1,1,30],'T':[31,4,4,4,4,4,4],'U':[17,17,17,17,17,17,14],
+          'X':[17,17,10,4,10,17,17]
+          }
+          def png(path,w,h,kind):
+              pix=bytearray([22,26,32,255])*(w*h)
+              def rect(x,y,x2,y2,c):
+                  x=max(0,x);y=max(0,y);x2=min(w,x2);y2=min(h,y2)
+                  for yy in range(y,y2):
+                      off=(yy*w+x)*4
+                      for xx in range(x,x2):
+                          pix[off:off+4]=bytes(c);off+=4
+              def text(s,x,y,scale=4,c=(238,242,247,255)):
+                  ox=x
+                  for ch in s:
+                      rows=font.get(ch.upper(),font[' '])
+                      for ry,bits in enumerate(rows):
+                          for rx in range(5):
+                              if bits & (1<<(4-rx)):
+                                  rect(x+rx*scale,y+ry*scale,x+(rx+1)*scale,y+(ry+1)*scale,c)
+                      x += 6*scale
+                  return x-ox
+              # card and accent
+              rect(6,6,w-6,h-6,(35,41,49,255))
+              rect(6,6,14,h-6,(45,128,229,255))
+              if kind=='mini':
+                  text('P',28,24,7,(90,160,255,255)); text('00:42',28,h-54,5)
+              elif kind=='square':
+                  text('P',28,24,6,(90,160,255,255)); text('EN COURS',76,30,3,(190,200,212,255)); text('00:42',34,86,7)
+                  rect(w-92,82,w-24,150,(58,66,78,255)); text('PHOTO',w-88,108,2,(190,200,212,255)); text('1.40 CHF',34,h-62,3,(190,200,212,255))
+              elif kind=='bar':
+                  text('P',26,30,6,(90,160,255,255)); text('00:42',88,32,6); text('1.40 CHF',340,42,3,(190,200,212,255))
+              else:
+                  text('P',28,26,6,(90,160,255,255)); text('EN COURS',82,32,3,(190,200,212,255)); text('00:42',32,92,7)
+                  text('RUE DU LAC 12',250,74,3,(190,200,212,255)); text('ZONE B - ETAGE -1',250,108,2,(160,172,188,255)); text('1.40 CHF',250,145,3)
+                  rect(250,h-78,400,h-25,(45,128,229,255)); text('MAPS',282,h-61,3)
+                  rect(416,h-78,w-24,h-25,(112,52,57,255)); text('TERMINER',438,h-61,2)
+              raw=bytearray()
+              for y in range(h): raw.append(0); raw.extend(pix[y*w*4:(y+1)*w*4])
+              def chunk(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+              data=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(bytes(raw),9))+chunk(b'IEND',b'')
+              open(path,'wb').write(data)
+          png(out+'/widget_preview_mini.png',240,240,'mini')
+          png(out+'/widget_preview_square.png',300,300,'square')
+          png(out+'/widget_preview_bar.png',600,180,'bar')
+          png(out+'/widget_preview_full.png',600,300,'full')
+          PY
 
           JAVA=app/src/main/java/ch/clubvwsuisse/drivebox
           RES=app/src/main/res
