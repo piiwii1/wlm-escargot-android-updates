@@ -43,8 +43,77 @@ jobs:
           PY
           bash /tmp/reconstruct.sh
           bash /tmp/rc14.sh
+
+          python3 - <<'PY'
+          from pathlib import Path
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+
+          def replace_method(src, signature_start, new_method):
+              a = src.index(signature_start)
+              brace = src.index('{', a)
+              depth = 0
+              i = brace
+              while i < len(src):
+                  if src[i] == '{': depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return src[:a] + new_method + src[i+1:]
+                  i += 1
+              raise RuntimeError('Unbalanced method: ' + signature_start)
+
+          detail = r'''private void countryDetail(String flag, String country, int signColor, String signColorName,
+                                     String city, String rural, String expressway, String motorway,
+                                     String motorwayBadge, String toll, String[] equipment,
+                                     String winter, String emergency) {
+              LinearLayout root = page(flag, country, "Fiche route rapide • voiture particulière", this::countriesScreen);
+              root.addView(countrySignCard(signColorName, signColor));
+
+              root.addView(sectionTitle("LIMITATIONS"), lp(-1, -2, 0, 18, 0, 8));
+              LinearLayout speeds1 = row(Gravity.CENTER);
+              speeds1.addView(speedCard(city, "Ville"), new LinearLayout.LayoutParams(0, dp(132), 1));
+              speeds1.addView(speedCard(rural, "Hors agglo"), new LinearLayout.LayoutParams(0, dp(132), 1));
+              root.addView(speeds1);
+              LinearLayout speeds2 = row(Gravity.CENTER);
+              speeds2.addView(speedCard(expressway, "Voie rapide"), new LinearLayout.LayoutParams(0, dp(132), 1));
+              speeds2.addView(speedCard(motorway, "Autoroute"), new LinearLayout.LayoutParams(0, dp(132), 1));
+              root.addView(speeds2, lp(-1, -2, 0, 8, 0, 0));
+              if ("Allemagne".equals(country)) {
+                  root.addView(infoStrip("i", "Sur Autobahn sans limitation affichée, 130 km/h est la vitesse recommandée, pas une limitation générale.", BLUE));
+              }
+
+              root.addView(sectionTitle("AUTOROUTE / PÉAGE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("🛣", toll, BLUE));
+              if ("Suisse".equals(country)) {
+                  root.addView(infoStrip("✓", "E-vignette officielle : CHF 40 • liée à la plaque.", GREEN), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(officialWebButton("Acheter l’e-vignette officielle", "https://www.e-vignette.ch/"), lp(-1, dp(48), 0, 8, 0, 0));
+              } else if ("Autriche".equals(country)) {
+                  root.addView(infoStrip("✓", "Vignette numérique officielle disponible en ligne.", GREEN), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(infoStrip("!", "Les règles de validité immédiate varient selon la durée choisie : vérifiez la date affichée avant l’achat.", ORANGE), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(officialWebButton("Acheter la vignette ASFINAG", "https://shop.asfinag.at/fr/produits/vignette-numerique/"), lp(-1, dp(48), 0, 8, 0, 0));
+              }
+
+              root.addView(sectionTitle("ÉQUIPEMENT / OBLIGATIONS"), lp(-1, -2, 0, 18, 0, 8));
+              for (String item : equipment) {
+                  String[] p = item.split("\\|", 3);
+                  if (p.length == 3) root.addView(equipmentRow(p[0], p[1], p[2]));
+              }
+
+              root.addView(sectionTitle("HIVER"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("❄", winter, ORANGE));
+              root.addView(sectionTitle("URGENCE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("☎", emergency, RED));
+              root.addView(infoStrip("!", "Résumé pratique, pas un texte juridique. Vérifiez les règles officielles et la signalisation locale avant un voyage.", MUTED), lp(-1, -2, 0, 14, 0, 0));
+              setScrollablePage(root);
+          }'''
+          s = replace_method(s, 'private void countryDetail(', detail)
+          java.write_text(s)
+          PY
+
           grep -q "DriveBox 1.0.0 RC14" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'renderQuickTools(results)' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'String city, String rural, String expressway, String motorway' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q "versionCode 23" /tmp/drivebox-src/app/build.gradle
 
       - uses: actions/setup-java@v4
