@@ -7,6 +7,7 @@ on:
       - '.github/workflows/drivebox-rc40-lifecycle.yml'
       - 'drivebox-ci/rc40.part*.b64'
       - 'drivebox-ci/rc40fix.part*.b64'
+      - 'drivebox-ci/rc40fix2.b64'
   workflow_dispatch:
 
 permissions:
@@ -62,6 +63,13 @@ jobs:
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc40fix.patch
 
+          cd "$GITHUB_WORKSPACE"
+          test "$(sha256sum drivebox-ci/rc40fix2.b64 | awk '{print $1}')" = '126cb31258160fe6db03fee1fe2d4e687ff52d303ac3188780aabbec61a6dec6'
+          base64 -d drivebox-ci/rc40fix2.b64 | gzip -d > /tmp/rc40fix2.patch
+          test "$(sha256sum /tmp/rc40fix2.patch | awk '{print $1}')" = 'ad9c2663e696d4bc4da6d3b79c5f4d4dab6178b56cb6e1f78b846494431023f0'
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc40fix2.patch
+
           grep -q 'versionCode 49' app/build.gradle
           grep -q "versionName '1.0.0-rc40'" app/build.gradle
           grep -q 'STATE_SCREEN_TAG' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
@@ -69,6 +77,7 @@ jobs:
           grep -q 'restoreScreen' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'getPackageManager().getPackageInfo' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'displayVersionCode()' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'android.os.Build.VERSION.SDK_INT' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'stopParkingTicker();' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'widget.render' app/src/main/java/ch/clubvwsuisse/drivebox/ParkingWidgetRenderer.java
           test "$(grep -c '@Test' app/src/test/java/ch/clubvwsuisse/drivebox/ParkingTimePolicyTest.java)" -ge 6
