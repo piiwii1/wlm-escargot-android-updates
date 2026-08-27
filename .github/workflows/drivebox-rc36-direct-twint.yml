@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           base64 -d drivebox-ci/rc36-direct-twint.patch.gz.b64 | gzip -d > /tmp/rc36.patch
-          test "$(sha256sum /tmp/rc36.patch | awk '{print $1}')" = '22ad04b512a010380231abd20a71ba2f040bc2a8cd2ab6a1303af779ded6e63a'
+          test "$(sha256sum /tmp/rc36.patch | awk '{print $1}')" = '719593e01cbc199dbedce3e136ef67af54697c11f8d0881e4ecefbb46dc4dcd5'
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc36.patch
           grep -q 'versionCode 45' app/build.gradle
