@@ -1,0 +1,80 @@
+name: Package DriveBox RC34
+
+on:
+  push:
+    branches: [ drivebox-rc34-twint-physical-qr ]
+    paths:
+      - '.github/workflows/drivebox-rc34-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore validated RC33 source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9629015044/zip" -o /tmp/rc33.zip
+          mkdir -p /tmp/a /tmp/drivebox-src
+          unzip -oq /tmp/rc33.zip -d /tmp/a
+          unzip -oq /tmp/a/DriveBox-1.0.0-RC33-source.zip -d /tmp/drivebox-src
+      - name: Apply RC34 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d drivebox-ci/rc34-twint-physical-qr.patch.gz.b64 | gzip -d > /tmp/rc34.patch
+          test "$(sha256sum /tmp/rc34.patch | awk '{print $1}')" = 'dd6df8b46d1c25c09c3c2c86d61f88f0d7587bd7bff36d558d7c7a2ce4fd8779'
+          cd /tmp/drivebox-src && patch -p1 < /tmp/rc34.patch
+          grep -q 'versionCode 43' app/build.gradle
+          grep -q "versionName '1.0.0-rc34'" app/build.gradle
+          ! grep -R -q 'S.code=' app/src/main/java/ch/clubvwsuisse/drivebox
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build and verify
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='43'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc34'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" > /tmp/perms.txt
+          ! grep -q 'android.permission.INTERNET' /tmp/perms.txt
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34-source.zip.sha256.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC34
+          path: |
+            DriveBox-1.0.0-RC34.apk
+            DriveBox-1.0.0-RC34.apk.sha256.txt
+            DriveBox-1.0.0-RC34-source.zip
+            DriveBox-1.0.0-RC34-source.zip.sha256.txt
+          retention-days: 7
