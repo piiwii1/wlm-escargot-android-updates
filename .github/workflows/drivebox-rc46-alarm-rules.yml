@@ -1,0 +1,120 @@
+name: Build DriveBox RC46 Alarm Rules
+
+on:
+  push:
+    branches: [ drivebox-rc46-alarm-rules ]
+    paths:
+      - '.github/workflows/drivebox-rc46-alarm-rules.yml'
+      - 'drivebox-ci/rc46.part*.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore validated RC45 source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9655967559/zip" -o /tmp/rc45-artifact.zip
+          rm -rf /tmp/rc45-artifact /tmp/drivebox-src
+          mkdir -p /tmp/rc45-artifact /tmp/drivebox-src
+          unzip -oq /tmp/rc45-artifact.zip -d /tmp/rc45-artifact
+          test "$(sha256sum /tmp/rc45-artifact/DriveBox-1.0.0-RC45-source.zip | awk '{print $1}')" = 'd8ecccb22235854c210e2827c89e29c79e565bc5c375885b7462c493848d2d59'
+          unzip -oq /tmp/rc45-artifact/DriveBox-1.0.0-RC45-source.zip -d /tmp/drivebox-src
+          grep -q 'versionCode 54' /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc45'" /tmp/drivebox-src/app/build.gradle
+
+      - name: Verify and apply RC46 alarm patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum drivebox-ci/rc46.part00.b64 | awk '{print $1}')" = '6d1f38ec489e194f798b3ba7e7cc7f266460ee108056edd57d44468df721ee5d'
+          test "$(sha256sum drivebox-ci/rc46.part01.b64 | awk '{print $1}')" = '305f87d392c8f1f388d81fd53d07211529aca8263bbeda70156f5680fcd8d1c0'
+          cat drivebox-ci/rc46.part*.b64 | base64 -d > /tmp/rc46.patch.gz
+          test "$(sha256sum /tmp/rc46.patch.gz | awk '{print $1}')" = '697bc9aa8358e36f7a31bdb0e73c1991cfd6d5b4f1587f50c7678c9d51d5a823'
+          gzip -d -c /tmp/rc46.patch.gz > /tmp/rc46.patch
+          test "$(sha256sum /tmp/rc46.patch | awk '{print $1}')" = '1b3ee5bfc2b6aeecccf0d4edf92aab249c847d79462b2813a07443f6784fb3a6'
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc46.patch
+          grep -q 'versionCode 55' app/build.gradle
+          grep -q "versionName '1.0.0-rc46'" app/build.gradle
+          test -f app/src/main/java/ch/clubvwsuisse/drivebox/ParkingAlarmPolicy.java
+          grep -q 'ACTION_FREE_EXPIRED' app/src/main/java/ch/clubvwsuisse/drivebox/FreeParkingAlarmReceiver.java
+          grep -q 'startFreeAlarm' app/src/main/java/ch/clubvwsuisse/drivebox/FreeParkingAlarmReceiver.java
+          grep -q 'shouldSoundParkingEnd' app/src/main/java/ch/clubvwsuisse/drivebox/ParkingAlarmReceiver.java
+          grep -q 'parking_free_warning_v3' app/src/main/java/ch/clubvwsuisse/drivebox/FreeParkingAlarmReceiver.java
+          grep -q 'parking_expiry_alarm_v3' app/src/main/java/ch/clubvwsuisse/drivebox/ParkingExpiryAlarmService.java
+          grep -q 'rappel 10 min avant • alarme à la fin' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          test "$(grep -R -h '@Test' app/src/test/java | wc -l)" -ge 17
+          test -f CONTINUITE-RC46.md
+          if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then echo 'Unexpected INTERNET permission'; exit 1; fi
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and compile RC46
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify and package RC46
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='55'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc46'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_BACKGROUND_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK' /tmp/perms.txt
+          grep -q 'android.permission.SCHEDULE_EXACT_ALARM' /tmp/perms.txt
+          grep -q 'android.permission.POST_NOTIFICATIONS' /tmp/perms.txt
+          if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then exit 1; fi
+          unzip -t "$APK"
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC46.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC46-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC46.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC46.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC46-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC46-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC46-ALARM-RULES
+          path: |
+            DriveBox-1.0.0-RC46.apk
+            DriveBox-1.0.0-RC46.apk.sha256.txt
+            DriveBox-1.0.0-RC46-source.zip
+            DriveBox-1.0.0-RC46-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
