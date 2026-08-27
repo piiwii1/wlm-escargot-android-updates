@@ -1,0 +1,120 @@
+name: Build DriveBox RC33 TWINT Native QR
+
+on:
+  push:
+    branches: [ drivebox-rc33-twint-native-qr ]
+    paths:
+      - '.github/workflows/drivebox-rc33-twint-native-qr.yml'
+      - 'drivebox-ci/rc33-twint-native-qr.patch.gz.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore validated RC32 source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9628786166/zip" \
+            -o /tmp/rc32-artifact.zip
+          rm -rf /tmp/rc32-artifact /tmp/drivebox-src
+          mkdir -p /tmp/rc32-artifact /tmp/drivebox-src
+          unzip -oq /tmp/rc32-artifact.zip -d /tmp/rc32-artifact
+          test -f /tmp/rc32-artifact/DriveBox-1.0.0-RC32-source.zip
+          test "$(sha256sum /tmp/rc32-artifact/DriveBox-1.0.0-RC32-source.zip | awk '{print $1}')" = 'b5cb67993519e9159f213d676cbe3873d44d595de701f6157fcec8ec46e6da06'
+          unzip -oq /tmp/rc32-artifact/DriveBox-1.0.0-RC32-source.zip -d /tmp/drivebox-src
+          grep -q 'versionCode 41' /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc32'" /tmp/drivebox-src/app/build.gradle
+
+      - name: Apply RC33 TWINT native QR fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d drivebox-ci/rc33-twint-native-qr.patch.gz.b64 | gzip -d > /tmp/rc33.patch
+          test "$(sha256sum /tmp/rc33.patch | awk '{print $1}')" = 'cf9c4e474284adf957c77fac8a3f50a8a70c08e25ffeae5af7708260ac3ddfb2'
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc33.patch
+          grep -q 'versionCode 42' app/build.gradle
+          grep -q "versionName '1.0.0-rc33'" app/build.gradle
+          grep -q 'QR TWINT natif' app/src/main/java/ch/clubvwsuisse/drivebox/TwintQrAnalyzer.java
+          grep -q 'ch.twint.action.TWINT_PAYMENT' app/src/main/java/ch/clubvwsuisse/drivebox/TwintParkingDetailActivity.java
+          grep -q 'DB_VERSION = 2' app/src/main/java/ch/clubvwsuisse/drivebox/TwintParkingDbHelper.java
+          grep -q 'Payer avec TWINT' app/src/main/java/ch/clubvwsuisse/drivebox/TwintParkingDetailActivity.java
+          grep -q 'android:scheme="twint"' app/src/main/AndroidManifest.xml
+          if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          python3 - <<'PY'
+          import re
+          raw='02:05a48b31-a436-40a8-bfb3-2552b451bbee:#b9cd182e07fc550eb164559c869c37102bb5769e#28990'
+          m=re.match(r'^(0[12]):([^:]+):#([0-9a-fA-F]{16,})#([0-9]{5})$', raw)
+          assert m and m.group(4) == '28990'
+          print('Native TWINT sample recognized; code=', m.group(4))
+          PY
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC33
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC33
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='42'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc33'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          unzip -t "$APK"
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC33.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC33-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC33.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC33.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC33-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC33-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC33-TWINT-NATIVE-QR
+          path: |
+            DriveBox-1.0.0-RC33.apk
+            DriveBox-1.0.0-RC33.apk.sha256.txt
+            DriveBox-1.0.0-RC33-source.zip
+            DriveBox-1.0.0-RC33-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
