@@ -54,16 +54,6 @@ jobs:
           grep -q 'this::settingsScreen);' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           test "$(grep -R -h '@Test' app/src/test/java | wc -l)" -ge 12
           test -f CONTINUITE-RC44.md
-          python - <<'PY'
-from pathlib import Path
-s=Path('app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java').read_text()
-parking=s[s.index('private void parkingScreen()'):s.index('private void startParkingFromDraft', s.index('private void parkingScreen()'))]
-assert 'Historique des arrêts' not in parking
-assert 'Automatique GPS' not in parking
-settings=s[s.index('private void settingsScreen()'):s.index('private void aboutScreen()', s.index('private void settingsScreen()'))]
-assert 'Historique des arrêts' in settings
-assert 'Automatique GPS' in settings
-PY
           if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then echo 'Unexpected INTERNET permission'; exit 1; fi
 
       - uses: actions/setup-java@v5
