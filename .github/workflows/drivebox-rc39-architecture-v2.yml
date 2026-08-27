@@ -1,0 +1,111 @@
+name: Build DriveBox RC39 Architecture V2
+
+on:
+  push:
+    branches: [ drivebox-rc39-architecture ]
+    paths:
+      - '.github/workflows/drivebox-rc39-architecture-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore validated RC38 source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9636722642/zip" -o /tmp/rc38-artifact.zip
+          rm -rf /tmp/rc38-artifact /tmp/drivebox-src
+          mkdir -p /tmp/rc38-artifact /tmp/drivebox-src
+          unzip -oq /tmp/rc38-artifact.zip -d /tmp/rc38-artifact
+          unzip -oq /tmp/rc38-artifact/DriveBox-1.0.0-RC38-source.zip -d /tmp/drivebox-src
+          grep -q 'versionCode 47' /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc38'" /tmp/drivebox-src/app/build.gradle
+
+      - name: Verify and apply RC39 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum drivebox-ci/rc39.part00a.b64 | awk '{print $1}')" = 'a40d93b1d1fd2180111572dcab9330848aae87bc145f348baa0c8eb84b04e73a'
+          test "$(sha256sum drivebox-ci/rc39.part00b.b64 | awk '{print $1}')" = '37d4c72b7ce3116d1449b97925e4fe4e35e5f94da761c88960516b531ad09325'
+          test "$(sha256sum drivebox-ci/rc39.part01.b64 | awk '{print $1}')" = 'de4f8dd1aaf33d1d22ba4676d1b6a7e9f0de248db912cbb703ce5e19a17061ae'
+          test "$(sha256sum drivebox-ci/rc39.part02.b64 | awk '{print $1}')" = 'b7c1336fc0635ab76bec8dca314b1d6dbd68f99842244554b6a702cd1e7a2a36'
+          test "$(sha256sum drivebox-ci/rc39.part03.b64 | awk '{print $1}')" = '89e9e26774ce9bd196119f2bc0a209363cc73fe0e6285ad5c370a18741946595'
+          test "$(sha256sum drivebox-ci/rc39.part04.b64 | awk '{print $1}')" = '2ee42a29c6d780567eb7190c5ba77119a42c4fc85ff5e1b81c5c6f5cfe455ccb'
+          cat drivebox-ci/rc39.part00a.b64 drivebox-ci/rc39.part00b.b64 drivebox-ci/rc39.part01.b64 drivebox-ci/rc39.part02.b64 drivebox-ci/rc39.part03.b64 drivebox-ci/rc39.part04.b64 | base64 -d | gzip -d > /tmp/rc39.patch
+          test "$(sha256sum /tmp/rc39.patch | awk '{print $1}')" = 'b15cbc1ed6169e060ddfc9c46c69dd0ecf83eda1faafafaf080ab9d17e6fce66'
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc39.patch
+          grep -q 'versionCode 48' app/build.gradle
+          grep -q "versionName '1.0.0-rc39'" app/build.gradle
+          test -f app/src/main/java/ch/clubvwsuisse/drivebox/ParkingSessionStore.java
+          test -f app/src/main/java/ch/clubvwsuisse/drivebox/ParkingAddressResolver.java
+          test -f app/src/main/java/ch/clubvwsuisse/drivebox/ParkingTimePolicy.java
+          test -f app/src/test/java/ch/clubvwsuisse/drivebox/ParkingTimePolicyTest.java
+          test "$(wc -l < app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java)" -lt 3100
+          if grep -Eq 'put(Boolean|Long|String|Int)\(PREF_PARK_(ACTIVE|START|END|LAT|LON|ADDRESS|TYPE|RATE|FREE)' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java; then exit 1; fi
+          if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then exit 1; fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and compile RC39
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify and package RC39
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='48'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc39'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then exit 1; fi
+          unzip -t "$APK"
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC39.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC39-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC39.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC39.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC39-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC39-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC39-ARCHITECTURE
+          path: |
+            DriveBox-1.0.0-RC39.apk
+            DriveBox-1.0.0-RC39.apk.sha256.txt
+            DriveBox-1.0.0-RC39-source.zip
+            DriveBox-1.0.0-RC39-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
