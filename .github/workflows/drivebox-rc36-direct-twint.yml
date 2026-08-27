@@ -5,7 +5,8 @@ on:
     branches: [ drivebox-rc36-direct-twint ]
     paths:
       - '.github/workflows/drivebox-rc36-direct-twint.yml'
-      - 'drivebox-ci/rc36-direct-twint.patch.gz.b64'
+      - 'drivebox-ci/rc36-direct-twint.part1.b64'
+      - 'drivebox-ci/rc36-direct-twint.part2.b64'
   workflow_dispatch:
 
 permissions:
@@ -41,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d drivebox-ci/rc36-direct-twint.patch.gz.b64 | gzip -d > /tmp/rc36.patch
+          cat drivebox-ci/rc36-direct-twint.part1.b64 drivebox-ci/rc36-direct-twint.part2.b64 | base64 -d | gzip -d > /tmp/rc36.patch
           test "$(sha256sum /tmp/rc36.patch | awk '{print $1}')" = '719593e01cbc199dbedce3e136ef67af54697c11f8d0881e4ecefbb46dc4dcd5'
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc36.patch
