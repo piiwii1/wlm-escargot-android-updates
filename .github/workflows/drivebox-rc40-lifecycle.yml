@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/drivebox-rc40-lifecycle.yml'
       - 'drivebox-ci/rc40.part*.b64'
+      - 'drivebox-ci/rc40fix.part*.b64'
   workflow_dispatch:
 
 permissions:
@@ -51,16 +52,28 @@ jobs:
           test "$(sha256sum /tmp/rc40.patch | awk '{print $1}')" = 'e635e213ef0956282c11bf6cd86e3459269efb8f2e055bbc49c4afe873bf9c20'
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc40.patch
+
+          cd "$GITHUB_WORKSPACE"
+          test "$(sha256sum drivebox-ci/rc40fix.part00.b64 | awk '{print $1}')" = '5614a1c5de97475b10ff587cad71439bbc793ade82a8b80e4369ec56bab0f8a0'
+          test "$(sha256sum drivebox-ci/rc40fix.part01.b64 | awk '{print $1}')" = 'ef0c323c6a073cb1f1948ea1c7846257d28d75f155c6cff0931e8d6a43a99fc1'
+          test "$(sha256sum drivebox-ci/rc40fix.part02.b64 | awk '{print $1}')" = '7938907f6d18bf9118a6cac60c666001a04e0d53a44c18a4d415dfd55c4e2e03'
+          cat drivebox-ci/rc40fix.part*.b64 | base64 -d | gzip -d > /tmp/rc40fix.patch
+          test "$(sha256sum /tmp/rc40fix.patch | awk '{print $1}')" = '0bc6d06b3706a2b1bef04fbd03e997eb259e186b187d219c2cf4928a3bdd97fe'
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc40fix.patch
+
           grep -q 'versionCode 49' app/build.gradle
           grep -q "versionName '1.0.0-rc40'" app/build.gradle
           grep -q 'STATE_SCREEN_TAG' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'onSaveInstanceState' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'restoreScreen' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
-          grep -q 'BuildConfig.VERSION_NAME' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'getPackageManager().getPackageInfo' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'displayVersionCode()' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'stopParkingTicker();' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
           grep -q 'widget.render' app/src/main/java/ch/clubvwsuisse/drivebox/ParkingWidgetRenderer.java
           test "$(grep -c '@Test' app/src/test/java/ch/clubvwsuisse/drivebox/ParkingTimePolicyTest.java)" -ge 6
           test -f CONTINUITE-RC40.md
+          if grep -q 'BuildConfig.VERSION_' app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java; then echo 'Stale BuildConfig version reference'; exit 1; fi
           if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then echo 'Unexpected INTERNET permission'; exit 1; fi
 
       - uses: actions/setup-java@v4
