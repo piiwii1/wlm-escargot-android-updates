@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Restore validated RC37 source
         shell: bash
         env:
@@ -31,16 +30,18 @@ jobs:
           unzip -oq /tmp/rc37-artifact/DriveBox-1.0.0-RC37-source.zip -d /tmp/drivebox-src
           grep -q 'versionCode 46' /tmp/drivebox-src/app/build.gradle
           grep -q "versionName '1.0.0-rc37'" /tmp/drivebox-src/app/build.gradle
-
       - name: Verify and apply RC38 stability patch
         shell: bash
         run: |
           set -euo pipefail
+          wc -c drivebox-ci/rc38-stability.part1.b64 drivebox-ci/rc38-stability.part2.b64 drivebox-ci/rc38-stability.part3a.b64 drivebox-ci/rc38-stability.part3b.b64
+          sha256sum drivebox-ci/rc38-stability.part1.b64 drivebox-ci/rc38-stability.part2.b64 drivebox-ci/rc38-stability.part3a.b64 drivebox-ci/rc38-stability.part3b.b64
           test "$(sha256sum drivebox-ci/rc38-stability.part1.b64 | awk '{print $1}')" = '6add24550b828ab740c41439cd80f15f96de65d771037af8ffef32c5fca91964'
           test "$(sha256sum drivebox-ci/rc38-stability.part2.b64 | awk '{print $1}')" = '2925d74537a4d8c406a6740affe56d97be3fa8894ab269b7d565c1e391ccea63'
           test "$(sha256sum drivebox-ci/rc38-stability.part3a.b64 | awk '{print $1}')" = 'f2672dab065e337ed7b5098b9cd10de809c5546e313a4bbd1d073d44b8c7196c'
           test "$(sha256sum drivebox-ci/rc38-stability.part3b.b64 | awk '{print $1}')" = '219899a0385a681981052fd5806df6aaa4ff2f90d726a8c54178cccc6cd274ac'
           cat drivebox-ci/rc38-stability.part1.b64 drivebox-ci/rc38-stability.part2.b64 drivebox-ci/rc38-stability.part3a.b64 drivebox-ci/rc38-stability.part3b.b64 | base64 -d | gzip -d > /tmp/rc38.patch
+          sha256sum /tmp/rc38.patch
           test "$(sha256sum /tmp/rc38.patch | awk '{print $1}')" = '6bd0f46a90b343acd06c6fd63222ec2c80c2083b21402aedc3b34d9e0337e27a'
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc38.patch
@@ -54,28 +55,22 @@ jobs:
           grep -q 'boolean blueZone' app/src/main/java/ch/clubvwsuisse/drivebox/WidgetQuickStartActivity.java
           test -f app/src/main/java/ch/clubvwsuisse/drivebox/DriveBoxLog.java
           if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then echo 'Unexpected INTERNET permission'; exit 1; fi
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - uses: android-actions/setup-android@v3
-
       - name: Install Android SDK
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
       - name: Compile RC38
         working-directory: /tmp/drivebox-src
         run: gradle --no-daemon clean :app:assembleDebug
-
       - name: Verify and package RC38
         shell: bash
         run: |
@@ -102,7 +97,6 @@ jobs:
           (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC38-source.zip" .)
           sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC38.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC38.apk.sha256.txt"
           sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC38-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC38-source.zip.sha256.txt"
-
       - uses: actions/upload-artifact@v4
         with:
           name: DriveBox-1.0.0-RC38-STABILITY
