@@ -36,16 +36,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo 'RC38 chunk diagnostics:'
-          wc -c drivebox-ci/rc38-stability.part*.b64
-          sha256sum drivebox-ci/rc38-stability.part*.b64
-          cat drivebox-ci/rc38-stability.part*.b64 > /tmp/rc38.b64
-          echo 'Combined base64:'
-          wc -c /tmp/rc38.b64
-          base64 -d /tmp/rc38.b64 | gzip -d > /tmp/rc38.patch
-          echo 'Decoded patch:'
-          wc -c /tmp/rc38.patch
-          sha256sum /tmp/rc38.patch
+          test "$(sha256sum drivebox-ci/rc38-stability.part1.b64 | awk '{print $1}')" = '6add24550b828ab740c41439cd80f15f96de65d771037af8ffef32c5fca91964'
+          test "$(sha256sum drivebox-ci/rc38-stability.part2.b64 | awk '{print $1}')" = '2925d74537a4d8c406a6740affe56d97be3fa8894ab269b7d565c1e391ccea63'
+          test "$(sha256sum drivebox-ci/rc38-stability.part3a.b64 | awk '{print $1}')" = 'f2672dab065e337ed7b5098b9cd10de809c5546e313a4bbd1d073d44b8c7196c'
+          test "$(sha256sum drivebox-ci/rc38-stability.part3b.b64 | awk '{print $1}')" = '219899a0385a681981052fd5806df6aaa4ff2f90d726a8c54178cccc6cd274ac'
+          cat drivebox-ci/rc38-stability.part1.b64 drivebox-ci/rc38-stability.part2.b64 drivebox-ci/rc38-stability.part3a.b64 drivebox-ci/rc38-stability.part3b.b64 | base64 -d | gzip -d > /tmp/rc38.patch
           test "$(sha256sum /tmp/rc38.patch | awk '{print $1}')" = '6bd0f46a90b343acd06c6fd63222ec2c80c2083b21402aedc3b34d9e0337e27a'
           cd /tmp/drivebox-src
           patch -p1 < /tmp/rc38.patch
