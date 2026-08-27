@@ -1,0 +1,132 @@
+name: Build DriveBox RC34 TWINT Physical QR
+
+on:
+  push:
+    branches: [ drivebox-rc34-twint-physical-qr ]
+    paths:
+      - '.github/workflows/drivebox-rc34-twint-physical-qr.yml'
+      - 'drivebox-ci/rc34-twint-physical-qr.patch.gz.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore validated RC33 source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9629015044/zip" \
+            -o /tmp/rc33-artifact.zip
+          rm -rf /tmp/rc33-artifact /tmp/drivebox-src
+          mkdir -p /tmp/rc33-artifact /tmp/drivebox-src
+          unzip -oq /tmp/rc33-artifact.zip -d /tmp/rc33-artifact
+          unzip -oq /tmp/rc33-artifact/DriveBox-1.0.0-RC33-source.zip -d /tmp/drivebox-src
+          grep -q 'versionCode 42' /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc33'" /tmp/drivebox-src/app/build.gradle
+
+      - name: Apply RC34 physical QR fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d drivebox-ci/rc34-twint-physical-qr.patch.gz.b64 | gzip -d > /tmp/rc34.patch
+          test "$(sha256sum /tmp/rc34.patch | awk '{print $1}')" = 'dd6df8b46d1c25c09c3c2c86d61f88f0d7587bd7bff36d558d7c7a2ce4fd8779'
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc34.patch
+          grep -q 'versionCode 43' app/build.gradle
+          grep -q "versionName '1.0.0-rc34'" app/build.gradle
+          grep -q 'DB_VERSION = 3' app/src/main/java/ch/clubvwsuisse/drivebox/TwintParkingDbHelper.java
+          grep -q 'QR TWINT physique' app/src/main/java/ch/clubvwsuisse/drivebox/TwintQrAnalyzer.java
+          grep -q 'openTwintForPhysicalQr' app/src/main/java/ch/clubvwsuisse/drivebox/TwintParkingDetailActivity.java
+          grep -q 'queryIntentActivities' app/src/main/java/ch/clubvwsuisse/drivebox/TwintParkingDetailActivity.java
+          if grep -R -q 'S.code=' app/src/main/java/ch/clubvwsuisse/drivebox; then echo 'RC33 fabricated TWINT numeric code still present'; exit 1; fi
+          python3 - <<'PY'
+          import re
+          raw='02:05a48b31-a436-40a8-bfb3-2552b451bbee:#b9cd182e07fc550eb164559c869c37102bb5769e#28990'
+          p=re.compile(r'^(0[12]):([^:]+):#([0-9a-fA-F]{16,})#([0-9]{5})$')
+          m=p.match(raw)
+          assert m, 'User QR must remain recognized as a physical TWINT QR'
+          assert m.group(4)=='28990'
+          print('User QR recognized; trailing 28990 kept only as proprietary payload data, never as TWINT_PAYMENT code')
+          PY
+          if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then echo 'Unexpected INTERNET permission'; exit 1; fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC34
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC34
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='43'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc34'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          unzip -t "$APK"
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34-source.zip.sha256.txt"
+
+      - name: Android install and launch smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install -r "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC34.apk"
+            adb shell monkey -p ch.clubvwsuisse.drivebox.v1 -c android.intent.category.LAUNCHER 1
+            sleep 3
+            adb shell pidof ch.clubvwsuisse.drivebox.v1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC34-TWINT-PHYSICAL-QR
+          path: |
+            DriveBox-1.0.0-RC34.apk
+            DriveBox-1.0.0-RC34.apk.sha256.txt
+            DriveBox-1.0.0-RC34-source.zip
+            DriveBox-1.0.0-RC34-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
