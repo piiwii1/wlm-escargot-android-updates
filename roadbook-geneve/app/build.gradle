@@ -6,20 +6,31 @@ android {
     namespace 'ch.piiwii.roadbookgeneve'
     compileSdk 35
 
+    signingConfigs {
+        stable {
+            storeFile file('../signing/roadbook-release.jks')
+            storePassword 'Roadbook2026!'
+            keyAlias 'roadbook'
+            keyPassword 'Roadbook2026!'
+        }
+    }
+
     defaultConfig {
         applicationId 'ch.piiwii.roadbookgeneve'
         minSdk 26
         targetSdk 35
-        versionCode 2
-        versionName '1.1.0'
+        versionCode 3
+        versionName '1.1.1'
     }
 
     buildTypes {
         debug {
             minifyEnabled false
+            signingConfig signingConfigs.stable
         }
         release {
             minifyEnabled false
+            signingConfig signingConfigs.stable
         }
     }
 }
