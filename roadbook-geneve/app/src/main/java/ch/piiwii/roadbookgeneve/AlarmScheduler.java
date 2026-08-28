@@ -1,10 +1,107 @@
 package ch.piiwii.roadbookgeneve;
-import android.app.*;import android.content.*;import android.os.Build;
-public final class AlarmScheduler{
- public static final String PREF_ENABLED="alerts_enabled"; private AlarmScheduler(){}
- public static boolean isEnabled(Context c){return Itinerary.prefs(c).getBoolean(PREF_ENABLED,false);} public static void setEnabled(Context c,boolean e){Itinerary.prefs(c).edit().putBoolean(PREF_ENABLED,e).apply();if(e)scheduleAll(c);else cancelAll(c);} public static boolean canExact(Context c){if(Build.VERSION.SDK_INT<31)return true;AlarmManager a=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);return a!=null&&a.canScheduleExactAlarms();}
- public static void scheduleAll(Context c){cancelAll(c);if(!isEnabled(c))return;int i=0;for(Itinerary.Stop s:Itinerary.STOPS){long at=Itinerary.getTimeMillis(c,s);if(s.alertBeforeMinutes>0)schedule(c,at-s.alertBeforeMinutes*60000L,1000+i*2,"Dans "+s.alertBeforeMinutes+" min",s.title+" à "+Itinerary.getTime(c,s));if(s.alertAtTime)schedule(c,at,1001+i*2,s.title,msg(s));i++;}}
- private static String msg(Itinerary.Stop s){if("depart_sion".equals(s.id))return"C'est l'heure de partir vers Rolle.";if("leave_rolle".equals(s.id))return"Direction Genève / P+R Bachet-Praille.";if("leave_village".equals(s.id))return"Pars maintenant vers le centre pour garder ta marge.";if("garden".equals(s.id))return"Objectif: être placé au Jardin Anglais.";if("rock".equals(s.id))return"La séance Rock & Pop commence maintenant.";if("choice".equals(s.id))return"22h20: choisis la suite selon la motivation.";return s.note;}
- private static void schedule(Context c,long t,int code,String title,String text){if(t<=System.currentTimeMillis())return;AlarmManager a=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);if(a==null)return;Intent in=new Intent(c,AlarmReceiver.class).putExtra("title",title).putExtra("text",text).putExtra("notification_id",code);PendingIntent p=PendingIntent.getBroadcast(c,code,in,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);if(Build.VERSION.SDK_INT>=31&&!a.canScheduleExactAlarms())a.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,t,p);else a.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,t,p);}
- public static void cancelAll(Context c){AlarmManager a=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);if(a==null)return;for(int i=0;i<Itinerary.STOPS.length;i++){cancel(c,a,1000+i*2);cancel(c,a,1001+i*2);}} private static void cancel(Context c,AlarmManager a,int code){PendingIntent p=PendingIntent.getBroadcast(c,code,new Intent(c,AlarmReceiver.class),PendingIntent.FLAG_NO_CREATE|PendingIntent.FLAG_IMMUTABLE);if(p!=null){a.cancel(p);p.cancel();}}
+
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+
+public final class AlarmScheduler {
+    public static final String PREF_ENABLED = "alerts_enabled";
+
+    private AlarmScheduler() {}
+
+    public static boolean isEnabled(Context context) {
+        return Itinerary.prefs(context).getBoolean(PREF_ENABLED, false);
+    }
+
+    public static void setEnabled(Context context, boolean enabled) {
+        Itinerary.prefs(context).edit().putBoolean(PREF_ENABLED, enabled).apply();
+        if (enabled) scheduleAll(context);
+        else cancelAll(context);
+    }
+
+    public static boolean canExact(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true;
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        return am != null && am.canScheduleExactAlarms();
+    }
+
+    public static void scheduleAll(Context context) {
+        cancelAll(context);
+        if (!isEnabled(context)) return;
+
+        int index = 0;
+        for (Itinerary.Stop stop : Itinerary.STOPS) {
+            long at = Itinerary.getTimeMillis(context, stop);
+            if (stop.alertBeforeMinutes > 0) {
+                schedule(context, at - stop.alertBeforeMinutes * 60_000L,
+                        1000 + index * 2,
+                        "Dans " + stop.alertBeforeMinutes + " min",
+                        reminderText(stop));
+            }
+            if (stop.alertAtTime) {
+                schedule(context, at,
+                        1001 + index * 2,
+                        stop.title,
+                        notificationText(stop));
+            }
+            index++;
+        }
+    }
+
+    private static String reminderText(Itinerary.Stop stop) {
+        if ("depart_sion".equals(stop.id)) return "Prépare-toi : départ de Sion à " + stop.defaultTime + ".";
+        if ("leave_rolle".equals(stop.id)) return "Il reste 15 min avant de quitter le meeting pour Genève.";
+        if ("leave_village".equals(stop.id)) return "Il reste 15 min avant de partir vers le Jardin Anglais.";
+        if ("rock".equals(stop.id)) return "Rock & Pop à 22h00 : commence à te placer au Jardin Anglais.";
+        return stop.title + " à " + stop.defaultTime;
+    }
+
+    private static String notificationText(Itinerary.Stop stop) {
+        if ("depart_sion".equals(stop.id)) return "C'est l'heure de partir pour Rolle.";
+        if ("leave_rolle".equals(stop.id)) return "Direction Genève / Geneva Vice.";
+        if ("leave_village".equals(stop.id)) return "Pars maintenant vers le Jardin Anglais.";
+        if ("rock".equals(stop.id)) return "La séance Rock & Pop commence maintenant.";
+        if ("choice".equals(stop.id)) return "22h20 : choisis la suite selon la motivation.";
+        return stop.note;
+    }
+
+    private static void schedule(Context context, long triggerAtMillis, int requestCode, String title, String text) {
+        if (triggerAtMillis <= System.currentTimeMillis()) return;
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+
+        Intent intent = new Intent(context, AlarmReceiver.class);
+        intent.putExtra("title", title);
+        intent.putExtra("text", text);
+        intent.putExtra("notification_id", requestCode);
+        PendingIntent pi = PendingIntent.getBroadcast(context, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi);
+        } else {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi);
+        }
+    }
+
+    public static void cancelAll(Context context) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        for (int index = 0; index < Itinerary.STOPS.length; index++) {
+            cancel(context, am, 1000 + index * 2);
+            cancel(context, am, 1001 + index * 2);
+        }
+    }
+
+    private static void cancel(Context context, AlarmManager am, int requestCode) {
+        Intent intent = new Intent(context, AlarmReceiver.class);
+        PendingIntent pi = PendingIntent.getBroadcast(context, requestCode, intent,
+                PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
+        if (pi != null) {
+            am.cancel(pi);
+            pi.cancel();
+        }
+    }
 }
