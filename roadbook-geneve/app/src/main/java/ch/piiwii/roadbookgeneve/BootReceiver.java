@@ -1,0 +1,1 @@
+package ch.piiwii.roadbookgeneve;import android.content.*;public class BootReceiver extends BroadcastReceiver{public void onReceive(Context c,Intent i){if(AlarmScheduler.isEnabled(c))AlarmScheduler.scheduleAll(c);}}
