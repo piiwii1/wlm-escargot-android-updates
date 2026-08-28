@@ -1,4 +1,4 @@
-name: Temp Roadbook Geneve CI v1.1
+name: Temp Roadbook Geneve CI v1.1.1
 
 on:
   push:
@@ -26,19 +26,22 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Restore stable signing key
+        run: base64 -d roadbook-geneve/signing/roadbook-release.jks.b64 > roadbook-geneve/signing/roadbook-release.jks
       - name: Build debug APK
         working-directory: roadbook-geneve
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Verify APK
         run: |
-          cp roadbook-geneve/app/build/outputs/apk/debug/app-debug.apk Roadbook-Geneve-2026-08-29-v1.1.0.apk
-          test -s Roadbook-Geneve-2026-08-29-v1.1.0.apk
-          unzip -t Roadbook-Geneve-2026-08-29-v1.1.0.apk >/dev/null
-          sha256sum Roadbook-Geneve-2026-08-29-v1.1.0.apk
+          cp roadbook-geneve/app/build/outputs/apk/debug/app-debug.apk Roadbook-Geneve-2026-08-29-v1.1.1.apk
+          test -s Roadbook-Geneve-2026-08-29-v1.1.1.apk
+          unzip -t Roadbook-Geneve-2026-08-29-v1.1.1.apk >/dev/null
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose Roadbook-Geneve-2026-08-29-v1.1.1.apk
+          sha256sum Roadbook-Geneve-2026-08-29-v1.1.1.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Roadbook-Geneve-2026-08-29-v1.1.0
-          path: Roadbook-Geneve-2026-08-29-v1.1.0.apk
+          name: Roadbook-Geneve-2026-08-29-v1.1.1
+          path: Roadbook-Geneve-2026-08-29-v1.1.1.apk
           retention-days: 7
           if-no-files-found: error
