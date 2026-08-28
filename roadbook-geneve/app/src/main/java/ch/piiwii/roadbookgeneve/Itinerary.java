@@ -15,7 +15,7 @@ public final class Itinerary {
     public static final ZoneId ZONE = ZoneId.of("Europe/Zurich");
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");
 
-    public static final String TOMATO_DESTINATION = "Gymnase de la Cité, Place de la Cathédrale 1, 1005 Lausanne, Suisse";
+    public static final String AROMAT_DESTINATION = "Maison St-Charles, Rue du Château 126, 1680 Romont, Suisse";
     public static final String HOME_DESTINATION = "Sion, Suisse";
 
     public static class Stop {
@@ -74,7 +74,7 @@ public final class Itinerary {
                     true, 20, true),
             new Stop(
                     "choice", "22:20", "Choix pour la suite",
-                    "Classique 22h30, Fête de la Tomate à Lausanne, retour Sion ou autre destination.",
+                    "Classique 22h30, Nuit de l'Aromat à Romont, retour Sion ou autre destination.",
                     null, null, true, 0, false)
     };
 
