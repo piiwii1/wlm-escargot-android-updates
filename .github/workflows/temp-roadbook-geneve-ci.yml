@@ -1,4 +1,4 @@
-name: Temp Roadbook Geneve CI v1.1.1
+name: Temp Roadbook Geneve unsigned release
 
 on:
   push:
@@ -26,25 +26,19 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Restore and verify stable signing key
-        run: |
-          base64 -d roadbook-geneve/signing/roadbook-release.jks.b64 > roadbook-geneve/signing/roadbook-release.jks
-          test "$(stat -c%s roadbook-geneve/signing/roadbook-release.jks)" -eq 3075
-          keytool -list -storetype JKS -keystore roadbook-geneve/signing/roadbook-release.jks -storepass 'Roadbook2026!' -alias roadbook
-      - name: Build debug APK
+      - name: Build unsigned release APK
         working-directory: roadbook-geneve
-        run: gradle --no-daemon --stacktrace assembleDebug
-      - name: Verify APK
+        run: gradle --no-daemon --stacktrace assembleRelease
+      - name: Verify unsigned APK
         run: |
-          cp roadbook-geneve/app/build/outputs/apk/debug/app-debug.apk Roadbook-Geneve-2026-08-29-v1.1.1.apk
-          test -s Roadbook-Geneve-2026-08-29-v1.1.1.apk
-          unzip -t Roadbook-Geneve-2026-08-29-v1.1.1.apk >/dev/null
-          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose Roadbook-Geneve-2026-08-29-v1.1.1.apk
-          sha256sum Roadbook-Geneve-2026-08-29-v1.1.1.apk
-      - name: Upload APK
+          cp roadbook-geneve/app/build/outputs/apk/release/app-release-unsigned.apk Roadbook-Geneve-2026-08-29-v1.1.1-unsigned.apk
+          test -s Roadbook-Geneve-2026-08-29-v1.1.1-unsigned.apk
+          unzip -t Roadbook-Geneve-2026-08-29-v1.1.1-unsigned.apk >/dev/null
+          sha256sum Roadbook-Geneve-2026-08-29-v1.1.1-unsigned.apk
+      - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: Roadbook-Geneve-2026-08-29-v1.1.1
-          path: Roadbook-Geneve-2026-08-29-v1.1.1.apk
+          name: Roadbook-Geneve-2026-08-29-v1.1.1-unsigned
+          path: Roadbook-Geneve-2026-08-29-v1.1.1-unsigned.apk
           retention-days: 7
           if-no-files-found: error
