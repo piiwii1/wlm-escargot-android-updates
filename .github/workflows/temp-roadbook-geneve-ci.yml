@@ -26,8 +26,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Restore stable signing key
-        run: base64 -d roadbook-geneve/signing/roadbook-release.jks.b64 > roadbook-geneve/signing/roadbook-release.jks
+      - name: Restore and verify stable signing key
+        run: |
+          base64 -d roadbook-geneve/signing/roadbook-release.jks.b64 > roadbook-geneve/signing/roadbook-release.jks
+          test "$(stat -c%s roadbook-geneve/signing/roadbook-release.jks)" -eq 3075
+          keytool -list -storetype JKS -keystore roadbook-geneve/signing/roadbook-release.jks -storepass 'Roadbook2026!' -alias roadbook
       - name: Build debug APK
         working-directory: roadbook-geneve
         run: gradle --no-daemon --stacktrace assembleDebug
