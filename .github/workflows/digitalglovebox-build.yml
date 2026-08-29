@@ -1,10 +1,11 @@
 name: DigitalGlovebox APK Build
 
 on:
-  push:
+  pull_request:
     branches:
       - main
     paths:
+      - 'digitalglovebox-build/**'
       - '.github/workflows/digitalglovebox-build.yml'
   workflow_dispatch:
 
