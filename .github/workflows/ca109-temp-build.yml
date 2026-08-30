@@ -17,7 +17,7 @@ jobs:
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
-      - name: Reconstruct verified 1.0.8 base and apply 1.0.9 patch
+      - name: Reconstruct verified 1.0.8 base and apply 1.0.9 code patch
         env:
           GH_TOKEN: '${{ github.token }}'
         run: |
@@ -30,11 +30,11 @@ jobs:
           unzip -tq /tmp/source.zip
           mkdir /tmp/src
           unzip -q /tmp/source.zip -d /tmp/src
-          gh api repos/${GITHUB_REPOSITORY}/git/blobs/85db6f419f4dffe69d82a35b7a903afc213d96fc --jq .content | tr -d '\n' | base64 -d > /tmp/ca109.patch
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/e5976342589fed3af27f050fc65c81615775cc91 --jq .content | tr -d '\n' | base64 -d > /tmp/ca109-code.patch
+          echo '09c5b55d9b36f1c5bdd4aad44f42e45651e822003dfe68eaeae5cb4afaa0f4c9  /tmp/ca109-code.patch' | sha256sum -c -
           P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
           cd "$P"
-          patch -p4 --batch < /tmp/ca109.patch
-          echo 'b2e130a00fa649fae51150337fdc3211252e8e8e1fe7a5fe254c22d46590b3c1  CHANGELOG.md' | sha256sum -c -
+          patch -p4 --batch < /tmp/ca109-code.patch
           echo '121c62f3ec26fa03159c30fe6bc15f925f62077fb255c18b198e21dca8fbee5e  app/build.gradle' | sha256sum -c -
           echo 'e2eb00e1af1019ecfe7b9215888197a7bdd3f059f2071c5e12cee92beb8fedce  app/src/main/java/com/compagnonautoroute/app/MainActivity.java' | sha256sum -c -
           echo '1a327e931b1d05006d7178d5259992c810ef96642fd008edd4f65b2d34f1147b  app/src/main/java/com/compagnonautoroute/app/data/OverpassClient.java' | sha256sum -c -
