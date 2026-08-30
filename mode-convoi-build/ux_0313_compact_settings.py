@@ -63,17 +63,17 @@ s, n = re.subn(r'    private void vehicleAppearanceDialog\(\)\{.*?(?=    private
 if n != 1:
     raise SystemExit(f'vehicleAppearanceDialog replacement count={n}')
 
-# Supprime le titre PLUS en haut de la page Réglages.
+# Supprime le titre PLUS en haut de la page Réglage.
 s, n = re.subn(r'        TextView title=text\("PLUS",24,true,fg\); title\.setPadding\(dp\(4\),dp\(16\),0,dp\(8\)\); content\.addView\(title\);\n\n', '', s)
 if n != 1:
     raise SystemExit(f'PLUS title removal count={n}')
 
-# Menu inférieur : Plus -> Réglages avec engrenage.
-s = s.replace('addBottomNavItem(nav,"•••","Plus","more");', 'addBottomNavItem(nav,"⚙","Réglages","more");')
-s = s.replace('addBottomNavItem(bottomNav,"•••","Plus","more");', 'addBottomNavItem(bottomNav,"⚙","Réglages","more");')
+# Menu inférieur : Plus -> Réglage avec engrenage.
+s = s.replace('addBottomNavItem(nav,"•••","Plus","more");', 'addBottomNavItem(nav,"⚙","Réglage","more");')
+s = s.replace('addBottomNavItem(bottomNav,"•••","Plus","more");', 'addBottomNavItem(bottomNav,"⚙","Réglage","more");')
 if '"•••","Plus","more"' in s or 'TextView title=text("PLUS"' in s:
     raise SystemExit('legacy Plus UI still present')
-if s.count('"⚙","Réglages","more"') != 2:
+if s.count('"⚙","Réglage","more"') != 2:
     raise SystemExit('settings nav replacement incomplete')
 
 p.write_text(s)
