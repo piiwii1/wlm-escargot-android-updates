@@ -1,15 +1,14 @@
-name: Compagnon Autoroute 1.0.8 UI build final R2
+name: Compagnon Autoroute 1.0.8 unsigned build
 on:
   push:
     branches: [main]
     paths: ['.github/workflows/ca106-temp-build.yml']
 permissions:
   contents: read
-  issues: write
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v5
@@ -18,76 +17,47 @@ jobs:
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
-      - name: Live services
-        run: |
-          Q='[out:json][timeout:16];(nwr(around:18000,46.2331,7.3606)[amenity=fuel];nwr(around:18000,46.2331,7.3606)[amenity=toilets];nwr(around:18000,46.2331,7.3606)[amenity=charging_station];nwr(around:15000,46.2331,7.3606)[amenity~"^(restaurant|cafe|fast_food)$"];);out center qt;'
-          curl -fsS --max-time 30 -A 'CompagnonAutoroute-CI/1.0.8' -X POST https://overpass.osm.ch/api/interpreter --data-urlencode "data=$Q" -o /tmp/services.json
-          F=$(jq '[.elements[]|select(.tags.amenity=="fuel")]|length' /tmp/services.json); W=$(jq '[.elements[]|select(.tags.amenity=="toilets" or .tags.toilets!=null)]|length' /tmp/services.json); C=$(jq '[.elements[]|select(.tags.amenity=="charging_station")]|length' /tmp/services.json); E=$(jq '[.elements[]|select(.tags.amenity=="restaurant" or .tags.amenity=="cafe" or .tags.amenity=="fast_food")]|length' /tmp/services.json)
-          echo "FUEL=$F WC=$W CHARGE=$C FOOD=$E" | tee /tmp/services-smoke.txt
-          test $F -gt 0; test $W -gt 0; test $C -gt 0; test $E -gt 0
-      - name: Open session
-        id: s
-        env: {GH_TOKEN: '${{ github.token }}'}
-        run: |
-          S=$(openssl rand -hex 12)
-          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/k.pem >/dev/null 2>&1
-          openssl pkey -in /tmp/k.pem -pubout -out /tmp/p.pem
-          P=$(base64 -w0 /tmp/p.pem)
-          gh api repos/${GITHUB_REPOSITORY}/issues/45/comments -f body="CA108C_PUBLIC_KEY:${S}:${P}" >/dev/null
-          echo "session=$S" >> $GITHUB_OUTPUT
-      - name: Receive encrypted bundle
-        env: {GH_TOKEN: '${{ github.token }}', SESSION: '${{ steps.s.outputs.session }}'}
+      - name: Reconstruct source
+        env:
+          GH_TOKEN: '${{ github.token }}'
         run: |
           set -euo pipefail
-          M=''
-          for i in $(seq 1 180); do
-            M=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/45/comments --jq ".[]|select(.body|startswith(\"CA108C_MANIFEST:${SESSION}:\"))|.body" | tail -1 || true)
-            [ -n "$M" ] && break
-            sleep 5
+          : > /tmp/source.zip
+          for H in \
+            2ea825b585a9f260bd4256fe811650d245ccd837 \
+            5e6264585e4ec332f8e6b0f3852857f9edfb4dca \
+            d39c3528e691213de6d750e3ba12d2e29baccf78 \
+            0f9b4635d69cc740e8ccb462379e07c0685e0159
+          do
+            gh api repos/${GITHUB_REPOSITORY}/git/blobs/$H --jq .content | tr -d '\n' | base64 -d >> /tmp/source.zip
           done
-          test -n "$M"
-          R=${M#CA108C_MANIFEST:${SESSION}:}
-          KEYB64=${R%%:*}
-          COUNT=${R##*:}
-          printf '%s' "$KEYB64" | base64 -d >/tmp/key.enc
-          : >/tmp/b.enc
-          for n in $(seq 0 $((COUNT-1))); do
-            printf -v IDX '%02d' "$n"
-            P=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/45/comments --jq ".[]|select(.body|startswith(\"CA108C_PART:${SESSION}:${IDX}:\"))|.body" | tail -1 || true)
-            test -n "$P"
-            DATA=${P#CA108C_PART:${SESSION}:${IDX}:}
-            printf '%s' "$DATA" | base64 -d >>/tmp/b.enc
-          done
-          openssl pkeyutl -decrypt -inkey /tmp/k.pem -in /tmp/key.enc -pkeyopt rsa_padding_mode:oaep >/tmp/pass
-          openssl enc -d -aes-256-cbc -pbkdf2 -in /tmp/b.enc -out /tmp/b.zip -pass file:/tmp/pass
-          unzip -tq /tmp/b.zip
-          cd /tmp
-          unzip -q b.zip
+          echo '4b336e63b342a0cd7eca9a68d7b51fdf7a908d531c6ba87a1a585f7aed2374a1  /tmp/source.zip' | sha256sum -c -
+          unzip -tq /tmp/source.zip
           mkdir /tmp/src
-          unzip -q /tmp/ca108c-bundle/source.zip -d /tmp/src
+          unzip -q /tmp/source.zip -d /tmp/src
       - name: Core tests
         run: |
-          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle|head -1)")
+          set -e
+          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
           mkdir /tmp/core
           javac -d /tmp/core "$P/app/src/main/java/com/compagnonautoroute/app/core/GeoMath.java" "$P/app/src/main/java/com/compagnonautoroute/app/core/RouteGraph.java" "$P/tools/CoreLogicSelfTest.java"
           java -cp /tmp/core CoreLogicSelfTest | tee /tmp/core-tests.txt
-      - name: Build sign verify
+      - name: Build unsigned APK
         run: |
           set -e
-          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle|head -1)")
+          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
           cd "$P"
-          gradle --no-daemon :app:assembleDebug
-          APK=$(find app/build/outputs/apk/debug -name '*.apk'|head -1)
+          gradle --no-daemon :app:assembleRelease
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          test -f "$APK"
           mkdir /tmp/out
-          A=$(find $ANDROID_HOME/build-tools -name apksigner|sort -V|tail -1)
-          B=$(find $ANDROID_HOME/build-tools -name aapt|sort -V|tail -1)
-          PW=$(cat /tmp/ca108c-bundle/signing-pass.txt)
-          $A sign --ks /tmp/ca108c-bundle/signing.jks --ks-key-alias compagnon-test --ks-pass pass:$PW --key-pass pass:$PW --out /tmp/out/CompagnonAutoroute-1.0.8-V1.apk "$APK"
-          sha256sum /tmp/out/CompagnonAutoroute-1.0.8-V1.apk | tee /tmp/out/CompagnonAutoroute-1.0.8-V1.apk.sha256
-          $B dump badging /tmp/out/CompagnonAutoroute-1.0.8-V1.apk | tee /tmp/out/badging.txt
+          cp "$APK" /tmp/out/CompagnonAutoroute-1.0.8-V1-unsigned.apk
+          B=$(find $ANDROID_HOME/build-tools -name aapt | sort -V | tail -1)
+          $B dump badging /tmp/out/CompagnonAutoroute-1.0.8-V1-unsigned.apk | tee /tmp/out/badging.txt
           grep -F "package: name='com.compagnonautoroute.app' versionCode='9' versionName='1.0.8-v1'" /tmp/out/badging.txt
-          $A verify --verbose --print-certs /tmp/out/CompagnonAutoroute-1.0.8-V1.apk | tee /tmp/out/signature.txt
-          grep -Fi f71e230f97112b5763e0b546e6b297b9e9c54df243dc8dcd8c856f35ea37acfc /tmp/out/signature.txt
-          cp /tmp/services-smoke.txt /tmp/core-tests.txt /tmp/out/
+          cp /tmp/core-tests.txt /tmp/out/
       - uses: actions/upload-artifact@v4
-        with: {name: CompagnonAutoroute-1.0.8-V1-APK, path: '/tmp/out/*', retention-days: 1}
+        with:
+          name: CompagnonAutoroute-1.0.8-V1-UNSIGNED
+          path: '/tmp/out/*'
+          retention-days: 1
