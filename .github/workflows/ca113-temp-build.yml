@@ -18,7 +18,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
 
-      - name: Reconstruct verified 1.0.12 and apply 1.0.13
+      - name: Reconstruct verified 1.0.12 code and apply 1.0.13
         env:
           GH_TOKEN: '${{ github.token }}'
         run: |
@@ -63,23 +63,23 @@ jobs:
               p.write_text(s.replace(old, new, 1))
           PY
 
-          gh api repos/${GITHUB_REPOSITORY}/git/blobs/7e59d793c50af84e8a5d6f0abc155446e8c1fd13 --jq .content | tr -d '\n' | base64 -d > /tmp/ca113.patch
-          echo '678155e043abfc4ba0d6d7c6dbba6337b733903a4567219224597dd122844f24  /tmp/ca113.patch' | sha256sum -c -
-          patch -p1 --batch < /tmp/ca113.patch
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/f9182dba3e168a51c227bcb17d0717e62beca545 --jq .content | tr -d '\n' | base64 -d > /tmp/ca113-code.patch
+          echo '9564e9c005fbc0b11bc73e3a484660460bfce72a597ebaa896bf8e9234e56e81  /tmp/ca113-code.patch' | sha256sum -c -
+          patch -p1 --batch < /tmp/ca113-code.patch
 
           echo '620e68e72902439c46572ab152ed9f90e4908b6c88c4db7beea8fea0d39b6d2c  app/build.gradle' | sha256sum -c -
           echo '04acfebf414ca9b84f3a59cc6c6a139fc2967f9d588ed62c422e839d176c5ffc  app/src/main/java/com/compagnonautoroute/app/MainActivity.java' | sha256sum -c -
           echo '00a15aad00c67fb599990b8fc20c46f08e5791b13389b89d8c794a607ffe129d  app/src/main/java/com/compagnonautoroute/app/data/OverpassClient.java' | sha256sum -c -
           echo "$P" > /tmp/project-path
 
-      - name: Download verified brand visuals
+      - name: Download real brand visuals
         run: |
           set -euo pipefail
           P=$(cat /tmp/project-path)
           D="$P/app/src/main/res/drawable-nodpi"
           mkdir -p "$D"
-          UA='Mozilla/5.0 (Android brand asset verifier)'
-          get() { echo "Downloading $1"; curl -A "$UA" -fL --retry 3 --connect-timeout 20 --max-time 90 "$2" -o "$D/$1"; test -s "$D/$1"; }
+          UA='Mozilla/5.0'
+          get() { echo "Downloading $1"; curl -A "$UA" -fL --retry 2 --connect-timeout 15 --max-time 60 "$2" -o "$D/$1"; test -s "$D/$1"; }
 
           get fuel_logo_eni.png 'https://cdn.freebiesupply.com/logos/large/2x/eni-1-logo-png-transparent.png'
           get fuel_logo_shell.jpg 'https://amecorg.com/wp-content/uploads/2023/06/Shell-Pecten-Logo-RGB.jpg'
@@ -128,21 +128,11 @@ jobs:
           "$BDIR/aapt" dump badging /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk | tee /tmp/out/badging.txt
           grep -F "package: name='com.compagnonautoroute.app' versionCode='14' versionName='1.0.13-v1'" /tmp/out/badging.txt
           unzip -l /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk | grep 'fuel_logo_' | tee /tmp/out/embedded-logos.txt
-          grep -q 'fuel_logo_eni' /tmp/out/embedded-logos.txt
-          grep -q 'fuel_logo_shell' /tmp/out/embedded-logos.txt
-          grep -q 'fuel_logo_migrol' /tmp/out/embedded-logos.txt
-          grep -q 'fuel_logo_tamoil' /tmp/out/embedded-logos.txt
-          grep -q 'fuel_logo_combustia' /tmp/out/embedded-logos.txt
+          for f in eni shell migrol tamoil combustia; do grep -q "fuel_logo_${f}" /tmp/out/embedded-logos.txt; done
           sha256sum /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk > /tmp/out/unsigned.sha256
           cp /tmp/core-tests.txt /tmp/out/
           cp /tmp/logo-files.txt /tmp/out/
-
-          rm -rf app/build .gradle build
-          mkdir -p /tmp/sourcepack
-          cp -a "$P" /tmp/sourcepack/CompagnonAutoroute-1.0.13-V1-source
-          cd /tmp/sourcepack
-          zip -qr /tmp/out/CompagnonAutoroute-1.0.13-V1-source.zip CompagnonAutoroute-1.0.13-V1-source
-          sha256sum /tmp/out/CompagnonAutoroute-1.0.13-V1-source.zip > /tmp/out/source.sha256
+          cp -a "$P/app/src/main/res/drawable-nodpi" /tmp/out/brand-assets
 
       - uses: actions/upload-artifact@v4
         with:
