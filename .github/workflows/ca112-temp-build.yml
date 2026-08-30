@@ -17,7 +17,7 @@ jobs:
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
-      - name: Reconstruct verified 1.0.11 source and apply 1.0.12 patch
+      - name: Reconstruct verified 1.0.11 code and apply 1.0.12 patch
         env:
           GH_TOKEN: '${{ github.token }}'
         run: |
@@ -48,10 +48,10 @@ jobs:
           gunzip -c /tmp/ca111.patch.gz > /tmp/ca111.patch
           patch -p1 --batch < /tmp/ca111.patch
 
-          gh api repos/${GITHUB_REPOSITORY}/git/blobs/6c3d39b538b71f92135860a1223e7911c0645a20 --jq .content | tr -d '\n' | base64 -d > /tmp/ca112.patch.gz
-          echo '33fdda871f17f6c68dde6a8e62690db95c4e0cd162960564c9475243f113b00c  /tmp/ca112.patch.gz' | sha256sum -c -
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/4cd028abd1f01b38d26a92763e9c5ee4eea72be7 --jq .content | tr -d '\n' | base64 -d > /tmp/ca112.patch.gz
+          echo '112691f0b61a728eefa02849b366b35296b724f4942faf2ae19e37348f384970  /tmp/ca112.patch.gz' | sha256sum -c -
           gunzip -c /tmp/ca112.patch.gz > /tmp/ca112.patch
-          patch -p4 --batch < /tmp/ca112.patch
+          patch -p1 --batch < /tmp/ca112.patch
 
           echo 'fa43feb07c7c8de3d2286a9d8a6027ba78bbfedf959f2fa53c0e39f5436e79c6  app/build.gradle' | sha256sum -c -
           echo 'e2751211e19a53823e31a3da42b7795afeb7965b46107746e8a1d88f2325b616  app/src/main/java/com/compagnonautoroute/app/MainActivity.java' | sha256sum -c -
