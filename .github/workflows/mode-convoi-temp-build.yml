@@ -1,5 +1,5 @@
 name: TEMP Build Mode Convoi APK
-# retry-androidx
+# retry-scanner-imports
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
         run: |
           mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
           cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
-          echo '00b75c6bd1897a65b00780d199cf2c6708c5a48b6503f346995adccb7b6303a0  mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java' | sha256sum -c -
+          echo 'ed5bb759bbf50efbb2f88248b3c2fa4b288d0cec27e29d78c79c57f8ac72121e  mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java' | sha256sum -c -
 
       - uses: actions/setup-java@v4
         with:
