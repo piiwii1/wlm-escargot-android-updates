@@ -76,23 +76,26 @@ jobs:
       - name: Compile canonical source
         run: gradle -p mode-convoi-clean/android --no-daemon assembleDebug assembleRelease
 
+      - name: Preserve release artifact before Git cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp mode-convoi-clean/android/app/build/outputs/apk/release/app-release-unsigned.apk ModeConvoi-0.3.26-UNSIGNED.apk
+          sha256sum ModeConvoi-0.3.26-UNSIGNED.apk > ModeConvoi-0.3.26-UNSIGNED.apk.sha256
+          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java > MainActivity-lines.txt
+          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java > LocationShareService-lines.txt
+
       - name: Publish validated canonical source
         shell: bash
         run: |
           set -euo pipefail
           if git log -1 --pretty=%B | grep -q '^Mode Convoi 0.3.26 continue structural cleanup$'; then
+            git reset --hard HEAD
+            rm -rf mode-convoi-clean/android/app/build mode-convoi-clean/android/.gradle
             git fetch origin mode-convoi-apk-build
             git rebase origin/mode-convoi-apk-build
             git push origin HEAD:mode-convoi-apk-build
           fi
-
-      - name: Package release artifact
-        shell: bash
-        run: |
-          cp mode-convoi-clean/android/app/build/outputs/apk/release/app-release-unsigned.apk ModeConvoi-0.3.26-UNSIGNED.apk
-          sha256sum ModeConvoi-0.3.26-UNSIGNED.apk > ModeConvoi-0.3.26-UNSIGNED.apk.sha256
-          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java > MainActivity-lines.txt
-          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java > LocationShareService-lines.txt
 
       - uses: actions/upload-artifact@v4
         with:
