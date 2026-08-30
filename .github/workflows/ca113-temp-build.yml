@@ -63,9 +63,8 @@ jobs:
               p.write_text(s.replace(old, new, 1))
           PY
 
-          gh api repos/${GITHUB_REPOSITORY}/git/blobs/c10ce89ae9db8c2e3430ce2f93a5fe0824052898 --jq .content | tr -d '\n' | base64 -d > /tmp/ca113.patch.gz
-          echo '594cb0947ca7701691d0b81c298e365f3a06901cab455f22260a74f24c5e5d18  /tmp/ca113.patch.gz' | sha256sum -c -
-          gunzip -c /tmp/ca113.patch.gz > /tmp/ca113.patch
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/7e59d793c50af84e8a5d6f0abc155446e8c1fd13 --jq .content | tr -d '\n' | base64 -d > /tmp/ca113.patch
+          echo '678155e043abfc4ba0d6d7c6dbba6337b733903a4567219224597dd122844f24  /tmp/ca113.patch' | sha256sum -c -
           patch -p1 --batch < /tmp/ca113.patch
 
           echo '620e68e72902439c46572ab152ed9f90e4908b6c88c4db7beea8fea0d39b6d2c  app/build.gradle' | sha256sum -c -
@@ -82,14 +81,12 @@ jobs:
           UA='Mozilla/5.0 (Android brand asset verifier)'
           get() { echo "Downloading $1"; curl -A "$UA" -fL --retry 3 --connect-timeout 20 --max-time 90 "$2" -o "$D/$1"; test -s "$D/$1"; }
 
-          # Required: brands explicitly reported wrong by the tester.
           get fuel_logo_eni.png 'https://cdn.freebiesupply.com/logos/large/2x/eni-1-logo-png-transparent.png'
           get fuel_logo_shell.jpg 'https://amecorg.com/wp-content/uploads/2023/06/Shell-Pecten-Logo-RGB.jpg'
           get fuel_logo_migrol.png 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Logo_Migrol.svg/1024px-Logo_Migrol.svg.png'
           get fuel_logo_tamoil.png 'https://cdn.freebiesupply.com/logos/large/2x/tamoil-logo-png-transparent.png'
           get fuel_logo_combustia.png 'https://media.jobs.ch/media/6089b4f1-172f-44fd-9aee-38b1e8ec124a?dimensions=1200x0&format=png'
 
-          # Other verified identities. If one remote source disappears, generic fuel remains preferable to a fake badge.
           get fuel_logo_coop.jpg 'https://uploads-ssl.webflow.com/617a436ffeb78984e38dc31b/61b91989cf42f08bb4b00e16_Coop_Pronto_Logo.jpg' || true
           get fuel_logo_enilive.jpg 'https://www.24-autohof.de/files/24autohof/bildmaterial/logos/Enilive_logo-1.jpeg' || true
           get fuel_logo_avia.jpg 'https://openhours.ch/photos/056/760/avia-big.jpg' || true
