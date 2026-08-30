@@ -1,0 +1,80 @@
+        GmsBarcodeScanner scanner=GmsBarcodeScanning.getClient(this,options);
+        scanner.startScan().addOnSuccessListener(barcode->{
+            String code=extractConvoyCode(barcode.getRawValue());
+            if(code==null){toast("QR Mode Convoi non reconnu");return;}
+            saveProfile(pseudo,vehicle,color,server);
+            joinConvoy(code);
+        }).addOnCanceledListener(()->toast("Scan annulé")).addOnFailureListener(e->toast("Scanner QR indisponible"));
+    }
+    private String extractConvoyCode(String raw){
+        if(raw==null)return null; String v=raw.trim();
+        try{
+            Uri u=Uri.parse(v);
+            if("modeconvoi".equalsIgnoreCase(u.getScheme())&&"join".equalsIgnoreCase(u.getHost()))v=u.getLastPathSegment();
+            else if("drivebox".equalsIgnoreCase(u.getScheme())&&"convoy".equalsIgnoreCase(u.getHost()))v=u.getLastPathSegment();
+        }catch(Exception ignored){}
+        if(v==null)return null; v=v.replaceAll("[^A-Za-z0-9]","").toUpperCase(Locale.ROOT);
+        return v.length()==6?v:null;
+    }
+
+    private void saveProfile(EditText pseudo, EditText vehicle, EditText color, EditText server) {
+        prefs.put("profileName", pseudo.getText().toString().trim()); prefs.put("profileVehicle", vehicle.getText().toString().trim()); prefs.put("profileColor", color.getText().toString().trim()); prefs.put("serverUrl", server.getText().toString().trim());
+    }
+
+    private void createConvoy(String name) {
+        runBusy("Création…",()->{
+            JSONObject participant=new JSONObject().put("name",prefs.get("profileName","Conducteur")).put("vehicle",prefs.get("profileVehicle","Véhicule")).put("vehicleColor",prefs.get("profileColor",""));
+            JSONObject body=new JSONObject().put("convoyName",name).put("participant",participant);
+            JSONObject r=ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys",body,null);
+            saveSession(r); return r;
+        }, r->{ ensurePermissionsAndService(); render(); startPolling(); });
+    }
+    private void joinConvoy(String raw) {
+        final String code=raw.replaceAll("[^A-Za-z0-9]","").toUpperCase(Locale.ROOT);
+        if(code.length()!=6){toast("Code invalide");return;}
+        runBusy("Connexion…",()->{
+            JSONObject body=new JSONObject().put("name",prefs.get("profileName","Conducteur")).put("vehicle",prefs.get("profileVehicle","Véhicule")).put("vehicleColor",prefs.get("profileColor",""));
+            JSONObject r=ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+code+"/join",body,null);
+            saveSession(r); prefs.remove("pendingJoin"); return r;
+        }, r->{ ensurePermissionsAndService(); render(); startPolling(); });
+    }
+    private void saveSession(JSONObject r) {
+        prefs.put("code",r.optString("code")); prefs.put("convoyName",r.optString("convoyName")); prefs.put("participantId",r.optString("participantId")); prefs.put("token",r.optString("token"));
+        if(r.has("adminKey")) prefs.put("adminKey",r.optString("adminKey"));
+        if(r.has("lastEventId")) prefs.putLong("lastEventId",r.optLong("lastEventId"));
+    }
+
+    private void renderConvoyHome() {
+        currentPage = "home";
+        String code=prefs.get("code","");
+        TextView name=text(prefs.get("convoyName","Convoi"),22,true,fg); content.addView(name);
+        LinearLayout codeRow=new LinearLayout(this); codeRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView codeV=text("CODE  "+code,16,true,accent); codeRow.addView(codeV,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button qr=button("QR",card,fg); qr.setOnClickListener(v->showConvoyQr()); codeRow.addView(qr,new LinearLayout.LayoutParams(dp(64),dp(44)));
+        Button share=button("PARTAGER",card,fg); share.setOnClickListener(v->shareConvoy()); LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(-2,dp(44));slp.setMargins(dp(6),0,0,0);codeRow.addView(share,slp); content.addView(codeRow);
+
+        snapshotArea=new LinearLayout(this); snapshotArea.setOrientation(LinearLayout.VERTICAL); content.addView(snapshotArea,new LinearLayout.LayoutParams(-1,-2));
+        refreshSnapshotArea();
+
+        TextView quick=text("STATUT RAPIDE",12,true,muted); quick.setPadding(0,dp(18),0,dp(6)); content.addView(quick);
+        GridLayout grid=new GridLayout(this); grid.setColumnCount(2); String[][] statuses={{"🛑  ARRÊT","stop"},{"⛽  ESSENCE","fuel"},{"🚻  WC","wc"},{"☕  PAUSE","pause"},{"⚠  PROBLÈME","problem"},{"🔧  VOITURE","car_problem"},{"📍  JE REJOINS","joining"},{"✅  TOUT VA BIEN","ok"}};
+        for(String[] s:statuses){ Button b=button(s[0],card,fg); b.setOnClickListener(v->sendStatus(s[1])); GridLayout.LayoutParams lp=new GridLayout.LayoutParams(); lp.width=0; lp.height=dp(62); lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f); lp.setMargins(dp(3),dp(3),dp(3),dp(3)); grid.addView(b,lp); }
+        content.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+        Button custom=button("✏  AUTRE MESSAGE",card,fg); custom.setOnClickListener(v->customStatusDialog()); content.addView(custom);
+        Button clear=button("ANNULER MON STATUT",bg,muted); clear.setOnClickListener(v->sendStatus("clear")); content.addView(clear);
+
+        LinearLayout nav=new LinearLayout(this); nav.setPadding(0,dp(18),0,0);
+        Button map=button("CARTE",card,fg); map.setOnClickListener(v->renderMapPage()); nav.addView(map,new LinearLayout.LayoutParams(0,dp(54),1));
+        Button members=button("PARTICIPANTS",card,fg); members.setOnClickListener(v->renderParticipantsPage()); LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(0,dp(54),1); mlp.setMargins(dp(8),0,0,0); nav.addView(members,mlp); content.addView(nav);
+        Button options=button("PARAMÈTRES DU CONVOI",bg,muted); options.setOnClickListener(v->convoyOptions()); content.addView(options);
+    }
+
+    private void refreshSnapshotArea() {
+        if (snapshotArea == null || !"home".equals(currentPage)) return;
+        snapshotArea.removeAllViews();
+        if (snapshot == null) { cardTitle(snapshotArea,"Connexion au convoi…","Récupération des participants et positions."); return; }
+        renderSnapshot(snapshotArea);
+    }
+
+    private void renderSnapshot(LinearLayout target) {
+        JSONArray ps=snapshot.optJSONArray("participants"); int total=ps==null?0:ps.length(), online=0; long t=snapshot.optLong("serverTime",System.currentTimeMillis());

@@ -1,0 +1,64 @@
+        if(ps!=null)for(int i=0;i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p!=null&&t-p.optLong("lastSeen",0)<30000)online++;}
+        cardTitle(target,total+" participants · "+online+" en ligne","Présence réseau et fraîcheur GPS sont distinguées.");
+        JSONObject me=findMe();
+        JSONObject myStatus=me==null?null:me.optJSONObject("activeStatus");
+        if(myStatus!=null){LinearLayout sb=cardBox();sb.addView(text("MON STATUT ACTIF",11,true,muted));sb.addView(text("⚑  "+myStatus.optString("label","Statut actif"),17,true,accent));sb.addView(text("Tu peux l’annuler avec le bouton sous les statuts rapides.",12,false,muted));target.addView(sb);}
+        Relative rel=computeRelative();
+        LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(positionCard("DEVANT MOI",rel.ahead),new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(0,-2,1);rlp.setMargins(dp(8),0,0,0);row.addView(positionCard("DERRIÈRE MOI",rel.behind),rlp);target.addView(row);
+        JSONObject rally=snapshot.optJSONObject("rally");
+        if(rally!=null){
+            LinearLayout box=cardBox(); box.addView(text("📍 POINT DE REGROUPEMENT",12,true,accent)); box.addView(text(rally.optString("name","Point de regroupement"),18,true,fg));
+            JSONObject ml=me==null?null:me.optJSONObject("location"); if(ml!=null){double d=GeoUtils.distanceMeters(ml.optDouble("lat"),ml.optDouble("lon"),rally.optDouble("lat"),rally.optDouble("lon"));box.addView(text("≈ "+GeoUtils.humanDistance(d),15,false,muted));}
+            Button open=button("OUVRIR DANS LE GPS",accent,Color.rgb(20,23,26)); open.setOnClickListener(v->openGps(rally)); box.addView(open); target.addView(box);
+        }
+    }
+
+    private View positionCard(String title, JSONObject p) {
+        LinearLayout b=cardBox(); b.addView(text(title,11,true,muted));
+        if(p==null){ b.addView(text("—",22,true,fg)); b.addView(text("Position indisponible",12,false,muted)); }
+        else {
+            b.addView(text(p.optString("name","—"),20,true,fg));
+            b.addView(text(p.optString("vehicle",""),13,false,muted));
+            b.addView(text(p.optString("_relative",""),14,true,accent));
+            JSONObject st=p.optJSONObject("activeStatus"); if(st!=null)b.addView(text("⚑ "+st.optString("label",""),12,true,accent));
+            JSONObject loc=p.optJSONObject("location"); long serverTime=snapshot==null?System.currentTimeMillis():snapshot.optLong("serverTime",System.currentTimeMillis());
+            long at=loc==null?0:loc.optLong("receivedAt",0); if(at>0){long age=Math.max(0,serverTime-at);b.addView(text((age>30000?"Position ancienne · ":"Position · ")+ageText(age),11,false,age>30000?danger:muted));}
+        }
+        return b;
+    }
+
+    private static class Relative { JSONObject ahead, behind; }
+    private Relative computeRelative() {
+        Relative r=new Relative(); if(snapshot==null)return r; JSONObject me=findMe(); if(me==null)return r; JSONObject ml=me.optJSONObject("location"); if(ml==null)return r;
+        long serverTime=snapshot.optLong("serverTime",System.currentTimeMillis()); long myPosAt=ml.optLong("receivedAt",0); if(myPosAt<=0||serverTime-myPosAt>120000)return r;
+        double myLat=ml.optDouble("lat"),myLon=ml.optDouble("lon"); JSONObject rally=snapshot.optJSONObject("rally"); double myRally=Double.NaN;
+        if(rally!=null)myRally=GeoUtils.distanceMeters(myLat,myLon,rally.optDouble("lat"),rally.optDouble("lon"));
+        Double heading=ml.has("bearing")&&!ml.isNull("bearing")?ml.optDouble("bearing"):null; double bestA=Double.POSITIVE_INFINITY,bestB=Double.POSITIVE_INFINITY;
+        JSONArray ps=snapshot.optJSONArray("participants"); if(ps==null)return r;
+        for(int i=0;i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p==null||p.optString("id").equals(prefs.get("participantId","")))continue;JSONObject l=p.optJSONObject("location");if(l==null)continue;
+            long posAt=l.optLong("receivedAt",0); if(posAt<=0||serverTime-posAt>120000)continue;
+            double dist=GeoUtils.distanceMeters(myLat,myLon,l.optDouble("lat"),l.optDouble("lon")); boolean ahead;
+            if(Double.isFinite(myRally)){double od=GeoUtils.distanceMeters(l.optDouble("lat"),l.optDouble("lon"),rally.optDouble("lat"),rally.optDouble("lon")); ahead=od<myRally;}
+            else if(heading!=null){double br=GeoUtils.bearing(myLat,myLon,l.optDouble("lat"),l.optDouble("lon"));ahead=GeoUtils.signedProjection(dist,br,heading)>0;}
+            else continue;
+            try{p.put("_relative","≈ "+GeoUtils.humanDistance(dist)+(ahead?" devant":" derrière"));}catch(Exception ignored){}
+            if(ahead&&dist<bestA){bestA=dist;r.ahead=p;} if(!ahead&&dist<bestB){bestB=dist;r.behind=p;}
+        } return r;
+    }
+    private JSONObject findMe(){JSONArray ps=snapshot==null?null:snapshot.optJSONArray("participants");if(ps==null)return null;String id=prefs.get("participantId","");for(int i=0;i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p!=null&&id.equals(p.optString("id")))return p;}return null;}
+
+    private void renderMapPage() {
+        currentPage = "map";
+        content.removeAllViews();
+        LinearLayout top=new LinearLayout(this); Button back=button("‹ CONVOI",bg,fg); back.setOnClickListener(v->{render();startPolling();}); top.addView(back); top.addView(text("CARTE DU CONVOI",20,true,fg)); content.addView(top);
+        mapView=new WebView(this); mapView.getSettings().setJavaScriptEnabled(true); mapView.getSettings().setDomStorageEnabled(true); mapView.setBackgroundColor(bg); mapView.loadUrl("file:///android_asset/convoy_map.html");
+        mapView.setWebViewClient(new android.webkit.WebViewClient(){@Override public void onPageFinished(WebView v,String url){pushMap();}});
+        content.addView(mapView,new LinearLayout.LayoutParams(-1,dp(560))); pushMap();
+    }
+    private void pushMap(){ if(mapView==null||snapshot==null)return; String raw=JSONObject.quote(snapshot.toString()); String id=JSONObject.quote(prefs.get("participantId","")); mapView.evaluateJavascript("window.updateConvoy("+raw+","+id+")",null); }
+
+    private void renderParticipantsPage(){
+        currentPage = "participants";
+        mapView = null;

@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>html,body,#map{height:100%;margin:0;background:#101419}.leaflet-control-attribution{font-size:9px}.car{font-size:24px;text-shadow:0 1px 4px #000}.lbl{font:600 12px sans-serif;background:#111d;color:#fff;padding:2px 5px;border-radius:5px;white-space:nowrap}</style></head>
+<body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+const map=L.map('map',{zoomControl:true}).setView([46.23,7.36],10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+let layer=L.layerGroup().addTo(map), fitted=false;
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+window.updateConvoy=function(raw,myId){
+  try{const s=typeof raw==='string'?JSON.parse(raw):raw;layer.clearLayers();const pts=[];
+    (s.participants||[]).forEach((p,i)=>{if(!p.location)return;const age=(s.serverTime||Date.now())-(p.location.receivedAt||0);const stale=age>30000;
+      const icon=L.divIcon({className:'',html:`<div class="car" style="opacity:${stale?.45:1}">🚗</div><div class="lbl">${esc(p.name)}${p.id===myId?' · MOI':''}</div>`,iconSize:[90,44],iconAnchor:[18,18]});
+      L.marker([p.location.lat,p.location.lon],{icon}).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.vehicle)}<br>${stale?'Position ancienne':'En ligne'}`).addTo(layer);pts.push([p.location.lat,p.location.lon]);
+    });
+    if(s.rally){L.marker([s.rally.lat,s.rally.lon]).bindPopup(`<b>📍 ${esc(s.rally.name)}</b>`).addTo(layer);pts.push([s.rally.lat,s.rally.lon]);}
+    if(pts.length&&!fitted){map.fitBounds(pts,{padding:[40,40],maxZoom:15});fitted=true;}
+  }catch(e){console.log(e)}
+}
+</script></body></html>

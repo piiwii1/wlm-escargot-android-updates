@@ -1,0 +1,62 @@
+        content.removeAllViews(); Button back=button("‹ CONVOI",bg,fg); back.setOnClickListener(v->{render();startPolling();}); content.addView(back); content.addView(text("PARTICIPANTS",24,true,fg));
+        if(snapshot==null){content.addView(text("Aucune donnée",14,false,muted));return;} JSONArray ps=snapshot.optJSONArray("participants"); long st=snapshot.optLong("serverTime",System.currentTimeMillis());
+        for(int i=0;ps!=null&&i<ps.length();i++){
+            JSONObject p=ps.optJSONObject(i); if(p==null)continue; LinearLayout box=cardBox(); long presenceAge=Math.max(0,st-p.optLong("lastSeen",0)); boolean online=presenceAge<30000;
+            box.addView(text((online?"●  ":"○  ")+p.optString("name"),18,true,online?Color.rgb(85,190,115):muted));
+            box.addView(text(p.optString("vehicle")+(p.optString("vehicleColor").isEmpty()?"":" · "+p.optString("vehicleColor")),14,false,muted));
+            JSONObject active=p.optJSONObject("activeStatus"); if(active!=null)box.addView(text("⚑ "+active.optString("label"),14,true,accent));
+            JSONObject loc=p.optJSONObject("location");
+            if(loc!=null&&loc.optLong("receivedAt",0)>0){long posAge=Math.max(0,st-loc.optLong("receivedAt"));box.addView(text((posAge>30000?"Position ancienne · ":"Position · ")+ageText(posAge),12,false,posAge>30000?danger:muted));}
+            else box.addView(text("Position non disponible",12,false,muted));
+            if(!online)box.addView(text("Hors ligne · dernière présence "+ageText(presenceAge),12,false,muted));
+            content.addView(box);
+        }
+    }
+
+    private void convoyOptions(){
+        boolean admin=!prefs.get("adminKey","").isEmpty();
+        String[] items=admin
+                ? new String[]{"Renommer le convoi","Définir le point de regroupement","Gérer les participants","Définir l’apparence","Fermer le convoi"}
+                : new String[]{"Définir l’apparence","Quitter le convoi"};
+        new AlertDialog.Builder(this).setTitle("Mode Convoi").setItems(items,(d,w)->{
+            String s=items[w];
+            if(s.startsWith("Renommer"))renameConvoyDialog();
+            else if(s.startsWith("Définir le point"))rallyDialog();
+            else if(s.startsWith("Gérer"))manageParticipantsDialog();
+            else if(s.contains("apparence"))themeDialog();
+            else if(s.startsWith("Fermer"))confirmClose();
+            else leaveConvoy();
+        }).show();
+    }
+    private void renameConvoyDialog(){
+        EditText name=input("Nom du convoi",prefs.get("convoyName","Convoi"));
+        new AlertDialog.Builder(this).setTitle("Renommer le convoi").setView(name).setNegativeButton("Annuler",null)
+                .setPositiveButton("Enregistrer",(d,w)->renameConvoy(name.getText().toString())).show();
+    }
+    private void renameConvoy(String raw){
+        String name=raw==null?"":raw.trim(); if(name.length()<2){toast("Nom trop court");return;}
+        try{JSONObject b=authBody().put("name",name);runBusy("Mise à jour…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/name",b,prefs.get("adminKey","")),r->{prefs.put("convoyName",r.optString("convoyName",name));render();});}catch(Exception e){toast(e.getMessage());}
+    }
+    private void manageParticipantsDialog(){
+        JSONArray ps=snapshot==null?null:snapshot.optJSONArray("participants"); if(ps==null){toast("Participants indisponibles");return;}
+        ArrayList<JSONObject> targets=new ArrayList<>(); ArrayList<String> labels=new ArrayList<>(); String me=prefs.get("participantId","");
+        for(int i=0;i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p==null||me.equals(p.optString("id")))continue;targets.add(p);labels.add(p.optString("name","Participant")+" · "+p.optString("vehicle","Véhicule"));}
+        if(targets.isEmpty()){toast("Aucun autre participant");return;}
+        new AlertDialog.Builder(this).setTitle("Retirer un participant").setItems(labels.toArray(new String[0]),(d,w)->confirmRemoveParticipant(targets.get(w))).show();
+    }
+    private void confirmRemoveParticipant(JSONObject target){
+        String name=target.optString("name","ce participant");
+        new AlertDialog.Builder(this).setTitle("Retirer "+name+" ?").setMessage("Sa session sera invalidée et son partage de position s’arrêtera à la prochaine synchronisation.")
+                .setNegativeButton("Annuler",null).setPositiveButton("Retirer",(d,w)->removeParticipant(target.optString("id"))).show();
+    }
+    private void removeParticipant(String targetId){
+        try{JSONObject b=authBody().put("targetParticipantId",targetId);runBusy("Suppression…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/remove",b,prefs.get("adminKey","")),r->pollOnce());}catch(Exception e){toast(e.getMessage());}
+    }
+    private void rallyDialog(){
+        LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),0,dp(20),0);EditText n=input("Nom","Point de regroupement");EditText lat=input("Latitude","");EditText lon=input("Longitude","");l.addView(n);l.addView(lat);l.addView(lon);
+        JSONObject me=findMe();JSONObject loc=me==null?null:me.optJSONObject("location");if(loc!=null){lat.setText(String.valueOf(loc.optDouble("lat")));lon.setText(String.valueOf(loc.optDouble("lon")));}
+        new AlertDialog.Builder(this).setTitle("Point de regroupement").setView(l).setPositiveButton("Partager",(d,w)->setRally(n.getText().toString(),lat.getText().toString(),lon.getText().toString())).setNegativeButton("Annuler",null).show();
+    }
+    private void setRally(String name,String latS,String lonS){try{double lat=Double.parseDouble(latS.replace(',','.')),lon=Double.parseDouble(lonS.replace(',','.')); JSONObject b=authBody().put("name",name).put("lat",lat).put("lon",lon);runBusy("Partage…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/rally",b,prefs.get("adminKey","")),r->pollOnce());}catch(Exception e){toast("Coordonnées invalides");}}
+    private void openGps(JSONObject r){try{double lat=r.optDouble("lat"),lon=r.optDouble("lon");String q=Uri.encode(r.optString("name","Point de regroupement"));Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse("geo:"+lat+","+lon+"?q="+lat+","+lon+"("+q+")"));startActivity(Intent.createChooser(i,"Ouvrir dans le GPS"));}catch(Exception e){toast("Aucune application GPS disponible");}}
+    private void showConvoyQr(){

@@ -1,0 +1,111 @@
+package ch.piiwii.modeconvoi;
+
+import android.Manifest;
+import android.app.*;
+import android.content.*;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.os.*;
+import android.provider.Settings;
+import android.view.*;
+import android.webkit.WebView;
+import android.widget.*;
+import org.json.*;
+import java.util.*;
+import java.net.URLEncoder;
+import java.util.concurrent.*;
+import com.google.android.gms.codescanner.GmsBarcodeScanner;
+import com.google.android.gms.codescanner.GmsBarcodeScannerOptions;
+import com.google.android.gms.codescanner.GmsBarcodeScanning;
+import com.google.mlkit.vision.barcode.common.Barcode;
+
+public class MainActivity extends Activity {
+    private AppPrefs prefs;
+    private final ExecutorService io = Executors.newCachedThreadPool();
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private LinearLayout root, content;
+    private TextView connectionBadge;
+    private JSONObject snapshot;
+    private WebView mapView;
+    private LinearLayout snapshotArea;
+    private String currentPage = "welcome";
+    private boolean polling;
+    private int bg, card, fg, muted, accent, danger;
+    private static final int REQ_LOCATION = 1001, REQ_NOTIF = 1002;
+    private static final String EVENTS_CHANNEL = "convoy_events";
+
+    @Override public void onCreate(Bundle b) {
+        super.onCreate(b);
+        prefs = new AppPrefs(this);
+        applyPalette();
+        createEventChannel();
+        handleDeepLink(getIntent());
+        render();
+    }
+    @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleDeepLink(intent); render(); }
+    @Override protected void onResume() { super.onResume(); if (prefs.hasActiveConvoy()) startPolling(); }
+    @Override protected void onPause() { super.onPause(); polling=false; }
+    @Override protected void onDestroy() { io.shutdownNow(); super.onDestroy(); }
+
+    private void handleDeepLink(Intent i) {
+        Uri d=i==null?null:i.getData();
+        if(d!=null && "modeconvoi".equals(d.getScheme()) && "join".equals(d.getHost())) {
+            String code=d.getLastPathSegment(); if(code!=null) prefs.put("pendingJoin", code.toUpperCase(Locale.ROOT));
+        }
+    }
+
+    private void applyPalette() {
+        String mode = prefs == null ? "auto" : prefs.get("theme", "auto");
+        boolean dark = mode.equals("dark") || (mode.equals("auto") && (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)==Configuration.UI_MODE_NIGHT_YES);
+        if (dark) { bg=Color.rgb(15,19,24); card=Color.rgb(24,30,37); fg=Color.rgb(244,246,248); muted=Color.rgb(160,171,182); }
+        else { bg=Color.rgb(242,244,247); card=Color.WHITE; fg=Color.rgb(20,25,30); muted=Color.rgb(88,98,108); }
+        accent=Color.rgb(245,179,59); danger=Color.rgb(208,67,67);
+        getWindow().setStatusBarColor(bg); getWindow().setNavigationBarColor(bg);
+        getWindow().getDecorView().setSystemUiVisibility(dark?0:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+    }
+
+    private void render() {
+        mapView = null;
+        applyPalette();
+        ScrollView scroll=new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(bg);
+        root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(16),dp(14),dp(16),dp(30));
+        scroll.addView(root,new ScrollView.LayoutParams(-1,-2)); setContentView(scroll);
+        header();
+        content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); root.addView(content,new LinearLayout.LayoutParams(-1,-2));
+        if(prefs.hasActiveConvoy()) renderConvoyHome(); else renderWelcome();
+    }
+
+    private void header() {
+        LinearLayout h=new LinearLayout(this); h.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title=text("MODE CONVOI",24,true,fg); h.addView(title,new LinearLayout.LayoutParams(0,dp(50),1));
+        connectionBadge=text(prefs.hasActiveConvoy()?"● ACTIF":"○ INACTIF",12,true,prefs.hasActiveConvoy()?Color.rgb(90,200,120):muted);
+        h.addView(connectionBadge); root.addView(h);
+        TextView sub=text("Un coup d’œil. Un appui. L’information est transmise.",13,false,muted); sub.setPadding(0,0,0,dp(14)); root.addView(sub);
+    }
+
+    private void renderWelcome() {
+        currentPage = "welcome";
+        cardTitle(content,"Coordonner plusieurs voitures","Crée un convoi ou rejoins-en un avec un code. Mode Convoi ne remplace ni WhatsApp ni ton GPS.");
+        EditText pseudo=input("Prénom ou pseudo", prefs.get("profileName","PiiWii"));
+        EditText vehicle=input("Véhicule", prefs.get("profileVehicle","VW Polo GTI"));
+        EditText color=input("Couleur", prefs.get("profileColor","Grise"));
+        EditText server=input("Serveur", prefs.get("serverUrl","http://192.168.1.25:8787"));
+        content.addView(pseudo); content.addView(vehicle); content.addView(color); content.addView(server);
+
+        EditText convoyName=input("Nom du convoi", "VW Suisse – Sortie"); content.addView(convoyName);
+        Button create=button("CRÉER UN CONVOI",accent,Color.rgb(20,23,26)); create.setOnClickListener(v->{ saveProfile(pseudo,vehicle,color,server); createConvoy(convoyName.getText().toString()); }); content.addView(create);
+
+        spacer(12);
+        TextView or=text("REJOINDRE",12,true,muted); or.setPadding(0,dp(6),0,dp(4)); content.addView(or);
+        String pending=prefs.get("pendingJoin","");
+        EditText code=input("Code du convoi", pending); code.setAllCaps(true); content.addView(code);
+        Button scan=button("▣  SCANNER UN QR",card,fg); scan.setOnClickListener(v->scanJoinQr(pseudo,vehicle,color,server)); content.addView(scan);
+        Button join=button("REJOINDRE LE CONVOI",card,fg); join.setOnClickListener(v->{ saveProfile(pseudo,vehicle,color,server); joinConvoy(code.getText().toString()); }); content.addView(join);
+        Button settings=button("APPARENCE : "+prefs.get("theme","auto").toUpperCase(Locale.ROOT),bg,muted); settings.setOnClickListener(v->themeDialog()); content.addView(settings);
+    }
+
+    private void scanJoinQr(EditText pseudo,EditText vehicle,EditText color,EditText server){
+        GmsBarcodeScannerOptions options=new GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).enableAutoZoom().build();

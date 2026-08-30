@@ -1,0 +1,63 @@
+name: Build Mode Convoi APK
+
+on:
+  push:
+    branches:
+      - mode-convoi-apk-build
+    paths:
+      - 'mode-convoi-build/**'
+      - '.github/workflows/mode-convoi-apk-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact MainActivity
+        shell: bash
+        run: |
+          mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
+          cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          echo '00b75c6bd1897a65b00780d199cf2c6708c5a48b6503f346995adccb7b6303a0  mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java' | sha256sum -c -
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        shell: bash
+        run: gradle -p mode-convoi-build/android --no-daemon assembleDebug
+
+      - name: Verify and package APK
+        shell: bash
+        run: |
+          APK='mode-convoi-build/android/app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$APK"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          cp "$APK" ModeConvoi-0.2.0.apk
+          sha256sum ModeConvoi-0.2.0.apk > ModeConvoi-0.2.0.apk.sha256
+          ls -lh ModeConvoi-0.2.0.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ModeConvoi-0.2.0-apk
+          if-no-files-found: error
+          path: |
+            ModeConvoi-0.2.0.apk
+            ModeConvoi-0.2.0.apk.sha256
