@@ -57,6 +57,20 @@ jobs:
           BODY=""
           for i in $(seq 1 120); do
             BODY=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_PAYLOAD_V1:${SESSION}:\")) | .body" | tail -n 1 || true)
+            if [ -z "$BODY" ]; then
+              DONE=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_CHUNK_DONE_V1:${SESSION}:\")) | .body" | tail -n 1 || true)
+              if [ -n "$DONE" ]; then
+                COUNT=${DONE##*:}
+                JOINED=""
+                for N in $(seq 1 "$COUNT"); do
+                  CHUNK=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_CHUNK_V1:${SESSION}:${N}:\")) | .body" | tail -n 1 || true)
+                  test -n "$CHUNK"
+                  PREFIX="MC_CHUNK_V1:${SESSION}:${N}:"
+                  JOINED="${JOINED}${CHUNK#${PREFIX}}"
+                done
+                BODY="MC_PAYLOAD_V1:${SESSION}:${JOINED}"
+              fi
+            fi
             [ -n "$BODY" ] && break
             sleep 5
           done
