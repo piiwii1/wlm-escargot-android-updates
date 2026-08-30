@@ -75,11 +75,7 @@ public class LocationShareService extends Service implements LocationListener {
 
     @Override public void onLocationChanged(Location loc) {
         long t = System.currentTimeMillis();
-        prefs.put(PREF_GPS_LAT, String.valueOf(loc.getLatitude()));
-        prefs.put(PREF_GPS_LON, String.valueOf(loc.getLongitude()));
-        prefs.put(PREF_GPS_ACC, String.valueOf(loc.hasAccuracy()?loc.getAccuracy():-1));
-        prefs.putLong(PREF_GPS_FIX_AT, t);
-        prefs.remove(PREF_GPS_ERROR);
+        prefs.putLocationFix(loc.getLatitude(), loc.getLongitude(), loc.hasAccuracy()?loc.getAccuracy():-1, t);
         float speed = loc.hasSpeed() ? loc.getSpeed() : 0f;
         long interval = speed > 1.5f ? 5000 : 18000;
         if (lastLocation != null && loc.hasAccuracy() && lastLocation.hasAccuracy() && loc.getAccuracy() > 80 && lastLocation.getAccuracy() < loc.getAccuracy()) return;

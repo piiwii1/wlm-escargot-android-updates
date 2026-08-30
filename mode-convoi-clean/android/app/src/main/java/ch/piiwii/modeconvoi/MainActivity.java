@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        ensureParticipantDefaults();
+        ParticipantDefaults.ensure(prefs);
         String savedServer=prefs.get("serverUrl","");
         boolean oldLocalServer=savedServer.startsWith("http://192.168.") || savedServer.startsWith("http://10.") || savedServer.startsWith("http://172.");
         // Hors session active, tous les nouveaux convois utilisent le serveur officiel.
@@ -102,26 +102,6 @@ public class MainActivity extends Activity {
     @Override protected void onPause() { super.onPause(); stopPolling(); }
     @Override protected void onDestroy() { if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
 
-    private void ensureParticipantDefaults(){
-    if(!prefs.getBool("participantDefaultsV0312",false) && !prefs.hasActiveConvoy()){
-        String oldName=prefs.get("profileName","").trim();
-        if(oldName.isEmpty() || "PiiWii".equalsIgnoreCase(oldName) || "Conducteur".equalsIgnoreCase(oldName) || oldName.matches("(?i)user\\s*\\d+"))
-            prefs.put("profileName",funnyNickname());
-        String oldVehicle=prefs.get("profileVehicle","").trim();
-        if("VW Polo GTI".equalsIgnoreCase(oldVehicle) || "Véhicule".equalsIgnoreCase(oldVehicle)) prefs.put("profileVehicle","");
-        String[] markerColors={"#EF4444","#3B82F6","#22C55E","#A855F7","#F97316","#14B8A6","#EC4899","#EAB308","#64748B","#06B6D4"};
-        String current=prefs.get("profileVehicleMarkerColor","");
-        if(current.isEmpty() || "#FFB514".equalsIgnoreCase(current)){
-            int idx=Math.floorMod(java.util.UUID.randomUUID().getLeastSignificantBits(),markerColors.length);
-            prefs.put("profileVehicleMarkerColor",markerColors[idx]);
-        }
-        prefs.putBool("participantDefaultsV0312",true);
-    }
-}
-private String funnyNickname(){
-    String[] names={"TurboMarmotte","PapyNitro","TartifletteRacing","ChamoisPressé","BiscotteTurbo","KlaxonSauvage","PatateGTI","CroissantRacing","PneuMou","GPSPerdu","VirageMystère","CaféTurbo","CornichonSport","BaguetteExpress","MoustacheRacing","PistonRigolo","RacletteFurieuse","MarmotteGTI","CactusTurbo","FromagePressé","CapitaineKlaxon","BiberonRacing","ChaussetteTurbo","EscargotNitro","PandaPressé","FriteSport","BananeRacing","PouletTurbo","PneuCarré","ChamoisNitro","RacletteExpress","BiscotteGTI"};
-    return names[new java.util.Random().nextInt(names.length)];
-}
     private boolean saveProfileChecked(EditText pseudo,EditText vehicle,EditText color,EditText server){
         String name=pseudo.getText().toString().trim();
         if(name.isEmpty()){
@@ -854,7 +834,7 @@ private String funnyNickname(){
     private View participantAvatar(JSONObject p,int size,int fallbackColor){
         String image=p==null?prefs.get("profileVehicleImage",""):p.optString("vehicleImage","");
         if(image!=null&&!image.isEmpty()){
-            try{byte[] raw=Base64.decode(image,Base64.DEFAULT);Bitmap b=BitmapFactory.decodeByteArray(raw,0,raw.length);if(b!=null){ImageView iv=new ImageView(this);iv.setScaleType(ImageView.ScaleType.CENTER_CROP);iv.setImageBitmap(b);iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));iv.setClipToOutline(true);return iv;}}catch(Exception ignored){}
+            try{Bitmap b=VehicleImageCache.decode(image);if(b!=null){ImageView iv=new ImageView(this);iv.setScaleType(ImageView.ScaleType.CENTER_CROP);iv.setImageBitmap(b);iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));iv.setClipToOutline(true);return iv;}}catch(Exception ignored){}
         }
         String icon=p==null?prefs.get("profileVehicleIcon","🚗"):p.optString("vehicleIcon","🚗");if(icon.isEmpty())icon="🚗";
         TextView v=text(icon,size>=46?24:19,false,participantMarkerColor(p,fallbackColor));v.setGravity(Gravity.CENTER);v.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));return v;
