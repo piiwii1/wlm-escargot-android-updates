@@ -13,23 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct V1.3 and apply V1.4 patch
+      - name: Reconstruct verified V1.4 source
         shell: bash
         run: |
           set -euo pipefail
-          cat convoyride-v12/source-part-* | base64 -d > /tmp/convoyride-v12.zip
-          rm -rf cr12base
-          mkdir -p cr12base
-          unzip -q /tmp/convoyride-v12.zip -d cr12base
-          cat convoyride-v13/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v13.patch
-          patch -p0 < /tmp/convoyride-v13.patch
-          cat convoyride-v14/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v14.patch
-          patch -p0 < /tmp/convoyride-v14.patch
-          test -s cr12base/app/src/main/java/ch/piiwii/convoyride/RouteModel.java
-          test -s cr12base/app/src/main/java/ch/piiwii/convoyride/ApiClient.java
-          test -s cr12base/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
-          grep -q "versionName '1.4.0'" cr12base/app/build.gradle
-          grep -q "versionCode 5" cr12base/app/build.gradle
+          cat convoyride-v14-source/source-part-* | base64 -d > /tmp/ConvoyRide-V1.4.0-source.zip
+          echo '79591f9f301d36065158ebd7a2870a3dcd28ba54196392e28050e7de0f221699  /tmp/ConvoyRide-V1.4.0-source.zip' | sha256sum -c -
+          rm -rf cr14
+          mkdir -p cr14
+          unzip -q /tmp/ConvoyRide-V1.4.0-source.zip -d cr14
+          test -s cr14/app/src/main/java/ch/piiwii/convoyride/RouteModel.java
+          test -s cr14/app/src/main/java/ch/piiwii/convoyride/ApiClient.java
+          test -s cr14/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q "versionName '1.4.0'" cr14/app/build.gradle
+          grep -q "versionCode 5" cr14/app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -46,14 +43,14 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Build release
-        run: gradle -p cr12base --no-daemon assembleRelease
+        run: gradle -p cr14 --no-daemon assembleRelease
 
       - name: Align and inspect
         shell: bash
         run: |
           set -euo pipefail
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
-            cr12base/app/build/outputs/apk/release/app-release-unsigned.apk \
+            cr14/app/build/outputs/apk/release/app-release-unsigned.apk \
             ConvoyRide-V1.4.0-aligned-unsigned.apk
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ConvoyRide-V1.4.0-aligned-unsigned.apk
           sha256sum ConvoyRide-V1.4.0-aligned-unsigned.apk > ConvoyRide-V1.4.0-aligned-unsigned.apk.sha256
