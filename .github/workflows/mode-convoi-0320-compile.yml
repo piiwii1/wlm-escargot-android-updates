@@ -5,7 +5,8 @@ on:
     branches: [mode-convoi-apk-build]
     paths:
       - '.github/workflows/mode-convoi-0320-compile.yml'
-      - 'mode-convoi-build/ux0320_patch.gz.b64'
+      - 'mode-convoi-build/ux0320_part1.b64'
+      - 'mode-convoi-build/ux0320_part2.b64'
   workflow_dispatch:
 
 jobs:
@@ -78,7 +79,7 @@ jobs:
           python mode-convoi-build/ux_0318_stability_talkie.py
           base64 -d mode-convoi-build/ux0319_patch.gz.b64 | gunzip > /tmp/ux0319.patch
           patch -p0 < /tmp/ux0319.patch
-          base64 -d mode-convoi-build/ux0320_patch.gz.b64 | gunzip > /tmp/ux0320.patch
+          cat mode-convoi-build/ux0320_part1.b64 mode-convoi-build/ux0320_part2.b64 | base64 -d | gunzip > /tmp/ux0320.patch
           patch -p0 < /tmp/ux0320.patch
           grep -q "versionCode 23" mode-convoi-build/android/app/build.gradle
           grep -q "versionName '0.3.20'" mode-convoi-build/android/app/build.gradle
