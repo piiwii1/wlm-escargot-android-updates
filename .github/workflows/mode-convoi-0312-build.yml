@@ -43,7 +43,7 @@ jobs:
           import re
           p=Path('mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java')
           s=p.read_text()
-          repl='''    private void ensureParticipantDefaults(){
+          repl=r'''    private void ensureParticipantDefaults(){
               if(!prefs.getBool("participantDefaultsV0312",false) && !prefs.hasActiveConvoy()){
                   String oldName=prefs.get("profileName","").trim();
                   if(oldName.isEmpty() || "PiiWii".equalsIgnoreCase(oldName) || "Conducteur".equalsIgnoreCase(oldName) || oldName.matches("(?i)user\\s*\\d+"))
