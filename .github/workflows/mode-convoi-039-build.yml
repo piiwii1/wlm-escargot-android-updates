@@ -31,6 +31,7 @@ jobs:
           python mode-convoi-build/ux_036_fix.py
           python mode-convoi-build/ux_037_map_patch.py
           python mode-convoi-build/ux_038_gps_patch.py
+          python mode-convoi-build/ux_039_prepare.py
           python mode-convoi-build/ux_039_patch.py
           python mode-convoi-build/ux_039_map_patch.py
           sed -i "s/versionCode 2/versionCode 12/" mode-convoi-build/android/app/build.gradle
