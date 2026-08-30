@@ -1,0 +1,65 @@
+name: Build ConvoyRide V1.3.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/convoyride-v13-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct V1.2 and apply V1.3 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat convoyride-v12/source-part-* | base64 -d > /tmp/convoyride-v12.zip
+          rm -rf cr12base
+          mkdir -p cr12base
+          unzip -q /tmp/convoyride-v12.zip -d cr12base
+          cat convoyride-v13/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v13.patch
+          patch -p0 < /tmp/convoyride-v13.patch
+          test -s cr12base/app/src/main/java/ch/piiwii/convoyride/ApiClient.java
+          test -s cr12base/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q "versionName '1.3.0'" cr12base/app/build.gradle
+          grep -q "versionCode 4" cr12base/app/build.gradle
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build release
+        run: gradle -p cr12base --no-daemon assembleRelease
+
+      - name: Align and inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
+            cr12base/app/build/outputs/apk/release/app-release-unsigned.apk \
+            ConvoyRide-V1.3.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ConvoyRide-V1.3.0-aligned-unsigned.apk
+          sha256sum ConvoyRide-V1.3.0-aligned-unsigned.apk > ConvoyRide-V1.3.0-aligned-unsigned.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ConvoyRide-V1.3.0-unsigned
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ConvoyRide-V1.3.0-aligned-unsigned.apk
+            ConvoyRide-V1.3.0-aligned-unsigned.apk.sha256
