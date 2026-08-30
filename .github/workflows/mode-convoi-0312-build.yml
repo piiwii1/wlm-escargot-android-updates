@@ -65,7 +65,7 @@ jobs:
           }
           '''
           pat=r'    private void ensureParticipantDefaults\(\)\{.*?(?=    private boolean saveProfileChecked)'
-          s,n=re.subn(pat,repl,s,flags=re.S)
+          s,n=re.subn(pat,lambda m: repl,s,flags=re.S)
           if n!=1: raise SystemExit(f'profile default replacement count={n}')
           p.write_text(s)
           PY
