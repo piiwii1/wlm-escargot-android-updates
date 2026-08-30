@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -35,22 +35,32 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Live Overpass critical-services smoke test
+      - name: Live Swiss Overpass WC and fuel smoke test
         shell: bash
         run: |
           set -euo pipefail
-          Q='[out:json][timeout:15];(nwr(around:20000,46.5197,6.6323)[amenity~"^(fuel|charging_station|toilets)$"];nwr(around:20000,46.5197,6.6323)[highway~"^(services|rest_area)$"];);out center qt;'
+          LAT='46.5197'
+          LON='6.6323'
+          Q_FUEL='[out:json][timeout:10];(nwr(around:12000,'"$LAT"','"$LON"')[amenity=fuel];nwr(around:12000,'"$LAT"','"$LON"')[highway=services];);out center qt;'
+          Q_WC='[out:json][timeout:10];(nwr(around:12000,'"$LAT"','"$LON"')[amenity=toilets];nwr(around:12000,'"$LAT"','"$LON"')[highway~"^(services|rest_area)$"][toilets];);out center qt;'
           : > /tmp/overpass-smoke.txt
           OK=0
-          for ENDPOINT in 'https://overpass-api.de/api/interpreter' 'https://overpass.private.coffee/api/interpreter'; do
+          for ENDPOINT in \
+            'https://overpass.osm.ch/api/interpreter' \
+            'https://overpass.private.coffee/api/interpreter' \
+            'https://maps.mail.ru/osm/tools/overpass/api/interpreter' \
+            'https://overpass-api.de/api/interpreter'; do
             echo "ENDPOINT=$ENDPOINT" | tee -a /tmp/overpass-smoke.txt
-            if curl --fail --silent --show-error --max-time 35 -A 'CompagnonAutoroute-CI/1.0.3' -X POST "$ENDPOINT" --data-urlencode "data=$Q" -o /tmp/osm.json; then
-              COUNT=$(jq '.elements | length' /tmp/osm.json)
-              FUEL=$(jq '[.elements[] | select((.tags.amenity // "") == "fuel" or (.tags.highway // "") == "services")] | length' /tmp/osm.json)
-              WC=$(jq '[.elements[] | select((.tags.amenity // "") == "toilets" or ((.tags.toilets // "") != "" and (.tags.toilets // "") != "no"))] | length' /tmp/osm.json)
-              echo "ELEMENTS=$COUNT FUEL_LIKE=$FUEL WC_LIKE=$WC" | tee -a /tmp/overpass-smoke.txt
-              if [ "$COUNT" -gt 0 ] && [ "$FUEL" -gt 0 ]; then OK=1; break; fi
+            FUEL=0
+            WC=0
+            if curl --fail --silent --show-error --max-time 22 -A 'CompagnonAutoroute-CI/1.0.3' -X POST "$ENDPOINT" --data-urlencode "data=$Q_FUEL" -o /tmp/fuel.json; then
+              FUEL=$(jq '.elements | length' /tmp/fuel.json 2>/dev/null || echo 0)
             fi
+            if curl --fail --silent --show-error --max-time 22 -A 'CompagnonAutoroute-CI/1.0.3' -X POST "$ENDPOINT" --data-urlencode "data=$Q_WC" -o /tmp/wc.json; then
+              WC=$(jq '.elements | length' /tmp/wc.json 2>/dev/null || echo 0)
+            fi
+            echo "FUEL_LIKE=$FUEL WC_LIKE=$WC" | tee -a /tmp/overpass-smoke.txt
+            if [ "$FUEL" -gt 0 ] && [ "$WC" -gt 0 ]; then OK=1; break; fi
           done
           test "$OK" = 1
 
