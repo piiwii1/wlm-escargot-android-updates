@@ -35,6 +35,7 @@ jobs:
           P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
           cd "$P"
           patch -p4 --batch < /tmp/ca109-code.patch
+          sed -i 's/external\.setOnClickListener(v -> openCurrentPositionInMaps())/external.setOnClickListener(view -> openCurrentPositionInMaps())/' app/src/main/java/com/compagnonautoroute/app/MainActivity.java
           echo '121c62f3ec26fa03159c30fe6bc15f925f62077fb255c18b198e21dca8fbee5e  app/build.gradle' | sha256sum -c -
           echo 'e2eb00e1af1019ecfe7b9215888197a7bdd3f059f2071c5e12cee92beb8fedce  app/src/main/java/com/compagnonautoroute/app/MainActivity.java' | sha256sum -c -
           echo '1a327e931b1d05006d7178d5259992c810ef96642fd008edd4f65b2d34f1147b  app/src/main/java/com/compagnonautoroute/app/data/OverpassClient.java' | sha256sum -c -
