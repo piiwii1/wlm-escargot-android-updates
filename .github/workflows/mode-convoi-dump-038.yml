@@ -1,0 +1,36 @@
+name: Dump Mode Convoi 0.3.8 Source
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mode-convoi-dump-038.yml']
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mode-convoi-apk-build
+      - name: Reconstruct 0.3.8
+        run: |
+          mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
+          cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          python mode-convoi-build/ui_patch.py
+          python mode-convoi-build/bottom_nav_patch.py
+          python mode-convoi-build/ux_032_patch.py
+          python mode-convoi-build/ux_033_patch.py
+          python mode-convoi-build/ux_034_patch.py
+          python mode-convoi-build/ux_035_patch.py
+          python mode-convoi-build/ux_036_patch.py
+          python mode-convoi-build/ux_036_fix.py
+          python mode-convoi-build/ux_037_map_patch.py
+          python mode-convoi-build/ux_038_gps_patch.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ModeConvoi-0.3.8-reconstructed-source
+          path: |
+            mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+            mode-convoi-build/android/app/src/main/assets/convoy_map.html
