@@ -35,7 +35,7 @@ jobs:
           python mode-convoi-build/ux_039_map_patch.py
           python mode-convoi-build/ux_0310_profile_patch.py
           python mode-convoi-build/ux_0311_ui_patch.py
-          base64 -d mode-convoi-build/ux_0312_main.patch.gz.b64 | gunzip > /tmp/ux0312.patch
+          cat mode-convoi-build/ux0312_part_01.txt mode-convoi-build/ux0312_part_02.txt mode-convoi-build/ux0312_part_03.txt mode-convoi-build/ux0312_part_04.txt mode-convoi-build/ux0312_part_05.txt | base64 -d | gunzip > /tmp/ux0312.patch
           patch -p0 < /tmp/ux0312.patch
           sed -i "s/versionCode 2/versionCode 15/" mode-convoi-build/android/app/build.gradle
           sed -i "s/versionName '0.2.0'/versionName '0.3.12'/" mode-convoi-build/android/app/build.gradle
