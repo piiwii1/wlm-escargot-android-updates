@@ -1,0 +1,127 @@
+name: Mode Convoi 0.3.26 Structure
+
+on:
+  push:
+    branches: [mode-convoi-apk-build]
+    paths:
+      - '.github/workflows/mode-convoi-0326-structure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refactor-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mode-convoi-apk-build
+          fetch-depth: 0
+
+      - name: Apply safe structural cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          main = Path('mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java')
+          s = main.read_text()
+
+          if 'ParticipantDefaults.ensure(prefs);' not in s:
+              s, n = re.subn(r'\bensureParticipantDefaults\(\);', 'ParticipantDefaults.ensure(prefs);', s, count=1)
+              if n != 1:
+                  raise SystemExit(f'participant defaults call replacement count={n}')
+
+          if 'private void ensureParticipantDefaults' in s:
+              pat = r'\n    private void ensureParticipantDefaults\(\)\{.*?\n    private boolean saveProfileChecked'
+              s, n = re.subn(pat, '\n    private boolean saveProfileChecked', s, count=1, flags=re.S)
+              if n != 1:
+                  raise SystemExit(f'participant defaults block removal count={n}')
+
+          old = 'try{byte[] raw=Base64.decode(image,Base64.DEFAULT);Bitmap b=BitmapFactory.decodeByteArray(raw,0,raw.length);if(b!=null){ImageView iv=new ImageView(this);'
+          new = 'try{Bitmap b=VehicleImageCache.decode(image);if(b!=null){ImageView iv=new ImageView(this);'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif 'VehicleImageCache.decode(image)' not in s:
+              raise SystemExit('vehicle image decode block not found')
+          main.write_text(s)
+
+          service = Path('mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java')
+          t = service.read_text()
+          old = '''        prefs.put(PREF_GPS_LAT, String.valueOf(loc.getLatitude()));
+        prefs.put(PREF_GPS_LON, String.valueOf(loc.getLongitude()));
+        prefs.put(PREF_GPS_ACC, String.valueOf(loc.hasAccuracy()?loc.getAccuracy():-1));
+        prefs.putLong(PREF_GPS_FIX_AT, t);
+        prefs.remove(PREF_GPS_ERROR);'''
+          if old in t:
+              t = t.replace(old, '        prefs.putLocationFix(loc.getLatitude(), loc.getLongitude(), loc.hasAccuracy()?loc.getAccuracy():-1, t);', 1)
+          elif 'prefs.putLocationFix(' not in t:
+              raise SystemExit('GPS preference block not found')
+          service.write_text(t)
+
+          gradle = Path('mode-convoi-clean/android/app/build.gradle')
+          g = gradle.read_text()
+          g = re.sub(r'versionCode\s+\d+', 'versionCode 29', g)
+          g = re.sub(r"versionName\s+'[^']+'", "versionName '0.3.26'", g)
+          gradle.write_text(g)
+          PY
+
+          grep -q 'ParticipantDefaults.ensure(prefs);' mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          ! grep -q 'private void ensureParticipantDefaults' mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q 'VehicleImageCache.decode(image)' mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q 'prefs.putLocationFix' mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java
+          grep -q "versionName '0.3.26'" mode-convoi-clean/android/app/build.gradle
+
+      - name: Commit canonical 0.3.26 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Mode Convoi Builder'
+          git config user.email 'mode-convoi-builder@users.noreply.github.com'
+          git add mode-convoi-clean/android
+          if ! git diff --cached --quiet; then
+            git commit -m 'Mode Convoi 0.3.26 structural cleanup and image cache'
+            git push origin HEAD:mode-convoi-apk-build
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compile direct canonical source
+        run: gradle -p mode-convoi-clean/android --no-daemon assembleDebug assembleRelease
+
+      - name: Package artifacts
+        shell: bash
+        run: |
+          cp mode-convoi-clean/android/app/build/outputs/apk/debug/app-debug.apk ModeConvoi-0.3.26-TEST.apk
+          cp mode-convoi-clean/android/app/build/outputs/apk/release/app-release-unsigned.apk ModeConvoi-0.3.26-UNSIGNED.apk
+          sha256sum ModeConvoi-0.3.26-TEST.apk > ModeConvoi-0.3.26-TEST.apk.sha256
+          sha256sum ModeConvoi-0.3.26-UNSIGNED.apk > ModeConvoi-0.3.26-UNSIGNED.apk.sha256
+          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java > MainActivity-lines.txt
+          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java > LocationShareService-lines.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ModeConvoi-0.3.26-structure
+          if-no-files-found: error
+          path: |
+            ModeConvoi-0.3.26-TEST.apk
+            ModeConvoi-0.3.26-TEST.apk.sha256
+            ModeConvoi-0.3.26-UNSIGNED.apk
+            ModeConvoi-0.3.26-UNSIGNED.apk.sha256
+            MainActivity-lines.txt
+            LocationShareService-lines.txt
