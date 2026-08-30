@@ -1,0 +1,23 @@
+name: Export Android APK signer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/convoyride-export-apksigner.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: android-actions/setup-android@v3
+      - name: Install build tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Copy signer
+        run: cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" apksigner.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apksigner-35
+          retention-days: 1
+          path: apksigner.jar
