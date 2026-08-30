@@ -25,7 +25,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
       - name: Live service coverage smoke test
         shell: bash
         run: |
@@ -42,7 +41,6 @@ jobs:
           test "$WC" -gt 0
           test "$CHARGE" -gt 0
           test "$FOOD" -gt 0
-
       - name: Open encrypted session
         id: session
         env:
@@ -53,9 +51,8 @@ jobs:
           openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/ca106-private.pem >/dev/null 2>&1
           openssl pkey -in /tmp/ca106-private.pem -pubout -out /tmp/ca106-public.pem
           PUB=$(base64 -w0 /tmp/ca106-public.pem)
-          gh api repos/${GITHUB_REPOSITORY}/issues/44/comments -f body="CA106_PUBLIC_KEY:${SESSION}:${PUB}" >/dev/null
+          gh api repos/${GITHUB_REPOSITORY}/issues/45/comments -f body="CA106_PUBLIC_KEY:${SESSION}:${PUB}" >/dev/null
           echo "session=${SESSION}" >> "$GITHUB_OUTPUT"
-
       - name: Receive encrypted bundle
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,7 +61,7 @@ jobs:
           set -euo pipefail
           MANIFEST=''
           for i in $(seq 1 180); do
-            MANIFEST=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/44/comments --jq ".[] | select(.body | startswith(\"CA106_BLOBS:${SESSION}:\")) | .body" | tail -n 1 || true)
+            MANIFEST=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/45/comments --jq ".[] | select(.body | startswith(\"CA106_BLOBS:${SESSION}:\")) | .body" | tail -n 1 || true)
             [ -n "$MANIFEST" ] && break
             sleep 5
           done
@@ -81,7 +78,6 @@ jobs:
           unzip -tq /tmp/bundle.zip
           cd /tmp && unzip -q /tmp/bundle.zip
           mkdir -p /tmp/src && unzip -q /tmp/ca106-bundle/source.zip -d /tmp/src
-
       - name: Core tests
         shell: bash
         run: |
@@ -90,7 +86,6 @@ jobs:
           mkdir -p /tmp/core
           javac -d /tmp/core "$PROJ/app/src/main/java/com/compagnonautoroute/app/core/GeoMath.java" "$PROJ/app/src/main/java/com/compagnonautoroute/app/core/RouteGraph.java" "$PROJ/tools/CoreLogicSelfTest.java"
           java -cp /tmp/core CoreLogicSelfTest | tee /tmp/core-tests.txt
-
       - name: Build and sign
         shell: bash
         run: |
@@ -108,10 +103,9 @@ jobs:
           "$AAPT" dump badging /tmp/out/CompagnonAutoroute-1.0.6-V1.apk | tee /tmp/out/badging.txt
           grep -F "package: name='com.compagnonautoroute.app' versionCode='7' versionName='1.0.6-v1'" /tmp/out/badging.txt
           "$APKSIGNER" verify --verbose --print-certs /tmp/out/CompagnonAutoroute-1.0.6-V1.apk | tee /tmp/out/signature.txt
-          grep -Fi '8f93161dfa8d9e0aadb94bb9433280bb1926584930c94b26c15bdad0d159258a' /tmp/out/signature.txt
+          grep -Fi 'f71e230f97112b5763e0b546e6b297b9e9c54df243dc8dcd8c856f35ea37acfc' /tmp/out/signature.txt
           cp /tmp/services-smoke.txt /tmp/out/services-smoke.txt
           cp /tmp/core-tests.txt /tmp/out/core-tests.txt
-
       - uses: actions/upload-artifact@v4
         with:
           name: CompagnonAutoroute-1.0.6-V1-APK
@@ -122,4 +116,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SESSION: ${{ steps.session.outputs.session }}
-        run: gh api repos/${GITHUB_REPOSITORY}/issues/44/comments -f body="CA106_BUILD_DONE:${SESSION}" >/dev/null
+        run: gh api repos/${GITHUB_REPOSITORY}/issues/45/comments -f body="CA106_BUILD_DONE:${SESSION}" >/dev/null
