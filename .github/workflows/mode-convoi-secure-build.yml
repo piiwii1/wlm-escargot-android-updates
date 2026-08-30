@@ -68,7 +68,7 @@ jobs:
           printf '%s' "$DATA_B64" | base64 -d > /tmp/mc-source.enc
           openssl pkeyutl -decrypt -inkey /tmp/mc-private.pem -in /tmp/mc-key.enc -pkeyopt rsa_padding_mode:oaep > /tmp/mc-pass.txt
           openssl enc -d -aes-256-cbc -pbkdf2 -in /tmp/mc-source.enc -out /tmp/mc-source.zip -pass file:/tmp/mc-pass.txt
-          echo '935f9c1169ffef8390b2c0f7b0cea290798d63c4a1c182add228ab6e1be1220c  /tmp/mc-source.zip' | sha256sum -c -
+          echo '279e07436ff2d9501d3a78f2b6353247d742a513b3eb0a6a14422c6deda01cc2  /tmp/mc-source.zip' | sha256sum -c -
           unzip -tq /tmp/mc-source.zip
           mkdir -p /tmp/mc-src
           unzip -q /tmp/mc-source.zip -d /tmp/mc-src
