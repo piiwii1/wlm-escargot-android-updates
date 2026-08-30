@@ -54,24 +54,22 @@ jobs:
           SESSION: ${{ steps.session.outputs.session }}
         run: |
           set -euo pipefail
+          gh api repos/${GITHUB_REPOSITORY}/issues/40/comments -f body="MC_STAGE_V1:${SESSION}:receive-start" >/dev/null
           BODY=""
           for i in $(seq 1 120); do
-            BODY=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_PAYLOAD_V1:${SESSION}:\")) | .body" | tail -n 1 || true)
-            if [ -z "$BODY" ]; then
-              DONE=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_CHUNK_DONE_V1:${SESSION}:\")) | .body" | tail -n 1 || true)
-              if [ -n "$DONE" ]; then
-                COUNT=${DONE##*:}
-                JOINED=""
-                for N in $(seq 1 "$COUNT"); do
-                  CHUNK=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_CHUNK_V1:${SESSION}:${N}:\")) | .body" | tail -n 1 || true)
-                  test -n "$CHUNK"
-                  PREFIX="MC_CHUNK_V1:${SESSION}:${N}:"
-                  JOINED="${JOINED}${CHUNK#${PREFIX}}"
-                done
-                BODY="MC_PAYLOAD_V1:${SESSION}:${JOINED}"
-              fi
+            DONE=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_CHUNK_DONE_V1:${SESSION}:\")) | .body" | tail -n 1 || true)
+            if [ -n "$DONE" ]; then
+              COUNT=${DONE##*:}
+              JOINED=""
+              for N in $(seq 1 "$COUNT"); do
+                CHUNK=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/40/comments --jq ".[] | select(.body | startswith(\"MC_CHUNK_V1:${SESSION}:${N}:\")) | .body" | tail -n 1 || true)
+                test -n "$CHUNK"
+                PREFIX="MC_CHUNK_V1:${SESSION}:${N}:"
+                JOINED="${JOINED}${CHUNK#${PREFIX}}"
+              done
+              BODY="MC_PAYLOAD_V1:${SESSION}:${JOINED}"
+              break
             fi
-            [ -n "$BODY" ] && break
             sleep 5
           done
           test -n "$BODY"
@@ -80,21 +78,41 @@ jobs:
           DATA_B64=${REST#*:}
           printf '%s' "$KEY_B64" | base64 -d > /tmp/mc-key.enc
           printf '%s' "$DATA_B64" | base64 -d > /tmp/mc-source.enc
+          gh api repos/${GITHUB_REPOSITORY}/issues/40/comments -f body="MC_STAGE_V1:${SESSION}:chunks-joined:key=$(wc -c </tmp/mc-key.enc):data=$(wc -c </tmp/mc-source.enc)" >/dev/null
           openssl pkeyutl -decrypt -inkey /tmp/mc-private.pem -in /tmp/mc-key.enc -pkeyopt rsa_padding_mode:oaep > /tmp/mc-pass.txt
           openssl enc -d -aes-256-cbc -pbkdf2 -in /tmp/mc-source.enc -out /tmp/mc-source.zip -pass file:/tmp/mc-pass.txt
           echo '279e07436ff2d9501d3a78f2b6353247d742a513b3eb0a6a14422c6deda01cc2  /tmp/mc-source.zip' | sha256sum -c -
           unzip -tq /tmp/mc-source.zip
           mkdir -p /tmp/mc-src
           unzip -q /tmp/mc-source.zip -d /tmp/mc-src
+          gh api repos/${GITHUB_REPOSITORY}/issues/40/comments -f body="MC_STAGE_V1:${SESSION}:source-ok" >/dev/null
 
       - name: Build debug APK
+        id: gradlebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SESSION: ${{ steps.session.outputs.session }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           SETTINGS=$(find /tmp/mc-src -maxdepth 4 -type f -name settings.gradle | head -n 1)
-          test -n "$SETTINGS"
+          if [ -z "$SETTINGS" ]; then
+            gh api repos/${GITHUB_REPOSITORY}/issues/40/comments -f body="MC_BUILD_FAIL_V1:${SESSION}:settings.gradle not found" >/dev/null
+            exit 1
+          fi
           PROJ=$(dirname "$SETTINGS")
           cd "$PROJ"
-          gradle --no-daemon :app:assembleDebug --stacktrace
+          gh api repos/${GITHUB_REPOSITORY}/issues/40/comments -f body="MC_STAGE_V1:${SESSION}:gradle-start" >/dev/null
+          set +e
+          gradle --no-daemon :app:assembleDebug --stacktrace 2>&1 | tee /tmp/mc-gradle.log
+          RC=${PIPESTATUS[0]}
+          set -e
+          if [ "$RC" -ne 0 ]; then
+            tail -c 9000 /tmp/mc-gradle.log > /tmp/mc-tail.txt
+            printf 'MC_BUILD_FAIL_V1:%s:\n' "$SESSION" > /tmp/mc-comment.txt
+            cat /tmp/mc-tail.txt >> /tmp/mc-comment.txt
+            gh api repos/${GITHUB_REPOSITORY}/issues/40/comments -F body=@/tmp/mc-comment.txt >/dev/null || true
+            exit "$RC"
+          fi
           APK=$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)
           test -f "$APK"
           mkdir -p /tmp/mc-out
@@ -107,6 +125,7 @@ jobs:
           grep -F "package: name='ch.piiwii.modeconvoi' versionCode='2' versionName='0.2.0'" /tmp/mc-out/badging.txt
           grep -F "sdkVersion:'26'" /tmp/mc-out/badging.txt
           grep -F "targetSdkVersion:'35'" /tmp/mc-out/badging.txt
+          gh api repos/${GITHUB_REPOSITORY}/issues/40/comments -f body="MC_STAGE_V1:${SESSION}:apk-verified" >/dev/null
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
