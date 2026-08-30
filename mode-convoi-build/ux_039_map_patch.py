@@ -1,0 +1,13 @@
+from pathlib import Path
+p=Path('mode-convoi-build/android/app/src/main/assets/convoy_map.html')
+s=p.read_text()
+s=s.replace('.marker{position:absolute;transform:translate(-18px,-18px);z-index:5;pointer-events:auto}.car{font-size:25px;filter:drop-shadow(0 2px 3px #000)}', '.marker{position:absolute;transform:translate(-18px,-18px);z-index:5;pointer-events:auto}.car{font-size:25px;filter:drop-shadow(0 2px 3px #000)}.photo{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 5px #000a;background:#222}')
+old="function addMarker(lat,lon,label,kind='',stale=false){if(!validPoint(lat,lon))return;const tl=topLeft(),p=project(lat,lon),m=document.createElement('div');m.className='marker '+kind+(stale?' stale':'');m.style.left=(p.x-tl.x)+'px';m.style.top=(p.y-tl.y)+'px';m.innerHTML=`<div class=\"car\">${kind.includes('rally')?'📍':'🚗'}</div><div class=\"label\">${esc(label)}</div>`;markersEl.appendChild(m)}"
+new="function addMarker(lat,lon,label,kind='',stale=false,icon='🚗',image='',markerColor=''){if(!validPoint(lat,lon))return;const tl=topLeft(),p=project(lat,lon),m=document.createElement('div');m.className='marker '+kind+(stale?' stale':'');m.style.left=(p.x-tl.x)+'px';m.style.top=(p.y-tl.y)+'px';const safeImg=(image&&/^[A-Za-z0-9+/=]+$/.test(image)&&image.length<30000)?image:'';const visual=kind.includes('rally')?'<div class=\"car\">📍</div>':(safeImg?`<img class=\"photo\" src=\"data:image/jpeg;base64,${safeImg}\">`:`<div class=\"car\">${esc(icon||'🚗')}</div>`);m.innerHTML=`${visual}<div class=\"label\">${esc(label)}</div>`;if(markerColor&&/^#[0-9A-Fa-f]{6}$/.test(markerColor)){const lab=m.querySelector('.label');if(lab)lab.style.borderColor=markerColor;const ph=m.querySelector('.photo');if(ph)ph.style.borderColor=markerColor;}markersEl.appendChild(m)}"
+assert old in s;s=s.replace(old,new,1)
+old2="addMarker(lat,lon,(p.name||'Participant')+(p.id===myId?' · MOI':''),p.id===myId?'mine':'',stale);count++"
+new2="addMarker(lat,lon,(p.name||'Participant')+(p.id===myId?' · MOI':''),p.id===myId?'mine':'',stale,p.vehicleIcon||'🚗',p.vehicleImage||'',p.vehicleMarkerColor||'');count++"
+assert old2 in s;s=s.replace(old2,new2,1)
+s=s.replace("addMarker(+state.rally.lat,+state.rally.lon,state.rally.name||'Regroupement','rally',false)","addMarker(+state.rally.lat,+state.rally.lon,state.rally.name||'Regroupement','rally',false,'📍','','')",1)
+p.write_text(s)
+print('0.3.9 map patch applied')
