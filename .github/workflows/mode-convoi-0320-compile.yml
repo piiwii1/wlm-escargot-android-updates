@@ -1,4 +1,4 @@
-name: Compile Mode Convoi 0.3.21
+name: Compile Mode Convoi 0.3.22
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
       - 'mode-convoi-build/ux0320_part1.b64'
       - 'mode-convoi-build/ux0320_part2.b64'
       - 'mode-convoi-build/ux0321_patch.gz.b64'
+      - 'mode-convoi-build/ux_0322_notifications.py'
   workflow_dispatch:
 
 jobs:
@@ -16,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct 0.3.21 sources
+      - name: Reconstruct 0.3.22 sources
         shell: bash
         run: |
           set -euo pipefail
@@ -86,30 +87,32 @@ jobs:
           rm -f mode-convoi-build/android/app/build.gradle.rej
           base64 -d mode-convoi-build/ux0321_patch.gz.b64 | gunzip > /tmp/ux0321.patch
           patch -p0 < /tmp/ux0321.patch
+          python mode-convoi-build/ux_0322_notifications.py
           python - <<'PY'
           from pathlib import Path
           import re
           p=Path('mode-convoi-build/android/app/build.gradle')
           s=p.read_text()
-          s=re.sub(r'versionCode\s+\d+', 'versionCode 24', s)
-          s=re.sub(r"versionName\s+'[^']+'", "versionName '0.3.21'", s)
+          s=re.sub(r'versionCode\s+\d+', 'versionCode 25', s)
+          s=re.sub(r"versionName\s+'[^']+'", "versionName '0.3.22'", s)
           p.write_text(s)
           PY
-          grep -q "versionCode 24" mode-convoi-build/android/app/build.gradle
-          grep -q "versionName '0.3.21'" mode-convoi-build/android/app/build.gradle
-          grep -q 'state.initiator' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
-          grep -q 'bindLocalTrackToNegotiatedAudio' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
-          grep -q 'VOICE_COMMUNICATION' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
+          grep -q "versionCode 25" mode-convoi-build/android/app/build.gradle
+          grep -q "versionName '0.3.22'" mode-convoi-build/android/app/build.gradle
+          grep -q 'convoy_alerts_v2' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q 'VISIBILITY_PUBLIC' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java
+          test -f mode-convoi-build/android/app/src/main/res/drawable/ic_notification.xml
 
       - name: Export reconstructed source
         uses: actions/upload-artifact@v4
         with:
-          name: ModeConvoi-0.3.21-reconstructed-source
+          name: ModeConvoi-0.3.22-reconstructed-source
           if-no-files-found: error
           path: |
             mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
             mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
-            mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/ConvoyApi.java
+            mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java
+            mode-convoi-build/android/app/src/main/res/drawable/ic_notification.xml
             mode-convoi-build/android/app/build.gradle
 
       - uses: actions/setup-java@v4
@@ -132,13 +135,13 @@ jobs:
       - name: Package test APK
         shell: bash
         run: |
-          cp mode-convoi-build/android/app/build/outputs/apk/debug/app-debug.apk ModeConvoi-0.3.21-TEST.apk
-          sha256sum ModeConvoi-0.3.21-TEST.apk > ModeConvoi-0.3.21-TEST.apk.sha256
+          cp mode-convoi-build/android/app/build/outputs/apk/debug/app-debug.apk ModeConvoi-0.3.22-TEST.apk
+          sha256sum ModeConvoi-0.3.22-TEST.apk > ModeConvoi-0.3.22-TEST.apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ModeConvoi-0.3.21-compile-test
+          name: ModeConvoi-0.3.22-compile-test
           if-no-files-found: error
           path: |
-            ModeConvoi-0.3.21-TEST.apk
-            ModeConvoi-0.3.21-TEST.apk.sha256
+            ModeConvoi-0.3.22-TEST.apk
+            ModeConvoi-0.3.22-TEST.apk.sha256
