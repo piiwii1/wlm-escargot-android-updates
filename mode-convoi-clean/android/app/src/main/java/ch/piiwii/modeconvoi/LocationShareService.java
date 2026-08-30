@@ -118,7 +118,7 @@ public class LocationShareService extends Service implements LocationListener {
         if (base.isEmpty() || code.isEmpty() || id.isEmpty() || token.isEmpty()) return;
         try {
             String path="/api/convoys/"+code+"?participantId="+URLEncoder.encode(id,"UTF-8")+"&token="+URLEncoder.encode(token,"UTF-8");
-            JSONObject snapshot=ConvoyApi.get(base,path);
+            JSONObject snapshot=ConvoyApi.getCachedSnapshot(base,path,6000L);
             ConvoyEventProcessor.process(this,prefs,snapshot);
             JSONArray participants=snapshot.optJSONArray("participants");
             int count=participants==null?0:participants.length();
