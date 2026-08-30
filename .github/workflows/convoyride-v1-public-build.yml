@@ -1,0 +1,198 @@
+name: Build ConvoyRide V1.0.0 APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/convoyride-v1-public-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p convoyride-android/app/src/main/java/ch/piiwii/convoyride
+          mkdir -p convoyride-android/app/src/main/assets
+          mkdir -p convoyride-android/app/src/main/res/values
+          mkdir -p convoyride-android/app/src/main/res/drawable
+
+          cat > convoyride-android/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'ConvoyRide'
+          include ':app'
+          EOF
+
+          cat > convoyride-android/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.8.2' apply false
+          }
+          EOF
+
+          cat > convoyride-android/app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+
+          android {
+              namespace 'ch.piiwii.convoyride'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'ch.piiwii.convoyride'
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0.0'
+              }
+          }
+          EOF
+
+          cat > convoyride-android/app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+                  <item name="android:colorAccent">#F59E0B</item>
+                  <item name="android:navigationBarColor">#111827</item>
+                  <item name="android:statusBarColor">#111827</item>
+                  <item name="android:windowLightStatusBar">false</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > convoyride-android/app/src/main/res/drawable/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#111827" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#F59E0B" android:pathData="M17,67 L24,48 Q27,39 37,37 L71,37 Q81,39 84,48 L91,67 L91,80 L81,80 L78,72 L30,72 L27,80 L17,80 Z"/>
+              <path android:fillColor="#FFFFFF" android:pathData="M31,50 Q33,44 40,43 L68,43 Q75,44 77,50 L80,58 L28,58 Z"/>
+              <path android:fillColor="#111827" android:pathData="M27,63a6,6 0,1 0,0.1,0z M81,63a6,6 0,1 0,0.1,0z"/>
+              <path android:fillColor="#F59E0B" android:pathData="M48,18h12v14h-12z M36,21h8v8h-8z M64,21h8v8h-8z"/>
+          </vector>
+          EOF
+
+          cat > convoyride-android/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:roundIcon="@drawable/ic_launcher"
+                  android:label="ConvoyRide"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="portrait">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > convoyride-android/app/src/main/java/ch/piiwii/convoyride/MainActivity.java <<'EOF'
+          package ch.piiwii.convoyride;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.GeolocationPermissions;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
+
+                  WebSettings s = webView.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setDatabaseEnabled(true);
+                  s.setGeolocationEnabled(true);
+                  s.setAllowFileAccess(true);
+                  s.setAllowContentAccess(true);
+
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                          callback.invoke(origin, true, false);
+                      }
+                  });
+
+                  if (android.os.Build.VERSION.SDK_INT >= 23) {
+                      requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, 101);
+                  }
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) webView.goBack();
+                  else super.onBackPressed();
+              }
+          }
+          EOF
+
+          base64 -d convoyride-v1/inline.html.gz.b64 | gunzip > convoyride-android/app/src/main/assets/index.html
+          test -s convoyride-android/app/src/main/assets/index.html
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build release APK
+        run: gradle -p convoyride-android --no-daemon assembleRelease
+
+      - name: Align APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
+            convoyride-android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            ConvoyRide-V1.0.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ConvoyRide-V1.0.0-aligned-unsigned.apk
+          sha256sum ConvoyRide-V1.0.0-aligned-unsigned.apk > ConvoyRide-V1.0.0-aligned-unsigned.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ConvoyRide-V1.0.0-unsigned
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ConvoyRide-V1.0.0-aligned-unsigned.apk
+            ConvoyRide-V1.0.0-aligned-unsigned.apk.sha256
