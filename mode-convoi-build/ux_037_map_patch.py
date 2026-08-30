@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 p=Path('mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java')
 s=p.read_text()
@@ -7,8 +6,13 @@ s=p.read_text()
 if 'private boolean mapPageReady' not in s:
     s=s.replace('    private WebView mapView;','    private WebView mapView;\n    private boolean mapPageReady=false;',1)
 
-pat=re.compile(r'    private void renderMapPage\(\) \{.*?\n    private void renderParticipantsPage\(\)\{',re.S)
-rep='''    private void renderMapPage() {
+start=s.find('private void renderMapPage')
+end=s.find('private void renderParticipantsPage', start)
+if start<0 or end<0: raise SystemExit('map function markers not found')
+indent=s.rfind('\n',0,start)+1
+prefix=s[:indent]
+suffix=s[end:]
+new='''    private void renderMapPage() {
         currentPage = "map";
         refreshBottomNav();
         content.removeAllViews();
@@ -56,10 +60,8 @@ rep='''    private void renderMapPage() {
         mapView.evaluateJavascript("window.updateConvoy("+raw+","+id+")",null);
     }
 
-    private void renderParticipantsPage(){'''
-s,n=pat.subn(rep,s,count=1)
-if n!=1: raise SystemExit('renderMapPage function not found')
-
+    '''
+s=prefix+new+suffix
 s=s.replace('cardTitle(content,"Mode Convoi 0.3.6",','cardTitle(content,"Mode Convoi 0.3.7",',1)
 p.write_text(s)
 print('0.3.7 map patch applied')
