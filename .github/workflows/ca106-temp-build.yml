@@ -1,4 +1,4 @@
-name: Compagnon Autoroute 1.0.8 UI build final
+name: Compagnon Autoroute 1.0.8 UI build final R2
 on:
   push:
     branches: [main]
