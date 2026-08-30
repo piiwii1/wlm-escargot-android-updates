@@ -1,4 +1,4 @@
-name: Compagnon Autoroute 1.0.9 build
+name: Compagnon Autoroute 1.0.9 build verified
 on:
   push:
     branches: [main]
@@ -17,19 +17,28 @@ jobs:
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
-      - name: Reconstruct source
+      - name: Reconstruct verified 1.0.8 base and apply 1.0.9 patch
         env:
           GH_TOKEN: '${{ github.token }}'
         run: |
           set -euo pipefail
           : > /tmp/source.zip
-          for H in 943f3465dea4b796b1e565174ab27a8f7dcf5772 44dd6458dd5a5585eea192dc9a0d8a90299531c2; do
+          for H in 2ea825b585a9f260bd4256fe811650d245ccd837 5e6264585e4ec332f8e6b0f3852857f9edfb4dca d39c3528e691213de6d750e3ba12d2e29baccf78 0f9b4635d69cc740e8ccb462379e07c0685e0159; do
             gh api repos/${GITHUB_REPOSITORY}/git/blobs/$H --jq .content | tr -d '\n' | base64 -d >> /tmp/source.zip
           done
-          echo '3865d9ec7c7489d00a76da98683e004f1d20b8da6a92fb17991a02a9acfd0d3b  /tmp/source.zip' | sha256sum -c -
+          echo '4b336e63b342a0cd7eca9a68d7b51fdf7a908d531c6ba87a1a585f7aed2374a1  /tmp/source.zip' | sha256sum -c -
           unzip -tq /tmp/source.zip
           mkdir /tmp/src
           unzip -q /tmp/source.zip -d /tmp/src
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/85db6f419f4dffe69d82a35b7a903afc213d96fc --jq .content | tr -d '\n' | base64 -d > /tmp/ca109.patch
+          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
+          cd "$P"
+          patch -p4 --batch < /tmp/ca109.patch
+          echo 'b2e130a00fa649fae51150337fdc3211252e8e8e1fe7a5fe254c22d46590b3c1  CHANGELOG.md' | sha256sum -c -
+          echo '121c62f3ec26fa03159c30fe6bc15f925f62077fb255c18b198e21dca8fbee5e  app/build.gradle' | sha256sum -c -
+          echo 'e2eb00e1af1019ecfe7b9215888197a7bdd3f059f2071c5e12cee92beb8fedce  app/src/main/java/com/compagnonautoroute/app/MainActivity.java' | sha256sum -c -
+          echo '1a327e931b1d05006d7178d5259992c810ef96642fd008edd4f65b2d34f1147b  app/src/main/java/com/compagnonautoroute/app/data/OverpassClient.java' | sha256sum -c -
+          echo 'c88532054aa31c547215a6f344038cedbe8801d6320acb1a402be0b3dd53d923  app/src/main/res/values/styles.xml' | sha256sum -c -
       - name: Core tests
         run: |
           set -e
