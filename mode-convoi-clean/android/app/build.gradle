@@ -1,0 +1,33 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ch.piiwii.modeconvoi'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ch.piiwii.modeconvoi'
+        minSdk 26
+        targetSdk 35
+        versionCode 27
+        versionName '0.3.24'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+    implementation 'io.github.webrtc-sdk:android:144.7559.14'
+}
