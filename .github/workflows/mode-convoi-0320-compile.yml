@@ -98,6 +98,17 @@ jobs:
           grep -q 'setCommunicationDevice' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
           grep -q 'SEND_RECV' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
 
+      - name: Export reconstructed source
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModeConvoi-0.3.20-reconstructed-source
+          if-no-files-found: error
+          path: |
+            mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
+            mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+            mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/ConvoyApi.java
+            mode-convoi-build/android/app/build.gradle
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
