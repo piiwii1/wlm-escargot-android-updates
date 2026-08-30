@@ -111,14 +111,16 @@ jobs:
           cd "$P"
           gradle --no-daemon :app:assembleRelease
           APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          test -f "$APK"
           mkdir -p /tmp/out
           BDIR="$ANDROID_HOME/build-tools/35.0.0"
           "$BDIR/zipalign" -p -f 4 "$APK" /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk
           "$BDIR/zipalign" -c -v 4 /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk
           "$BDIR/aapt" dump badging /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk | tee /tmp/out/badging.txt
           grep -F "package: name='com.compagnonautoroute.app' versionCode='14' versionName='1.0.13-v1'" /tmp/out/badging.txt
-          unzip -l /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk | grep 'fuel_logo_' | tee /tmp/out/embedded-logos.txt
-          for f in eni shell migrol tamoil combustia; do grep -q "fuel_logo_${f}" /tmp/out/embedded-logos.txt; done
+          "$BDIR/aapt" dump resources /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk > /tmp/out/resources.txt
+          grep -E 'fuel_logo_(eni|shell|migrol|tamoil|combustia)' /tmp/out/resources.txt | tee /tmp/out/embedded-logos.txt
+          for f in eni shell migrol tamoil combustia; do grep -q "fuel_logo_${f}" /tmp/out/resources.txt; done
           sha256sum /tmp/out/CompagnonAutoroute-1.0.13-V1-aligned-unsigned.apk > /tmp/out/unsigned.sha256
           cp /tmp/core-tests.txt /tmp/out/
           cp /tmp/logo-files.txt /tmp/out/
