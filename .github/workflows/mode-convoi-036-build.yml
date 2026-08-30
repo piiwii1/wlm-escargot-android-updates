@@ -19,7 +19,7 @@ jobs:
 
       - name: Reconstruct source and apply patches
         run: |
-          # 0.3.6 retry after robust patch update
+          # 0.3.6 retry with share-string fix
           mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
           cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
           python mode-convoi-build/ui_patch.py
@@ -29,6 +29,7 @@ jobs:
           python mode-convoi-build/ux_034_patch.py
           python mode-convoi-build/ux_035_patch.py
           python mode-convoi-build/ux_036_patch.py
+          python mode-convoi-build/ux_036_fix.py
           sed -i "s/versionCode 2/versionCode 9/" mode-convoi-build/android/app/build.gradle
           sed -i "s/versionName '0.2.0'/versionName '0.3.6'/" mode-convoi-build/android/app/build.gradle
           grep -q 'copyConvoyCode' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
