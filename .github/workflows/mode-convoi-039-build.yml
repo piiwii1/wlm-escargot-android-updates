@@ -17,7 +17,7 @@ jobs:
         with:
           ref: mode-convoi-apk-build
 
-      - name: Reconstruct source and apply patches
+      - name: Reconstruct exact 0.3.8 and apply 0.3.9
         run: |
           mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
           cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
@@ -31,8 +31,7 @@ jobs:
           python mode-convoi-build/ux_036_fix.py
           python mode-convoi-build/ux_037_map_patch.py
           python mode-convoi-build/ux_038_gps_patch.py
-          python mode-convoi-build/ux_039_prepare.py
-          python mode-convoi-build/ux_039_patch.py
+          python mode-convoi-build/ux_039_exact.py
           python mode-convoi-build/ux_039_map_patch.py
           sed -i "s/versionCode 2/versionCode 12/" mode-convoi-build/android/app/build.gradle
           sed -i "s/versionName '0.2.0'/versionName '0.3.9'/" mode-convoi-build/android/app/build.gradle
