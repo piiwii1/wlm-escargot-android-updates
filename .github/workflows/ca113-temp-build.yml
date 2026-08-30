@@ -72,30 +72,20 @@ jobs:
           echo '00a15aad00c67fb599990b8fc20c46f08e5791b13389b89d8c794a607ffe129d  app/src/main/java/com/compagnonautoroute/app/data/OverpassClient.java' | sha256sum -c -
           echo "$P" > /tmp/project-path
 
-      - name: Download real brand visuals
+      - name: Download five verified brand visuals
         run: |
           set -euo pipefail
           P=$(cat /tmp/project-path)
           D="$P/app/src/main/res/drawable-nodpi"
           mkdir -p "$D"
           UA='Mozilla/5.0'
-          get() { echo "Downloading $1"; curl -A "$UA" -fL --retry 2 --connect-timeout 15 --max-time 60 "$2" -o "$D/$1"; test -s "$D/$1"; }
+          get() { echo "Downloading $1"; curl -A "$UA" -fL --retry 3 --connect-timeout 15 --max-time 60 "$2" -o "$D/$1"; test -s "$D/$1"; }
 
           get fuel_logo_eni.png 'https://cdn.freebiesupply.com/logos/large/2x/eni-1-logo-png-transparent.png'
           get fuel_logo_shell.jpg 'https://amecorg.com/wp-content/uploads/2023/06/Shell-Pecten-Logo-RGB.jpg'
-          get fuel_logo_migrol.png 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Logo_Migrol.svg/1024px-Logo_Migrol.svg.png'
+          get fuel_logo_migrol.jpg 'https://upload.wikimedia.org/wikipedia/commons/9/92/Migrol_Logo.jpg'
           get fuel_logo_tamoil.png 'https://cdn.freebiesupply.com/logos/large/2x/tamoil-logo-png-transparent.png'
           get fuel_logo_combustia.png 'https://media.jobs.ch/media/6089b4f1-172f-44fd-9aee-38b1e8ec124a?dimensions=1200x0&format=png'
-
-          get fuel_logo_coop.jpg 'https://uploads-ssl.webflow.com/617a436ffeb78984e38dc31b/61b91989cf42f08bb4b00e16_Coop_Pronto_Logo.jpg' || true
-          get fuel_logo_enilive.jpg 'https://www.24-autohof.de/files/24autohof/bildmaterial/logos/Enilive_logo-1.jpeg' || true
-          get fuel_logo_avia.jpg 'https://openhours.ch/photos/056/760/avia-big.jpg' || true
-          get fuel_logo_agrola.jpg 'https://api.awverlag.ch/uploads/firm_logo/ew_113.jpg' || true
-          get fuel_logo_ruedi.png 'https://www.autoschnider.ch/media/o20j30cz/logo_ruediruessel_breiter-1-e1580199250717.png?anchor=center&autorotate=true&mode=crop&width=1400' || true
-          get fuel_logo_socar.png 'https://www.liblogo.com/img-logo/so6725s297-socar-logo-socar-logo-vector-eps-668-61-kb-download.png' || true
-          get fuel_logo_esso.jpg 'https://www.truckstopsandservices.com/use_images/ads/essologo.jpg' || true
-          get fuel_logo_total.jpg 'https://mms.businesswire.com/media/20260209124827/en/2714968/5/Logo_TotalEnergies.svg.jpg' || true
-          get fuel_logo_bp.png 'https://www.vhv.rs/dpng/d/490-4907418_bp-logo-png-free-background-british-petroleum-logo.png' || true
 
           file "$D"/fuel_logo_* | tee /tmp/logo-files.txt
           for f in eni shell migrol tamoil combustia; do ls "$D"/fuel_logo_${f}.* >/dev/null; done
