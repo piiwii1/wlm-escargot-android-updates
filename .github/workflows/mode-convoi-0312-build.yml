@@ -6,6 +6,7 @@ on:
     paths: ['.github/workflows/mode-convoi-0312-build.yml']
   workflow_dispatch:
 
+# retry after exact patch upload
 jobs:
   build:
     runs-on: ubuntu-latest
