@@ -19,6 +19,7 @@ jobs:
 
       - name: Reconstruct source and apply patches
         run: |
+          # 0.3.6 retry after robust patch update
           mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
           cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
           python mode-convoi-build/ui_patch.py
