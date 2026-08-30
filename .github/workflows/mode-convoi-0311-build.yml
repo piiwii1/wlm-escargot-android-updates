@@ -1,0 +1,75 @@
+name: Build Mode Convoi 0.3.11 UI Polish
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mode-convoi-0311-build.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+        with:
+          ref: mode-convoi-apk-build
+
+      - name: Reconstruct 0.3.10 and apply 0.3.11 UI polish
+        run: |
+          mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
+          cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          python mode-convoi-build/ui_patch.py
+          python mode-convoi-build/bottom_nav_patch.py
+          python mode-convoi-build/ux_032_patch.py
+          python mode-convoi-build/ux_033_patch.py
+          python mode-convoi-build/ux_034_patch.py
+          python mode-convoi-build/ux_035_patch.py
+          python mode-convoi-build/ux_036_patch.py
+          python mode-convoi-build/ux_036_fix.py
+          python mode-convoi-build/ux_037_map_patch.py
+          python mode-convoi-build/ux_038_gps_patch.py
+          python mode-convoi-build/ux_039_exact.py
+          python mode-convoi-build/ux_039_map_patch.py
+          python mode-convoi-build/ux_0310_profile_patch.py
+          python mode-convoi-build/ux_0311_ui_patch.py
+          sed -i "s/versionCode 2/versionCode 14/" mode-convoi-build/android/app/build.gradle
+          sed -i "s/versionName '0.2.0'/versionName '0.3.11'/" mode-convoi-build/android/app/build.gradle
+          grep -q 'private boolean darkTheme' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q 'navSurface' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q 'Mode Convoi 0.3.11' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q "versionName '0.3.11'" mode-convoi-build/android/app/build.gradle
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build unsigned release APK
+        run: gradle -p mode-convoi-build/android --no-daemon assembleRelease
+
+      - name: Prepare artifact
+        run: |
+          APK='mode-convoi-build/android/app/build/outputs/apk/release/app-release-unsigned.apk'
+          test -s "$APK"
+          cp "$APK" ModeConvoi-0.3.11-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" apksigner.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ModeConvoi-0.3.11-unsigned
+          if-no-files-found: error
+          path: |
+            ModeConvoi-0.3.11-unsigned.apk
+            apksigner.jar
