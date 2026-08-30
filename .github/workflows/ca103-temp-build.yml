@@ -1,0 +1,134 @@
+name: Compagnon Autoroute 1.0.3 encrypted build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/ca103-temp-build.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35 build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Live Overpass critical-services smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          Q='[out:json][timeout:15];(nwr(around:20000,46.5197,6.6323)[amenity~"^(fuel|charging_station|toilets)$"];nwr(around:20000,46.5197,6.6323)[highway~"^(services|rest_area)$"];);out center qt;'
+          : > /tmp/overpass-smoke.txt
+          OK=0
+          for ENDPOINT in 'https://overpass-api.de/api/interpreter' 'https://overpass.private.coffee/api/interpreter'; do
+            echo "ENDPOINT=$ENDPOINT" | tee -a /tmp/overpass-smoke.txt
+            if curl --fail --silent --show-error --max-time 35 -A 'CompagnonAutoroute-CI/1.0.3' -X POST "$ENDPOINT" --data-urlencode "data=$Q" -o /tmp/osm.json; then
+              COUNT=$(jq '.elements | length' /tmp/osm.json)
+              FUEL=$(jq '[.elements[] | select((.tags.amenity // "") == "fuel" or (.tags.highway // "") == "services")] | length' /tmp/osm.json)
+              WC=$(jq '[.elements[] | select((.tags.amenity // "") == "toilets" or ((.tags.toilets // "") != "" and (.tags.toilets // "") != "no"))] | length' /tmp/osm.json)
+              echo "ELEMENTS=$COUNT FUEL_LIKE=$FUEL WC_LIKE=$WC" | tee -a /tmp/overpass-smoke.txt
+              if [ "$COUNT" -gt 0 ] && [ "$FUEL" -gt 0 ]; then OK=1; break; fi
+            fi
+          done
+          test "$OK" = 1
+
+      - name: Open encrypted build session
+        id: session
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SESSION=$(openssl rand -hex 12)
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/ca103-private.pem >/dev/null 2>&1
+          openssl pkey -in /tmp/ca103-private.pem -pubout -out /tmp/ca103-public.pem
+          PUB=$(base64 -w0 /tmp/ca103-public.pem)
+          gh api repos/${GITHUB_REPOSITORY}/issues/41/comments -f body="CA103_PUBLIC_KEY:${SESSION}:${PUB}" >/dev/null
+          echo "session=${SESSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Receive and decrypt source chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SESSION: ${{ steps.session.outputs.session }}
+        run: |
+          set -euo pipefail
+          DONE=''
+          for i in $(seq 1 160); do
+            DONE=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/41/comments --jq ".[] | select(.body | startswith(\"CA103_DONE:${SESSION}:\")) | .body" | tail -n 1 || true)
+            [ -n "$DONE" ] && break
+            sleep 5
+          done
+          test -n "$DONE"
+          REST=${DONE#CA103_DONE:${SESSION}:}
+          COUNT=${REST%%:*}
+          KEY_B64=${REST#*:}
+          : > /tmp/ca103-source.enc.b64
+          for N in $(seq 1 "$COUNT"); do
+            BODY=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/41/comments --jq ".[] | select(.body | startswith(\"CA103_CHUNK:${SESSION}:${N}:\")) | .body" | tail -n 1)
+            test -n "$BODY"
+            PREFIX="CA103_CHUNK:${SESSION}:${N}:"
+            printf '%s' "${BODY#${PREFIX}}" >> /tmp/ca103-source.enc.b64
+          done
+          printf '%s' "$KEY_B64" | base64 -d > /tmp/ca103-key.enc
+          base64 -d /tmp/ca103-source.enc.b64 > /tmp/ca103-source.enc
+          openssl pkeyutl -decrypt -inkey /tmp/ca103-private.pem -in /tmp/ca103-key.enc -pkeyopt rsa_padding_mode:oaep > /tmp/ca103-pass.txt
+          openssl enc -d -aes-256-cbc -pbkdf2 -in /tmp/ca103-source.enc -out /tmp/ca103-source.zip -pass file:/tmp/ca103-pass.txt
+          unzip -tq /tmp/ca103-source.zip
+          mkdir -p /tmp/ca103-src
+          unzip -q /tmp/ca103-source.zip -d /tmp/ca103-src
+
+      - name: Build and verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJ=$(dirname "$(find /tmp/ca103-src -maxdepth 3 -type f -name settings.gradle | head -n 1)")
+          test -n "$PROJ"
+          cd "$PROJ"
+          gradle --no-daemon :app:assembleDebug --stacktrace
+          APK=$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)
+          test -f "$APK"
+          mkdir -p /tmp/ca103-out
+          cp "$APK" /tmp/ca103-out/CompagnonAutoroute-1.0.3-V1.apk
+          sha256sum /tmp/ca103-out/CompagnonAutoroute-1.0.3-V1.apk | tee /tmp/ca103-out/CompagnonAutoroute-1.0.3-V1.apk.sha256
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          "$AAPT" dump badging /tmp/ca103-out/CompagnonAutoroute-1.0.3-V1.apk | tee /tmp/ca103-out/badging.txt
+          grep -F "package: name='com.compagnonautoroute.app' versionCode='4' versionName='1.0.3-v1'" /tmp/ca103-out/badging.txt
+          "$APKSIGNER" verify --verbose --print-certs /tmp/ca103-out/CompagnonAutoroute-1.0.3-V1.apk | tee /tmp/ca103-out/signature.txt
+          cp /tmp/overpass-smoke.txt /tmp/ca103-out/overpass-smoke.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CompagnonAutoroute-1.0.3-V1-APK
+          path: /tmp/ca103-out/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SESSION: ${{ steps.session.outputs.session }}
+        run: gh api repos/${GITHUB_REPOSITORY}/issues/41/comments -f body="CA103_BUILD_DONE:${SESSION}" >/dev/null
