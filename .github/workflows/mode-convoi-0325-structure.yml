@@ -1,0 +1,86 @@
+name: Mode Convoi 0.3.25 Structure Cleanup
+
+on:
+  push:
+    branches: [mode-convoi-apk-build]
+    paths:
+      - '.github/workflows/mode-convoi-0325-structure.yml'
+      - 'mode-convoi-maintenance/refactor_0325.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refactor-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mode-convoi-apk-build
+          fetch-depth: 0
+
+      - name: Apply structural refactor to canonical source
+        run: python mode-convoi-maintenance/refactor_0325.py
+
+      - name: Structural assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi
+          test -f "$SRC/NotificationHelper.java"
+          test -f "$SRC/ConvoyEventProcessor.java"
+          ! grep -q 'startVoicePolling' "$SRC/LocationShareService.java"
+          ! grep -q 'pollVoice' "$SRC/LocationShareService.java"
+          ! grep -q 'private void processEvents' "$SRC/MainActivity.java"
+          grep -q 'ConvoyEventProcessor.process(this,prefs,s);' "$SRC/MainActivity.java"
+          grep -q "versionName '0.3.25'" mode-convoi-clean/android/app/build.gradle
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compile canonical source
+        run: gradle -p mode-convoi-clean/android --no-daemon assembleDebug assembleRelease
+
+      - name: Commit validated canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Mode Convoi Builder'
+          git config user.email 'mode-convoi-builder@users.noreply.github.com'
+          git add mode-convoi-clean/android
+          if ! git diff --cached --quiet; then
+            git commit -m 'Mode Convoi 0.3.25 centralize events and remove legacy voice code'
+            git push origin HEAD:mode-convoi-apk-build
+          fi
+
+      - name: Package release artifact
+        shell: bash
+        run: |
+          cp mode-convoi-clean/android/app/build/outputs/apk/release/app-release-unsigned.apk ModeConvoi-0.3.25-UNSIGNED.apk
+          sha256sum ModeConvoi-0.3.25-UNSIGNED.apk > ModeConvoi-0.3.25-UNSIGNED.apk.sha256
+          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java > MainActivity-lines.txt
+          wc -l mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java > LocationShareService-lines.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ModeConvoi-0.3.25-structure-cleanup
+          if-no-files-found: error
+          path: |
+            ModeConvoi-0.3.25-UNSIGNED.apk
+            ModeConvoi-0.3.25-UNSIGNED.apk.sha256
+            MainActivity-lines.txt
+            LocationShareService-lines.txt
+            mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/NotificationHelper.java
+            mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/ConvoyEventProcessor.java
