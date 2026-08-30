@@ -1,4 +1,4 @@
-name: Compagnon Autoroute 1.0.6 ergonomie build retry
+name: Compagnon Autoroute 1.0.6 ergonomie build retry final
 on:
   push:
     branches: [main]
