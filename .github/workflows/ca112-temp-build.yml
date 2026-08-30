@@ -1,0 +1,95 @@
+name: Compagnon Autoroute 1.0.12 verified build
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ca112-temp-build.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with: {distribution: temurin, java-version: '17'}
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Reconstruct verified 1.0.11 source and apply 1.0.12 patch
+        env:
+          GH_TOKEN: '${{ github.token }}'
+        run: |
+          set -euo pipefail
+          : > /tmp/source.zip
+          for H in 2ea825b585a9f260bd4256fe811650d245ccd837 5e6264585e4ec332f8e6b0f3852857f9edfb4dca d39c3528e691213de6d750e3ba12d2e29baccf78 0f9b4635d69cc740e8ccb462379e07c0685e0159; do
+            gh api repos/${GITHUB_REPOSITORY}/git/blobs/$H --jq .content | tr -d '\n' | base64 -d >> /tmp/source.zip
+          done
+          echo '4b336e63b342a0cd7eca9a68d7b51fdf7a908d531c6ba87a1a585f7aed2374a1  /tmp/source.zip' | sha256sum -c -
+          unzip -tq /tmp/source.zip
+          mkdir /tmp/src
+          unzip -q /tmp/source.zip -d /tmp/src
+          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
+          cd "$P"
+
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/e5976342589fed3af27f050fc65c81615775cc91 --jq .content | tr -d '\n' | base64 -d > /tmp/ca109.patch
+          echo '09c5b55d9b36f1c5bdd4aad44f42e45651e822003dfe68eaeae5cb4afaa0f4c9  /tmp/ca109.patch' | sha256sum -c -
+          patch -p4 --batch < /tmp/ca109.patch
+          sed -i 's/external\.setOnClickListener(v -> openCurrentPositionInMaps())/external.setOnClickListener(view -> openCurrentPositionInMaps())/' app/src/main/java/com/compagnonautoroute/app/MainActivity.java
+
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/da4a0a7c795216b8b4d65cfe70c3ec02a0452167 --jq .content | tr -d '\n' | base64 -d > /tmp/ca110.patch.gz
+          echo '5f40cd7d732eb8af8491e36eb67f512aae7c04eb15128417520bd24f9fc2df65  /tmp/ca110.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/ca110.patch.gz > /tmp/ca110.patch
+          patch -p1 --batch < /tmp/ca110.patch
+
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/6a3a01e49ae6c80c085846318197c51961b4851b --jq .content | tr -d '\n' | base64 -d > /tmp/ca111.patch.gz
+          echo '2b3ca6e35a3cd7f2ab5711d9f68299ffcb5788f58f420fbb9cb23106768235f2  /tmp/ca111.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/ca111.patch.gz > /tmp/ca111.patch
+          patch -p1 --batch < /tmp/ca111.patch
+
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/6c3d39b538b71f92135860a1223e7911c0645a20 --jq .content | tr -d '\n' | base64 -d > /tmp/ca112.patch.gz
+          echo '33fdda871f17f6c68dde6a8e62690db95c4e0cd162960564c9475243f113b00c  /tmp/ca112.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/ca112.patch.gz > /tmp/ca112.patch
+          patch -p4 --batch < /tmp/ca112.patch
+
+          echo 'fa43feb07c7c8de3d2286a9d8a6027ba78bbfedf959f2fa53c0e39f5436e79c6  app/build.gradle' | sha256sum -c -
+          echo 'e2751211e19a53823e31a3da42b7795afeb7965b46107746e8a1d88f2325b616  app/src/main/java/com/compagnonautoroute/app/MainActivity.java' | sha256sum -c -
+          echo '23bad68eeb73e95e63e72133a183d1ab28540651e060aa3062e3209de23dced6  app/src/main/java/com/compagnonautoroute/app/data/OverpassClient.java' | sha256sum -c -
+          echo '0ddf7fd0b889c417bca1cabb7fffc91c450be91f14581c555fafbde5b7e76fe0  app/src/main/java/com/compagnonautoroute/app/model/HighwayService.java' | sha256sum -c -
+          echo '209c4d02a0b73a3c981200d6b1d2d3acba7f2bde5f60806f27054face76567ad  app/src/main/java/com/compagnonautoroute/app/core/ServiceQuality.java' | sha256sum -c -
+          echo '1b1ca5366bf19af74ac5c03c700b006bee41c10891427d44294c08f2cf78a7b7  tools/CoreLogicSelfTest.java' | sha256sum -c -
+      - name: Core tests
+        run: |
+          set -e
+          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
+          mkdir /tmp/core
+          javac -d /tmp/core \
+            "$P/app/src/main/java/com/compagnonautoroute/app/core/GeoMath.java" \
+            "$P/app/src/main/java/com/compagnonautoroute/app/core/RouteGraph.java" \
+            "$P/app/src/main/java/com/compagnonautoroute/app/core/ServiceQuality.java" \
+            "$P/app/src/main/java/com/compagnonautoroute/app/model/ServiceType.java" \
+            "$P/app/src/main/java/com/compagnonautoroute/app/model/HighwayService.java" \
+            "$P/tools/CoreLogicSelfTest.java"
+          java -cp /tmp/core CoreLogicSelfTest | tee /tmp/core-tests.txt
+      - name: Build unsigned APK
+        run: |
+          set -e
+          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
+          cd "$P"
+          gradle --no-daemon :app:assembleRelease
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          test -f "$APK"
+          mkdir /tmp/out
+          BDIR="$ANDROID_HOME/build-tools/35.0.0"
+          "$BDIR/zipalign" -p -f 4 "$APK" /tmp/out/CompagnonAutoroute-1.0.12-V1-aligned-unsigned.apk
+          "$BDIR/zipalign" -c -v 4 /tmp/out/CompagnonAutoroute-1.0.12-V1-aligned-unsigned.apk
+          "$BDIR/aapt" dump badging /tmp/out/CompagnonAutoroute-1.0.12-V1-aligned-unsigned.apk | tee /tmp/out/badging.txt
+          grep -F "package: name='com.compagnonautoroute.app' versionCode='13' versionName='1.0.12-v1'" /tmp/out/badging.txt
+          sha256sum /tmp/out/CompagnonAutoroute-1.0.12-V1-aligned-unsigned.apk | tee /tmp/out/unsigned.sha256
+          cp /tmp/core-tests.txt /tmp/out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CompagnonAutoroute-1.0.12-V1-UNSIGNED
+          path: '/tmp/out/*'
+          retention-days: 1
