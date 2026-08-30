@@ -1,4 +1,4 @@
-name: Compagnon Autoroute 1.0.8 unsigned build
+name: Compagnon Autoroute 1.0.8 corrected unsigned build
 on:
   push:
     branches: [main]
@@ -17,7 +17,7 @@ jobs:
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
-      - name: Reconstruct source
+      - name: Reconstruct and patch source
         env:
           GH_TOKEN: '${{ github.token }}'
         run: |
@@ -35,6 +35,9 @@ jobs:
           unzip -tq /tmp/source.zip
           mkdir /tmp/src
           unzip -q /tmp/source.zip -d /tmp/src
+          P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle | head -1)")
+          sed -i 's/external.setOnClickListener(v -> openCurrentPositionInMaps());/external.setOnClickListener(view -> openCurrentPositionInMaps());/' "$P/app/src/main/java/com/compagnonautoroute/app/MainActivity.java"
+          grep -F 'external.setOnClickListener(view -> openCurrentPositionInMaps());' "$P/app/src/main/java/com/compagnonautoroute/app/MainActivity.java"
       - name: Core tests
         run: |
           set -e
