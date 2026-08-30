@@ -91,7 +91,6 @@ jobs:
           set -euo pipefail
           if git log -1 --pretty=%B | grep -q '^Mode Convoi 0.3.26 continue structural cleanup$'; then
             git reset --hard HEAD
-            rm -rf mode-convoi-clean/android/app/build mode-convoi-clean/android/.gradle
             git fetch origin mode-convoi-apk-build
             git rebase origin/mode-convoi-apk-build
             git push origin HEAD:mode-convoi-apk-build
