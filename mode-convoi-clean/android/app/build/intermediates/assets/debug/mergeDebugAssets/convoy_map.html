@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+html,body,#map{height:100%;margin:0;background:#101419;overflow:hidden;font-family:Arial,sans-serif;color:#fff}
+#map{position:relative;touch-action:none;background:linear-gradient(135deg,#111820,#18212a)}
+#tiles,#markers{position:absolute;inset:0;overflow:hidden}#tiles img{position:absolute;width:256px;height:256px;user-select:none;-webkit-user-drag:none;background:#18212a}
+.marker{position:absolute;transform:translate(-18px,-18px);z-index:5;pointer-events:auto}.car{font-size:25px;filter:drop-shadow(0 2px 3px #000)}.photo{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 5px #000a;background:#222}
+.label{position:absolute;left:26px;top:3px;white-space:nowrap;background:#111e;border:1px solid #ffffff24;border-radius:7px;padding:3px 6px;font-size:12px;font-weight:700;box-shadow:0 2px 7px #0008}
+.rally .car{font-size:27px}.mine .label{border-color:#f0ad32;color:#ffd27c}.stale{opacity:.48}
+.controls{position:absolute;right:10px;top:10px;z-index:20;display:flex;flex-direction:column;gap:7px}.ctrl{width:42px;height:42px;border:1px solid #ffffff25;border-radius:11px;background:#151a20ef;color:#fff;font-size:22px;font-weight:bold;box-shadow:0 2px 8px #0008}.ctrl:active{background:#272e36}
+#recenter{font-size:18px}#status{position:absolute;left:10px;bottom:10px;z-index:20;max-width:75%;background:#111d;border:1px solid #ffffff1f;border-radius:9px;padding:7px 9px;font-size:11px;color:#cbd0d5;box-shadow:0 2px 8px #0008}
+#status.good{color:#a7e39b;border-color:#5bc43e55}#status.warn{color:#ffd27c;border-color:#f0ad3255}
+</style></head>
+<body><div id="map"><div id="tiles"></div><div id="markers"></div><div class="controls"><button class="ctrl" id="plus">+</button><button class="ctrl" id="minus">−</button><button class="ctrl" id="recenter">◎</button></div><div id="status">Carte prête — en attente des positions du convoi</div></div>
+<script>
+const mapEl=document.getElementById('map'), tilesEl=document.getElementById('tiles'), markersEl=document.getElementById('markers'), statusEl=document.getElementById('status');
+let zoom=10, center={lat:46.23,lon:7.36}, state={}, myId='', fitted=false, tileErrors=0, dragging=false, startX=0,startY=0,startWorld=null;
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function project(lat,lon,z=zoom){const n=256*Math.pow(2,z),x=(lon+180)/360*n;const s=Math.sin(lat*Math.PI/180);const y=(.5-Math.log((1+s)/(1-s))/(4*Math.PI))*n;return{x,y}}
+function unproject(x,y,z=zoom){const n=256*Math.pow(2,z),lon=x/n*360-180,yy=.5-y/n,lat=90-360*Math.atan(Math.exp(-yy*2*Math.PI))/Math.PI;return{lat,lon}}
+function viewport(){return{w:mapEl.clientWidth||360,h:mapEl.clientHeight||500}}
+function topLeft(){const v=viewport(),c=project(center.lat,center.lon);return{x:c.x-v.w/2,y:c.y-v.h/2}}
+function validPoint(lat,lon){return Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=85&&Math.abs(lon)<=180}
+function setStatus(t,kind=''){statusEl.textContent=t;statusEl.className=kind}
+function renderTiles(){tilesEl.innerHTML='';tileErrors=0;const v=viewport(),tl=topLeft(),n=Math.pow(2,zoom);let minX=Math.floor(tl.x/256)-1,maxX=Math.floor((tl.x+v.w)/256)+1,minY=Math.floor(tl.y/256)-1,maxY=Math.floor((tl.y+v.h)/256)+1;
+ for(let ty=minY;ty<=maxY;ty++){if(ty<0||ty>=n)continue;for(let tx=minX;tx<=maxX;tx++){let wrap=((tx%n)+n)%n,img=document.createElement('img');img.loading='eager';img.referrerPolicy='no-referrer';img.src=`https://tile.openstreetmap.org/${zoom}/${wrap}/${ty}.png`;img.style.left=(tx*256-tl.x)+'px';img.style.top=(ty*256-tl.y)+'px';img.onerror=()=>{tileErrors++;if(tileErrors===3)setStatus('Fond de carte indisponible — positions toujours visibles','warn')};tilesEl.appendChild(img)}}}
+function addMarker(lat,lon,label,kind='',stale=false,icon='🚗',image='',markerColor=''){if(!validPoint(lat,lon))return;const tl=topLeft(),p=project(lat,lon),m=document.createElement('div');m.className='marker '+kind+(stale?' stale':'');m.style.left=(p.x-tl.x)+'px';m.style.top=(p.y-tl.y)+'px';const safeImg=(image&&/^[A-Za-z0-9+/=]+$/.test(image)&&image.length<30000)?image:'';const visual=kind.includes('rally')?'<div class="car">📍</div>':(safeImg?`<img class="photo" src="data:image/jpeg;base64,${safeImg}">`:`<div class="car">${esc(icon||'🚗')}</div>`);m.innerHTML=`${visual}<div class="label">${esc(label)}</div>`;if(markerColor&&/^#[0-9A-Fa-f]{6}$/.test(markerColor)){const lab=m.querySelector('.label');if(lab)lab.style.borderColor=markerColor;const ph=m.querySelector('.photo');if(ph)ph.style.borderColor=markerColor;}markersEl.appendChild(m)}
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function renderMarkers(){markersEl.innerHTML='';const now=state.serverTime||Date.now();let count=0;(state.participants||[]).forEach(p=>{if(!p.location)return;const lat=+p.location.lat,lon=+p.location.lon;if(!validPoint(lat,lon))return;const stale=now-(p.location.receivedAt||0)>30000;addMarker(lat,lon,(p.name||'Participant')+(p.id===myId?' · MOI':''),p.id===myId?'mine':'',stale,p.vehicleIcon||'🚗',p.vehicleImage||'',p.vehicleMarkerColor||'');count++});if(state.rally)addMarker(+state.rally.lat,+state.rally.lon,state.rally.name||'Regroupement','rally',false,'📍','','');if(tileErrors<3)setStatus(count?`${count} voiture${count>1?'s':''} positionnée${count>1?'s':''}`:'Aucune position GPS reçue',count?'good':'')}
+function render(){renderTiles();renderMarkers()}
+function fitPoints(){let pts=[];(state.participants||[]).forEach(p=>{if(p.location&&validPoint(+p.location.lat,+p.location.lon))pts.push({lat:+p.location.lat,lon:+p.location.lon})});if(state.rally&&validPoint(+state.rally.lat,+state.rally.lon))pts.push({lat:+state.rally.lat,lon:+state.rally.lon});if(!pts.length)return;let minLat=Math.min(...pts.map(p=>p.lat)),maxLat=Math.max(...pts.map(p=>p.lat)),minLon=Math.min(...pts.map(p=>p.lon)),maxLon=Math.max(...pts.map(p=>p.lon));center={lat:(minLat+maxLat)/2,lon:(minLon+maxLon)/2};const v=viewport();for(let z=16;z>=5;z--){let a=project(minLat,minLon,z),b=project(maxLat,maxLon,z);if(Math.abs(b.x-a.x)<v.w-100&&Math.abs(b.y-a.y)<v.h-120){zoom=z;break}}}
+window.updateConvoy=function(raw,id){try{state=typeof raw==='string'?JSON.parse(raw||'{}'):(raw||{});myId=id||'';if(!fitted){fitPoints();fitted=true}render()}catch(e){setStatus('Erreur de données de la carte','warn')}};
+function zoomBy(d){const old=zoom;zoom=clamp(zoom+d,4,19);if(old!==zoom)render()}
+document.getElementById('plus').onclick=()=>zoomBy(1);document.getElementById('minus').onclick=()=>zoomBy(-1);document.getElementById('recenter').onclick=()=>{fitted=false;fitPoints();fitted=true;render()};
+function point(ev){const t=ev.touches?ev.touches[0]:ev;return{x:t.clientX,y:t.clientY}}
+function begin(ev){if(ev.target.tagName==='BUTTON')return;dragging=true;const q=point(ev);startX=q.x;startY=q.y;startWorld=project(center.lat,center.lon);ev.preventDefault()}
+function move(ev){if(!dragging)return;const q=point(ev),dx=q.x-startX,dy=q.y-startY;center=unproject(startWorld.x-dx,startWorld.y-dy);render();ev.preventDefault()}
+function end(){dragging=false}
+mapEl.addEventListener('mousedown',begin);window.addEventListener('mousemove',move);window.addEventListener('mouseup',end);mapEl.addEventListener('touchstart',begin,{passive:false});mapEl.addEventListener('touchmove',move,{passive:false});mapEl.addEventListener('touchend',end);
+window.addEventListener('resize',()=>render());render();window.mapReady=true;
+</script></body></html>

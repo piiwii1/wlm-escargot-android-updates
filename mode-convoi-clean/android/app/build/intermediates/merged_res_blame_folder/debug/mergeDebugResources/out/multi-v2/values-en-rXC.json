@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "ch.piiwii.modeconvoi.app-mergeDebugResources-10:/values-en-rXC/values-en-rXC.xml",
+            "map": [
+                {
+                    "source": "/home/runner/.gradle/caches/8.9/transforms/aa0d300993af54b4f2e94b07cb4c2398/transformed/core-1.2.0/res/values-en-rXC/values-en-rXC.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "203",
+                        "endOffsets": "254"
+                    }
+                }
+            ]
+        }
+    ]
+}

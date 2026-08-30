@@ -52,7 +52,6 @@ public class MainActivity extends Activity {
     private int bg, card, fg, muted, accent, danger, border, control, navSurface;
     private boolean darkTheme;
     private static final int REQ_LOCATION = 1001, REQ_NOTIF = 1002, REQ_AUDIO = 1003, REQ_VEHICLE_IMAGE = 2001;
-    private static final String EVENTS_CHANNEL = "convoy_alerts_v2";
     private FrameLayout vehiclePreview;
     private Dialog fullScreenMapDialog;
     private WebView fullScreenMapView;
@@ -94,7 +93,7 @@ public class MainActivity extends Activity {
         else if(savedServer.isEmpty()) prefs.put("serverUrl",DEFAULT_SERVER);
         if(oldLocalServer && prefs.hasActiveConvoy()) { prefs.clearSession(); snapshot=null; prefs.put("serverUrl",DEFAULT_SERVER); }
         applyPalette();
-        createEventChannel();
+        NotificationHelper.ensureAlertChannel(this);
         handleDeepLink(getIntent());
         render();
     }
@@ -830,7 +829,7 @@ private String funnyNickname(){
                     pollInFlight=false;
                     String newName=s.optString("name",""); boolean renamed=!newName.isEmpty()&&!newName.equals(prefs.get("convoyName",""));
                     if(renamed)prefs.put("convoyName",newName);
-                    snapshot=s;processEvents(); consecutivePollFailures=0; lastSuccessfulSyncAt=System.currentTimeMillis();
+                    snapshot=s;ConvoyEventProcessor.process(this,prefs,s); consecutivePollFailures=0; lastSuccessfulSyncAt=System.currentTimeMillis();
                     if(liveTalkie!=null)liveTalkie.ensureStarted();
                     if(renamed&&"home".equals(currentPage))render();
                     else if(mapView!=null)pushMap();
@@ -850,41 +849,6 @@ private String funnyNickname(){
                 });
             }
         });
-    }
-
-    private void processEvents(){JSONArray es=snapshot==null?null:snapshot.optJSONArray("events");if(es==null)return;long last=prefs.getLong("lastEventId",0),max=last;String me=prefs.get("participantId","");for(int i=0;i<es.length();i++){JSONObject e=es.optJSONObject(i);if(e==null)continue;long id=e.optLong("id");max=Math.max(max,id);if(id>last&&!me.equals(e.optString("participantId"))&&(e.optString("type").equals("status")||e.optString("type").equals("rally")||e.optString("type").equals("leave")||e.optString("type").equals("join")||e.optString("type").equals("remove")||e.optString("type").equals("rename")||e.optString("type").equals("close")||e.optString("type").equals("role")||e.optString("type").equals("emergency-stop")||e.optString("type").equals("status-clear-auto")))notifyEvent(e);}prefs.putLong("lastEventId",max);}
-    private void notifyEvent(JSONObject e){
-        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
-        NotificationManager nm=getSystemService(NotificationManager.class);
-        String title=e.optString("participantName","Mode Convoi");
-        String msg=e.optString("label","Nouvelle information");
-        Intent open=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi=PendingIntent.getActivity(this,(int)(e.optLong("id")%100000),open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        Notification.Builder b=new Notification.Builder(this,EVENTS_CHANNEL)
-                .setSmallIcon(R.drawable.ic_notification)
-                .setColor(accent)
-                .setContentTitle(title)
-                .setContentText(msg)
-                .setStyle(new Notification.BigTextStyle().bigText(msg))
-                .setContentIntent(pi)
-                .setAutoCancel(true)
-                .setCategory(Notification.CATEGORY_MESSAGE)
-                .setVisibility(Notification.VISIBILITY_PUBLIC)
-                .setPriority(Notification.PRIORITY_HIGH)
-                .setWhen(System.currentTimeMillis())
-                .setShowWhen(true);
-        nm.notify((int)(10000+e.optLong("id")%100000),b.build());
-    }
-    private void createEventChannel(){
-        if(Build.VERSION.SDK_INT>=26){
-            NotificationChannel c=new NotificationChannel(EVENTS_CHANNEL,"Alertes Mode Convoi",NotificationManager.IMPORTANCE_HIGH);
-            c.setDescription("Alertes des participants, regroupements et événements importants du convoi");
-            c.enableVibration(true);c.setVibrationPattern(new long[]{0,220,110,260});
-            c.enableLights(true);c.setLightColor(accent);
-            c.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-            c.setShowBadge(true);
-            getSystemService(NotificationManager.class).createNotificationChannel(c);
-        }
     }
 
     private View participantAvatar(JSONObject p,int size,int fallbackColor){

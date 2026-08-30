@@ -1,0 +1,15 @@
+ch.piiwii.modeconvoi.app-lifecycle-runtime-2.3.1-0 /home/runner/.gradle/caches/8.9/transforms/0084e1435841a50bbd139f9a4a679066/transformed/lifecycle-runtime-2.3.1/res
+ch.piiwii.modeconvoi.app-savedstate-1.1.0-1 /home/runner/.gradle/caches/8.9/transforms/2ec79939b08b3130254d642cbb4a4c9e/transformed/savedstate-1.1.0/res
+ch.piiwii.modeconvoi.app-play-services-basement-18.1.0-2 /home/runner/.gradle/caches/8.9/transforms/7372d0c618da6ff3d66aef0823e540f8/transformed/play-services-basement-18.1.0/res
+ch.piiwii.modeconvoi.app-activity-1.3.1-3 /home/runner/.gradle/caches/8.9/transforms/887d82958012d2a550d8eedc3bef12d8/transformed/activity-1.3.1/res
+ch.piiwii.modeconvoi.app-core-1.2.0-4 /home/runner/.gradle/caches/8.9/transforms/aa0d300993af54b4f2e94b07cb4c2398/transformed/core-1.2.0/res
+ch.piiwii.modeconvoi.app-coordinatorlayout-1.0.0-5 /home/runner/.gradle/caches/8.9/transforms/b71951edcf6b4d9efa3bc01dd09b535c/transformed/coordinatorlayout-1.0.0/res
+ch.piiwii.modeconvoi.app-lifecycle-viewmodel-2.3.1-6 /home/runner/.gradle/caches/8.9/transforms/c58c82dd7398d569088ebf011e3ef05d/transformed/lifecycle-viewmodel-2.3.1/res
+ch.piiwii.modeconvoi.app-play-services-base-18.1.0-7 /home/runner/.gradle/caches/8.9/transforms/ff126ce3dbc4ac872d44e195bb13a10c/transformed/play-services-base-18.1.0/res
+ch.piiwii.modeconvoi.app-pngs-8 /home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/build/generated/res/pngs/release
+ch.piiwii.modeconvoi.app-resValues-9 /home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/build/generated/res/resValues/release
+ch.piiwii.modeconvoi.app-packageReleaseResources-10 /home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+ch.piiwii.modeconvoi.app-packageReleaseResources-11 /home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+ch.piiwii.modeconvoi.app-release-12 /home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/build/intermediates/merged_res/release/mergeReleaseResources
+ch.piiwii.modeconvoi.app-main-13 /home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/res
+ch.piiwii.modeconvoi.app-release-14 /home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/release/res

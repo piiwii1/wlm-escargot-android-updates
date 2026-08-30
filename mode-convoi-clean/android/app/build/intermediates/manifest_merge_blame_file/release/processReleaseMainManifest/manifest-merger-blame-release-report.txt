@@ -1,0 +1,205 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="ch.piiwii.modeconvoi"
+4    android:versionCode="28"
+5    android:versionName="0.3.25" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:3:5-67
+11-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:3:22-64
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:4:5-79
+12-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:4:22-76
+13    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+13-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:5:5-79
+13-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:5:22-76
+14    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+14-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:6:5-81
+14-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:6:22-78
+15    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+15-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:7:5-77
+15-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:7:22-74
+16    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+16-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:8:5-86
+16-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:8:22-83
+17    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+17-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:9:5-77
+17-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:9:22-74
+18    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+18-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:10:5-71
+18-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:10:22-68
+19
+20    <application
+20-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:5-18:19
+21        android:allowBackup="true"
+21-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:18-44
+22        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+22-->[androidx.core:core:1.2.0] /home/runner/.gradle/caches/8.9/transforms/aa0d300993af54b4f2e94b07cb4c2398/transformed/core-1.2.0/AndroidManifest.xml:24:18-86
+23        android:extractNativeLibs="false"
+24        android:icon="@mipmap/ic_launcher"
+24-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:45-79
+25        android:label="Mode Convoi"
+25-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:80-107
+26        android:roundIcon="@mipmap/ic_launcher_round"
+26-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:108-153
+27        android:supportsRtl="true"
+27-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:154-180
+28        android:theme="@style/Theme.ModeConvoi"
+28-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:181-220
+29        android:usesCleartextTraffic="true" >
+29-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:11:221-256
+30        <meta-data
+30-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:12:9-101
+31            android:name="com.google.mlkit.vision.DEPENDENCIES"
+31-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:12:20-71
+32            android:value="barcode_ui" />
+32-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:12:72-98
+33
+34        <activity
+34-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:13:9-16:20
+35            android:name="ch.piiwii.modeconvoi.MainActivity"
+35-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:13:19-47
+36            android:exported="true"
+36-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:13:48-71
+37            android:screenOrientation="unspecified" >
+37-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:13:72-111
+38            <intent-filter>
+38-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:14:13-156
+39                <action android:name="android.intent.action.MAIN" />
+39-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:14:28-80
+39-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:14:36-77
+40
+41                <category android:name="android.intent.category.LAUNCHER" />
+41-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:14:80-140
+41-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:14:90-137
+42            </intent-filter>
+43            <intent-filter>
+43-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:13-272
+44                <action android:name="android.intent.action.VIEW" />
+44-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:28-80
+44-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:36-77
+45
+46                <category android:name="android.intent.category.DEFAULT" />
+46-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:80-139
+46-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:90-136
+47                <category android:name="android.intent.category.BROWSABLE" />
+47-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:139-200
+47-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:149-197
+48
+49                <data
+49-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:200-256
+50                    android:host="join"
+50-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:234-253
+51                    android:scheme="modeconvoi" />
+51-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:15:206-233
+52            </intent-filter>
+53        </activity>
+54
+55        <service
+55-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:17:9-123
+56            android:name="ch.piiwii.modeconvoi.LocationShareService"
+56-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:17:18-54
+57            android:exported="false"
+57-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:17:55-79
+58            android:foregroundServiceType="location" />
+58-->/home/runner/work/wlm-escargot-android-updates/wlm-escargot-android-updates/mode-convoi-clean/android/app/src/main/AndroidManifest.xml:17:80-120
+59        <!--
+60        This activity is an invisible delegate activity to start scanner activity
+61        and receive result, so it's unnecessary to support screen orientation and
+62        we can avoid any side effect from activity recreation in any case.
+63        -->
+64        <activity
+64-->[com.google.android.gms:play-services-code-scanner:16.1.0] /home/runner/.gradle/caches/8.9/transforms/16e70bffb4abb8e7cdf6b9597c34e3d8/transformed/play-services-code-scanner-16.1.0/AndroidManifest.xml:15:9-20:20
+65            android:name="com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity"
+65-->[com.google.android.gms:play-services-code-scanner:16.1.0] /home/runner/.gradle/caches/8.9/transforms/16e70bffb4abb8e7cdf6b9597c34e3d8/transformed/play-services-code-scanner-16.1.0/AndroidManifest.xml:16:13-107
+66            android:exported="false"
+66-->[com.google.android.gms:play-services-code-scanner:16.1.0] /home/runner/.gradle/caches/8.9/transforms/16e70bffb4abb8e7cdf6b9597c34e3d8/transformed/play-services-code-scanner-16.1.0/AndroidManifest.xml:17:13-37
+67            android:screenOrientation="portrait" >
+67-->[com.google.android.gms:play-services-code-scanner:16.1.0] /home/runner/.gradle/caches/8.9/transforms/16e70bffb4abb8e7cdf6b9597c34e3d8/transformed/play-services-code-scanner-16.1.0/AndroidManifest.xml:18:13-49
+68        </activity>
+69
+70        <service
+70-->[com.google.mlkit:vision-common:17.0.0] /home/runner/.gradle/caches/8.9/transforms/411f98389468a9736d7aabfd43db8525/transformed/vision-common-17.0.0/AndroidManifest.xml:9:9-15:19
+71            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+71-->[com.google.mlkit:vision-common:17.0.0] /home/runner/.gradle/caches/8.9/transforms/411f98389468a9736d7aabfd43db8525/transformed/vision-common-17.0.0/AndroidManifest.xml:10:13-91
+72            android:directBootAware="true"
+72-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:17:13-43
+73            android:exported="false" >
+73-->[com.google.mlkit:vision-common:17.0.0] /home/runner/.gradle/caches/8.9/transforms/411f98389468a9736d7aabfd43db8525/transformed/vision-common-17.0.0/AndroidManifest.xml:11:13-37
+74            <meta-data
+74-->[com.google.mlkit:vision-common:17.0.0] /home/runner/.gradle/caches/8.9/transforms/411f98389468a9736d7aabfd43db8525/transformed/vision-common-17.0.0/AndroidManifest.xml:12:13-14:85
+75                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
+75-->[com.google.mlkit:vision-common:17.0.0] /home/runner/.gradle/caches/8.9/transforms/411f98389468a9736d7aabfd43db8525/transformed/vision-common-17.0.0/AndroidManifest.xml:13:17-124
+76                android:value="com.google.firebase.components.ComponentRegistrar" />
+76-->[com.google.mlkit:vision-common:17.0.0] /home/runner/.gradle/caches/8.9/transforms/411f98389468a9736d7aabfd43db8525/transformed/vision-common-17.0.0/AndroidManifest.xml:14:17-82
+77            <meta-data
+77-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:20:13-22:85
+78                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
+78-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:21:17-120
+79                android:value="com.google.firebase.components.ComponentRegistrar" />
+79-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:22:17-82
+80        </service>
+81
+82        <provider
+82-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:9:9-13:38
+83            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+83-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:10:13-78
+84            android:authorities="ch.piiwii.modeconvoi.mlkitinitprovider"
+84-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:11:13-69
+85            android:exported="false"
+85-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:12:13-37
+86            android:initOrder="99" />
+86-->[com.google.mlkit:common:18.9.0] /home/runner/.gradle/caches/8.9/transforms/a4fa92a3e5cc0a2457c70ec072189e5b/transformed/common-18.9.0/AndroidManifest.xml:13:13-35
+87
+88        <service
+88-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /home/runner/.gradle/caches/8.9/transforms/4b469b113f7035dbd8c4305357d4d5b0/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:29:9-35:19
+89            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+89-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /home/runner/.gradle/caches/8.9/transforms/4b469b113f7035dbd8c4305357d4d5b0/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:30:13-103
+90            android:exported="false" >
+90-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /home/runner/.gradle/caches/8.9/transforms/4b469b113f7035dbd8c4305357d4d5b0/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:31:13-37
+91            <meta-data
+91-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /home/runner/.gradle/caches/8.9/transforms/4b469b113f7035dbd8c4305357d4d5b0/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:32:13-34:39
+92                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+92-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /home/runner/.gradle/caches/8.9/transforms/4b469b113f7035dbd8c4305357d4d5b0/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:33:17-94
+93                android:value="cct" />
+93-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /home/runner/.gradle/caches/8.9/transforms/4b469b113f7035dbd8c4305357d4d5b0/transformed/transport-backend-cct-2.3.3/AndroidManifest.xml:34:17-36
+94        </service>
+95        <service
+95-->[com.google.android.datatransport:transport-runtime:2.2.6] /home/runner/.gradle/caches/8.9/transforms/daa86c04f564f71bd172d7303f2a0e6d/transformed/transport-runtime-2.2.6/AndroidManifest.xml:26:9-30:19
+96            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+96-->[com.google.android.datatransport:transport-runtime:2.2.6] /home/runner/.gradle/caches/8.9/transforms/daa86c04f564f71bd172d7303f2a0e6d/transformed/transport-runtime-2.2.6/AndroidManifest.xml:27:13-117
+97            android:exported="false"
+97-->[com.google.android.datatransport:transport-runtime:2.2.6] /home/runner/.gradle/caches/8.9/transforms/daa86c04f564f71bd172d7303f2a0e6d/transformed/transport-runtime-2.2.6/AndroidManifest.xml:28:13-37
+98            android:permission="android.permission.BIND_JOB_SERVICE" >
+98-->[com.google.android.datatransport:transport-runtime:2.2.6] /home/runner/.gradle/caches/8.9/transforms/daa86c04f564f71bd172d7303f2a0e6d/transformed/transport-runtime-2.2.6/AndroidManifest.xml:29:13-69
+99        </service>
+100
+101        <receiver
+101-->[com.google.android.datatransport:transport-runtime:2.2.6] /home/runner/.gradle/caches/8.9/transforms/daa86c04f564f71bd172d7303f2a0e6d/transformed/transport-runtime-2.2.6/AndroidManifest.xml:32:9-34:40
+102            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+102-->[com.google.android.datatransport:transport-runtime:2.2.6] /home/runner/.gradle/caches/8.9/transforms/daa86c04f564f71bd172d7303f2a0e6d/transformed/transport-runtime-2.2.6/AndroidManifest.xml:33:13-132
+103            android:exported="false" />
+103-->[com.google.android.datatransport:transport-runtime:2.2.6] /home/runner/.gradle/caches/8.9/transforms/daa86c04f564f71bd172d7303f2a0e6d/transformed/transport-runtime-2.2.6/AndroidManifest.xml:34:13-37
+104
+105        <activity
+105-->[com.google.android.gms:play-services-base:18.1.0] /home/runner/.gradle/caches/8.9/transforms/ff126ce3dbc4ac872d44e195bb13a10c/transformed/play-services-base-18.1.0/AndroidManifest.xml:20:9-22:45
+106            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+106-->[com.google.android.gms:play-services-base:18.1.0] /home/runner/.gradle/caches/8.9/transforms/ff126ce3dbc4ac872d44e195bb13a10c/transformed/play-services-base-18.1.0/AndroidManifest.xml:20:19-85
+107            android:exported="false"
+107-->[com.google.android.gms:play-services-base:18.1.0] /home/runner/.gradle/caches/8.9/transforms/ff126ce3dbc4ac872d44e195bb13a10c/transformed/play-services-base-18.1.0/AndroidManifest.xml:22:19-43
+108            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+108-->[com.google.android.gms:play-services-base:18.1.0] /home/runner/.gradle/caches/8.9/transforms/ff126ce3dbc4ac872d44e195bb13a10c/transformed/play-services-base-18.1.0/AndroidManifest.xml:21:19-78
+109
+110        <meta-data
+110-->[com.google.android.gms:play-services-basement:18.1.0] /home/runner/.gradle/caches/8.9/transforms/7372d0c618da6ff3d66aef0823e540f8/transformed/play-services-basement-18.1.0/AndroidManifest.xml:21:9-23:69
+111            android:name="com.google.android.gms.version"
+111-->[com.google.android.gms:play-services-basement:18.1.0] /home/runner/.gradle/caches/8.9/transforms/7372d0c618da6ff3d66aef0823e540f8/transformed/play-services-basement-18.1.0/AndroidManifest.xml:22:13-58
+112            android:value="@integer/google_play_services_version" />
+112-->[com.google.android.gms:play-services-basement:18.1.0] /home/runner/.gradle/caches/8.9/transforms/7372d0c618da6ff3d66aef0823e540f8/transformed/play-services-basement-18.1.0/AndroidManifest.xml:23:13-66
+113    </application>
+114
+115</manifest>

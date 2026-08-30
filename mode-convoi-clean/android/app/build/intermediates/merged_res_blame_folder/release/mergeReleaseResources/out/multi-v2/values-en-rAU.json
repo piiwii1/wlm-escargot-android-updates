@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "ch.piiwii.modeconvoi.app-mergeReleaseResources-10:/values-en-rAU/values-en-rAU.xml",
+            "map": [
+                {
+                    "source": "/home/runner/.gradle/caches/8.9/transforms/aa0d300993af54b4f2e94b07cb4c2398/transformed/core-1.2.0/res/values-en-rAU/values-en-rAU.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    }
+                }
+            ]
+        }
+    ]
+}
