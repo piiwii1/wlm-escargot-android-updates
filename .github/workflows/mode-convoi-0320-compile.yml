@@ -37,6 +37,7 @@ jobs:
           python mode-convoi-build/ux_0311_ui_patch.py
           cat mode-convoi-build/ux0312_part_01.txt mode-convoi-build/ux0312_part_02.txt mode-convoi-build/ux0312_part_03.txt mode-convoi-build/ux0312_part_04.txt mode-convoi-build/ux0312_part_05.txt | base64 -d | gunzip > /tmp/ux0312.patch
           patch -p0 < /tmp/ux0312.patch || true
+          rm -f mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java.rej
           python - <<'PY'
           from pathlib import Path
           import re
@@ -80,10 +81,22 @@ jobs:
           base64 -d mode-convoi-build/ux0319_patch.gz.b64 | gunzip > /tmp/ux0319.patch
           patch -p0 < /tmp/ux0319.patch
           cat mode-convoi-build/ux0320_part1.b64 mode-convoi-build/ux0320_part2.b64 | base64 -d | gunzip > /tmp/ux0320.patch
-          patch -p0 < /tmp/ux0320.patch
+          patch -p0 < /tmp/ux0320.patch || true
+          rm -f mode-convoi-build/android/app/build.gradle.rej
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('mode-convoi-build/android/app/build.gradle')
+          s=p.read_text()
+          s=re.sub(r'versionCode\s+\d+', 'versionCode 23', s)
+          s=re.sub(r"versionName\s+'[^']+'", "versionName '0.3.20'", s)
+          p.write_text(s)
+          PY
           grep -q "versionCode 23" mode-convoi-build/android/app/build.gradle
           grep -q "versionName '0.3.20'" mode-convoi-build/android/app/build.gradle
           grep -q 'RÉCEPTION AUDIO' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q 'setCommunicationDevice' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
+          grep -q 'SEND_RECV' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/LiveTalkieManager.java
 
       - uses: actions/setup-java@v4
         with:
