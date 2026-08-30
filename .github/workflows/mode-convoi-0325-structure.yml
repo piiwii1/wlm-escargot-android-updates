@@ -42,6 +42,23 @@ jobs:
           grep -q 'ConvoyEventProcessor.process(this,prefs,s);' "$SRC/MainActivity.java"
           grep -q "versionName '0.3.26'" mode-convoi-clean/android/app/build.gradle
 
+      - name: Prepare canonical source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Mode Convoi Builder'
+          git config user.email 'mode-convoi-builder@users.noreply.github.com'
+          git add \
+            mode-convoi-clean/android/app/build.gradle \
+            mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/AppPrefs.java \
+            mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java \
+            mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/LocationShareService.java \
+            mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/ParticipantDefaults.java \
+            mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/VehicleImageCache.java
+          if ! git diff --cached --quiet; then
+            git commit -m 'Mode Convoi 0.3.26 continue structural cleanup'
+          fi
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -59,15 +76,13 @@ jobs:
       - name: Compile canonical source
         run: gradle -p mode-convoi-clean/android --no-daemon assembleDebug assembleRelease
 
-      - name: Commit validated canonical source
+      - name: Publish validated canonical source
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'Mode Convoi Builder'
-          git config user.email 'mode-convoi-builder@users.noreply.github.com'
-          git add mode-convoi-clean/android
-          if ! git diff --cached --quiet; then
-            git commit -m 'Mode Convoi 0.3.26 continue structural cleanup'
+          if git log -1 --pretty=%B | grep -q '^Mode Convoi 0.3.26 continue structural cleanup$'; then
+            git fetch origin mode-convoi-apk-build
+            git rebase origin/mode-convoi-apk-build
             git push origin HEAD:mode-convoi-apk-build
           fi
 
