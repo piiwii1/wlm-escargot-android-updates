@@ -1,4 +1,4 @@
-name: Compagnon Autoroute 1.0.7 navigation build
+name: Compagnon Autoroute 1.0.7 navigation build T2
 on:
   push:
     branches: [main]
@@ -29,18 +29,27 @@ jobs:
         id: s
         env: {GH_TOKEN: '${{ github.token }}'}
         run: |
-          S=$(openssl rand -hex 12); openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/k.pem >/dev/null 2>&1; openssl pkey -in /tmp/k.pem -pubout -out /tmp/p.pem; P=$(base64 -w0 /tmp/p.pem); gh api repos/${GITHUB_REPOSITORY}/issues/45/comments -f body="CA107_PUBLIC_KEY:${S}:${P}" >/dev/null; echo "session=$S" >> $GITHUB_OUTPUT
+          S=$(openssl rand -hex 12); openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/k.pem >/dev/null 2>&1; openssl pkey -in /tmp/k.pem -pubout -out /tmp/p.pem; P=$(base64 -w0 /tmp/p.pem); gh api repos/${GITHUB_REPOSITORY}/issues/45/comments -f body="CA107T2_PUBLIC_KEY:${S}:${P}" >/dev/null; echo "session=$S" >> $GITHUB_OUTPUT
       - name: Receive bundle
         env: {GH_TOKEN: '${{ github.token }}', SESSION: '${{ steps.s.outputs.session }}'}
         run: |
-          M=''; for i in $(seq 1 180); do M=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/45/comments --jq ".[]|select(.body|startswith(\"CA107_BLOBS:${SESSION}:\"))|.body"|tail -1||true); [ -n "$M" ] && break; sleep 5; done; test -n "$M"
-          R=${M#CA107_BLOBS:${SESSION}:}; K=${R%%:*}; CSV=${R#*:}; gh api repos/${GITHUB_REPOSITORY}/git/blobs/$K --jq .content|tr -d '\n'|base64 -d >/tmp/key.enc; : >/tmp/b.enc; IFS=',' read -ra A <<< "$CSV"; for H in "${A[@]}"; do gh api repos/${GITHUB_REPOSITORY}/git/blobs/$H --jq .content|tr -d '\n'|base64 -d >>/tmp/b.enc; done
-          openssl pkeyutl -decrypt -inkey /tmp/k.pem -in /tmp/key.enc -pkeyopt rsa_padding_mode:oaep >/tmp/pass; openssl enc -d -aes-256-cbc -pbkdf2 -in /tmp/b.enc -out /tmp/b.zip -pass file:/tmp/pass; unzip -tq /tmp/b.zip; cd /tmp; unzip -q b.zip; mkdir /tmp/src; unzip -q /tmp/ca107-bundle/source.zip -d /tmp/src
+          set -euo pipefail
+          M=''; for i in $(seq 1 180); do M=$(gh api --paginate repos/${GITHUB_REPOSITORY}/issues/45/comments --jq ".[]|select(.body|startswith(\"CA107T2_BLOBS:${SESSION}:\"))|.body"|tail -1||true); [ -n "$M" ] && break; sleep 5; done; test -n "$M"
+          R=${M#CA107T2_BLOBS:${SESSION}:}; K=${R%%:*}; CSV=${R#*:}
+          gh api repos/${GITHUB_REPOSITORY}/git/blobs/$K --jq .content | tr -d '\n' | base64 -d | base64 -d >/tmp/key.enc
+          : >/tmp/b.enc
+          IFS=',' read -ra A <<< "$CSV"
+          for H in "${A[@]}"; do gh api repos/${GITHUB_REPOSITORY}/git/blobs/$H --jq .content | tr -d '\n' | base64 -d | base64 -d >>/tmp/b.enc; done
+          openssl pkeyutl -decrypt -inkey /tmp/k.pem -in /tmp/key.enc -pkeyopt rsa_padding_mode:oaep >/tmp/pass
+          openssl enc -d -aes-256-cbc -pbkdf2 -in /tmp/b.enc -out /tmp/b.zip -pass file:/tmp/pass
+          sha256sum /tmp/b.zip
+          unzip -tq /tmp/b.zip
+          cd /tmp; unzip -q b.zip; mkdir /tmp/src; unzip -q /tmp/ca107-bundle/source.zip -d /tmp/src
       - name: Core tests
         run: |
           P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle|head -1)"); mkdir /tmp/core; javac -d /tmp/core "$P/app/src/main/java/com/compagnonautoroute/app/core/GeoMath.java" "$P/app/src/main/java/com/compagnonautoroute/app/core/RouteGraph.java" "$P/tools/CoreLogicSelfTest.java"; java -cp /tmp/core CoreLogicSelfTest | tee /tmp/core-tests.txt
       - name: Build sign verify
         run: |
-          set -e; P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle|head -1)"); cd "$P"; gradle --no-daemon :app:assembleDebug; APK=$(find app/build/outputs/apk/debug -name '*.apk'|head -1); mkdir /tmp/out; A=$(find $ANDROID_HOME/build-tools -name apksigner|sort -V|tail -1); B=$(find $ANDROID_HOME/build-tools -name aapt|sort -V|tail -1); PW=$(cat /tmp/ca107-bundle/signing-pass.txt); $A sign --ks /tmp/ca107-bundle/signing.jks --ks-key-alias compagnon-test --ks-pass pass:$PW --key-pass pass:$PW --out /tmp/out/CompagnonAutoroute-1.0.7-V1.apk "$APK"; sha256sum /tmp/out/CompagnonAutoroute-1.0.7-V1.apk | tee /tmp/out/CompagnonAutoroute-1.0.7-V1.apk.sha256; $B dump badging /tmp/out/CompagnonAutoroute-1.0.7-V1.apk | tee /tmp/out/badging.txt; grep -F "versionCode='8' versionName='1.0.7-v1'" /tmp/out/badging.txt; $A verify --verbose --print-certs /tmp/out/CompagnonAutoroute-1.0.7-V1.apk | tee /tmp/out/signature.txt; grep -Fi f71e230f97112b5763e0b546e6b297b9e9c54df243dc8dcd8c856f35ea37acfc /tmp/out/signature.txt; cp /tmp/services-smoke.txt /tmp/core-tests.txt /tmp/out/
+          set -e; P=$(dirname "$(find /tmp/src -maxdepth 3 -name settings.gradle|head -1)"); cd "$P"; gradle --no-daemon :app:assembleDebug; APK=$(find app/build/outputs/apk/debug -name '*.apk'|head -1); mkdir /tmp/out; A=$(find $ANDROID_HOME/build-tools -name apksigner|sort -V|tail -1); B=$(find $ANDROID_HOME/build-tools -name aapt|sort -V|tail -1); PW=$(cat /tmp/ca107-bundle/signing-pass.txt); $A sign --ks /tmp/ca107-bundle/signing.jks --ks-key-alias compagnon-test --ks-pass pass:$PW --key-pass pass:$PW --out /tmp/out/CompagnonAutoroute-1.0.7-V1.apk "$APK"; sha256sum /tmp/out/CompagnonAutoroute-1.0.7-V1.apk | tee /tmp/out/CompagnonAutoroute-1.0.7-V1.apk.sha256; $B dump badging /tmp/out/CompagnonAutoroute-1.0.7-V1.apk | tee /tmp/out/badging.txt; grep -F "package: name='com.compagnonautoroute.app' versionCode='8' versionName='1.0.7-v1'" /tmp/out/badging.txt; $A verify --verbose --print-certs /tmp/out/CompagnonAutoroute-1.0.7-V1.apk | tee /tmp/out/signature.txt; grep -Fi f71e230f97112b5763e0b546e6b297b9e9c54df243dc8dcd8c856f35ea37acfc /tmp/out/signature.txt; cp /tmp/services-smoke.txt /tmp/core-tests.txt /tmp/out/
       - uses: actions/upload-artifact@v4
         with: {name: CompagnonAutoroute-1.0.7-V1-APK, path: '/tmp/out/*', retention-days: 1}
