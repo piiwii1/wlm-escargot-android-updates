@@ -22,6 +22,7 @@ jobs:
           rm -rf cr14
           mkdir -p cr14
           unzip -q /tmp/ConvoyRide-V1.4.0-source.zip -d cr14
+          cp convoyride-v14-fixes/RouteModel.java cr14/app/src/main/java/ch/piiwii/convoyride/RouteModel.java
           test -s cr14/app/src/main/java/ch/piiwii/convoyride/RouteModel.java
           test -s cr14/app/src/main/java/ch/piiwii/convoyride/ApiClient.java
           test -s cr14/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
