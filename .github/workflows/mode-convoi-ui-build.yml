@@ -22,9 +22,11 @@ jobs:
           mkdir -p mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi
           cat mode-convoi-build/main-parts/part-00 mode-convoi-build/main-parts/part-01 mode-convoi-build/main-parts/part-02 mode-convoi-build/main-parts/part-03 mode-convoi-build/main-parts/part-04 mode-convoi-build/main-parts/part-05 > mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
           python mode-convoi-build/ui_patch.py
+          python mode-convoi-build/ui_patch_fix.py
           sed -i "s/versionCode 2/versionCode 3/" mode-convoi-build/android/app/build.gradle
           sed -i "s/versionName '0.2.0'/versionName '0.3.0'/" mode-convoi-build/android/app/build.gradle
           grep -q 'private GradientDrawable roundBg' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          grep -q 'String\[\]\[\] statuses={{"🛑 Arrêt"' mode-convoi-build/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
           grep -q "versionName '0.3.0'" mode-convoi-build/android/app/build.gradle
 
       - uses: actions/setup-java@v4
