@@ -1,0 +1,178 @@
+            boolean hasArm64 = r.abis.contains("arm64-v8a");
+            boolean hasArm32 = r.abis.contains("armeabi-v7a");
+            boolean onlyX86 = !hasArm64 && !hasArm32 && (r.abis.contains("x86") || r.abis.contains("x86_64"));
+            if (phoneArm64 && onlyX86) r.addBuild(30, "Bibliothèques natives x86 sans ARM détecté sur téléphone ARM");
+            else if (phoneArm64 && hasArm32 && !hasArm64) r.addBuild(6, "Bibliothèques natives ARM 32 bits sans arm64-v8a");
+        }
+    }
+
+    private boolean has(AppResult r, String p) {
+        return r.permissions.contains(p);
+    }
+
+    private List<String> sensitiveGranted(Set<String> granted) {
+        String[] watched = {
+                "android.permission.ACCESS_FINE_LOCATION",
+                "android.permission.ACCESS_COARSE_LOCATION",
+                "android.permission.ACCESS_BACKGROUND_LOCATION",
+                "android.permission.CAMERA",
+                "android.permission.RECORD_AUDIO",
+                "android.permission.READ_CONTACTS",
+                "android.permission.WRITE_CONTACTS",
+                "android.permission.READ_CALL_LOG",
+                "android.permission.WRITE_CALL_LOG",
+                "android.permission.READ_SMS",
+                "android.permission.SEND_SMS",
+                "android.permission.READ_PHONE_STATE",
+                "android.permission.BLUETOOTH_CONNECT",
+                "android.permission.NEARBY_WIFI_DEVICES"
+        };
+        List<String> out = new ArrayList<>();
+        for (String p : watched) if (granted.contains(p)) out.add(shortPermission(p));
+        return out;
+    }
+
+    private String shortPermission(String p) {
+        int idx = p.lastIndexOf('.');
+        return idx >= 0 ? p.substring(idx + 1) : p;
+    }
+
+    private Map<String, UsageStats> usageMap(long begin, long end) {
+        try {
+            UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+            if (usm == null) return Collections.emptyMap();
+            Map<String, UsageStats> m = usm.queryAndAggregateUsageStats(begin, end);
+            return m == null ? Collections.emptyMap() : m;
+        } catch (Throwable t) {
+            return Collections.emptyMap();
+        }
+    }
+
+    private void countExported(PackageInfo pi, AppResult r) {
+        if (pi.activities != null) for (ActivityInfo i : pi.activities) {
+            if (i != null && i.exported && empty(i.permission)) r.exportedActivities++;
+        }
+        if (pi.services != null) for (ServiceInfo i : pi.services) {
+            if (i != null && i.exported && empty(i.permission)) r.exportedServices++;
+        }
+        if (pi.receivers != null) for (ActivityInfo i : pi.receivers) {
+            if (i != null && i.exported && empty(i.permission)) r.exportedReceivers++;
+        }
+        if (pi.providers != null) for (ProviderInfo i : pi.providers) {
+            if (i != null && i.exported && empty(i.readPermission) && empty(i.writePermission)) r.exportedProviders++;
+        }
+    }
+
+    private void inspectSpecialServices(PackageInfo pi, AppResult r) {
+        if (pi.services == null) return;
+        for (ServiceInfo s : pi.services) {
+            if (s == null) continue;
+            if ("android.permission.BIND_ACCESSIBILITY_SERVICE".equals(s.permission)) r.accessibilityService = true;
+            if ("android.permission.BIND_NOTIFICATION_LISTENER_SERVICE".equals(s.permission)) r.notificationListener = true;
+            if ("android.permission.BIND_VPN_SERVICE".equals(s.permission)) r.vpnService = true;
+            if (Build.VERSION.SDK_INT >= 28 && s.foregroundServiceType != 0) {
+                addForegroundTypes(s.foregroundServiceType, r.foregroundTypes);
+            }
+        }
+    }
+
+    private void addForegroundTypes(int t, Set<String> out) {
+        if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION) != 0) out.add("location");
+        if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK) != 0) out.add("mediaPlayback");
+        if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) != 0) out.add("mediaProjection");
+        if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) != 0) out.add("dataSync");
+        if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE) != 0) out.add("connectedDevice");
+        if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE) != 0) out.add("microphone");
+        if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA) != 0) out.add("camera");
+        if (Build.VERSION.SDK_INT >= 34) {
+            if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH) != 0) out.add("health");
+            if ((t & ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING) != 0) out.add("remoteMessaging");
+        }
+    }
+
+    private boolean empty(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    private String installer(PackageManager pm, String pkg) {
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                InstallSourceInfo source = pm.getInstallSourceInfo(pkg);
+                String installing = source.getInstallingPackageName();
+                String initiating = source.getInitiatingPackageName();
+                if (!empty(installing)) return installing;
+                if (!empty(initiating)) return initiating;
+                return "inconnu";
+            }
+            String v = pm.getInstallerPackageName(pkg);
+            return empty(v) ? "inconnu" : v;
+        } catch (Throwable t) {
+            return "inconnu";
+        }
+    }
+
+    private boolean looksManual(String installer) {
+        if (installer == null) return true;
+        String s = installer.toLowerCase(Locale.ROOT);
+        if (s.equals("inconnu")) return true;
+        if (s.contains("packageinstaller") || s.contains("permissioncontroller") || s.contains("documentsui") || s.contains("myfiles")) return true;
+        return !(s.contains("vending") || s.contains("galaxy.store") || s.contains("samsung.android.app") ||
+                s.contains("amazon.venezia") || s.contains("appmarket") || s.contains("fdroid"));
+    }
+
+    private long apkSize(ApplicationInfo ai) {
+        long total = 0;
+        try {
+            if (ai.sourceDir != null) total += new File(ai.sourceDir).length();
+            if (ai.splitSourceDirs != null) for (String p : ai.splitSourceDirs) if (p != null) total += new File(p).length();
+        } catch (Throwable ignored) {}
+        return total;
+    }
+
+    private ApkScan scanApks(ApplicationInfo ai) {
+        ApkScan out = new ApkScan();
+        List<String> paths = new ArrayList<>();
+        if (ai.sourceDir != null) paths.add(ai.sourceDir);
+        if (ai.splitSourceDirs != null) paths.addAll(Arrays.asList(ai.splitSourceDirs));
+        for (String path : paths) {
+            if (path == null) continue;
+            try (ZipFile zip = new ZipFile(path)) {
+                java.util.Enumeration<? extends ZipEntry> en = zip.entries();
+                while (en.hasMoreElements()) {
+                    String n = en.nextElement().getName();
+                    if (n.matches("classes(\\d*)\\.dex")) out.dexCount++;
+                    if (n.startsWith("lib/") && n.endsWith(".so")) {
+                        String[] parts = n.split("/");
+                        if (parts.length >= 3) out.abis.add(parts[1]);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        return out;
+    }
+
+    private String certificateSha256(PackageInfo pi) {
+        try {
+            Signature[] signatures = null;
+            if (Build.VERSION.SDK_INT >= 28 && pi.signingInfo != null) {
+                signatures = pi.signingInfo.hasMultipleSigners()
+                        ? pi.signingInfo.getApkContentsSigners()
+                        : pi.signingInfo.getSigningCertificateHistory();
+            }
+            if (signatures == null || signatures.length == 0) return "inconnu";
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(signatures[0].toByteArray());
+            StringBuilder s = new StringBuilder();
+            for (byte b : digest) s.append(String.format(Locale.ROOT, "%02x", b));
+            return s.toString();
+        } catch (Throwable t) {
+            return "inconnu";
+        }
+    }
+
+    private String safeLabel(PackageManager pm, ApplicationInfo ai) {
+        try {
+            CharSequence label = pm.getApplicationLabel(ai);
+            return label == null ? ai.packageName : label.toString();
+        } catch (Throwable t) {
+            return ai.packageName;
