@@ -70,8 +70,8 @@
             if ("android.permission.BIND_ACCESSIBILITY_SERVICE".equals(s.permission)) r.accessibilityService = true;
             if ("android.permission.BIND_NOTIFICATION_LISTENER_SERVICE".equals(s.permission)) r.notificationListener = true;
             if ("android.permission.BIND_VPN_SERVICE".equals(s.permission)) r.vpnService = true;
-            if (Build.VERSION.SDK_INT >= 28 && s.foregroundServiceType != 0) {
-                addForegroundTypes(s.foregroundServiceType, r.foregroundTypes);
+            if (Build.VERSION.SDK_INT >= 28 && s.getForegroundServiceType() != 0) {
+                addForegroundTypes(s.getForegroundServiceType(), r.foregroundTypes);
             }
         }
     }
