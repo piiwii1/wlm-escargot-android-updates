@@ -35,6 +35,7 @@ public final class AppPrefs {
         return !get("code", "").isEmpty() && !get("participantId", "").isEmpty() && !get("token", "").isEmpty();
     }
     public void clearSession() {
+        ConvoySnapshotRepository.invalidate();
         remove("code", "convoyName", "participantId", "token", "adminKey", "lastEventId", "lastVoiceId");
     }
 }
