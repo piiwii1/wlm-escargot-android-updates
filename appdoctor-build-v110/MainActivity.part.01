@@ -1,0 +1,178 @@
+        reportView.setText("Le rapport apparaîtra ici après l'analyse.");
+        reportView.setTextSize(12.5f);
+        reportView.setTextColor(Color.rgb(17, 24, 39));
+        reportView.setTextIsSelectable(true);
+        reportView.setTypeface(Typeface.MONOSPACE);
+        reportView.setPadding(dp(14), dp(14), dp(14), dp(14));
+        reportView.setBackgroundColor(Color.WHITE);
+        content.addView(reportView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        setContentView(root);
+    }
+
+    private TextView cardText(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextSize(14);
+        tv.setLineSpacing(0f, 1.12f);
+        tv.setTextColor(Color.rgb(31, 41, 55));
+        tv.setBackgroundColor(Color.WHITE);
+        tv.setPadding(dp(14), dp(13), dp(14), dp(13));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, dp(12));
+        tv.setLayoutParams(lp);
+        return tv;
+    }
+
+    private Button makeButton(String text, boolean primary) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextSize(14);
+        button.setAllCaps(false);
+        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        button.setMinHeight(dp(50));
+        if (primary) {
+            button.setTextColor(Color.WHITE);
+            button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(37, 99, 235)));
+        } else {
+            button.setTextColor(Color.rgb(17, 24, 39));
+            button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+        }
+        return button;
+    }
+
+    private LinearLayout.LayoutParams buttonParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, dp(5), 0, dp(5));
+        return lp;
+    }
+
+    private void updateUsageButton() {
+        boolean allowed = hasUsageAccess();
+        usageButton.setText(allowed ? "✓ STATISTIQUES D'UTILISATION AUTORISÉES" : "AUTORISER LES STATISTIQUES (RECOMMANDÉ)");
+        usageButton.setEnabled(!allowed);
+    }
+
+    private boolean hasUsageAccess() {
+        try {
+            AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+            int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getPackageName());
+            return mode == AppOpsManager.MODE_ALLOWED;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void startAnalysis() {
+        analyzeButton.setEnabled(false);
+        copyButton.setEnabled(false);
+        saveButton.setEnabled(false);
+        shareButton.setEnabled(false);
+        progressBar.setProgress(0);
+        progressBar.setVisibility(View.VISIBLE);
+        statusView.setText("Préparation de l'analyse…");
+        reportView.setText("Analyse en cours…");
+
+        executor.execute(() -> {
+            String result;
+            try {
+                result = runAnalysis();
+            } catch (Throwable t) {
+                result = "ERREUR APPDOCTOR " + VERSION + "\n\n" + t.getClass().getSimpleName() + ": " + safe(t.getMessage());
+            }
+            String finalResult = result;
+            runOnUiThread(() -> {
+                lastReport = finalResult;
+                reportView.setText(finalResult);
+                progressBar.setProgress(100);
+                progressBar.setVisibility(View.GONE);
+                analyzeButton.setEnabled(true);
+                copyButton.setEnabled(true);
+                saveButton.setEnabled(true);
+                shareButton.setEnabled(true);
+                statusView.setText("Analyse terminée. Rapport prêt à copier, enregistrer ou partager.");
+                updateUsageButton();
+            });
+        });
+    }
+
+    private String runAnalysis() {
+        PackageManager pm = getPackageManager();
+        boolean usageAllowed = hasUsageAccess();
+        long now = System.currentTimeMillis();
+        Map<String, UsageStats> usage7 = usageAllowed ? usageMap(now - 7L * DAY, now) : Collections.emptyMap();
+        Map<String, UsageStats> usage30 = usageAllowed ? usageMap(now - 30L * DAY, now) : Collections.emptyMap();
+        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+        int flags = PackageManager.GET_PERMISSIONS | PackageManager.GET_SERVICES | PackageManager.GET_RECEIVERS |
+                PackageManager.GET_ACTIVITIES | PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA |
+                PackageManager.GET_SIGNING_CERTIFICATES;
+        List<PackageInfo> packages;
+        if (Build.VERSION.SDK_INT >= 33) {
+            packages = pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(flags));
+        } else {
+            packages = pm.getInstalledPackages(flags);
+        }
+
+        List<PackageInfo> candidates = new ArrayList<>();
+        for (PackageInfo pi : packages) {
+            if (pi.applicationInfo == null) continue;
+            ApplicationInfo ai = pi.applicationInfo;
+            boolean pureSystem = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0 && (ai.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0;
+            if (pureSystem || getPackageName().equals(pi.packageName)) continue;
+            candidates.add(pi);
+        }
+
+        List<AppResult> results = new ArrayList<>();
+        int total = Math.max(1, candidates.size());
+        for (int i = 0; i < candidates.size(); i++) {
+            PackageInfo pi = candidates.get(i);
+            int done = i;
+            String label = safeLabel(pm, pi.applicationInfo);
+            runOnUiThread(() -> {
+                progressBar.setProgress(Math.min(95, (done * 95) / total));
+                statusView.setText("Analyse " + (done + 1) + "/" + total + " : " + label);
+            });
+            results.add(analyzePackage(pm, powerManager, pi, usage7.get(pi.packageName), usage30.get(pi.packageName)));
+        }
+
+        results.sort(Comparator
+                .comparing((AppResult a) -> !a.manualInstall)
+                .thenComparing((AppResult a) -> -a.score)
+                .thenComparing(a -> a.label.toLowerCase(Locale.ROOT)));
+
+        int priority = 0, warning = 0, ok = 0, manual = 0;
+        for (AppResult r : results) {
+            if (r.manualInstall) manual++;
+            if (r.score >= 35) priority++;
+            else if (r.score >= 15) warning++;
+            else ok++;
+        }
+
+        StringBuilder sb = new StringBuilder(64_000);
+        sb.append("APPDOCTOR — RAPPORT ").append(VERSION).append('\n');
+        sb.append("========================================\n");
+        sb.append("Date : ").append(formatDate(now)).append('\n');
+        sb.append("Téléphone : ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
+        sb.append("Android : ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+        sb.append("ABI téléphone : ").append(String.join(", ", Build.SUPPORTED_ABIS)).append('\n');
+        sb.append("Statistiques d'utilisation : ").append(usageAllowed ? "AUTORISÉES" : "NON AUTORISÉES").append('\n');
+        sb.append("Internet AppDoctor : NON (permission INTERNET absente)\n\n");
+
+        sb.append(deviceSnapshot()).append('\n');
+
+        sb.append("RÉSUMÉ\n");
+        sb.append("----------------------------------------\n");
+        sb.append("Applications utilisateur analysées : ").append(results.size()).append('\n');
+        sb.append("APK manuelles / hors Store probables : ").append(manual).append('\n');
+        sb.append("🔴 Prioritaires : ").append(priority).append('\n');
+        sb.append("⚠️ À surveiller : ").append(warning).append('\n');
+        sb.append("✅ OK / faible risque : ").append(ok).append("\n\n");
+
+        sb.append("TOP À VÉRIFIER EN PREMIER\n");
+        sb.append("----------------------------------------\n");
+        int shown = 0;
+        for (AppResult r : results) {
+            if (r.score < 15) continue;
+            sb.append(shown + 1).append(". ").append(r.label).append(" — score ").append(r.score)
+                    .append(" [Construction ").append(r.buildScore)
