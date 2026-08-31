@@ -1,0 +1,111 @@
+ os.flush();
+                Toast.makeText(this, "Rapport enregistré", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Erreur d'enregistrement : " + safe(e.getMessage()), Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private int dp(int v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    private static String formatDate(long time) {
+        if (time <= 0) return "jamais";
+        return new SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.FRANCE).format(new Date(time));
+    }
+
+    private static String duration(long ms) {
+        if (ms <= 0) return "0 min";
+        long minutes = ms / 60000L;
+        long hours = minutes / 60L;
+        long remain = minutes % 60L;
+        if (hours > 0) return hours + " h " + remain + " min";
+        return minutes + " min";
+    }
+
+    private static String size(long bytes) {
+        if (bytes <= 0) return "inconnue";
+        double mb = bytes / (1024d * 1024d);
+        return String.format(Locale.FRANCE, "%.1f Mo", mb);
+    }
+
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static final class ApkScan {
+        int dexCount;
+        final Set<String> abis = new LinkedHashSet<>();
+    }
+
+    private static final class AppResult {
+        String label;
+        String packageName;
+        String versionName;
+        long versionCode;
+        int minSdk;
+        int targetSdk;
+        long firstInstall;
+        long lastUpdate;
+        long apkSize;
+        int dexCount;
+        final Set<String> abis = new LinkedHashSet<>();
+        String installer;
+        boolean manualInstall;
+        boolean debuggable;
+        boolean testOnly;
+        boolean cleartext;
+        boolean batteryAllowlisted;
+        int activities;
+        int services;
+        int receivers;
+        int providers;
+        int exportedUnprotected;
+        long usage7;
+        long usage30;
+        long lastUsed;
+        Set<String> permissions = Collections.emptySet();
+        int score;
+        final List<String> findings = new ArrayList<>();
+
+        void add(int points, String finding) {
+            score += points;
+            findings.add("+" + points + " — " + finding);
+        }
+
+        String render() {
+            String icon = score >= 35 ? "🔴" : score >= 15 ? "⚠️" : "✅";
+            String level = score >= 35 ? "PRIORITAIRE" : score >= 15 ? "À SURVEILLER" : "OK / FAIBLE";
+            StringBuilder s = new StringBuilder();
+            s.append(icon).append(' ').append(label).append(" — ").append(level).append(" (score ").append(score).append(")\n");
+            s.append("Package : ").append(packageName).append('\n');
+            s.append("Version : ").append(versionName).append(" (code ").append(versionCode).append(")\n");
+            s.append("Installation : ").append(manualInstall ? "MANUELLE / HORS STORE probable" : "store reconnu probable").append(" — source: ").append(installer).append('\n');
+            s.append("SDK : min ").append(minSdk).append(" / target ").append(targetSdk).append('\n');
+            s.append("Installée : ").append(formatDate(firstInstall)).append(" — mise à jour : ").append(formatDate(lastUpdate)).append('\n');
+            s.append("Taille APK : ").append(size(apkSize)).append(" — DEX: ").append(dexCount).append(" — ABI: ").append(abis.isEmpty() ? "aucune lib native détectée" : String.join(", ", abis)).append('\n');
+            s.append("Composants : ").append(activities).append(" activités, ").append(services).append(" services, ").append(receivers).append(" receivers, ").append(providers).append(" providers");
+            if (exportedUnprotected > 0) s.append(" — exportés sans permission: ").append(exportedUnprotected);
+            s.append('\n');
+            s.append("Flags : debuggable=").append(debuggable ? "OUI" : "non")
+                    .append(", testOnly=").append(testOnly ? "OUI" : "non")
+                    .append(", cleartext=").append(cleartext ? "OUI" : "non")
+                    .append(", optimisation batterie ignorée=").append(batteryAllowlisted ? "OUI" : "non").append('\n');
+            if (usage7 > 0 || usage30 > 0 || lastUsed > 0) {
+                s.append("Utilisation : 7 j = ").append(duration(usage7)).append(" / 30 j = ").append(duration(usage30))
+                        .append(" — dernière utilisation : ").append(formatDate(lastUsed)).append('\n');
+            } else {
+                s.append("Utilisation : aucune donnée disponible\n");
+            }
+            if (findings.isEmpty()) {
+                s.append("Points détectés : aucun point important dans les contrôles V1.\n");
+            } else {
+                s.append("Points détectés :\n");
+                for (String f : findings) s.append("  • ").append(f).append('\n');
+            }
+            s.append("----------------------------------------\n");
+            return s.toString();
+        }
+    }
+}
