@@ -1,0 +1,109 @@
+dans DropBox : " + r.anrMentions + " occurrence(s)");
++        if (containsIgnoreCase(appops, "RUN_ANY_IN_BACKGROUND: ignore") || containsIgnoreCase(appops, "RUN_IN_BACKGROUND: ignore")) {
++            r.addBattery(4, "AppOps limite l'exécution en arrière-plan (état ignore détecté)");
++        }
++        if (containsIgnoreCase(appops, "WAKE_LOCK") && !containsIgnoreCase(appops, "WAKE_LOCK: deny")) {
++            r.deepWakeLockOp = true;
++        }
++    }
++
++    private String shellExec(String command) throws RemoteException {
++        IAppDoctorShell shell = shellService;
++        if (shell == null) throw new RemoteException("Service Shizuku non connecté");
++        String out = shell.exec(command);
++        return out == null ? "" : out;
++    }
++
++    private void status(String text, int progress) {
++        runOnUiThread(() -> {
++            statusView.setText(text);
++            progressBar.setProgress(Math.max(0, Math.min(99, progress)));
++        });
++    }
++
++    private int occurrences(String haystack, String needle) {
++        if (empty(haystack) || empty(needle)) return 0;
++        String h = haystack.toLowerCase(Locale.ROOT), n = needle.toLowerCase(Locale.ROOT);
++        int count = 0, pos = 0;
++        while ((pos = h.indexOf(n, pos)) >= 0) { count++; pos += n.length(); if (count >= 99) break; }
++        return count;
++    }
++
++    private boolean containsIgnoreCase(String a, String b) {
++        return a != null && b != null && a.toLowerCase(Locale.ROOT).contains(b.toLowerCase(Locale.ROOT));
++    }
++
++    private String compactAppOps(String text) {
++        if (empty(text)) return "aucune donnée";
++        StringBuilder out = new StringBuilder();
++        String[] watched = {"WAKE_LOCK", "RUN_IN_BACKGROUND", "RUN_ANY_IN_BACKGROUND", "FINE_LOCATION", "COARSE_LOCATION", "CAMERA", "RECORD_AUDIO", "SYSTEM_ALERT_WINDOW"};
++        for (String line : text.split("\\n")) {
++            for (String w : watched) if (line.contains(w)) { if (out.length() > 0) out.append(" | "); out.append(line.trim()); break; }
++            if (out.length() > 1200) break;
++        }
++        return out.length() == 0 ? "aucun AppOp sensible retenu" : out.toString();
++    }
++
+     private String deviceSnapshot() {
+         StringBuilder s = new StringBuilder();
+         s.append("ÉTAT DU TÉLÉPHONE AU MOMENT DE L'ANALYSE\n");
+@@ -783,6 +1030,33 @@
+         return s == null ? "" : s;
+     }
+ 
++    private static final class DeepSnapshot {
++        String identity = "";
++        String batterystats = "";
++        String procstats = "";
++        String services = "";
++        String jobs = "";
++        String deviceIdle = "";
++        String crashes = "";
++        String anrs = "";
++        String error = "";
++        String render() {
++            StringBuilder s = new StringBuilder();
++            s.append("DIAGNOSTIC SYSTÈME SHIZUKU / ADB\n");
++            s.append("----------------------------------------\n");
++            s.append("Identité : ").append(identity.replace('\n', ' ').trim()).append('\n');
++            s.append("Batterystats : ").append(batterystats.length()).append(" caractères analysés\n");
++            s.append("Procstats : ").append(procstats.length()).append(" caractères analysés\n");
++            s.append("Services : ").append(services.length()).append(" caractères analysés\n");
++            s.append("JobScheduler : ").append(jobs.length()).append(" caractères analysés\n");
++            s.append("Crash DropBox : ").append(crashes.length()).append(" caractères analysés\n");
++            s.append("ANR DropBox : ").append(anrs.length()).append(" caractères analysés\n");
++            if (!error.isEmpty()) s.append("⚠ Erreur partielle : ").append(error).append('\n');
++            s.append('\n');
++            return s.toString();
++        }
++    }
++
+     private static final class ApkScan {
+         int dexCount;
+         final Set<String> abis = new LinkedHashSet<>();
+@@ -826,6 +1100,16 @@
+         Set<String> grantedPermissions = Collections.emptySet();
+         final List<String> sensitiveGranted = new ArrayList<>();
+         final Set<String> foregroundTypes = new LinkedHashSet<>();
++        boolean deepAnalyzed;
++        boolean deviceIdleWhitelisted;
++        boolean deepWakeLockOp;
++        int batteryMentions;
++        int procMentions;
++        int activeServiceMentions;
++        int jobMentions;
++        int crashMentions;
++        int anrMentions;
++        String appOpsSummary = "";
+         int score;
+         int buildScore;
+         int batteryScore;
+@@ -880,7 +1164,7 @@
+                 s.append("Utilisation : aucune donnée disponible\n");
+             }
+             if (findings.isEmpty()) {
+-                s.append("Points détectés : aucun point important dans les contrôles V1.1.\n");
++                s.append("Points détectés : aucun point important dans les contrôles V2.\n");
+             } else {
+                 s.append("Points détectés :\n");
+                 for (String f : findings) s.append("  • ").append(f).append('\n');
