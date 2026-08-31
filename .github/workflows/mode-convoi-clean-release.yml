@@ -6,11 +6,10 @@ on:
     paths:
       - '.github/workflows/mode-convoi-clean-release.yml'
       - 'mode-convoi-clean/**'
-      - '_modeconvoi_assets/**'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-release:
@@ -19,46 +18,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: mode-convoi-apk-build
-
-      - name: Apply guarded 0.3.40 Volkswagen HD and selection migration
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import base64
-          parts=sorted(Path('_modeconvoi_assets').glob('vw_sprite_192.part*'))
-          expected=[8000]*10+[4840]
-          if len(parts)!=len(expected):
-              raise SystemExit(f'Expected {len(expected)} Volkswagen sprite chunks, found {len(parts)}')
-          payload=''.join(p.read_text().strip()[:n] for p,n in zip(parts,expected))
-          if len(payload)!=84840:
-              raise SystemExit(f'Unexpected Volkswagen sprite base64 size: {len(payload)}')
-          decoded=base64.b64decode(payload,validate=True)
-          if len(decoded)!=63628 or not (decoded.startswith(b'RIFF') and decoded[8:12]==b'WEBP'):
-              raise SystemExit(f'Invalid reconstructed Volkswagen sprite: {len(decoded)} bytes')
-          target=Path('mode-convoi-clean/android/app/src/main/res/drawable-nodpi/vw_sprite_192.webp')
-          target.write_text(payload)
-          print('Reassembled Volkswagen sprite transport:', len(payload), 'base64 chars')
-          PY
-          sed -i 's/sprite_path.stat().st_size>100000/sprite_path.stat().st_size>60000/' mode-convoi-clean/tools/patch_0340.py
-          python mode-convoi-clean/tools/patch_0340.py
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('mode-convoi-clean/android/app/src/main/res/drawable-nodpi/vw_sprite_192.webp')
-          raw=p.read_bytes()
-          if len(raw)!=63628 or not (raw.startswith(b'RIFF') and raw[8:12]==b'WEBP'):
-              raise SystemExit(f'Unexpected reconstructed Volkswagen sprite: {len(raw)} bytes')
-          print('Volkswagen sprite verified:', len(raw), 'bytes')
-          PY
-          git diff --check
-          git status --short
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add mode-convoi-clean/android
-          git diff --cached --quiet && { echo 'No canonical Android changes produced'; exit 1; }
-          git commit -m 'Mode Convoi 0.3.40: fix Volkswagen HD icons and live selection [skip ci]'
-          git push origin HEAD:mode-convoi-apk-build
 
       - uses: actions/setup-java@v4
         with:
