@@ -8,11 +8,29 @@ on:
       - 'mode-convoi-clean/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Apply guarded 0.3.35 ergonomics migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python mode-convoi-clean/tools/patch_0335.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mode-convoi-clean/android
+          if git diff --cached --quiet; then
+            echo "Guarded migration produced no changes" >&2
+            exit 1
+          fi
+          git commit -m "Mode Convoi 0.3.35: improve home ergonomics and responsive layout [skip ci]"
+          git push origin HEAD:mode-convoi-apk-build
 
       - uses: actions/setup-java@v4
         with:
