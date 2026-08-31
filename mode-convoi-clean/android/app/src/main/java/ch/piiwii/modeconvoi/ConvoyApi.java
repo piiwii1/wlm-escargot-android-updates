@@ -54,7 +54,7 @@ public final class ConvoyApi {
         c.setReadTimeout(7000);
         c.setRequestProperty("Accept", "application/json");
         c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-        c.setRequestProperty("User-Agent", "ModeConvoi-Android/0.3.41");
+        c.setRequestProperty("User-Agent", "ModeConvoi-Android/0.3.42");
         c.setUseCaches(false);
         return c;
     }

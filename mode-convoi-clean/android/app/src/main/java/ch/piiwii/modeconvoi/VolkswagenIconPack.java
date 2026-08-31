@@ -8,7 +8,8 @@ public final class VolkswagenIconPack {
     private static final int CELL=192;
     private static final int COLS=5;
     private static Bitmap spriteCache;
-    private static final Bitmap[] bitmapCache=new Bitmap[10];
+    private static Bitmap spriteMoreCache;
+    private static final Bitmap[] bitmapCache=new Bitmap[20];
 
     public static final class Item {
         public final String id;
@@ -28,7 +29,17 @@ public final class VolkswagenIconPack {
         new Item("vw:polo6n2","Polo 6N2 GTI",6),
         new Item("vw:passatb5","Passat B5 Variant",7),
         new Item("vw:jetta2","Jetta 2",8),
-        new Item("vw:newbeetle","New Beetle",9)
+        new Item("vw:newbeetle","New Beetle",9),
+        new Item("vw:karmannghia","Karmann Ghia",10),
+        new Item("vw:type3fastback","Type 3 Fastback",11),
+        new Item("vw:thing181","Type 181",12),
+        new Item("vw:t2","Combi T2",13),
+        new Item("vw:t3","Combi T3",14),
+        new Item("vw:scirocco1","Scirocco 1",15),
+        new Item("vw:scirocco2","Scirocco 2",16),
+        new Item("vw:corrado","Corrado VR6",17),
+        new Item("vw:lupogti","Lupo GTI",18),
+        new Item("vw:polog40","Polo G40",19)
     };
 
     private VolkswagenIconPack(){}
@@ -41,11 +52,18 @@ public final class VolkswagenIconPack {
     private static synchronized Bitmap bitmapAt(Resources resources,int index){
         if(index<0||index>=bitmapCache.length||resources==null)return null;
         if(bitmapCache[index]!=null&&!bitmapCache[index].isRecycled())return bitmapCache[index];
-        if(spriteCache==null||spriteCache.isRecycled())spriteCache=BitmapFactory.decodeResource(resources,R.drawable.vw_sprite_192);
-        if(spriteCache==null)return null;
-        int x=(index%COLS)*CELL,y=(index/COLS)*CELL;
-        if(x+CELL>spriteCache.getWidth()||y+CELL>spriteCache.getHeight())return null;
-        bitmapCache[index]=Bitmap.createBitmap(spriteCache,x,y,CELL,CELL);
+        Bitmap sprite; int localIndex;
+        if(index<10){
+            if(spriteCache==null||spriteCache.isRecycled())spriteCache=BitmapFactory.decodeResource(resources,R.drawable.vw_sprite_192);
+            sprite=spriteCache;localIndex=index;
+        }else{
+            if(spriteMoreCache==null||spriteMoreCache.isRecycled())spriteMoreCache=BitmapFactory.decodeResource(resources,R.drawable.vw_sprite_more_192);
+            sprite=spriteMoreCache;localIndex=index-10;
+        }
+        if(sprite==null)return null;
+        int x=(localIndex%COLS)*CELL,y=(localIndex/COLS)*CELL;
+        if(x+CELL>sprite.getWidth()||y+CELL>sprite.getHeight())return null;
+        bitmapCache[index]=Bitmap.createBitmap(sprite,x,y,CELL,CELL);
         return bitmapCache[index];
     }
 }

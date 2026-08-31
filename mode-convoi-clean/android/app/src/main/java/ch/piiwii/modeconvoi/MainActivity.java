@@ -936,7 +936,7 @@ public class MainActivity extends Activity {
             (i<5?vwFirst:vwMore).addView(slot,lp);
         }
         box.addView(vwFirst,new LinearLayout.LayoutParams(-1,-2));box.addView(vwMore,new LinearLayout.LayoutParams(-1,-2));
-        TextView vwHint=text("10 modèles Volkswagen HD · appuie sur une voiture pour l'utiliser sur la carte.",11,false,muted);vwHint.setPadding(dp(4),dp(3),dp(4),0);box.addView(vwHint);
+        TextView vwHint=text("20 modèles Volkswagen HD · appuie sur une voiture pour l'utiliser sur la carte.",11,false,muted);vwHint.setPadding(dp(4),dp(3),dp(4),0);box.addView(vwHint);
         vwHeader.setOnClickListener(v->{boolean open=vwMore.getVisibility()==View.VISIBLE;vwMore.setVisibility(open?View.GONE:View.VISIBLE);vwChevron.setText(open?"⌄":"⌃");});
 
         TextView cl=text("COULEUR DU REPÈRE",11,true,accent);cl.setPadding(0,dp(14),0,dp(6));box.addView(cl);
@@ -1019,7 +1019,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.41","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.42","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
