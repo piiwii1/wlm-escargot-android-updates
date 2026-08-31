@@ -8,7 +8,6 @@ import android.location.*;
 import android.os.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.net.URLEncoder;
 import java.util.concurrent.*;
 
 public class LocationShareService extends Service implements LocationListener {
@@ -114,11 +113,8 @@ public class LocationShareService extends Service implements LocationListener {
 
     private void pollEvents() {
         if (!prefs.hasActiveConvoy()) { stopSelf(); return; }
-        final String base=prefs.get("serverUrl", ""), code=prefs.get("code", ""), id=prefs.get("participantId", ""), token=prefs.get("token", "");
-        if (base.isEmpty() || code.isEmpty() || id.isEmpty() || token.isEmpty()) return;
         try {
-            String path="/api/convoys/"+code+"?participantId="+URLEncoder.encode(id,"UTF-8")+"&token="+URLEncoder.encode(token,"UTF-8");
-            JSONObject snapshot=ConvoyApi.getCachedSnapshot(base,path,6000L);
+            JSONObject snapshot=ConvoySnapshotRepository.getForBackground(prefs);
             ConvoyEventProcessor.process(this,prefs,snapshot);
             JSONArray participants=snapshot.optJSONArray("participants");
             int count=participants==null?0:participants.length();
