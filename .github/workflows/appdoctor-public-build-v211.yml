@@ -1,0 +1,77 @@
+name: Build AppDoctor 2.1.1 Guidance Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'appdoctor-build-v211/**'
+      - '.github/workflows/appdoctor-public-build-v211.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore and patch source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p appdoctor-build-v211/out appdoctor-build-v211/work
+          cat appdoctor-build-v210/source.b64.part.00 appdoctor-build-v210/source.b64.part.01 appdoctor-build-v210/source.b64.part.02 appdoctor-build-v210/source.b64.part.03 appdoctor-build-v210/source.b64.tail.0 appdoctor-build-v210/source.b64.tail.1 appdoctor-build-v210/source.b64.tail.2 | base64 -d > appdoctor-build-v211/source.zip
+          unzip -q appdoctor-build-v211/source.zip -d appdoctor-build-v211/work
+          ROOT=appdoctor-build-v211/work/AppDoctor-2.1.0-source
+          sed -i 's/^android\.useAndroidX=.*/android.useAndroidX=true/' "$ROOT/gradle.properties"
+          (cd appdoctor-build-v211/work && patch -p0 < "$GITHUB_WORKSPACE/appdoctor-build-v211/AppDoctor-2.1.1-build.patch")
+          grep -q "versionCode 5" "$ROOT/app/build.gradle"
+          grep -q "versionName '2.1.1'" "$ROOT/app/build.gradle"
+          grep -q 'VERSION = "2.1.1"' "$ROOT/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java"
+          grep -q 'Active uniquement « Débogage sans fil »' "$ROOT/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java"
+          echo "$ROOT" > appdoctor-build-v211/root.txt
+
+      - name: Build release APK
+        id: compile
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          ROOT=$(cat appdoctor-build-v211/root.txt)
+          gradle -p "$ROOT" --no-daemon assembleRelease 2>&1 | tee appdoctor-build-v211/out/build.log
+
+      - name: Collect APK and signing tool
+        if: steps.compile.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=$(cat appdoctor-build-v211/root.txt)
+          cp "$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk" appdoctor-build-v211/out/AppDoctor-2.1.1-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" appdoctor-build-v211/out/apksigner.jar
+          sha256sum appdoctor-build-v211/out/AppDoctor-2.1.1-unsigned.apk > appdoctor-build-v211/out/AppDoctor-2.1.1-unsigned.apk.sha256
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppDoctor-2.1.1-unsigned-tools
+          if-no-files-found: error
+          path: appdoctor-build-v211/out/
+
+      - name: Fail if compile failed
+        if: steps.compile.outcome != 'success'
+        run: exit 1
