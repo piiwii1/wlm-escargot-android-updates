@@ -10,12 +10,15 @@ import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.json.JSONObject;
@@ -84,52 +87,85 @@ public final class ConvoyVisualAlertController implements ConvoyForegroundAlertB
         Dialog dialog = new Dialog(activity, android.R.style.Theme_Translucent_NoTitleBar);
         currentDialog = dialog;
 
+        DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+        int screenWidthDp = Math.max(1, Math.round(dm.widthPixels / dm.density));
+        int screenHeightDp = Math.max(1, Math.round(dm.heightPixels / dm.density));
+        boolean compactHeight = screenHeightDp < 540;
+        int outerPadding = compactHeight ? 10 : 18;
+        int cardWidthDp = Math.min(style.critical ? 420 : 390, Math.max(260, screenWidthDp - outerPadding * 2));
+
         FrameLayout scrim = new FrameLayout(activity);
         scrim.setBackgroundColor(Color.argb(style.critical ? 190 : 150, 0, 0, 0));
-        scrim.setPadding(dp(18), dp(18), dp(18), dp(18));
+
+        ScrollView scroll = new ScrollView(activity);
+        scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
+        scroll.setPadding(dp(outerPadding), dp(outerPadding), dp(outerPadding), dp(outerPadding));
+        scroll.setVerticalScrollBarEnabled(false);
+
+        LinearLayout center = new LinearLayout(activity);
+        center.setOrientation(LinearLayout.VERTICAL);
+        center.setGravity(Gravity.CENTER);
+        center.setPadding(0, dp(6), 0, dp(6));
+        scroll.addView(center, new ScrollView.LayoutParams(-1, -1));
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(dp(24), dp(style.critical ? 28 : 22), dp(24), dp(22));
+        card.setPadding(
+                dp(compactHeight ? 18 : 24),
+                dp(compactHeight ? 16 : (style.critical ? 28 : 22)),
+                dp(compactHeight ? 18 : 24),
+                dp(compactHeight ? 16 : 22));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(style.backgroundColor);
         bg.setCornerRadius(dp(style.critical ? 34 : 26));
         bg.setStroke(dp(style.critical ? 4 : 2), style.borderColor);
         card.setBackground(bg);
 
-        TextView icon = text(style.icon, style.critical ? 88 : 64, true, Color.WHITE);
+        int iconSp = compactHeight ? (style.critical ? 58 : 48) : (style.critical ? 82 : 62);
+        int iconHeight = compactHeight ? (style.critical ? 74 : 62) : (style.critical ? 106 : 84);
+        TextView icon = text(style.icon, iconSp, true, Color.WHITE);
         icon.setGravity(Gravity.CENTER);
-        card.addView(icon, new LinearLayout.LayoutParams(-1, dp(style.critical ? 118 : 88)));
+        card.addView(icon, new LinearLayout.LayoutParams(-1, dp(iconHeight)));
 
-        TextView title = text(style.title, style.critical ? 28 : 22, true, Color.WHITE);
+        TextView title = text(style.title, compactHeight ? 23 : (style.critical ? 29 : 24), true, Color.WHITE);
         title.setGravity(Gravity.CENTER);
-        title.setLetterSpacing(.04f);
-        card.addView(title);
+        title.setLetterSpacing(.035f);
+        title.setMaxLines(2);
+        title.setAutoSizeTextTypeUniformWithConfiguration(18, style.critical ? 30 : 25, 1, TypedValue.COMPLEX_UNIT_SP);
+        card.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
         String who = event.optString("participantName", "").trim();
         if (!who.isEmpty()) {
-            TextView participant = text(who.toUpperCase(Locale.ROOT), 16, true, Color.WHITE);
+            TextView participant = text(who.toUpperCase(Locale.ROOT), compactHeight ? 14 : 16, true, Color.WHITE);
             participant.setGravity(Gravity.CENTER);
-            participant.setPadding(0, dp(8), 0, 0);
-            card.addView(participant);
+            participant.setMaxLines(2);
+            participant.setPadding(0, dp(compactHeight ? 5 : 8), 0, 0);
+            participant.setAutoSizeTextTypeUniformWithConfiguration(12, 16, 1, TypedValue.COMPLEX_UNIT_SP);
+            card.addView(participant, new LinearLayout.LayoutParams(-1, -2));
         }
 
         String label = event.optString("label", "Nouvelle information").trim();
-        TextView message = text(label, style.critical ? 19 : 17, false, Color.WHITE);
+        TextView message = text(label, compactHeight ? 16 : (style.critical ? 19 : 17), false, Color.WHITE);
         message.setGravity(Gravity.CENTER);
-        message.setPadding(dp(4), dp(8), dp(4), dp(8));
-        card.addView(message);
+        message.setMaxLines(4);
+        message.setLineSpacing(dp(2), 1.0f);
+        message.setPadding(dp(4), dp(compactHeight ? 6 : 8), dp(4), dp(compactHeight ? 5 : 8));
+        message.setAutoSizeTextTypeUniformWithConfiguration(13, style.critical ? 19 : 17, 1, TypedValue.COMPLEX_UNIT_SP);
+        card.addView(message, new LinearLayout.LayoutParams(-1, -2));
 
         TextView hint = text("TOUCHE POUR FERMER", 10, true, Color.argb(205, 255, 255, 255));
         hint.setGravity(Gravity.CENTER);
-        hint.setPadding(0, dp(8), 0, 0);
-        card.addView(hint);
+        hint.setPadding(0, dp(compactHeight ? 5 : 8), 0, 0);
+        card.addView(hint, new LinearLayout.LayoutParams(-1, -2));
 
-        int width = dp(style.critical ? 340 : 320);
-        FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(width, -2, Gravity.CENTER);
-        scrim.addView(card, cardLp);
-        scrim.setOnClickListener(v -> dialog.dismiss());
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(dp(cardWidthDp), -2);
+        cardLp.gravity = Gravity.CENTER;
+        center.addView(card, cardLp);
+        scrim.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+
+        center.setOnClickListener(v -> dialog.dismiss());
         card.setOnClickListener(v -> dialog.dismiss());
 
         dialog.setContentView(scrim);
@@ -180,6 +216,7 @@ public final class ConvoyVisualAlertController implements ConvoyForegroundAlertB
         view.setText(value);
         view.setTextSize(sizeSp);
         view.setTextColor(color);
+        view.setIncludeFontPadding(false);
         if (bold) view.setTypeface(view.getTypeface(), android.graphics.Typeface.BOLD);
         return view;
     }
