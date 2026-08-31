@@ -8,11 +8,27 @@ on:
       - 'mode-convoi-clean/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Apply guarded 0.3.30 session refactor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 mode-convoi-clean/tools/patch_0330.py
+          if ! git diff --quiet; then
+            git config user.name 'piiwii1'
+            git config user.email 'piiwii32@gmail.com'
+            git add mode-convoi-clean/android
+            git commit -m 'Mode Convoi 0.3.30: move session and admin transport out of MainActivity'
+            git push origin HEAD:mode-convoi-apk-build
+          fi
 
       - uses: actions/setup-java@v4
         with:
