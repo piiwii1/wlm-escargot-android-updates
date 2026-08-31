@@ -1,0 +1,163 @@
+arLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, dp(5), 0, dp(5));
+        return lp;
+    }
+
+    private void updateUsageButton() {
+        boolean allowed = hasUsageAccess();
+        usageButton.setText(allowed ? "✓ STATISTIQUES D'UTILISATION AUTORISÉES" : "AUTORISER LES STATISTIQUES (FACULTATIF)");
+        usageButton.setEnabled(!allowed);
+    }
+
+    private boolean hasUsageAccess() {
+        try {
+            AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+            int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getPackageName());
+            return mode == AppOpsManager.MODE_ALLOWED;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void startAnalysis() {
+        analyzeButton.setEnabled(false);
+        copyButton.setEnabled(false);
+        saveButton.setEnabled(false);
+        progressBar.setVisibility(View.VISIBLE);
+        statusView.setText("Analyse des applications en cours…");
+        reportView.setText("Analyse en cours…");
+
+        executor.execute(() -> {
+            String result;
+            try {
+                result = runAnalysis();
+            } catch (Throwable t) {
+                result = "ERREUR APPDOCTOR\n\n" + t.getClass().getSimpleName() + ": " + safe(t.getMessage());
+            }
+            String finalResult = result;
+            runOnUiThread(() -> {
+                lastReport = finalResult;
+                reportView.setText(finalResult);
+                progressBar.setVisibility(View.GONE);
+                analyzeButton.setEnabled(true);
+                copyButton.setEnabled(true);
+                saveButton.setEnabled(true);
+                statusView.setText("Analyse terminée. Tu peux copier ou enregistrer le rapport.");
+                updateUsageButton();
+            });
+        });
+    }
+
+    private String runAnalysis() {
+        PackageManager pm = getPackageManager();
+        boolean usageAllowed = hasUsageAccess();
+        long now = System.currentTimeMillis();
+        Map<String, UsageStats> usage7 = usageAllowed ? usageMap(now - 7L * DAY, now) : Collections.emptyMap();
+        Map<String, UsageStats> usage30 = usageAllowed ? usageMap(now - 30L * DAY, now) : Collections.emptyMap();
+        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+        int flags = PackageManager.GET_PERMISSIONS | PackageManager.GET_SERVICES | PackageManager.GET_RECEIVERS |
+                PackageManager.GET_ACTIVITIES | PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA;
+        List<PackageInfo> packages;
+        if (Build.VERSION.SDK_INT >= 33) {
+            packages = pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(flags));
+        } else {
+            packages = pm.getInstalledPackages(flags);
+        }
+
+        List<AppResult> results = new ArrayList<>();
+        for (PackageInfo pi : packages) {
+            if (pi.applicationInfo == null) continue;
+            ApplicationInfo ai = pi.applicationInfo;
+            boolean system = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0 && (ai.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0;
+            if (system || getPackageName().equals(pi.packageName)) continue;
+            results.add(analyzePackage(pm, powerManager, pi, usage7.get(pi.packageName), usage30.get(pi.packageName)));
+        }
+
+        results.sort(Comparator
+                .comparing((AppResult a) -> !a.manualInstall)
+                .thenComparing((AppResult a) -> -a.score)
+                .thenComparing(a -> a.label.toLowerCase(Locale.ROOT)));
+
+        int priority = 0, warning = 0, ok = 0, manual = 0;
+        for (AppResult r : results) {
+            if (r.manualInstall) manual++;
+            if (r.score >= 35) priority++;
+            else if (r.score >= 15) warning++;
+            else ok++;
+        }
+
+        StringBuilder sb = new StringBuilder(32_000);
+        sb.append("APPDOCTOR — RAPPORT 1.0.0\n");
+        sb.append("========================================\n");
+        sb.append("Date : ").append(formatDate(now)).append('\n');
+        sb.append("Téléphone : ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
+        sb.append("Android : ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+        sb.append("Statistiques d'utilisation : ").append(usageAllowed ? "AUTORISÉES" : "NON AUTORISÉES").append('\n');
+        sb.append("Internet AppDoctor : NON (permission INTERNET absente)\n\n");
+
+        sb.append("RÉSUMÉ\n");
+        sb.append("----------------------------------------\n");
+        sb.append("Applications utilisateur analysées : ").append(results.size()).append('\n');
+        sb.append("Installations manuelles probables : ").append(manual).append('\n');
+        sb.append("🔴 Prioritaires : ").append(priority).append('\n');
+        sb.append("⚠️ À surveiller : ").append(warning).append('\n');
+        sb.append("✅ OK / faible risque : ").append(ok).append("\n\n");
+
+        sb.append("IMPORTANT\n");
+        sb.append("AppDoctor ne peut pas, sans root/ADB/Shizuku, lire librement les crash logs privés des autres applications ni mesurer leur batterie exacte en mAh. Le score ci-dessous indique des points techniques à vérifier ; ce n'est pas une preuve de culpabilité.\n\n");
+
+        if (!usageAllowed) {
+            sb.append("ℹ STATISTIQUES MANQUANTES\n");
+            sb.append("Autorise « Accès aux données d'utilisation » dans AppDoctor puis relance l'analyse pour ajouter l'utilisation 7/30 jours.\n\n");
+        }
+
+        sb.append("APPLICATIONS\n");
+        sb.append("========================================\n");
+        for (AppResult r : results) {
+            sb.append(r.render()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private AppResult analyzePackage(PackageManager pm, PowerManager powerManager, PackageInfo pi, UsageStats u7, UsageStats u30) {
+        ApplicationInfo ai = pi.applicationInfo;
+        AppResult r = new AppResult();
+        r.packageName = pi.packageName;
+        r.label = safeLabel(pm, ai);
+        r.versionName = pi.versionName == null ? "?" : pi.versionName;
+        r.versionCode = Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode;
+        r.minSdk = Build.VERSION.SDK_INT >= 24 ? ai.minSdkVersion : 0;
+        r.targetSdk = ai.targetSdkVersion;
+        r.firstInstall = pi.firstInstallTime;
+        r.lastUpdate = pi.lastUpdateTime;
+        r.debuggable = (ai.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        r.testOnly = (ai.flags & ApplicationInfo.FLAG_TEST_ONLY) != 0;
+        r.cleartext = (ai.flags & ApplicationInfo.FLAG_USES_CLEARTEXT_TRAFFIC) != 0;
+        r.apkSize = apkSize(ai);
+        ApkScan scan = scanApks(ai);
+        r.dexCount = scan.dexCount;
+        r.abis.addAll(scan.abis);
+        r.installer = installer(pm, pi.packageName);
+        r.manualInstall = looksManual(r.installer);
+
+        Set<String> perms = new HashSet<>();
+        if (pi.requestedPermissions != null) perms.addAll(Arrays.asList(pi.requestedPermissions));
+        r.permissions = perms;
+
+        r.activities = pi.activities == null ? 0 : pi.activities.length;
+        r.services = pi.services == null ? 0 : pi.services.length;
+        r.receivers = pi.receivers == null ? 0 : pi.receivers.length;
+        r.providers = pi.providers == null ? 0 : pi.providers.length;
+        r.exportedUnprotected = countExportedUnprotected(pi);
+
+        try {
+            r.batteryAllowlisted = powerManager != null && powerManager.isIgnoringBatteryOptimizations(pi.packageName);
+        } catch (Throwable ignored) {
+            r.batteryAllowlisted = false;
+        }
+
+        if (u7 != null) {
+            r.usage7 = u7.getTotalTimeInForeground();
+            r.lastUsed = u7.getLastTimeUsed();
+        
