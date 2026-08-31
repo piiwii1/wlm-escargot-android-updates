@@ -2,13 +2,15 @@ package ch.piiwii.modeconvoi;
 
 import org.json.JSONObject;
 
+import java.util.Iterator;
 import java.util.Locale;
 
 /**
- * Owns convoy session lifecycle and authenticated administration requests.
+ * Owns convoy session lifecycle and authenticated mutable commands.
  *
  * UI classes keep dialogs/navigation only. Session JSON construction,
- * authentication bodies, server calls and persisted session state live here.
+ * participant actions, administration requests, server calls and persisted
+ * session state live here.
  */
 public final class ConvoySessionManager {
     private final AppPrefs prefs;
@@ -58,12 +60,14 @@ public final class ConvoySessionManager {
     }
 
     public JSONObject close() throws Exception {
+        requireActiveSession();
         JSONObject response = ConvoyApi.post(server(), convoyPath("/close"), authBody(), adminKey());
         ConvoySnapshotRepository.invalidate();
         return response;
     }
 
     public JSONObject rename(String rawName) throws Exception {
+        requireActiveSession();
         String name = rawName == null ? "" : rawName.trim();
         if (name.length() < 2) throw new IllegalArgumentException("Nom trop court");
         JSONObject response = ConvoyApi.post(
@@ -74,6 +78,7 @@ public final class ConvoySessionManager {
     }
 
     public JSONObject setParticipantRole(String targetParticipantId, String role) throws Exception {
+        requireActiveSession();
         JSONObject response = ConvoyApi.post(
                 server(), convoyPath("/role"),
                 authBody().put("targetParticipantId", targetParticipantId).put("role", role == null ? "" : role),
@@ -83,6 +88,7 @@ public final class ConvoySessionManager {
     }
 
     public JSONObject removeParticipant(String targetParticipantId) throws Exception {
+        requireActiveSession();
         JSONObject response = ConvoyApi.post(
                 server(), convoyPath("/remove"),
                 authBody().put("targetParticipantId", targetParticipantId),
@@ -92,6 +98,7 @@ public final class ConvoySessionManager {
     }
 
     public JSONObject setRally(String name, String desiredTime, double lat, double lon) throws Exception {
+        requireActiveSession();
         JSONObject response = ConvoyApi.post(
                 server(), convoyPath("/rally"),
                 authBody()
@@ -105,8 +112,39 @@ public final class ConvoySessionManager {
     }
 
     public JSONObject sendGeneralStop() throws Exception {
+        requireActiveSession();
         JSONObject response = ConvoyApi.post(
                 server(), convoyPath("/emergency-stop"), authBody(), adminKey());
+        ConvoySnapshotRepository.invalidate();
+        return response;
+    }
+
+    public JSONObject sendStatus(String rawStatus) throws Exception {
+        requireActiveSession();
+        String status = rawStatus == null ? "" : rawStatus.trim();
+        if (status.isEmpty()) throw new IllegalArgumentException("Statut invalide");
+        JSONObject response = ConvoyApi.post(
+                server(), convoyPath("/status"), authBody().put("status", status), null);
+        ConvoySnapshotRepository.invalidate();
+        return response;
+    }
+
+    public JSONObject sendCustomStatus(String rawMessage) throws Exception {
+        requireActiveSession();
+        String message = rawMessage == null ? "" : rawMessage.trim();
+        if (message.isEmpty()) throw new IllegalArgumentException("Message vide");
+        if (message.length() > 80) message = message.substring(0, 80);
+        JSONObject response = ConvoyApi.post(
+                server(), convoyPath("/status"),
+                authBody().put("status", "custom").put("custom", message), null);
+        ConvoySnapshotRepository.invalidate();
+        return response;
+    }
+
+    public JSONObject syncProfile() throws Exception {
+        requireActiveSession();
+        JSONObject response = ConvoyApi.post(
+                server(), convoyPath("/profile"), authenticatedParticipantBody(), null);
         ConvoySnapshotRepository.invalidate();
         return response;
     }
@@ -125,6 +163,17 @@ public final class ConvoySessionManager {
                 .put("vehicleIcon", prefs.get("profileVehicleIcon", "🚗"))
                 .put("vehicleMarkerColor", prefs.get("profileVehicleMarkerColor", "#FFB514"))
                 .put("vehicleImage", prefs.get("profileVehicleImage", ""));
+    }
+
+    private JSONObject authenticatedParticipantBody() throws Exception {
+        JSONObject body = authBody();
+        JSONObject participant = participantBody();
+        Iterator<String> keys = participant.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            body.put(key, participant.get(key));
+        }
+        return body;
     }
 
     private JSONObject authBody() throws Exception {
@@ -146,6 +195,10 @@ public final class ConvoySessionManager {
         }
         if (response.has("adminKey")) prefs.put("adminKey", response.optString("adminKey"));
         if (response.has("lastEventId")) prefs.putLong("lastEventId", response.optLong("lastEventId"));
+    }
+
+    private void requireActiveSession() {
+        if (!prefs.hasActiveConvoy()) throw new IllegalStateException("Aucun convoi actif");
     }
 
     private void ensureOfficialServerForNewSession() {
