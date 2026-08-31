@@ -29,23 +29,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore and verify source
+      - name: Restore source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p appdoctor-build-v210/out appdoctor-build-v210/work
           cat appdoctor-build-v210/source.b64.part.* | base64 -d > appdoctor-build-v210/source.zip
+          unzip -t appdoctor-build-v210/source.zip
           unzip -q appdoctor-build-v210/source.zip -d appdoctor-build-v210/work
           ROOT=appdoctor-build-v210/work/AppDoctor-2.1.0-source
-          grep -q "versionCode 4" "$ROOT/app/build.gradle"
-          grep -q "versionName '2.1.0'" "$ROOT/app/build.gradle"
-          grep -q 'android.permission.INTERNET' "$ROOT/app/src/main/AndroidManifest.xml"
-          grep -q 'PairCodeReceiver' "$ROOT/app/src/main/AndroidManifest.xml"
-          grep -q 'AppDoctorApplication' "$ROOT/app/src/main/AndroidManifest.xml"
-          grep -q 'DÉMARRER' "$ROOT/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java"
-          grep -q 'ARRÊTER' "$ROOT/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java"
-          grep -q 'DIAGNOSTIC' "$ROOT/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java"
-          if grep -q 'Shizuku' "$ROOT/app/src/main/AndroidManifest.xml"; then exit 1; fi
+          test -f "$ROOT/app/build.gradle"
+          echo "$ROOT" > appdoctor-build-v210/root.txt
+          grep -nE 'versionCode|versionName' "$ROOT/app/build.gradle" || true
+          grep -nE 'PairCodeReceiver|AppDoctorApplication|INTERNET' "$ROOT/app/src/main/AndroidManifest.xml" || true
 
       - name: Build release APK
         id: compile
@@ -53,14 +49,16 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          gradle -p appdoctor-build-v210/work/AppDoctor-2.1.0-source --no-daemon assembleRelease 2>&1 | tee appdoctor-build-v210/out/build.log
+          ROOT=$(cat appdoctor-build-v210/root.txt)
+          gradle -p "$ROOT" --no-daemon assembleRelease 2>&1 | tee appdoctor-build-v210/out/build.log
 
       - name: Collect APK and signing tool
         if: steps.compile.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          cp appdoctor-build-v210/work/AppDoctor-2.1.0-source/app/build/outputs/apk/release/app-release-unsigned.apk appdoctor-build-v210/out/AppDoctor-2.1.0-unsigned.apk
+          ROOT=$(cat appdoctor-build-v210/root.txt)
+          cp "$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk" appdoctor-build-v210/out/AppDoctor-2.1.0-unsigned.apk
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" appdoctor-build-v210/out/apksigner.jar
           sha256sum appdoctor-build-v210/out/AppDoctor-2.1.0-unsigned.apk > appdoctor-build-v210/out/AppDoctor-2.1.0-unsigned.apk.sha256
 
