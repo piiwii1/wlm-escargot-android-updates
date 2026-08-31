@@ -57,6 +57,7 @@ public final class LiveTalkieManager {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ScheduledThreadPoolExecutor net = new ScheduledThreadPoolExecutor(3);
     private final Map<String, PeerState> peers = new HashMap<>();
+    private final Map<String, String> participantNames = new HashMap<>();
     private final Map<String, Long> lastRepairByPeer = new HashMap<>();
     private final Object peerLock = new Object();
 
@@ -74,6 +75,7 @@ public final class LiveTalkieManager {
     private AudioDeviceInfo previousCommunicationDevice = null;
     private volatile boolean audioRouteOwned = false;
     private volatile boolean hostForeground = true;
+    private volatile boolean backgroundSignalingOnly = false;
 
     private volatile boolean running = false;
     private volatile boolean transmitting = false;
@@ -84,6 +86,9 @@ public final class LiveTalkieManager {
     private volatile String lastError = "";
     private volatile boolean receivingAudio = false;
     private volatile String receivingPeerName = "";
+    private volatile String receivingPeerId = "";
+    private volatile long lastRemoteTalkSignalAt = 0L;
+    private volatile long lastTalkBroadcastAt = 0L;
     private volatile double receiveLevel = 0.0;
     private volatile double micLevel = 0.0;
     private volatile boolean meterScheduled = false;
@@ -103,19 +108,25 @@ public final class LiveTalkieManager {
             return;
         }
         String key = prefs.get("code", "") + ":" + prefs.get("participantId", "");
-        if (running && key.equals(sessionKey)) return;
+        if (running && key.equals(sessionKey)) {
+            if (hostForeground && backgroundSignalingOnly) resumeWebRtcForeground();
+            return;
+        }
         stopSession();
         try {
-            initWebRtc();
             sessionKey = key;
             lastSignalId = prefs.getLong("liveSignalLastId", 0);
             running = true;
             lastError = "";
+            backgroundSignalingOnly = !hostForeground;
+            if (hostForeground) initWebRtc();
             scheduleSignalPoll(0);
-            scheduleAudioMeter(250);
-            notifyState("Connexion live…");
+            if (hostForeground) scheduleAudioMeter(250);
+            notifyState(hostForeground ? "Connexion live…" : "● Live en arrière-plan");
         } catch (Throwable t) {
             lastError = safeMessage(t, "Initialisation WebRTC impossible");
+            running = false;
+            backgroundSignalingOnly = false;
             notifyState("Live indisponible : " + lastError);
         }
     }
@@ -129,19 +140,23 @@ public final class LiveTalkieManager {
      * audio route or volume stream captive.
      */
     public void setHostForeground(boolean foreground) {
+        if (hostForeground == foreground && !(foreground && backgroundSignalingOnly)) return;
+        if (!foreground && transmitting) broadcastTalkState(false);
         hostForeground = foreground;
         if (!foreground) {
             transmitting = false;
             transmittingSince = 0L;
             micLevel = 0.0;
             try { if (localAudioTrack != null) localAudioTrack.setEnabled(false); } catch (Throwable ignored) {}
-            muteTalkieOutputAndReleaseRoute();
-        } else if (receivingAudio && receiveEnabled) {
-            ensureReceivePath();
+            if (running) suspendWebRtcForBackground();
+            else muteTalkieOutputAndReleaseRoute();
+            notifyState("● Live en arrière-plan");
         } else {
-            muteTalkieOutputAndReleaseRoute();
+            if (running && backgroundSignalingOnly) resumeWebRtcForeground();
+            else if (receivingAudio && receiveEnabled) ensureReceivePath();
+            else muteTalkieOutputAndReleaseRoute();
+            notifyState(stateLabel());
         }
-        notifyState(foreground ? stateLabel() : "● Live en arrière-plan");
     }
 
     public int connectedPeerCount() {
@@ -181,8 +196,9 @@ public final class LiveTalkieManager {
     /** Enables/disables the already-established live microphone track. No file is created. */
     public boolean setTransmitting(boolean enabled) {
         ensureStarted();
-        if (!running || localAudioTrack == null) return false;
+        if (!running || localAudioTrack == null || backgroundSignalingOnly) return false;
         if (enabled && !hostForeground) return false;
+        boolean changed = transmitting != enabled;
         transmitting = enabled;
         transmittingSince = enabled ? System.currentTimeMillis() : 0L;
         try {
@@ -203,6 +219,10 @@ public final class LiveTalkieManager {
             return false;
         }
         if (!enabled) micLevel = 0.0;
+        if (changed) {
+            broadcastTalkState(enabled);
+            lastTalkBroadcastAt = enabled ? System.currentTimeMillis() : 0L;
+        }
         if (enabled) notifyState(connectedPeerCount() > 0 ? "● EN DIRECT" : "● EN DIRECT · connexion aux autres…");
         else notifyState(stateLabel());
         return true;
@@ -261,6 +281,38 @@ public final class LiveTalkieManager {
         transmittingSince = 0L;
         receivingAudio = false;
         receivingPeerName = "";
+        receivingPeerId = "";
+        lastRemoteTalkSignalAt = 0L;
+        lastTalkBroadcastAt = 0L;
+        receiveLevel = 0.0;
+        micLevel = 0.0;
+        synchronized (peerLock) {
+            for (PeerState p : peers.values()) closePeerInternal(p);
+            peers.clear();
+            participantNames.clear();
+            lastRepairByPeer.clear();
+        }
+        try { if (audioDeviceModule != null) audioDeviceModule.setSpeakerMute(true); } catch (Throwable ignored) {}
+        restoreSystemAudioRoute();
+        try { if (localAudioTrack != null) localAudioTrack.dispose(); } catch (Throwable ignored) {}
+        try { if (audioSource != null) audioSource.dispose(); } catch (Throwable ignored) {}
+        try { if (factory != null) factory.dispose(); } catch (Throwable ignored) {}
+        try { if (audioDeviceModule != null) audioDeviceModule.release(); } catch (Throwable ignored) {}
+        localAudioTrack = null;
+        audioSource = null;
+        factory = null;
+        audioDeviceModule = null;
+        sessionKey = "";
+        lastSignalId = 0;
+        backgroundSignalingOnly = false;
+    }
+
+    private void suspendWebRtcForBackground() {
+        backgroundSignalingOnly = true;
+        meterScheduled = false;
+        receivingAudio = false;
+        receivingPeerName = "";
+        receivingPeerId = "";
         receiveLevel = 0.0;
         micLevel = 0.0;
         synchronized (peerLock) {
@@ -278,8 +330,24 @@ public final class LiveTalkieManager {
         audioSource = null;
         factory = null;
         audioDeviceModule = null;
-        sessionKey = "";
-        lastSignalId = 0;
+        // Signal polling stays alive: it receives ptt-start/ptt-stop without owning any Android audio device.
+        scheduleSignalPoll(0);
+    }
+
+    private void resumeWebRtcForeground() {
+        if (!running || !hostForeground || !backgroundSignalingOnly) return;
+        try {
+            initWebRtc();
+            backgroundSignalingOnly = false;
+            lastError = "";
+            scheduleAudioMeter(120);
+            scheduleSignalPoll(0);
+            notifyState("◌ Reconnexion live…");
+        } catch (Throwable t) {
+            lastError = safeMessage(t, "Réactivation WebRTC impossible");
+            suspendWebRtcForBackground();
+            notifyState("⚠ " + lastError);
+        }
     }
 
     private synchronized void activateTalkieAudioRoute() {
@@ -336,7 +404,7 @@ public final class LiveTalkieManager {
     }
 
     private void pollAudioMeters() {
-        if (!running) return;
+        if (!running || backgroundSignalingOnly) return;
         List<PeerState> list = new ArrayList<>();
         synchronized (peerLock) {
             for (PeerState p : peers.values()) if (p.pc != null && p.connected) list.add(p);
@@ -375,7 +443,12 @@ public final class LiveTalkieManager {
                         if (receivingAudio && loudest[0] != null) {
                             String n = loudest[0].displayName == null ? "" : loudest[0].displayName.trim();
                             receivingPeerName = n.isEmpty() ? "Un participant" : n;
-                        } else receivingPeerName = "";
+                            receivingPeerId = loudest[0].peerId;
+                        } else { receivingPeerName = ""; receivingPeerId = ""; }
+                        if (transmitting && System.currentTimeMillis() - lastTalkBroadcastAt >= 900L) {
+                            broadcastTalkState(true);
+                            lastTalkBroadcastAt = System.currentTimeMillis();
+                        }
                         if (receivingAudio && hostForeground) ensureReceivePath();
                         else if (!transmitting && (wasReceiving || !hostForeground)) muteTalkieOutputAndReleaseRoute();
                         notifyState(stateLabel());
@@ -499,9 +572,15 @@ public final class LiveTalkieManager {
                 lastSignalId = serverLast;
                 prefs.putLong("liveSignalLastId", lastSignalId);
             }
+            if (backgroundSignalingOnly && receivingAudio && lastRemoteTalkSignalAt > 0
+                    && System.currentTimeMillis() - lastRemoteTalkSignalAt > 2600L) {
+                receivingAudio = false;
+                receivingPeerName = "";
+                receivingPeerId = "";
+            }
             lastError = "";
             notifyState(stateLabel());
-            scheduleSignalPoll(allPeersConnected() ? 1400 : 550);
+            scheduleSignalPoll(backgroundSignalingOnly ? 700 : (allPeersConnected() ? 1400 : 550));
         } catch (Throwable t) {
             lastError = safeMessage(t, "Signalisation live indisponible");
             notifyState("⚠ " + lastError);
@@ -527,10 +606,14 @@ public final class LiveTalkieManager {
             String id = p.optString("id", "");
             if (id.isEmpty() || id.equals(me)) continue;
             long lastSeen = p.optLong("lastSeen", now);
-            // Do not keep creating WebRTC sessions for phones that have been absent for several minutes.
             if (lastSeen > 0 && now - lastSeen > 180_000L) continue;
             seen.add(id);
             String displayName = p.optString("name", "").trim();
+            synchronized (peerLock) {
+                if (!displayName.isEmpty()) participantNames.put(id, displayName);
+                else if (!participantNames.containsKey(id)) participantNames.put(id, "Un participant");
+            }
+            if (backgroundSignalingOnly || !hostForeground || factory == null || localAudioTrack == null) continue;
             PeerState ps;
             synchronized (peerLock) { ps = peers.get(id); }
             if (ps == null) ps = createPeer(id);
@@ -539,6 +622,7 @@ public final class LiveTalkieManager {
         List<String> remove = new ArrayList<>();
         synchronized (peerLock) {
             for (String id : peers.keySet()) if (!seen.contains(id)) remove.add(id);
+            participantNames.keySet().removeIf(id -> !seen.contains(id));
         }
         for (String id : remove) removePeer(id);
     }
@@ -673,6 +757,31 @@ public final class LiveTalkieManager {
         String type = m.optString("type", "");
         String payload = m.optString("payload", "");
         if (from.isEmpty() || from.equals(prefs.get("participantId", ""))) return;
+
+        if ("ptt-start".equals(type)) {
+            if (!receiveEnabled) return;
+            String who = payload == null ? "" : payload.trim();
+            if (who.isEmpty()) { synchronized (peerLock) { who = participantNames.get(from); } }
+            receivingPeerId = from;
+            receivingPeerName = who == null || who.trim().isEmpty() ? "Un participant" : who.trim();
+            receivingAudio = true;
+            lastRemoteTalkSignalAt = System.currentTimeMillis();
+            notifyState(stateLabel());
+            return;
+        } else if ("ptt-stop".equals(type)) {
+            if (from.equals(receivingPeerId)) {
+                receivingAudio = false;
+                receivingPeerName = "";
+                receivingPeerId = "";
+                lastRemoteTalkSignalAt = 0L;
+                notifyState(stateLabel());
+            }
+            return;
+        }
+
+        // In background we intentionally do not create any PeerConnection/ADM. Old SDP/ICE is
+        // consumed and discarded; a fresh deterministic negotiation is started on foreground resume.
+        if (backgroundSignalingOnly || !hostForeground || factory == null || localAudioTrack == null) return;
         PeerState state;
         synchronized (peerLock) { state = peers.get(from); }
         if (state == null) state = createPeer(from);
@@ -745,6 +854,22 @@ public final class LiveTalkieManager {
                 try { state.pc.addIceCandidate(c); } catch (Throwable ignored) {}
             }
             state.pendingIce.clear();
+        }
+    }
+
+    private void broadcastTalkState(boolean active) {
+        if (!running || !prefs.hasActiveConvoy()) return;
+        Set<String> ids = new HashSet<>();
+        synchronized (peerLock) {
+            ids.addAll(participantNames.keySet());
+            ids.addAll(peers.keySet());
+        }
+        String me = prefs.get("participantId", "");
+        String name = prefs.get("profileName", "").trim();
+        if (name.isEmpty()) name = "Un participant";
+        for (String id : ids) {
+            if (id == null || id.isEmpty() || id.equals(me)) continue;
+            sendSignal(id, active ? "ptt-start" : "ptt-stop", active ? name : "");
         }
     }
 
