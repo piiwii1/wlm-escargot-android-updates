@@ -95,7 +95,7 @@ for forbidden in (
     "pollScheduled",
     "pollRunnable",
     "consecutivePollFailures",
-    "lastSuccessfulSyncAt",
+    "private long lastSuccessfulSyncAt",
     "URLEncoder.encode(prefs.get(\"participantId\"",
 ):
     if forbidden in main:
