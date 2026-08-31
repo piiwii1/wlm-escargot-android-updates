@@ -1,0 +1,186 @@
+name: Build AppDoctor Public Unsigned
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'appdoctor-build/**'
+      - '.github/workflows/appdoctor-public-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Prepare Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=appdoctor-build/android
+          mkdir -p "$ROOT/app/src/main/java/ch/piiwii/appdoctor" "$ROOT/app/src/main/res/values" "$ROOT/app/src/main/res/drawable" appdoctor-build/out
+
+          cat > "$ROOT/settings.gradle" <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "AppDoctor"
+          include ':app'
+          EOF
+
+          cat > "$ROOT/build.gradle" <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > "$ROOT/gradle.properties" <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=false
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat > "$ROOT/app/build.gradle" <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'ch.piiwii.appdoctor'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'ch.piiwii.appdoctor'
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0.0'
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          EOF
+
+          cat > "$ROOT/app/proguard-rules.pro" <<'EOF'
+          # AppDoctor V1 - no minification.
+          EOF
+
+          cat > "$ROOT/app/src/main/AndroidManifest.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+              <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+              <application
+                  android:allowBackup="false"
+                  android:fullBackupContent="false"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="AppDoctor"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/styles.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:statusBarColor">#111827</item>
+                  <item name="android:navigationBarColor">#111827</item>
+                  <item name="android:colorAccent">#2563EB</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/strings.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources><string name="app_name">AppDoctor</string></resources>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/drawable/ic_launcher.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#111827" android:pathData="M0,0h108v108h-108z" />
+              <path android:fillColor="#FFFFFF" android:pathData="M54,14L88,27V50C88,72 74,89 54,96C34,89 20,72 20,50V27L54,14Z" />
+              <path android:fillColor="#2563EB" android:pathData="M31,54H42L47,42L55,68L61,51L66,58H78V64H63L57,57L54,76L47,53L46,60H31Z" />
+          </vector>
+          EOF
+
+          cat appdoctor-build/MainActivity.part.00 appdoctor-build/MainActivity.part.01 appdoctor-build/MainActivity.part.02 appdoctor-build/MainActivity.part.03 > "$ROOT/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java"
+          grep -q 'class MainActivity extends Activity' "$ROOT/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java"
+          if grep -q 'android.permission.INTERNET' "$ROOT/app/src/main/AndroidManifest.xml"; then exit 1; fi
+
+      - name: Build release APK
+        id: compile
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle -p appdoctor-build/android --no-daemon assembleRelease 2>&1 | tee appdoctor-build/out/build.log
+
+      - name: Collect APK and signing tool
+        if: steps.compile.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp appdoctor-build/android/app/build/outputs/apk/release/app-release-unsigned.apk appdoctor-build/out/AppDoctor-1.0.0-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" appdoctor-build/out/apksigner.jar
+          sha256sum appdoctor-build/out/AppDoctor-1.0.0-unsigned.apk > appdoctor-build/out/AppDoctor-1.0.0-unsigned.apk.sha256
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppDoctor-1.0.0-unsigned-tools
+          if-no-files-found: error
+          path: appdoctor-build/out/
+
+      - name: Fail if compile failed
+        if: steps.compile.outcome != 'success'
+        run: exit 1
