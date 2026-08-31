@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct V1.6 and apply V1.7
+      - name: Reconstruct V1.6 and apply verified V1.7
         shell: bash
         run: |
           set -euo pipefail
@@ -24,9 +24,13 @@ jobs:
           unzip -q /tmp/ConvoyRide-V1.5.0-source.zip -d cr17
           cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
           (cd cr17 && patch -p4 < /tmp/convoyride-v16.patch)
-          cat convoyride-v17/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v17.patch
+
+          cat convoyride-v17b64/part-* | base64 -d > /tmp/convoyride-v17.patch.gz
+          echo 'af47abf9e1b463ae6905f24b8bb5499e9629c06c5889d9e21c3df704c1ac1e96  /tmp/convoyride-v17.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/convoyride-v17.patch.gz > /tmp/convoyride-v17.patch
           echo 'b955c2d54ef718d2bda07239a9247ec66d223b3141b65af797e612ef0797e9e6  /tmp/convoyride-v17.patch' | sha256sum -c -
           (cd cr17 && patch -p1 < /tmp/convoyride-v17.patch)
+
           grep -q "versionName '1.7.0'" cr17/app/build.gradle
           grep -q "versionCode 8" cr17/app/build.gradle
           grep -q "com.google.zxing:core:3.5.3" cr17/app/build.gradle
