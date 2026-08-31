@@ -858,9 +858,21 @@ public class MainActivity extends Activity {
     private View participantAvatar(JSONObject p,int size,int fallbackColor){
         String image=p==null?prefs.get("profileVehicleImage",""):p.optString("vehicleImage","");
         if(image!=null&&!image.isEmpty()){
-            try{Bitmap b=VehicleImageCache.decode(image);if(b!=null){ImageView iv=new ImageView(this);iv.setScaleType(ImageView.ScaleType.CENTER_CROP);iv.setImageBitmap(b);iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));iv.setClipToOutline(true);return iv;}}catch(Exception ignored){}
+            try{
+                Bitmap b=VehicleImageCache.decode(image);
+                if(b!=null){
+                    boolean transparentVehicle=image.startsWith("iVBOR");
+                    ImageView iv=new ImageView(this);
+                    iv.setScaleType(transparentVehicle?ImageView.ScaleType.FIT_CENTER:ImageView.ScaleType.CENTER_CROP);
+                    iv.setPadding(transparentVehicle?dp(3):0,transparentVehicle?dp(3):0,transparentVehicle?dp(3):0,transparentVehicle?dp(3):0);
+                    iv.setImageBitmap(b);
+                    iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));
+                    iv.setClipToOutline(!transparentVehicle);
+                    return iv;
+                }
+            }catch(Exception ignored){}
         }
-        String icon=p==null?prefs.get("profileVehicleIcon","🚗"):p.optString("vehicleIcon","🚗");if(icon.isEmpty())icon="🚗";
+        String icon=p==null?prefs.get("profileVehicleIcon","🚗"):p.optString("vehicleIcon","🚗");if(icon.isEmpty()||VolkswagenIconPack.isVolkswagen(icon))icon="🚗";
         TextView v=text(icon,size>=46?24:19,false,participantMarkerColor(p,fallbackColor));v.setGravity(Gravity.CENTER);v.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));return v;
     }
     private int participantMarkerColor(JSONObject p,int fallback){String c=p==null?prefs.get("profileVehicleMarkerColor",""):p.optString("vehicleMarkerColor","");try{if(c!=null&&!c.isEmpty())return Color.parseColor(c);}catch(Exception ignored){}return fallback;}
@@ -904,19 +916,26 @@ public class MainActivity extends Activity {
         box.addView(iconsFirst,new LinearLayout.LayoutParams(-1,-2));box.addView(iconsMore,new LinearLayout.LayoutParams(-1,-2));
         iconHeader.setOnClickListener(v->{boolean open=iconsMore.getVisibility()==View.VISIBLE;iconsMore.setVisibility(open?View.GONE:View.VISIBLE);iconChevron.setText(open?"⌄":"⌃");});
 
-        // Emplacements réservés au futur pack d'icônes Volkswagen.
         LinearLayout vwHeader=new LinearLayout(this);vwHeader.setGravity(Gravity.CENTER_VERTICAL);vwHeader.setPadding(0,dp(10),0,dp(3));
         TextView vwTitle=text("ICÔNES VOLKSWAGEN",11,true,accent);vwHeader.addView(vwTitle,new LinearLayout.LayoutParams(0,dp(40),1));
         TextView vwChevron=text("⌄",22,true,accent);vwChevron.setGravity(Gravity.CENTER);vwHeader.addView(vwChevron,new LinearLayout.LayoutParams(dp(44),dp(40)));box.addView(vwHeader);
         GridLayout vwFirst=new GridLayout(this);vwFirst.setColumnCount(5);
         GridLayout vwMore=new GridLayout(this);vwMore.setColumnCount(5);vwMore.setVisibility(View.GONE);
-        for(int i=0;i<15;i++){
-            TextView slot=text("",18,false,muted);slot.setGravity(Gravity.CENTER);slot.setBackground(roundBg(control,border,12,1));slot.setAlpha(.55f);
-            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(54);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));
+        VolkswagenIconPack.Item[] vwItems=VolkswagenIconPack.items();
+        String selectedVehicleIcon=prefs.get("profileVehicleIcon","🚗");
+        for(int i=0;i<vwItems.length;i++){
+            final VolkswagenIconPack.Item item=vwItems[i];
+            FrameLayout slot=new FrameLayout(this);slot.setContentDescription(item.label);
+            boolean selected=item.id.equals(selectedVehicleIcon);
+            slot.setBackground(roundBg(control,selected?accent:border,12,selected?2:1));
+            ImageView carIcon=new ImageView(this);carIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);carIcon.setPadding(dp(4),dp(4),dp(4),dp(4));carIcon.setImageBitmap(item.bitmap());
+            slot.addView(carIcon,new FrameLayout.LayoutParams(-1,-1));
+            slot.setOnClickListener(v->{prefs.put("profileVehicleIcon",item.id);prefs.put("profileVehicleImage",item.base64());refreshVehiclePreview();});
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(58);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));
             (i<5?vwFirst:vwMore).addView(slot,lp);
         }
         box.addView(vwFirst,new LinearLayout.LayoutParams(-1,-2));box.addView(vwMore,new LinearLayout.LayoutParams(-1,-2));
-        TextView vwHint=text("Emplacements réservés au futur pack Volkswagen.",11,false,muted);vwHint.setPadding(dp(4),dp(3),dp(4),0);box.addView(vwHint);
+        TextView vwHint=text("10 modèles Volkswagen · appuie sur une voiture pour l'utiliser sur la carte.",11,false,muted);vwHint.setPadding(dp(4),dp(3),dp(4),0);box.addView(vwHint);
         vwHeader.setOnClickListener(v->{boolean open=vwMore.getVisibility()==View.VISIBLE;vwMore.setVisibility(open?View.GONE:View.VISIBLE);vwChevron.setText(open?"⌄":"⌃");});
 
         TextView cl=text("COULEUR DU REPÈRE",11,true,accent);cl.setPadding(0,dp(14),0,dp(6));box.addView(cl);
@@ -990,7 +1009,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.38","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.39","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
