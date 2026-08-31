@@ -23,7 +23,7 @@ jobs:
           mkdir -p cr16
           unzip -q /tmp/ConvoyRide-V1.5.0-source.zip -d cr16
           cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
-          (cd cr16 && patch -p3 < /tmp/convoyride-v16.patch)
+          (cd cr16 && patch -p4 < /tmp/convoyride-v16.patch)
           grep -q "versionName '1.6.0'" cr16/app/build.gradle
           grep -q "versionCode 7" cr16/app/build.gradle
           test -s cr16/app/src/main/java/ch/piiwii/convoyride/ConvoyService.java
