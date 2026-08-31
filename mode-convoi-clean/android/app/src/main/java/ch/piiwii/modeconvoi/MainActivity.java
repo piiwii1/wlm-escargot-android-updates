@@ -135,8 +135,8 @@ public class MainActivity extends Activity {
         render();
     }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleDeepLink(intent); render(); }
-    @Override protected void onResume() { super.onResume(); activityForeground=true; NotificationHelper.clearTalkieSpeaker(this); if(visualAlertController!=null)ConvoyForegroundAlertBus.register(visualAlertController); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
-    @Override protected void onPause() { activityForeground=false; if(visualAlertController!=null)ConvoyForegroundAlertBus.unregister(visualAlertController); super.onPause(); stopPolling(); }
+    @Override protected void onResume() { super.onResume(); activityForeground=true; if(liveTalkie!=null)liveTalkie.setHostForeground(true); NotificationHelper.clearTalkieSpeaker(this); if(visualAlertController!=null)ConvoyForegroundAlertBus.register(visualAlertController); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
+    @Override protected void onPause() { activityForeground=false; if(liveTalkie!=null)liveTalkie.setHostForeground(false); if(visualAlertController!=null)ConvoyForegroundAlertBus.unregister(visualAlertController); super.onPause(); stopPolling(); }
     @Override protected void onDestroy() { NotificationHelper.clearTalkieSpeaker(this); if(talkieSpeakerClearRunnable!=null)ui.removeCallbacks(talkieSpeakerClearRunnable); if(visualAlertController!=null){ConvoyForegroundAlertBus.unregister(visualAlertController);visualAlertController.close();} if(mapController!=null)mapController.close(); if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
 
     private boolean saveProfileChecked(EditText pseudo,EditText vehicle,EditText color,EditText server){
@@ -990,7 +990,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.37","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.38","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){

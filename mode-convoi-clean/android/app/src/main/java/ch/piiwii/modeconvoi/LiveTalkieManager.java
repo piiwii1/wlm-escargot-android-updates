@@ -65,10 +65,15 @@ public final class LiveTalkieManager {
     private AudioTrack localAudioTrack;
     private AudioDeviceModule audioDeviceModule;
     private AudioManager audioManager;
-    private int oldAudioMode = AudioManager.MODE_NORMAL;
-    private int oldVoiceVolume = -1;
-    private boolean oldSpeakerphoneOn = false;
-    private AudioDeviceInfo oldCommunicationDevice = null;
+    // Audio routing is owned only while Mode Convoi is actually playing/recording talkie audio.
+    // Keeping MODE_IN_COMMUNICATION active while the app is in the background hijacks Android's
+    // volume keys/mixer (for example while watching TikTok), so the previous route is captured
+    // immediately before use and restored as soon as the talkie becomes idle/backgrounded.
+    private int previousAudioMode = AudioManager.MODE_NORMAL;
+    private boolean previousSpeakerphoneOn = false;
+    private AudioDeviceInfo previousCommunicationDevice = null;
+    private volatile boolean audioRouteOwned = false;
+    private volatile boolean hostForeground = true;
 
     private volatile boolean running = false;
     private volatile boolean transmitting = false;
@@ -118,6 +123,27 @@ public final class LiveTalkieManager {
     public boolean isRunning() { return running; }
     public boolean isTransmitting() { return transmitting; }
 
+    /**
+     * The WebRTC signalling/peer mesh may stay alive in background so we can still identify
+     * who is speaking, but background Mode Convoi must never keep Android's communication
+     * audio route or volume stream captive.
+     */
+    public void setHostForeground(boolean foreground) {
+        hostForeground = foreground;
+        if (!foreground) {
+            transmitting = false;
+            transmittingSince = 0L;
+            micLevel = 0.0;
+            try { if (localAudioTrack != null) localAudioTrack.setEnabled(false); } catch (Throwable ignored) {}
+            muteTalkieOutputAndReleaseRoute();
+        } else if (receivingAudio && receiveEnabled) {
+            ensureReceivePath();
+        } else {
+            muteTalkieOutputAndReleaseRoute();
+        }
+        notifyState(foreground ? stateLabel() : "● Live en arrière-plan");
+    }
+
     public int connectedPeerCount() {
         synchronized (peerLock) {
             int n = 0;
@@ -133,14 +159,22 @@ public final class LiveTalkieManager {
     public void setReceiveEnabled(boolean enabled) {
         receiveEnabled = enabled;
         prefs.putBool("talkieReceive", enabled);
-        try { if (audioDeviceModule != null) audioDeviceModule.setSpeakerMute(!enabled); } catch (Throwable ignored) {}
         synchronized (peerLock) {
             for (PeerState p : peers.values()) {
                 try { if (p.remoteTrack != null) p.remoteTrack.setEnabled(enabled); } catch (Throwable ignored) {}
             }
         }
-        if (enabled) ensureReceivePath();
-        else { receivingAudio = false; receiveLevel = 0.0; }
+        if (!enabled) {
+            receivingAudio = false;
+            receivingPeerName = "";
+            receiveLevel = 0.0;
+            muteTalkieOutputAndReleaseRoute();
+        } else if (hostForeground && receivingAudio) {
+            ensureReceivePath();
+        } else {
+            // Keep RTP alive for speaker detection, but do not own Android audio while idle/background.
+            muteTalkieOutputAndReleaseRoute();
+        }
         notifyState(enabled ? stateLabel() : "Réception live coupée");
     }
 
@@ -148,17 +182,23 @@ public final class LiveTalkieManager {
     public boolean setTransmitting(boolean enabled) {
         ensureStarted();
         if (!running || localAudioTrack == null) return false;
+        if (enabled && !hostForeground) return false;
         transmitting = enabled;
         transmittingSince = enabled ? System.currentTimeMillis() : 0L;
         try {
-            routeAudioToSpeaker();
+            if (enabled) {
+                activateTalkieAudioRoute();
+                try { if (audioDeviceModule != null) audioDeviceModule.setSpeakerMute(true); } catch (Throwable ignored) {}
+            }
             localAudioTrack.setEnabled(enabled);
             ensureLocalSendersAttached();
             if (enabled) prepareTransmitHealthCheck();
-            else ensureReceivePath();
+            else if (hostForeground && receiveEnabled && receivingAudio) ensureReceivePath();
+            else muteTalkieOutputAndReleaseRoute();
         } catch (Throwable t) {
             lastError = safeMessage(t, "Micro WebRTC indisponible");
             transmitting = false;
+            muteTalkieOutputAndReleaseRoute();
             notifyState("Micro live indisponible");
             return false;
         }
@@ -193,15 +233,8 @@ public final class LiveTalkieManager {
             }
         }
         audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        if (audioManager != null) {
-            oldAudioMode = audioManager.getMode();
-            try { oldVoiceVolume = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL); } catch (Throwable ignored) {}
-            try { oldSpeakerphoneOn = audioManager.isSpeakerphoneOn(); } catch (Throwable ignored) {}
-            if (Build.VERSION.SDK_INT >= 31) {
-                try { oldCommunicationDevice = audioManager.getCommunicationDevice(); } catch (Throwable ignored) {}
-            }
-            routeAudioToSpeaker();
-        }
+        // Do not switch Android to MODE_IN_COMMUNICATION merely because a convoy session exists.
+        // Routing is activated lazily only for actual foreground talkie audio.
         audioDeviceModule = JavaAudioDeviceModule.builder(context)
                 .setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                 .setUseHardwareAcousticEchoCanceler(true)
@@ -216,7 +249,8 @@ public final class LiveTalkieManager {
         // The WebRTC track itself controls push-to-talk. Keeping the ADM microphone
         // hard-muted can leave some Android audio stacks in a one-way state after
         // negotiation, so we do not use that second mute layer here.
-        audioDeviceModule.setSpeakerMute(!receiveEnabled);
+        // Start muted. Incoming RTP is still measured; output is unmuted only when foreground audio exists.
+        audioDeviceModule.setSpeakerMute(true);
     }
 
     private void stopSession() {
@@ -234,6 +268,8 @@ public final class LiveTalkieManager {
             peers.clear();
             lastRepairByPeer.clear();
         }
+        try { if (audioDeviceModule != null) audioDeviceModule.setSpeakerMute(true); } catch (Throwable ignored) {}
+        restoreSystemAudioRoute();
         try { if (localAudioTrack != null) localAudioTrack.dispose(); } catch (Throwable ignored) {}
         try { if (audioSource != null) audioSource.dispose(); } catch (Throwable ignored) {}
         try { if (factory != null) factory.dispose(); } catch (Throwable ignored) {}
@@ -242,27 +278,21 @@ public final class LiveTalkieManager {
         audioSource = null;
         factory = null;
         audioDeviceModule = null;
-        if (audioManager != null) {
-            if (Build.VERSION.SDK_INT >= 31) {
-                try {
-                    if (oldCommunicationDevice != null) audioManager.setCommunicationDevice(oldCommunicationDevice);
-                    else audioManager.clearCommunicationDevice();
-                } catch (Throwable ignored) {}
-            }
-            try { audioManager.setSpeakerphoneOn(oldSpeakerphoneOn); } catch (Throwable ignored) {}
-            if (oldVoiceVolume >= 0) {
-                try { audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, oldVoiceVolume, 0); } catch (Throwable ignored) {}
-            }
-            try { audioManager.setMode(oldAudioMode); } catch (Throwable ignored) {}
-        }
-        oldCommunicationDevice = null;
-        oldVoiceVolume = -1;
         sessionKey = "";
         lastSignalId = 0;
     }
 
-    private void routeAudioToSpeaker() {
-        if (audioManager == null) return;
+    private synchronized void activateTalkieAudioRoute() {
+        if (audioManager == null || !hostForeground) return;
+        if (!audioRouteOwned) {
+            try { previousAudioMode = audioManager.getMode(); } catch (Throwable ignored) { previousAudioMode = AudioManager.MODE_NORMAL; }
+            try { previousSpeakerphoneOn = audioManager.isSpeakerphoneOn(); } catch (Throwable ignored) { previousSpeakerphoneOn = false; }
+            previousCommunicationDevice = null;
+            if (Build.VERSION.SDK_INT >= 31) {
+                try { previousCommunicationDevice = audioManager.getCommunicationDevice(); } catch (Throwable ignored) {}
+            }
+            audioRouteOwned = true;
+        }
         try { audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION); } catch (Throwable ignored) {}
         if (Build.VERSION.SDK_INT >= 31) {
             try {
@@ -274,10 +304,26 @@ public final class LiveTalkieManager {
             } catch (Throwable ignored) {}
         }
         try { audioManager.setSpeakerphoneOn(true); } catch (Throwable ignored) {}
-        try {
-            int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL);
-            if (max > 0 && !audioManager.isVolumeFixed()) audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, max, 0);
-        } catch (Throwable ignored) {}
+        // Never change STREAM_VOICE_CALL volume here: volume belongs to the user/system mixer.
+    }
+
+    private synchronized void restoreSystemAudioRoute() {
+        if (audioManager == null || !audioRouteOwned) return;
+        if (Build.VERSION.SDK_INT >= 31) {
+            try {
+                if (previousCommunicationDevice != null) audioManager.setCommunicationDevice(previousCommunicationDevice);
+                else audioManager.clearCommunicationDevice();
+            } catch (Throwable ignored) {}
+        }
+        try { audioManager.setSpeakerphoneOn(previousSpeakerphoneOn); } catch (Throwable ignored) {}
+        try { audioManager.setMode(previousAudioMode); } catch (Throwable ignored) {}
+        previousCommunicationDevice = null;
+        audioRouteOwned = false;
+    }
+
+    private void muteTalkieOutputAndReleaseRoute() {
+        try { if (audioDeviceModule != null) audioDeviceModule.setSpeakerMute(true); } catch (Throwable ignored) {}
+        restoreSystemAudioRoute();
     }
 
     private void scheduleAudioMeter(long delayMs) {
@@ -300,6 +346,7 @@ public final class LiveTalkieManager {
             receivingPeerName = "";
             receiveLevel = 0.0;
             micLevel = 0.0;
+            if (!transmitting) muteTalkieOutputAndReleaseRoute();
             notifyState(stateLabel());
             scheduleAudioMeter(350);
             return;
@@ -323,12 +370,14 @@ public final class LiveTalkieManager {
                     if (pending.decrementAndGet() == 0) {
                         receiveLevel = levels[0];
                         micLevel = levels[1];
+                        boolean wasReceiving = receivingAudio;
                         receivingAudio = receiveEnabled && !transmitting && receiveLevel >= 0.012;
                         if (receivingAudio && loudest[0] != null) {
                             String n = loudest[0].displayName == null ? "" : loudest[0].displayName.trim();
                             receivingPeerName = n.isEmpty() ? "Un participant" : n;
                         } else receivingPeerName = "";
-                        if (receivingAudio) ensureReceivePath();
+                        if (receivingAudio && hostForeground) ensureReceivePath();
+                        else if (!transmitting && (wasReceiving || !hostForeground)) muteTalkieOutputAndReleaseRoute();
                         notifyState(stateLabel());
                         scheduleAudioMeter(180);
                     }
@@ -396,14 +445,17 @@ public final class LiveTalkieManager {
     }
 
     private void ensureReceivePath() {
-        if (!receiveEnabled) return;
+        if (!receiveEnabled || !hostForeground) {
+            muteTalkieOutputAndReleaseRoute();
+            return;
+        }
+        activateTalkieAudioRoute();
         try { if (audioDeviceModule != null) audioDeviceModule.setSpeakerMute(false); } catch (Throwable ignored) {}
         synchronized (peerLock) {
             for (PeerState state : peers.values()) {
                 try { if (state.remoteTrack != null) state.remoteTrack.setEnabled(true); } catch (Throwable ignored) {}
             }
         }
-        routeAudioToSpeaker();
     }
 
     private String meter(double level) {
