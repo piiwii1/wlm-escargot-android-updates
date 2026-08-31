@@ -1,0 +1,179 @@
+                    .append(" / Batterie ").append(r.batteryScore)
+                    .append(" / Sécurité ").append(r.securityScore).append("]")
+                    .append(r.manualInstall ? " — APK MANUELLE" : "").append('\n');
+            shown++;
+            if (shown >= 10) break;
+        }
+        if (shown == 0) sb.append("Aucune application au-dessus du seuil d'alerte.\n");
+        sb.append('\n');
+
+        sb.append("IMPORTANT\n");
+        sb.append("Le score est un indicateur de points à contrôler, pas une preuve qu'une application fait planter le téléphone. Sans root/ADB/Shizuku, Android ne permet pas à AppDoctor de lire librement les crash logs privés des autres applications ni leur consommation batterie exacte en mAh.\n\n");
+
+        if (!usageAllowed) {
+            sb.append("ℹ STATISTIQUES MANQUANTES\n");
+            sb.append("Autorise « Accès aux données d'utilisation » puis relance l'analyse pour ajouter l'utilisation 7/30 jours et la dernière utilisation.\n\n");
+        }
+
+        sb.append("APK INSTALLÉES MANUELLEMENT / PRIORITAIRES POUR NOS TESTS\n");
+        sb.append("========================================\n");
+        int manualShown = 0;
+        for (AppResult r : results) {
+            if (!r.manualInstall) continue;
+            sb.append(r.render()).append('\n');
+            manualShown++;
+        }
+        if (manualShown == 0) sb.append("Aucune installation manuelle détectée.\n\n");
+
+        sb.append("AUTRES APPLICATIONS UTILISATEUR\n");
+        sb.append("========================================\n");
+        for (AppResult r : results) {
+            if (r.manualInstall) continue;
+            sb.append(r.render()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private String deviceSnapshot() {
+        StringBuilder s = new StringBuilder();
+        s.append("ÉTAT DU TÉLÉPHONE AU MOMENT DE L'ANALYSE\n");
+        s.append("----------------------------------------\n");
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+            if (am != null) {
+                am.getMemoryInfo(mi);
+                s.append("RAM disponible : ").append(size(mi.availMem)).append(" / ").append(size(mi.totalMem));
+                if (mi.lowMemory) s.append(" — ⚠️ mémoire faible signalée par Android");
+                s.append('\n');
+            }
+        } catch (Throwable ignored) {}
+        try {
+            StatFs fs = new StatFs(Environment.getDataDirectory().getAbsolutePath());
+            long free = fs.getAvailableBytes();
+            long total = fs.getTotalBytes();
+            s.append("Stockage libre : ").append(size(free)).append(" / ").append(size(total));
+            if (total > 0 && free * 100L / total < 10L) s.append(" — ⚠️ moins de 10 % libre");
+            s.append('\n');
+        } catch (Throwable ignored) {}
+        try {
+            Intent battery = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (battery != null) {
+                int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+                int temp = battery.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
+                int status = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+                int pct = level >= 0 && scale > 0 ? Math.round(level * 100f / scale) : -1;
+                s.append("Batterie : ").append(pct >= 0 ? pct + " %" : "inconnue");
+                if (temp >= 0) s.append(" — ").append(String.format(Locale.FRANCE, "%.1f °C", temp / 10f));
+                if (status == BatteryManager.BATTERY_STATUS_CHARGING) s.append(" — en charge");
+                else if (status == BatteryManager.BATTERY_STATUS_FULL) s.append(" — chargée");
+                s.append('\n');
+            }
+        } catch (Throwable ignored) {}
+        return s.toString();
+    }
+
+    private AppResult analyzePackage(PackageManager pm, PowerManager powerManager, PackageInfo pi, UsageStats u7, UsageStats u30) {
+        ApplicationInfo ai = pi.applicationInfo;
+        AppResult r = new AppResult();
+        r.packageName = pi.packageName;
+        r.label = safeLabel(pm, ai);
+        r.versionName = pi.versionName == null ? "?" : pi.versionName;
+        r.versionCode = Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode;
+        r.minSdk = Build.VERSION.SDK_INT >= 24 ? ai.minSdkVersion : 0;
+        r.targetSdk = ai.targetSdkVersion;
+        r.firstInstall = pi.firstInstallTime;
+        r.lastUpdate = pi.lastUpdateTime;
+        r.debuggable = (ai.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        r.testOnly = (ai.flags & ApplicationInfo.FLAG_TEST_ONLY) != 0;
+        r.cleartext = (ai.flags & ApplicationInfo.FLAG_USES_CLEARTEXT_TRAFFIC) != 0;
+        r.apkSize = apkSize(ai);
+        r.splitCount = ai.splitSourceDirs == null ? 0 : ai.splitSourceDirs.length;
+        ApkScan scan = scanApks(ai);
+        r.dexCount = scan.dexCount;
+        r.abis.addAll(scan.abis);
+        r.installer = installer(pm, pi.packageName);
+        r.manualInstall = looksManual(r.installer);
+        r.certificateSha256 = certificateSha256(pi);
+
+        Set<String> perms = new HashSet<>();
+        Set<String> granted = new HashSet<>();
+        if (pi.requestedPermissions != null) {
+            perms.addAll(Arrays.asList(pi.requestedPermissions));
+            if (pi.requestedPermissionsFlags != null) {
+                for (int i = 0; i < pi.requestedPermissions.length && i < pi.requestedPermissionsFlags.length; i++) {
+                    if ((pi.requestedPermissionsFlags[i] & PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0) {
+                        granted.add(pi.requestedPermissions[i]);
+                    }
+                }
+            }
+        }
+        r.permissions = perms;
+        r.grantedPermissions = granted;
+        r.sensitiveGranted.addAll(sensitiveGranted(granted));
+
+        r.activities = pi.activities == null ? 0 : pi.activities.length;
+        r.services = pi.services == null ? 0 : pi.services.length;
+        r.receivers = pi.receivers == null ? 0 : pi.receivers.length;
+        r.providers = pi.providers == null ? 0 : pi.providers.length;
+        countExported(pi, r);
+        inspectSpecialServices(pi, r);
+
+        try {
+            r.batteryAllowlisted = powerManager != null && powerManager.isIgnoringBatteryOptimizations(pi.packageName);
+        } catch (Throwable ignored) {
+            r.batteryAllowlisted = false;
+        }
+
+        if (u7 != null) {
+            r.usage7 = u7.getTotalTimeInForeground();
+            r.lastUsed = u7.getLastTimeUsed();
+        }
+        if (u30 != null) {
+            r.usage30 = u30.getTotalTimeInForeground();
+            r.lastUsed = Math.max(r.lastUsed, u30.getLastTimeUsed());
+        }
+
+        score(r);
+        return r;
+    }
+
+    private void score(AppResult r) {
+        if (r.debuggable) r.addBuild(35, "Build DEBUGGABLE installé");
+        if (r.testOnly) r.addBuild(25, "Application marquée TEST_ONLY");
+
+        if (r.targetSdk < 31) r.addBuild(25, "targetSdk très ancien (" + r.targetSdk + ")");
+        else if (r.targetSdk < 33) r.addBuild(15, "targetSdk ancien (" + r.targetSdk + ")");
+        else if (r.targetSdk < 35) r.addBuild(6, "targetSdk vieillissant (" + r.targetSdk + ")");
+
+        if (has(r, "android.permission.WAKE_LOCK")) r.addBattery(4, "WAKE_LOCK déclaré — peut maintenir le CPU éveillé si mal utilisé");
+        if (has(r, "android.permission.RECEIVE_BOOT_COMPLETED")) r.addBattery(4, "Démarrage au boot déclaré");
+        if (has(r, "android.permission.ACCESS_BACKGROUND_LOCATION")) r.addBattery(8, "Localisation en arrière-plan déclarée");
+        if (has(r, "android.permission.SCHEDULE_EXACT_ALARM") || has(r, "android.permission.USE_EXACT_ALARM")) r.addBattery(5, "Alarmes exactes déclarées");
+        if (has(r, "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")) r.addBattery(8, "Peut demander à ignorer l'optimisation batterie");
+        if (has(r, "android.permission.FOREGROUND_SERVICE")) r.addBattery(2, "Foreground service possible");
+        if (r.batteryAllowlisted) r.addBattery(10, "Application actuellement exclue de l'optimisation batterie");
+        if (!r.foregroundTypes.isEmpty()) r.addBattery(Math.min(8, 2 + r.foregroundTypes.size()), "Types de service premier plan : " + String.join(", ", r.foregroundTypes));
+
+        if (r.exportedServices > 0) r.addSecurity(Math.min(15, r.exportedServices * 5), r.exportedServices + " service(s) exporté(s) sans permission");
+        if (r.exportedProviders > 0) r.addSecurity(Math.min(18, r.exportedProviders * 6), r.exportedProviders + " provider(s) exporté(s) sans permission");
+        if (r.exportedReceivers > 0) r.addSecurity(Math.min(12, r.exportedReceivers * 4), r.exportedReceivers + " receiver(s) exporté(s) sans permission");
+        if (r.exportedActivities > 3) r.addSecurity(3, r.exportedActivities + " activités exportées sans permission (certaines peuvent être normales)");
+        if (r.cleartext && r.targetSdk >= 28) r.addSecurity(4, "Trafic HTTP en clair autorisé");
+        if (r.accessibilityService) r.addSecurity(8, "Service d'accessibilité déclaré — capacité puissante à vérifier");
+        if (r.notificationListener) r.addSecurity(5, "Notification Listener déclaré");
+        if (r.vpnService) r.addSecurity(5, "Service VPN déclaré");
+        if (has(r, "android.permission.SYSTEM_ALERT_WINDOW")) r.addSecurity(7, "Superposition sur les autres applications demandée");
+        if (has(r, "android.permission.REQUEST_INSTALL_PACKAGES")) r.addSecurity(7, "Peut demander l'installation d'autres APK");
+        if (has(r, "android.permission.MANAGE_EXTERNAL_STORAGE")) r.addSecurity(6, "Accès étendu au stockage demandé");
+
+        if (r.services > 12) r.addBuild(4, "Nombre élevé de services déclarés (" + r.services + ")");
+        if (r.receivers > 12) r.addBuild(3, "Nombre élevé de receivers déclarés (" + r.receivers + ")");
+        if (r.apkSize > 150L * 1024L * 1024L) r.addBuild(6, "APK très volumineuse (>150 Mo)");
+        else if (r.apkSize > 75L * 1024L * 1024L) r.addBuild(3, "APK volumineuse (>75 Mo)");
+        if (r.dexCount > 8) r.addBuild(3, "Beaucoup de fichiers DEX (" + r.dexCount + ")");
+        if (r.splitCount > 20) r.addBuild(2, "Beaucoup de splits APK (" + r.splitCount + ")");
+
+        if (!r.abis.isEmpty()) {
+            boolean phoneArm64 = Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a");
