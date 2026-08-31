@@ -38,19 +38,17 @@ public class MainActivity extends Activity {
     private TextView connectionBadge;
     private JSONObject snapshot;
     private WebView mapView;
-    private boolean mapPageReady=false;
     private LinearLayout snapshotArea;
     private String currentPage = "welcome";
     private boolean busyOperation=false;
     private ConvoyPollingController pollingController;
     private ConvoySessionManager sessionManager;
+    private ConvoyMapController mapController;
     private int bg, card, fg, muted, accent, danger, border, control, navSurface;
     private boolean darkTheme;
     private static final int REQ_LOCATION = 1001, REQ_NOTIF = 1002, REQ_AUDIO = 1003, REQ_VEHICLE_IMAGE = 2001;
     private FrameLayout vehiclePreview;
     private Dialog fullScreenMapDialog;
-    private WebView fullScreenMapView;
-    private boolean fullScreenMapReady=false;
     private TextView talkieState;
     private View talkiePttButton;
     private boolean talkiePermissionRequestPending=false;
@@ -89,12 +87,13 @@ public class MainActivity extends Activity {
         if(oldLocalServer && prefs.hasActiveConvoy()) { prefs.clearSession(); snapshot=null; prefs.put("serverUrl",DEFAULT_SERVER); }
         applyPalette();
         sessionManager = new ConvoySessionManager(prefs,DEFAULT_SERVER);
+        mapController = new ConvoyMapController(prefs,()->snapshot);
         pollingController = new ConvoyPollingController(this,prefs,DEFAULT_SERVER,new ConvoyPollingController.Listener(){
             @Override public void onSnapshot(JSONObject s,boolean renamed,long synchronizedAt){
                 snapshot=s;
                 if(liveTalkie!=null)liveTalkie.ensureStarted();
                 if(renamed&&"home".equals(currentPage))render();
-                else if(mapView!=null)pushMap();
+                else if(mapView!=null)mapController.pushAll();
                 else if("home".equals(currentPage))refreshSnapshotArea();
                 else if("participants".equals(currentPage))renderParticipantsPage();
             }
@@ -120,7 +119,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleDeepLink(intent); render(); }
     @Override protected void onResume() { super.onResume(); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
     @Override protected void onPause() { super.onPause(); stopPolling(); }
-    @Override protected void onDestroy() { if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onDestroy() { if(mapController!=null)mapController.close(); if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
 
     private boolean saveProfileChecked(EditText pseudo,EditText vehicle,EditText color,EditText server){
         String name=pseudo.getText().toString().trim();
@@ -401,21 +400,8 @@ public class MainActivity extends Activity {
         mapStage.setBackground(roundBg(card,border,16,1));
         mapStage.setClipToOutline(true);
 
-        mapPageReady=false;
         mapView=new WebView(this);
-        mapView.getSettings().setJavaScriptEnabled(true);
-        mapView.getSettings().setDomStorageEnabled(true);
-        mapView.getSettings().setLoadsImagesAutomatically(true);
-        mapView.getSettings().setBlockNetworkImage(false);
-        mapView.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
-        mapView.setBackgroundColor(bg);
-        mapView.setWebViewClient(new android.webkit.WebViewClient(){
-            @Override public void onPageFinished(WebView v,String url){mapPageReady=true;pushMap();scheduleMapLocalRefresh();}
-            @Override public void onReceivedError(WebView view,android.webkit.WebResourceRequest req,android.webkit.WebResourceError err){
-                if(req!=null && req.isForMainFrame()) toast("Impossible d’ouvrir la carte");
-            }
-        });
-        mapView.loadUrl("file:///android_asset/convoy_map.html");
+        mapController.attachPage(mapView,bg,()->toast("Impossible d’ouvrir la carte"));
         mapStage.addView(mapView,new FrameLayout.LayoutParams(-1,-1));
 
         if(snapshot!=null){
@@ -505,39 +491,9 @@ public class MainActivity extends Activity {
         long sent=prefs.getLong(LocationShareService.PREF_GPS_SENT_AT,0);
         return sent>0?"Synchronisé · "+ageText(Math.max(0,System.currentTimeMillis()-sent)):"En attente de synchronisation";
     }
-    private JSONObject snapshotForMap(){
-        try{
-            JSONObject out=snapshot==null?new JSONObject():new JSONObject(snapshot.toString());
-            JSONArray ps=out.optJSONArray("participants"); if(ps==null){ps=new JSONArray();out.put("participants",ps);}
-            String meId=prefs.get("participantId",""); JSONObject me=null;
-            for(int i=0;i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p!=null&&meId.equals(p.optString("id"))){me=p;break;}}
-            if(me==null && !meId.isEmpty()){
-                me=new JSONObject().put("id",meId).put("name",prefs.get("profileName","Moi")).put("vehicle",prefs.get("profileVehicle","Véhicule")); ps.put(me);
-            }
-            if(me!=null){me.put("vehicleIcon",prefs.get("profileVehicleIcon","🚗"));me.put("vehicleMarkerColor",prefs.get("profileVehicleMarkerColor","#FFB514"));me.put("vehicleColor",prefs.get("profileColor",""));String img=prefs.get("profileVehicleImage","");if(!img.isEmpty())me.put("vehicleImage",img);}
-            long fixAt=prefs.getLong(LocationShareService.PREF_GPS_FIX_AT,0);
-            if(me!=null && fixAt>0){
-                double lat=Double.parseDouble(prefs.get(LocationShareService.PREF_GPS_LAT,"0"));
-                double lon=Double.parseDouble(prefs.get(LocationShareService.PREF_GPS_LON,"0"));
-                if(Math.abs(lat)<=90 && Math.abs(lon)<=180 && (lat!=0 || lon!=0)){
-                    JSONObject loc=new JSONObject().put("lat",lat).put("lon",lon).put("receivedAt",fixAt).put("deviceTime",fixAt);
-                    try{double acc=Double.parseDouble(prefs.get(LocationShareService.PREF_GPS_ACC,"-1"));if(acc>=0)loc.put("accuracy",acc);}catch(Exception ignored){}
-                    me.put("location",loc);
-                    out.put("serverTime",System.currentTimeMillis());
-                }
-            }
-            return out;
-        }catch(Exception e){ return snapshot==null?new JSONObject():snapshot; }
-    }
-    private void scheduleMapLocalRefresh(){
-        ui.postDelayed(new Runnable(){@Override public void run(){
-            if(!"map".equals(currentPage)||mapView==null||!mapPageReady)return;
-            pushMap(); ui.postDelayed(this,2000);
-        }},2000);
-    }
-    private void pushMap(){ if(mapView==null||!mapPageReady)return; JSONObject data=snapshotForMap(); String raw=JSONObject.quote(data.toString()); String id=JSONObject.quote(prefs.get("participantId","")); mapView.evaluateJavascript("window.updateConvoy("+raw+","+id+")",null); }
+    private void pushMap(){if(mapController!=null)mapController.pushPage();}
 
-    private void renderParticipantsPage(){currentPage="participants";mapView=null;content.removeAllViews();LinearLayout top=pageHeader("‹","PARTICIPANTS");top.getChildAt(0).setOnClickListener(v->{render();startPolling();});content.addView(top);if(snapshot==null){cardTitle(content,"Aucun participant","Crée ou rejoins un convoi depuis Accueil pour voir les voitures ici.");return;}JSONArray ps=snapshot.optJSONArray("participants");long st=snapshot.optLong("serverTime",System.currentTimeMillis());sectionLabel(content,"PARTICIPANTS ("+(ps==null?0:ps.length())+")");LinearLayout list=cardBox();list.setPadding(dp(12),dp(4),dp(12),dp(4));for(int i=0;ps!=null&&i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p==null)continue;long presenceAge=Math.max(0,st-p.optLong("lastSeen",0));boolean online=presenceAge<30000;JSONObject loc=p.optJSONObject("location");long posAge=loc==null?Long.MAX_VALUE:Math.max(0,st-loc.optLong("receivedAt",0));int state=online?(posAge>30000?accent:Color.rgb(91,196,62)):Color.rgb(112,116,120);LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(0,dp(8),0,dp(8));View icon=participantAvatar(p,40,state);row.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));LinearLayout who=new LinearLayout(this);who.setOrientation(LinearLayout.VERTICAL);who.setPadding(dp(10),0,0,0);who.addView(text(p.optString("name","Participant"),17,true,fg));who.addView(text(p.optString("vehicle","Véhicule"),12,false,muted));row.addView(who,new LinearLayout.LayoutParams(0,-2,1));String stateText=!online?"hors ligne":posAge>30000?"position ancienne":"en ligne";row.addView(text("●  "+stateText,11,false,state));list.addView(row);}content.addView(list);sectionLabel(content,"ÉVÉNEMENTS RÉCENTS");LinearLayout ev=cardBox();JSONArray events=snapshot.optJSONArray("events");int shown=0;if(events!=null)for(int i=events.length()-1;i>=0&&shown<4;i--){JSONObject e=events.optJSONObject(i);if(e==null)continue;String label=e.optString("label","");if(label.isEmpty())continue;ev.addView(text("•  "+label,13,false,fg),new LinearLayout.LayoutParams(-1,dp(42)));shown++;}if(shown==0)ev.addView(text("Aucun événement récent",13,false,muted));content.addView(ev);sectionLabel(content,"ADMINISTRATION");boolean admin=!prefs.get("adminKey","").isEmpty();if(admin){Button rename=adminButton("✎  Renommer le convoi",false);rename.setOnClickListener(v->renameConvoyDialog());content.addView(rename);Button rally=adminButton("⌖  Définir le regroupement",false);rally.setOnClickListener(v->rallyDialog());content.addView(rally);Button remove=adminButton("⊖  Retirer un participant",false);remove.setOnClickListener(v->manageParticipantsDialog());content.addView(remove);Button close=adminButton("▣  Fermer le convoi",true);close.setOnClickListener(v->confirmClose());content.addView(close);}else{Button leave=adminButton("↪  Quitter le convoi",true);leave.setOnClickListener(v->leaveConvoy());content.addView(leave);}}
+    private void renderParticipantsPage(){currentPage="participants";if(mapController!=null)mapController.detachPage();mapView=null;content.removeAllViews();LinearLayout top=pageHeader("‹","PARTICIPANTS");top.getChildAt(0).setOnClickListener(v->{render();startPolling();});content.addView(top);if(snapshot==null){cardTitle(content,"Aucun participant","Crée ou rejoins un convoi depuis Accueil pour voir les voitures ici.");return;}JSONArray ps=snapshot.optJSONArray("participants");long st=snapshot.optLong("serverTime",System.currentTimeMillis());sectionLabel(content,"PARTICIPANTS ("+(ps==null?0:ps.length())+")");LinearLayout list=cardBox();list.setPadding(dp(12),dp(4),dp(12),dp(4));for(int i=0;ps!=null&&i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p==null)continue;long presenceAge=Math.max(0,st-p.optLong("lastSeen",0));boolean online=presenceAge<30000;JSONObject loc=p.optJSONObject("location");long posAge=loc==null?Long.MAX_VALUE:Math.max(0,st-loc.optLong("receivedAt",0));int state=online?(posAge>30000?accent:Color.rgb(91,196,62)):Color.rgb(112,116,120);LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(0,dp(8),0,dp(8));View icon=participantAvatar(p,40,state);row.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));LinearLayout who=new LinearLayout(this);who.setOrientation(LinearLayout.VERTICAL);who.setPadding(dp(10),0,0,0);who.addView(text(p.optString("name","Participant"),17,true,fg));who.addView(text(p.optString("vehicle","Véhicule"),12,false,muted));row.addView(who,new LinearLayout.LayoutParams(0,-2,1));String stateText=!online?"hors ligne":posAge>30000?"position ancienne":"en ligne";row.addView(text("●  "+stateText,11,false,state));list.addView(row);}content.addView(list);sectionLabel(content,"ÉVÉNEMENTS RÉCENTS");LinearLayout ev=cardBox();JSONArray events=snapshot.optJSONArray("events");int shown=0;if(events!=null)for(int i=events.length()-1;i>=0&&shown<4;i--){JSONObject e=events.optJSONObject(i);if(e==null)continue;String label=e.optString("label","");if(label.isEmpty())continue;ev.addView(text("•  "+label,13,false,fg),new LinearLayout.LayoutParams(-1,dp(42)));shown++;}if(shown==0)ev.addView(text("Aucun événement récent",13,false,muted));content.addView(ev);sectionLabel(content,"ADMINISTRATION");boolean admin=!prefs.get("adminKey","").isEmpty();if(admin){Button rename=adminButton("✎  Renommer le convoi",false);rename.setOnClickListener(v->renameConvoyDialog());content.addView(rename);Button rally=adminButton("⌖  Définir le regroupement",false);rally.setOnClickListener(v->rallyDialog());content.addView(rally);Button remove=adminButton("⊖  Retirer un participant",false);remove.setOnClickListener(v->manageParticipantsDialog());content.addView(remove);Button close=adminButton("▣  Fermer le convoi",true);close.setOnClickListener(v->confirmClose());content.addView(close);}else{Button leave=adminButton("↪  Quitter le convoi",true);leave.setOnClickListener(v->leaveConvoy());content.addView(leave);}}
 
     private void convoyOptions(){
         boolean admin=!prefs.get("adminKey","").isEmpty();
@@ -870,18 +826,18 @@ public class MainActivity extends Activity {
     }
     private void syncProfileToServer(){if(!prefs.hasActiveConvoy())return;io.execute(()->{try{sessionManager.syncProfile();ui.post(()->{toast("Profil mis à jour");pollOnce();});}catch(Exception e){ui.post(()->toast("Profil local enregistré · serveur à mettre à jour"));}});}
     private void showFullScreenMap(){
-        if(fullScreenMapDialog!=null&&fullScreenMapDialog.isShowing())return;final Dialog d=new Dialog(this,android.R.style.Theme_Black_NoTitleBar_Fullscreen);fullScreenMapDialog=d;FrameLayout frame=new FrameLayout(this);frame.setBackgroundColor(Color.rgb(10,12,14));
-        WebView w=new WebView(this);fullScreenMapView=w;fullScreenMapReady=false;w.getSettings().setJavaScriptEnabled(true);w.getSettings().setDomStorageEnabled(true);w.getSettings().setLoadsImagesAutomatically(true);w.getSettings().setBlockNetworkImage(false);w.setBackgroundColor(bg);w.setWebViewClient(new android.webkit.WebViewClient(){@Override public void onPageFinished(WebView v,String url){fullScreenMapReady=true;pushFullScreenMap();scheduleFullScreenMapRefresh(d);}});frame.addView(w,new FrameLayout.LayoutParams(-1,-1));
+        if(fullScreenMapDialog!=null&&fullScreenMapDialog.isShowing())return;
+        final Dialog d=new Dialog(this,android.R.style.Theme_Black_NoTitleBar_Fullscreen);fullScreenMapDialog=d;
+        FrameLayout frame=new FrameLayout(this);frame.setBackgroundColor(Color.rgb(10,12,14));
+        WebView w=new WebView(this);mapController.attachFullScreen(w,bg,()->toast("Impossible d’ouvrir la carte"));frame.addView(w,new FrameLayout.LayoutParams(-1,-1));
         TextView close=text("✕",27,true,Color.WHITE);close.setGravity(Gravity.CENTER);close.setBackground(roundBg(Color.rgb(20,23,26),Color.rgb(90,94,98),22,1));close.setOnClickListener(v->d.dismiss());FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(dp(46),dp(46),Gravity.LEFT|Gravity.TOP);cp.setMargins(dp(12),dp(14),0,0);frame.addView(close,cp);
         TextView title=text("CARTE DU CONVOI",12,true,accent);title.setGravity(Gravity.CENTER);title.setBackground(roundBg(Color.rgb(20,23,26),Color.rgb(90,94,98),18,1));FrameLayout.LayoutParams tp=new FrameLayout.LayoutParams(dp(160),dp(40),Gravity.TOP|Gravity.CENTER_HORIZONTAL);tp.setMargins(0,dp(17),0,0);frame.addView(title,tp);
-        d.setContentView(frame);d.setOnDismissListener(x->{fullScreenMapReady=false;fullScreenMapView=null;fullScreenMapDialog=null;});d.show();if(d.getWindow()!=null)d.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);w.loadUrl("file:///android_asset/convoy_map.html");
+        d.setContentView(frame);d.setOnDismissListener(x->{if(mapController!=null)mapController.detachFullScreen();fullScreenMapDialog=null;});d.show();if(d.getWindow()!=null)d.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
-    private void pushFullScreenMap(){if(fullScreenMapView==null||!fullScreenMapReady)return;JSONObject data=snapshotForMap();String raw=JSONObject.quote(data.toString());String id=JSONObject.quote(prefs.get("participantId",""));fullScreenMapView.evaluateJavascript("window.updateConvoy("+raw+","+id+")",null);}
-    private void scheduleFullScreenMapRefresh(Dialog d){ui.postDelayed(new Runnable(){@Override public void run(){if(d==null||!d.isShowing()||fullScreenMapView==null)return;pushFullScreenMap();ui.postDelayed(this,2000);}},2000);}
 
     private void renderMorePage(){
         currentPage="more";
-        mapView=null;
+        if(mapController!=null)mapController.detachPage();mapView=null;
         content.removeAllViews();
         sectionLabel(content,"RÉGLAGES");
         LinearLayout settings=cardBox();settings.setPadding(dp(8),dp(6),dp(8),dp(6));
@@ -918,7 +874,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.31","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.32","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
