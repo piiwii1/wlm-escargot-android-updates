@@ -1,4 +1,4 @@
-# AppDoctor 2.0.0 deep diagnostic build
+# AppDoctor 2.0.0 deep diagnostic build - Shizuku provider verified
 name: Build AppDoctor 2.0.0 Shizuku
 
 on:
@@ -15,17 +15,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - uses: android-actions/setup-android@v3
-
       - name: Install Android SDK 35
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -90,22 +86,7 @@ jobs:
           EOF
 
           echo '# AppDoctor 2.0.0' > "$ROOT/app/proguard-rules.pro"
-
-          cat > "$ROOT/app/src/main/AndroidManifest.xml" <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-              <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
-              <application android:allowBackup="false" android:fullBackupContent="false" android:icon="@drawable/ic_launcher" android:label="AppDoctor" android:supportsRtl="true" android:theme="@style/AppTheme">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          cp appdoctor-build-v200/AndroidManifest.xml "$ROOT/app/src/main/AndroidManifest.xml"
 
           cat > "$ROOT/app/src/main/res/values/styles.xml" <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -141,6 +122,8 @@ jobs:
           grep -q 'runDeepSystemScan' "$JAVA/MainActivity.java"
           grep -q 'Shizuku.bindUserService' "$JAVA/MainActivity.java"
           grep -q 'dumpsys batterystats --charged' "$JAVA/MainActivity.java"
+          grep -q 'rikka.shizuku.ShizukuProvider' "$ROOT/app/src/main/AndroidManifest.xml"
+          grep -q 'android.permission.INTERACT_ACROSS_USERS_FULL' "$ROOT/app/src/main/AndroidManifest.xml"
           if grep -q 'android.permission.INTERNET' "$ROOT/app/src/main/AndroidManifest.xml"; then exit 1; fi
 
       - name: Build release APK
@@ -150,6 +133,19 @@ jobs:
         run: |
           set -o pipefail
           gradle -p appdoctor-build-v200/android --no-daemon assembleRelease 2>&1 | tee appdoctor-build-v200/out/build.log
+
+      - name: Verify merged Shizuku manifest
+        if: steps.compile.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          MERGED=appdoctor-build-v200/android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml
+          if [ ! -f "$MERGED" ]; then
+            MERGED=$(find appdoctor-build-v200/android/app/build/intermediates -path '*release*' -name AndroidManifest.xml | head -1)
+          fi
+          grep -q 'rikka.shizuku.ShizukuProvider' "$MERGED"
+          grep -q 'moe.shizuku.manager.permission.API_V23' "$MERGED"
+          cp "$MERGED" appdoctor-build-v200/out/merged-AndroidManifest.xml
 
       - name: Collect APK and signing tool
         if: steps.compile.outcome == 'success'
