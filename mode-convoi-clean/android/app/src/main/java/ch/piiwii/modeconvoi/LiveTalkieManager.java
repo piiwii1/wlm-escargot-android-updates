@@ -57,6 +57,7 @@ public final class LiveTalkieManager {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ScheduledThreadPoolExecutor net = new ScheduledThreadPoolExecutor(3);
     private final Map<String, PeerState> peers = new HashMap<>();
+    private final Map<String, Long> lastRepairByPeer = new HashMap<>();
     private final Object peerLock = new Object();
 
     private PeerConnectionFactory factory;
@@ -80,6 +81,7 @@ public final class LiveTalkieManager {
     private volatile double receiveLevel = 0.0;
     private volatile double micLevel = 0.0;
     private volatile boolean meterScheduled = false;
+    private volatile long transmittingSince = 0L;
 
     public LiveTalkieManager(Context context, AppPrefs prefs, Listener listener) {
         this.context = context.getApplicationContext();
@@ -136,7 +138,7 @@ public final class LiveTalkieManager {
                 try { if (p.remoteTrack != null) p.remoteTrack.setEnabled(enabled); } catch (Throwable ignored) {}
             }
         }
-        if (enabled) routeAudioToSpeaker();
+        if (enabled) ensureReceivePath();
         else { receivingAudio = false; receiveLevel = 0.0; }
         notifyState(enabled ? stateLabel() : "Réception live coupée");
     }
@@ -146,10 +148,13 @@ public final class LiveTalkieManager {
         ensureStarted();
         if (!running || localAudioTrack == null) return false;
         transmitting = enabled;
+        transmittingSince = enabled ? System.currentTimeMillis() : 0L;
         try {
             routeAudioToSpeaker();
-            ensureLocalSendersAttached();
             localAudioTrack.setEnabled(enabled);
+            ensureLocalSendersAttached();
+            if (enabled) prepareTransmitHealthCheck();
+            else ensureReceivePath();
         } catch (Throwable t) {
             lastError = safeMessage(t, "Micro WebRTC indisponible");
             transmitting = false;
@@ -218,12 +223,14 @@ public final class LiveTalkieManager {
         pollScheduled = false;
         meterScheduled = false;
         transmitting = false;
+        transmittingSince = 0L;
         receivingAudio = false;
         receiveLevel = 0.0;
         micLevel = 0.0;
         synchronized (peerLock) {
             for (PeerState p : peers.values()) closePeerInternal(p);
             peers.clear();
+            lastRepairByPeer.clear();
         }
         try { if (localAudioTrack != null) localAudioTrack.dispose(); } catch (Throwable ignored) {}
         try { if (audioSource != null) audioSource.dispose(); } catch (Throwable ignored) {}
@@ -300,15 +307,17 @@ public final class LiveTalkieManager {
         for (PeerState p : list) {
             try {
                 p.pc.getStats(report -> {
-                    double[] one = audioLevels(report);
+                    AudioStats one = audioStats(report);
+                    evaluateMediaHealth(p, one);
                     synchronized (meterLock) {
-                        levels[0] = Math.max(levels[0], one[0]);
-                        levels[1] = Math.max(levels[1], one[1]);
+                        levels[0] = Math.max(levels[0], one.inboundLevel);
+                        levels[1] = Math.max(levels[1], one.micLevel);
                     }
                     if (pending.decrementAndGet() == 0) {
                         receiveLevel = levels[0];
                         micLevel = levels[1];
                         receivingAudio = receiveEnabled && !transmitting && receiveLevel >= 0.012;
+                        if (receivingAudio) ensureReceivePath();
                         notifyState(stateLabel());
                         scheduleAudioMeter(180);
                     }
@@ -319,9 +328,9 @@ public final class LiveTalkieManager {
         }
     }
 
-    private double[] audioLevels(RTCStatsReport report) {
-        double inbound = 0.0, mic = 0.0;
-        if (report == null || report.getStatsMap() == null) return new double[]{0.0, 0.0};
+    private AudioStats audioStats(RTCStatsReport report) {
+        AudioStats result = new AudioStats();
+        if (report == null || report.getStatsMap() == null) return result;
         for (RTCStats stat : report.getStatsMap().values()) {
             if (stat == null || stat.getMembers() == null) continue;
             Map<String,Object> m = stat.getMembers();
@@ -329,12 +338,61 @@ public final class LiveTalkieManager {
             if ("null".equals(kind)) kind = String.valueOf(m.get("mediaType"));
             if (!"audio".equalsIgnoreCase(kind)) continue;
             Object raw = m.get("audioLevel");
-            if (!(raw instanceof Number)) continue;
-            double level = Math.max(0.0, Math.min(1.0, ((Number) raw).doubleValue()));
-            if ("inbound-rtp".equals(stat.getType())) inbound = Math.max(inbound, level);
-            else if ("media-source".equals(stat.getType())) mic = Math.max(mic, level);
+            if (raw instanceof Number) {
+                double level = Math.max(0.0, Math.min(1.0, ((Number) raw).doubleValue()));
+                if ("inbound-rtp".equals(stat.getType())) result.inboundLevel = Math.max(result.inboundLevel, level);
+                else if ("media-source".equals(stat.getType())) result.micLevel = Math.max(result.micLevel, level);
+            }
+            if ("inbound-rtp".equals(stat.getType())) result.inboundBytes = statLong(m.get("bytesReceived"));
+            else if ("outbound-rtp".equals(stat.getType())) result.outboundBytes = statLong(m.get("bytesSent"));
         }
-        return new double[]{inbound, mic};
+        return result;
+    }
+
+    private long statLong(Object value) {
+        return value instanceof Number ? Math.max(0L, ((Number) value).longValue()) : -1L;
+    }
+
+    private void prepareTransmitHealthCheck() {
+        long now = System.currentTimeMillis();
+        synchronized (peerLock) {
+            for (PeerState state : peers.values()) {
+                if (state == null) continue;
+                state.txStartedAt = now;
+                state.txStartOutboundBytes = state.lastOutboundBytes;
+                state.txProgress = false;
+            }
+        }
+    }
+
+    private void evaluateMediaHealth(PeerState state, AudioStats stats) {
+        if (!isCurrent(state) || !state.connected || stats == null) return;
+        long now = System.currentTimeMillis();
+        boolean missingRemoteTrack;
+        boolean stalledTransmit;
+        synchronized (state) {
+            if (stats.outboundBytes >= 0) {
+                if (stats.outboundBytes > state.lastOutboundBytes) state.lastOutboundBytes = stats.outboundBytes;
+                if (transmitting && state.txStartedAt > 0 && stats.outboundBytes > state.txStartOutboundBytes) state.txProgress = true;
+            }
+            if (stats.inboundBytes >= 0 && stats.inboundBytes > state.lastInboundBytes) state.lastInboundBytes = stats.inboundBytes;
+            missingRemoteTrack = state.remoteTrack == null && state.connectedAt > 0 && now - state.connectedAt > 2500L;
+            stalledTransmit = transmitting && state.txStartedAt > 0 && now - state.txStartedAt > 1800L
+                    && stats.outboundBytes >= 0 && stats.micLevel >= 0.008 && !state.txProgress;
+        }
+        if (missingRemoteTrack) repairPeer(state, "Réception audio absente");
+        else if (stalledTransmit) repairPeer(state, "Émission audio bloquée");
+    }
+
+    private void ensureReceivePath() {
+        if (!receiveEnabled) return;
+        try { if (audioDeviceModule != null) audioDeviceModule.setSpeakerMute(false); } catch (Throwable ignored) {}
+        synchronized (peerLock) {
+            for (PeerState state : peers.values()) {
+                try { if (state.remoteTrack != null) state.remoteTrack.setEnabled(true); } catch (Throwable ignored) {}
+            }
+        }
+        routeAudioToSpeaker();
     }
 
     private String meter(double level) {
@@ -456,6 +514,9 @@ public final class LiveTalkieManager {
 
         if (state.initiator) {
             net.schedule(() -> createOffer(state), 120, TimeUnit.MILLISECONDS);
+        } else {
+            net.schedule(() -> requestOfferIfNeeded(state), 1400, TimeUnit.MILLISECONDS);
+            net.schedule(() -> requestOfferIfNeeded(state), 4200, TimeUnit.MILLISECONDS);
         }
         notifyState(stateLabel());
         return state;
@@ -513,9 +574,15 @@ public final class LiveTalkieManager {
             boolean bound = bindLocalTrackToNegotiatedAudio(p);
             if (!bound && p.initiator && p.pc.getLocalDescription() == null) {
                 addOffererAudioTransceiver(p);
-                bindLocalTrackToNegotiatedAudio(p);
+                bound = bindLocalTrackToNegotiatedAudio(p);
             }
+            if (!bound && p.connected) repairPeer(p, "Émetteur audio non attaché");
         }
+    }
+
+    private void requestOfferIfNeeded(PeerState state) {
+        if (!isCurrent(state) || state.connected || state.initiator) return;
+        sendSignal(state.peerId, "need-offer", "");
     }
 
     private void createOffer(PeerState state) {
@@ -590,6 +657,18 @@ public final class LiveTalkieManager {
                     synchronized (state.pendingIce) { state.pendingIce.add(candidate); }
                 }
             } catch (Throwable ignored) {}
+        } else if ("need-offer".equals(type)) {
+            if (!state.initiator) return;
+            if (state.connected) {
+                reconnectPeer(state, 120);
+            } else if (state.offerSent && state.pc != null && state.pc.getLocalDescription() != null) {
+                sendSignal(state.peerId, "offer", state.pc.getLocalDescription().description);
+            } else {
+                createOffer(state);
+            }
+        } else if ("repair".equals(type)) {
+            notifyState("◌ Réparation audio…");
+            reconnectPeer(state, 180);
         } else if ("hangup".equals(type)) {
             reconnectPeer(state, 250);
         }
@@ -641,10 +720,27 @@ public final class LiveTalkieManager {
         if (running) net.schedule(() -> createPeer(id), Math.max(100, delayMs), TimeUnit.MILLISECONDS);
     }
 
+    private void repairPeer(PeerState state, String reason) {
+        if (!isCurrent(state)) return;
+        long now = System.currentTimeMillis();
+        boolean notifyRemote = false;
+        synchronized (peerLock) {
+            long last = lastRepairByPeer.containsKey(state.peerId) ? lastRepairByPeer.get(state.peerId) : 0L;
+            if (now - last >= 4500L) {
+                lastRepairByPeer.put(state.peerId, now);
+                notifyRemote = true;
+            }
+        }
+        lastError = "";
+        notifyState("◌ Réparation audio…");
+        if (notifyRemote) sendSignal(state.peerId, "repair", reason == null ? "" : reason);
+        reconnectPeer(state, 220);
+    }
+
     private void failPeer(PeerState state, String message) {
         lastError = message;
         notifyState("⚠ " + message);
-        reconnectPeer(state, 1600);
+        repairPeer(state, message);
     }
 
     private boolean isCurrent(PeerState state) {
@@ -680,7 +776,8 @@ public final class LiveTalkieManager {
         try { track.setEnabled(receiveEnabled); } catch (Throwable ignored) {}
         try { track.setVolume(2.5); } catch (Throwable ignored) {}
         state.remoteTrack = track;
-        if (receiveEnabled) routeAudioToSpeaker();
+        state.remoteTrackAt = System.currentTimeMillis();
+        if (receiveEnabled) ensureReceivePath();
     }
 
     private final class PeerObserver implements PeerConnection.Observer {
@@ -720,18 +817,23 @@ public final class LiveTalkieManager {
             if (!isCurrent(state)) return;
             if (newState == PeerConnection.PeerConnectionState.CONNECTED) {
                 state.connected = true;
-                bindLocalTrackToNegotiatedAudio(state);
+                state.connectedAt = System.currentTimeMillis();
+                state.txStartedAt = transmitting ? state.connectedAt : 0L;
+                state.txStartOutboundBytes = state.lastOutboundBytes;
+                state.txProgress = false;
+                boolean bound = bindLocalTrackToNegotiatedAudio(state);
                 lastError = "";
-                routeAudioToSpeaker();
+                ensureReceivePath();
+                if (!bound) net.schedule(() -> { if (isCurrent(state) && state.connected && !bindLocalTrackToNegotiatedAudio(state)) repairPeer(state, "Émetteur audio absent après connexion"); }, 700, TimeUnit.MILLISECONDS);
                 notifyState(stateLabel());
             } else if (newState == PeerConnection.PeerConnectionState.FAILED) {
                 state.connected = false;
                 notifyState("◌ Reconnexion live…");
-                reconnectPeer(state, 900);
+                repairPeer(state, "Connexion WebRTC en échec");
             } else if (newState == PeerConnection.PeerConnectionState.DISCONNECTED) {
                 state.connected = false;
                 notifyState("◌ Liaison live interrompue…");
-                net.schedule(() -> { if (isCurrent(state) && !state.connected) reconnectPeer(state, 100); }, 4500, TimeUnit.MILLISECONDS);
+                net.schedule(() -> { if (isCurrent(state) && !state.connected) repairPeer(state, "Liaison WebRTC interrompue"); }, 4500, TimeUnit.MILLISECONDS);
             } else if (newState == PeerConnection.PeerConnectionState.CLOSED) {
                 state.connected = false;
                 notifyState(stateLabel());
@@ -748,8 +850,22 @@ public final class LiveTalkieManager {
         volatile boolean connected = false;
         volatile boolean remoteDescriptionSet = false;
         volatile AudioTrack remoteTrack = null;
+        volatile long connectedAt = 0L;
+        volatile long remoteTrackAt = 0L;
+        volatile long lastInboundBytes = 0L;
+        volatile long lastOutboundBytes = 0L;
+        volatile long txStartedAt = 0L;
+        volatile long txStartOutboundBytes = 0L;
+        volatile boolean txProgress = false;
         final List<IceCandidate> pendingIce = new ArrayList<>();
         PeerState(String peerId) { this.peerId = peerId; }
+    }
+
+    private static final class AudioStats {
+        double inboundLevel = 0.0;
+        double micLevel = 0.0;
+        long inboundBytes = -1L;
+        long outboundBytes = -1L;
     }
 
     private abstract static class SimpleSdpObserver implements SdpObserver {

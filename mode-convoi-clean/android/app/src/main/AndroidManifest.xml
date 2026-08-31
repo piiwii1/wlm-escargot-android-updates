@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="Mode Convoi" android:roundIcon="@mipmap/ic_launcher_round" android:supportsRtl="true" android:theme="@style/Theme.ModeConvoi" android:usesCleartextTraffic="true">
         <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="unspecified">

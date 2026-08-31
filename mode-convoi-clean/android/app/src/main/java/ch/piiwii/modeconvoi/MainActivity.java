@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
     private ConvoySessionManager sessionManager;
     private ConvoyMapController mapController;
     private ConvoyPositionResolver positionResolver;
+    private ConvoyVisualAlertController visualAlertController;
     private int bg, card, fg, muted, accent, danger, border, control, navSurface;
     private boolean darkTheme;
     private static final int REQ_LOCATION = 1001, REQ_NOTIF = 1002, REQ_AUDIO = 1003, REQ_VEHICLE_IMAGE = 2001;
@@ -90,6 +91,7 @@ public class MainActivity extends Activity {
         sessionManager = new ConvoySessionManager(prefs,DEFAULT_SERVER);
         mapController = new ConvoyMapController(prefs,()->snapshot);
         positionResolver = new ConvoyPositionResolver(prefs);
+        visualAlertController = new ConvoyVisualAlertController(this);
         pollingController = new ConvoyPollingController(this,prefs,DEFAULT_SERVER,new ConvoyPollingController.Listener(){
             @Override public void onSnapshot(JSONObject s,boolean renamed,long synchronizedAt){
                 snapshot=s;
@@ -119,9 +121,9 @@ public class MainActivity extends Activity {
         render();
     }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleDeepLink(intent); render(); }
-    @Override protected void onResume() { super.onResume(); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
-    @Override protected void onPause() { super.onPause(); stopPolling(); }
-    @Override protected void onDestroy() { if(mapController!=null)mapController.close(); if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onResume() { super.onResume(); if(visualAlertController!=null)ConvoyForegroundAlertBus.register(visualAlertController); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
+    @Override protected void onPause() { if(visualAlertController!=null)ConvoyForegroundAlertBus.unregister(visualAlertController); super.onPause(); stopPolling(); }
+    @Override protected void onDestroy() { if(visualAlertController!=null){ConvoyForegroundAlertBus.unregister(visualAlertController);visualAlertController.close();} if(mapController!=null)mapController.close(); if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
 
     private boolean saveProfileChecked(EditText pseudo,EditText vehicle,EditText color,EditText server){
         String name=pseudo.getText().toString().trim();
@@ -844,7 +846,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.33","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.34","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){

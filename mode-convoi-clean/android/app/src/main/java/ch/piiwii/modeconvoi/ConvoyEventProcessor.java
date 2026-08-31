@@ -27,7 +27,8 @@ public final class ConvoyEventProcessor {
             max = Math.max(max, eventId);
             if (eventId <= last || me.equals(event.optString("participantId"))) continue;
             if (NOTIFIED_TYPES.contains(event.optString("type"))) {
-                NotificationHelper.notifyEvent(context, event);
+                boolean handledForeground = ConvoyForegroundAlertBus.dispatch(event);
+                if (!handledForeground) NotificationHelper.notifyEvent(context, event);
             }
         }
         if (max != last) prefs.putLong("lastEventId", max);
