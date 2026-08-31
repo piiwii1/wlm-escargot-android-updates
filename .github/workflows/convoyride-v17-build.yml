@@ -1,0 +1,72 @@
+name: Build ConvoyRide V1.7.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/convoyride-v17-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct V1.6 and apply V1.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat convoyride-v15-source/source-part-* | base64 -d > /tmp/ConvoyRide-V1.5.0-source.zip
+          echo '9618adb3c1c52a94af1f4a655f816ea37f4d9ff44d1ab6b465e627abe21a1afc  /tmp/ConvoyRide-V1.5.0-source.zip' | sha256sum -c -
+          rm -rf cr17
+          mkdir -p cr17
+          unzip -q /tmp/ConvoyRide-V1.5.0-source.zip -d cr17
+          cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
+          (cd cr17 && patch -p4 < /tmp/convoyride-v16.patch)
+          base64 -d convoyride-v17/patch.b64 | gunzip > /tmp/convoyride-v17.patch
+          echo '5160ab31577d511c58d20a8b97c60f3df6b31843dbd7dc02a8191b7692a86474  /tmp/convoyride-v17.patch' | sha256sum -c -
+          (cd cr17 && patch -p4 < /tmp/convoyride-v17.patch)
+          grep -q "versionName '1.7.0'" cr17/app/build.gradle
+          grep -q "versionCode 8" cr17/app/build.gradle
+          grep -q "com.google.zxing:core:3.5.3" cr17/app/build.gradle
+          grep -q 'android:scheme="convoyride"' cr17/app/src/main/AndroidManifest.xml
+          grep -q 'android:launchMode="singleTop"' cr17/app/src/main/AndroidManifest.xml
+          grep -q 'showJoinQr' cr17/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q 'handleJoinIntent' cr17/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build release
+        run: gradle -p cr17 --no-daemon assembleRelease
+
+      - name: Align and inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
+            cr17/app/build/outputs/apk/release/app-release-unsigned.apk \
+            ConvoyRide-V1.7.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ConvoyRide-V1.7.0-aligned-unsigned.apk
+          sha256sum ConvoyRide-V1.7.0-aligned-unsigned.apk > ConvoyRide-V1.7.0-aligned-unsigned.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ConvoyRide-V1.7.0-unsigned
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ConvoyRide-V1.7.0-aligned-unsigned.apk
+            ConvoyRide-V1.7.0-aligned-unsigned.apk.sha256
