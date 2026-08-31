@@ -39,6 +39,7 @@ public class MainActivity extends Activity {
     private JSONObject snapshot;
     private WebView mapView;
     private LinearLayout snapshotArea;
+    private TextView convoyCountView;
     private String currentPage = "welcome";
     private boolean busyOperation=false;
     private ConvoyPollingController pollingController;
@@ -172,6 +173,7 @@ public class MainActivity extends Activity {
 
     private void render() {
         mapView = null;
+        convoyCountView = null;
         applyPalette();
 
         FrameLayout screen = new FrameLayout(this);
@@ -221,18 +223,22 @@ public class MainActivity extends Activity {
         h.setPadding(dp(4),dp(4),dp(4),dp(6));
 
         Space left=new Space(this);
-        h.addView(left,new LinearLayout.LayoutParams(dp(82),dp(50)));
+        h.addView(left,new LinearLayout.LayoutParams(dp(104),dp(50)));
 
         TextView title=text("MODE CONVOI",19,true,accent);
         title.setGravity(Gravity.CENTER);
+        title.setMaxLines(1);
+        title.setAutoSizeTextTypeUniformWithConfiguration(15,19,1,android.util.TypedValue.COMPLEX_UNIT_SP);
         h.addView(title,new LinearLayout.LayoutParams(0,dp(50),1));
 
         connectionBadge=text(prefs.hasActiveConvoy()?"●  CONNECTÉ":"INACTIF",11,true,prefs.hasActiveConvoy()?Color.rgb(110,204,70):muted);
         connectionBadge.setGravity(Gravity.CENTER);
-        connectionBadge.setPadding(dp(12),0,dp(12),0);
+        connectionBadge.setMaxLines(1);
+        connectionBadge.setAutoSizeTextTypeUniformWithConfiguration(9,11,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+        connectionBadge.setPadding(dp(8),0,dp(8),0);
         connectionBadge.setBackground(roundBg(prefs.hasActiveConvoy()?Color.rgb(26,47,24):Color.rgb(42,44,46), prefs.hasActiveConvoy()?Color.rgb(71,133,48):Color.rgb(76,79,82), 18, 1));
         connectionBadge.setOnClickListener(v->{ if(prefs.hasActiveConvoy()) sessionStatusDialog(); else navigateBottom("home"); });
-        h.addView(connectionBadge,new LinearLayout.LayoutParams(dp(92),dp(34)));
+        h.addView(connectionBadge,new LinearLayout.LayoutParams(dp(104),dp(34)));
         root.addView(h);
 
         View line=new View(this);
@@ -302,41 +308,104 @@ public class MainActivity extends Activity {
     }
 
     private void renderConvoyHome() {
-        currentPage="home"; String code=prefs.get("code","");
-        TextView name=text(prefs.get("convoyName","Convoi"),23,true,fg); name.setGravity(Gravity.CENTER); name.setPadding(0,dp(14),0,0); content.addView(name);
-        TextView connected=text(snapshotCountText(),13,true,accent); connected.setGravity(Gravity.CENTER); connected.setPadding(0,dp(2),0,dp(8)); content.addView(connected);
-        LinearLayout codeRow=new LinearLayout(this); codeRow.setGravity(Gravity.CENTER_VERTICAL); codeRow.setPadding(dp(12),dp(5),dp(7),dp(5)); codeRow.setBackground(roundBg(control,border,15,1));
-        LinearLayout.LayoutParams codeLp=new LinearLayout.LayoutParams(-1,dp(54)); codeLp.setMargins(0,dp(5),0,dp(8)); codeRow.setLayoutParams(codeLp);
-        TextView codeV=text("CODE   "+code,14,true,fg); codeV.setLetterSpacing(.05f); codeRow.addView(codeV,new LinearLayout.LayoutParams(0,dp(44),1));
-        Button qr=smallButton("QR",Color.TRANSPARENT,accent); qr.setBackground(roundBg(Color.TRANSPARENT,accent,11,1)); qr.setOnClickListener(v->showConvoyQr()); codeRow.addView(qr,new LinearLayout.LayoutParams(dp(64),dp(38)));
-        Button share=smallButton("PARTAGER",Color.TRANSPARENT,accent); share.setBackground(roundBg(Color.TRANSPARENT,accent,11,1)); share.setOnClickListener(v->shareConvoy()); LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(dp(96),dp(38)); slp.setMargins(dp(6),0,0,0); codeRow.addView(share,slp); content.addView(codeRow);
-        snapshotArea=new LinearLayout(this); snapshotArea.setOrientation(LinearLayout.VERTICAL); content.addView(snapshotArea,new LinearLayout.LayoutParams(-1,-2)); refreshSnapshotArea();
+        currentPage="home";
+        String code=prefs.get("code","");
+
+        LinearLayout hero=cardBox();
+        hero.setPadding(dp(16),dp(14),dp(16),dp(16));
+        LinearLayout heroTop=new LinearLayout(this);heroTop.setGravity(Gravity.CENTER_VERTICAL);
+        TextView eyebrow=text("CONVOI EN COURS",11,true,accent);eyebrow.setLetterSpacing(.06f);heroTop.addView(eyebrow,new LinearLayout.LayoutParams(0,dp(28),1));
+        TextView live=text("●  LIVE",10,true,Color.rgb(101,211,117));live.setGravity(Gravity.CENTER);live.setPadding(dp(10),0,dp(10),0);live.setBackground(roundBg(darkTheme?Color.rgb(23,50,29):Color.rgb(233,249,236),Color.rgb(77,150,88),14,1));heroTop.addView(live,new LinearLayout.LayoutParams(-2,dp(28)));hero.addView(heroTop);
+
+        TextView name=text(prefs.get("convoyName","Convoi"),23,true,fg);name.setMaxLines(2);name.setPadding(0,dp(3),0,0);hero.addView(name);
+        convoyCountView=text(snapshotCountText(),13,true,accent);convoyCountView.setMaxLines(2);convoyCountView.setPadding(0,dp(5),0,dp(10));hero.addView(convoyCountView);
+
+        LinearLayout codePanel=new LinearLayout(this);codePanel.setOrientation(LinearLayout.VERTICAL);codePanel.setPadding(dp(12),dp(9),dp(12),dp(10));codePanel.setBackground(roundBg(control,border,14,1));
+        TextView codeV=text("CODE DU CONVOI   "+code,15,true,fg);codeV.setLetterSpacing(.045f);codeV.setGravity(Gravity.CENTER);codeV.setMaxLines(1);codeV.setAutoSizeTextTypeUniformWithConfiguration(12,15,1,android.util.TypedValue.COMPLEX_UNIT_SP);codePanel.addView(codeV,new LinearLayout.LayoutParams(-1,dp(34)));
+        LinearLayout shareRow=new LinearLayout(this);shareRow.setGravity(Gravity.CENTER_VERTICAL);shareRow.setPadding(0,dp(5),0,0);
+        Button qr=smallButton("▦  QR",Color.TRANSPARENT,accent);qr.setBackground(roundBg(Color.TRANSPARENT,accent,11,1));qr.setOnClickListener(v->showConvoyQr());LinearLayout.LayoutParams qlp=new LinearLayout.LayoutParams(0,dp(40),1);qlp.setMargins(0,0,dp(5),0);shareRow.addView(qr,qlp);
+        Button share=smallButton("↗  PARTAGER",Color.TRANSPARENT,accent);share.setBackground(roundBg(Color.TRANSPARENT,accent,11,1));share.setOnClickListener(v->shareConvoy());LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(0,dp(40),1);slp.setMargins(dp(5),0,0,0);shareRow.addView(share,slp);codePanel.addView(shareRow);
+        hero.addView(codePanel);content.addView(hero);
+
+        sectionLabel(content,"POSITION DU CONVOI");
+        snapshotArea=new LinearLayout(this);snapshotArea.setOrientation(LinearLayout.VERTICAL);content.addView(snapshotArea,new LinearLayout.LayoutParams(-1,-2));refreshSnapshotArea();
+
         addTalkieWalkieSection();
-        sectionLabel(content,"ACTIONS RAPIDES"); GridLayout grid=new GridLayout(this);grid.setColumnCount(4);
+
+        sectionLabel(content,"ACTIONS RAPIDES");
+        TextView actionHint=text("Envoie immédiatement ton état aux autres voitures.",11,false,muted);actionHint.setPadding(dp(2),0,dp(2),dp(4));content.addView(actionHint);
+        GridLayout grid=new GridLayout(this);grid.setColumnCount(2);
         String[][] statuses={{"🛑","Je m’arrête","stop"},{"⛽","Essence","fuel"},{"☕","Pause","pause"},{"🚻","WC","wc"},{"⚠️","Problème","problem"},{"🚗","Voiture","car_problem"},{"↗️","Je rejoins","joining"},{"👍","OK","ok"}};
-        for(String[] st:statuses){View b=quickActionTile(st[0],st[1]);b.setOnClickListener(v->sendStatus(st[2]));GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(94);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(b,lp);}content.addView(grid,new LinearLayout.LayoutParams(-1,-2));
-        Button custom=outlinedButton("✎   AUTRE MESSAGE",Color.rgb(94,99,104));custom.setOnClickListener(v->customStatusDialog());content.addView(custom);Button clear=ghostButton("ANNULER MON STATUT");clear.setOnClickListener(v->sendStatus("clear"));content.addView(clear);
+        for(String[] st:statuses){
+            View b=quickActionTile(st[0],st[1]);b.setOnClickListener(v->sendStatus(st[2]));
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(72);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(b,lp);
+        }
+        content.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+        Button custom=outlinedButton("✎   AUTRE MESSAGE",Color.rgb(94,99,104));custom.setOnClickListener(v->customStatusDialog());content.addView(custom);
+        Button clear=ghostButton("ANNULER MON STATUT");clear.setOnClickListener(v->sendStatus("clear"));content.addView(clear);
     }
     private String snapshotCountText(){if(snapshot==null)return "Connexion au convoi…";JSONArray ps=snapshot.optJSONArray("participants");int total=ps==null?0:ps.length();return total+" voiture"+(total>1?"s":"")+" connectée"+(total>1?"s":"");}
 
     private void refreshSnapshotArea() {
         if (snapshotArea == null || !"home".equals(currentPage)) return;
+        if(convoyCountView!=null)convoyCountView.setText(snapshotCountText());
         snapshotArea.removeAllViews();
         if (snapshot == null) { cardTitle(snapshotArea,"Connexion au convoi…","Récupération des participants et positions."); return; }
         renderSnapshot(snapshotArea);
     }
 
     private void renderSnapshot(LinearLayout target) {
-        JSONObject me=positionResolver.findMe(snapshot); ConvoyPositionResolver.Relative rel=positionResolver.resolveRelative(snapshot);
-        target.addView(positionCard("DEVANT MOI",rel.ahead,Color.rgb(91,196,62),false)); target.addView(positionCard("MOI",me,accent,true)); target.addView(positionCard("DERRIÈRE MOI",rel.behind,Color.rgb(55,158,225),false));
-        JSONObject myStatus=me==null?null:me.optJSONObject("activeStatus");if(myStatus!=null){TextView chip=text("●  "+myStatus.optString("label","Statut actif"),12,true,Color.rgb(132,218,84));chip.setGravity(Gravity.CENTER);chip.setPadding(dp(12),0,dp(12),0);chip.setBackground(roundBg(Color.rgb(26,48,23),Color.rgb(62,103,47),18,1));LinearLayout holder=new LinearLayout(this);holder.setGravity(Gravity.CENTER);holder.addView(chip,new LinearLayout.LayoutParams(-2,dp(34)));target.addView(holder);}
-        ConvoyPositionResolver.RallyInfo rallyInfo=positionResolver.rallyInfo(snapshot);if(rallyInfo!=null){JSONObject rally=rallyInfo.rally;LinearLayout box=cardBox();box.addView(text("📍  POINT DE REGROUPEMENT",11,true,accent));box.addView(text(rally.optString("name","Point de regroupement"),18,true,fg));
-            if(!rallyInfo.desiredTime.isEmpty()) box.addView(text("Heure souhaitée : "+rallyInfo.desiredTime,12,true,accent));target.addView(box);}
+        JSONObject me=positionResolver.findMe(snapshot);
+        ConvoyPositionResolver.Relative rel=positionResolver.resolveRelative(snapshot);
+        target.addView(positionCard("DEVANT MOI",rel.ahead,Color.rgb(91,196,62),false));
+        target.addView(positionCard("MOI",me,accent,true));
+        target.addView(positionCard("DERRIÈRE MOI",rel.behind,Color.rgb(55,158,225),false));
+
+        JSONObject myStatus=me==null?null:me.optJSONObject("activeStatus");
+        if(myStatus!=null){
+            TextView chip=text("●  "+myStatus.optString("label","Statut actif"),12,true,Color.rgb(132,218,84));
+            chip.setGravity(Gravity.CENTER);chip.setMaxLines(2);chip.setPadding(dp(12),dp(8),dp(12),dp(8));
+            chip.setBackground(roundBg(darkTheme?Color.rgb(26,48,23):Color.rgb(235,249,232),Color.rgb(62,103,47),16,1));
+            LinearLayout holder=new LinearLayout(this);holder.setGravity(Gravity.CENTER);holder.setPadding(0,dp(2),0,dp(2));holder.addView(chip,new LinearLayout.LayoutParams(-1,-2));target.addView(holder);
+        }
+
+        ConvoyPositionResolver.RallyInfo rallyInfo=positionResolver.rallyInfo(snapshot);
+        if(rallyInfo!=null){
+            JSONObject rally=rallyInfo.rally;
+            LinearLayout box=cardBox();box.setPadding(dp(14),dp(12),dp(12),dp(12));
+            LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);
+            labels.addView(text("📍  POINT DE REGROUPEMENT",11,true,accent));
+            TextView rallyName=text(rally.optString("name","Point de regroupement"),17,true,fg);rallyName.setMaxLines(2);rallyName.setPadding(0,dp(3),0,0);labels.addView(rallyName);
+            TextView rallySub=text(rallyInfo.subtitle,12,false,muted);rallySub.setMaxLines(2);rallySub.setPadding(0,dp(3),0,0);labels.addView(rallySub);
+            row.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+            Button gps=smallButton("GPS ➤",Color.TRANSPARENT,accent);gps.setBackground(roundBg(Color.TRANSPARENT,accent,11,1));gps.setOnClickListener(v->openGps(rally));LinearLayout.LayoutParams glp=new LinearLayout.LayoutParams(dp(72),dp(38));glp.setMargins(dp(8),0,0,0);row.addView(gps,glp);box.addView(row);target.addView(box);
+        }
     }
-    private View positionCard(String title,JSONObject p,int stripeColor,boolean own){LinearLayout outer=cardBox();outer.setBackground(roundBg(card,own?accent:border,16,own?2:1));LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);titleRow.addView(text(title,11,true,stripeColor),new LinearLayout.LayoutParams(0,dp(30),1));if(own){TextView active=text("ACTIF",11,true,Color.rgb(131,220,74));active.setGravity(Gravity.CENTER);active.setPadding(dp(10),0,dp(10),0);active.setBackground(roundBg(Color.rgb(24,48,20),Color.rgb(92,159,55),12,1));titleRow.addView(active,new LinearLayout.LayoutParams(-2,dp(28)));}outer.addView(titleRow);if(p==null){outer.addView(text("Position indisponible",17,true,fg));return outer;}LinearLayout info=new LinearLayout(this);info.setGravity(Gravity.CENTER_VERTICAL);View carIcon=participantAvatar(p,48,stripeColor);info.addView(carIcon,new LinearLayout.LayoutParams(dp(48),dp(48)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.setPadding(dp(12),0,dp(6),0);names.addView(text(p.optString("name",prefs.get("profileName","Moi")),19,true,fg));names.addView(text(p.optString("vehicle",prefs.get("profileVehicle","Véhicule")),13,false,muted));
+
+    private View positionCard(String title,JSONObject p,int stripeColor,boolean own){
+        LinearLayout outer=cardBox();outer.setBackground(roundBg(card,own?accent:border,16,own?2:1));
+        LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.addView(text(title,11,true,stripeColor),new LinearLayout.LayoutParams(0,dp(30),1));
+        if(own){TextView active=text("ACTIF",10,true,Color.rgb(131,220,74));active.setGravity(Gravity.CENTER);active.setPadding(dp(9),0,dp(9),0);active.setBackground(roundBg(darkTheme?Color.rgb(24,48,20):Color.rgb(235,249,232),Color.rgb(92,159,55),12,1));titleRow.addView(active,new LinearLayout.LayoutParams(-2,dp(27)));}
+        outer.addView(titleRow);
+        if(p==null){TextView missing=text("Position indisponible",15,true,muted);missing.setPadding(0,dp(4),0,dp(3));outer.addView(missing);return outer;}
+
+        LinearLayout info=new LinearLayout(this);info.setGravity(Gravity.CENTER_VERTICAL);
+        View carIcon=participantAvatar(p,48,stripeColor);info.addView(carIcon,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.setPadding(dp(12),0,dp(2),0);
+        TextView person=text(p.optString("name",prefs.get("profileName","Moi")),18,true,fg);person.setMaxLines(2);names.addView(person);
+        TextView vehicle=text(p.optString("vehicle",prefs.get("profileVehicle","Véhicule")),12,false,muted);vehicle.setMaxLines(2);names.addView(vehicle);
+        String relative=own?"":p.optString("_relative","");
+        if(!relative.isEmpty()){TextView distance=text(relative.replace(" devant","").replace(" derrière",""),12,true,stripeColor);distance.setPadding(0,dp(2),0,0);names.addView(distance);}
         String role=p.optString("role","");
         if("leader".equals(role)) names.addView(text("★ Chef de convoi",11,true,Color.rgb(91,196,62)));
-        else if("sweep".equals(role)) names.addView(text("◆ Voiture balai",11,true,Color.rgb(55,158,225)));info.addView(names,new LinearLayout.LayoutParams(0,-2,1));String relative=own?"":p.optString("_relative","");if(!relative.isEmpty())info.addView(text(relative.replace(" devant","").replace(" derrière",""),16,true,fg));outer.addView(info);JSONObject st=p.optJSONObject("activeStatus");if(st!=null)outer.addView(text("⚑  "+st.optString("label",""),12,true,accent));return outer;}
+        else if("sweep".equals(role)) names.addView(text("◆ Voiture balai",11,true,Color.rgb(55,158,225)));
+        info.addView(names,new LinearLayout.LayoutParams(0,-2,1));outer.addView(info);
+        JSONObject st=p.optJSONObject("activeStatus");
+        if(st!=null){TextView state=text("⚑  "+st.optString("label",""),12,true,accent);state.setMaxLines(2);state.setPadding(0,dp(7),0,0);outer.addView(state);}
+        return outer;
+    }
 
 
     private void renderMapPage() {
@@ -655,12 +724,12 @@ public class MainActivity extends Activity {
         TextView hint=text("Maintiens pour parler en direct · relâche pour couper le micro",12,false,muted);hint.setGravity(Gravity.CENTER);hint.setPadding(0,0,0,dp(8));card.addView(hint);
 
         TextView ptt=text("🎙️\nMAINTENIR POUR PARLER",17,true,Color.rgb(20,22,24));
-        ptt.setGravity(Gravity.CENTER);ptt.setPadding(dp(12),dp(10),dp(12),dp(10));ptt.setBackground(roundBg(accent,accent,20,0));
+        ptt.setGravity(Gravity.CENTER);ptt.setMaxLines(3);ptt.setPadding(dp(12),dp(10),dp(12),dp(10));ptt.setBackground(roundBg(accent,accent,20,0));
         ptt.setClickable(true);ptt.setFocusable(true);ptt.setSoundEffectsEnabled(true);
         LinearLayout.LayoutParams pttLp=new LinearLayout.LayoutParams(-1,dp(92));pttLp.setMargins(0,dp(2),0,dp(8));card.addView(ptt,pttLp);talkiePttButton=ptt;
 
         String initial=liveTalkie==null?"◌ Initialisation live…":liveTalkie.stateLabel();
-        talkieState=text(initial,14,true,initial.startsWith("⚠")?danger:Color.rgb(90,200,120));talkieState.setGravity(Gravity.CENTER);card.addView(talkieState,new LinearLayout.LayoutParams(-1,dp(42)));
+        talkieState=text(initial,14,true,initial.startsWith("⚠")?danger:Color.rgb(90,200,120));talkieState.setGravity(Gravity.CENTER);talkieState.setMaxLines(2);talkieState.setPadding(dp(4),dp(7),dp(4),dp(7));card.addView(talkieState,new LinearLayout.LayoutParams(-1,-2));
         TextView diagnostic=text("Le niveau audio s’anime quand le micro émet ou qu’une voix est reçue.",11,false,muted);diagnostic.setGravity(Gravity.CENTER);diagnostic.setPadding(0,0,0,dp(6));card.addView(diagnostic);
 
         Button receive=ghostButton(prefs.getBool("talkieReceive",true)?"🔊  RÉCEPTION LIVE : OUI":"🔇  RÉCEPTION LIVE : NON");
@@ -846,7 +915,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.34","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.35","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
@@ -938,9 +1007,13 @@ public class MainActivity extends Activity {
     private Button smallButton(String label,int bgColor,int textColor){Button b=button(label,bgColor,textColor);b.setTextSize(11);b.setMinHeight(0);return b;}
     private Button adminButton(String label,boolean destructive){Button b=button(label,control,destructive?danger:fg);b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);b.setTextSize(14);b.setBackground(roundBg(control,destructive?danger:border,12,1));return b;}
     private View quickActionTile(String icon,String label){
-        LinearLayout tile=new LinearLayout(this);tile.setOrientation(LinearLayout.VERTICAL);tile.setGravity(Gravity.CENTER);tile.setPadding(dp(4),dp(7),dp(4),dp(6));tile.setBackground(roundBg(control,border,15,1));
-        TextView iv=text(icon,27,false,accent);iv.setGravity(Gravity.CENTER);tile.addView(iv,new LinearLayout.LayoutParams(-1,dp(47)));
-        TextView tv=text(label,11,true,fg);tv.setGravity(Gravity.CENTER);tv.setMaxLines(1);tile.addView(tv,new LinearLayout.LayoutParams(-1,dp(27)));
+        boolean urgent=label.toLowerCase(Locale.ROOT).contains("arrêt")||label.toLowerCase(Locale.ROOT).contains("problème")||label.toLowerCase(Locale.ROOT).contains("voiture");
+        int tileFill=urgent?(darkTheme?Color.rgb(52,27,27):Color.rgb(255,242,242)):control;
+        int tileStroke=urgent?danger:border;
+        int iconColor=urgent?danger:accent;
+        LinearLayout tile=new LinearLayout(this);tile.setOrientation(LinearLayout.HORIZONTAL);tile.setGravity(Gravity.CENTER_VERTICAL);tile.setPadding(dp(11),dp(7),dp(10),dp(7));tile.setBackground(roundBg(tileFill,tileStroke,15,urgent?2:1));
+        TextView iv=text(icon,25,false,iconColor);iv.setGravity(Gravity.CENTER);tile.addView(iv,new LinearLayout.LayoutParams(dp(42),-1));
+        TextView tv=text(label,13,true,fg);tv.setGravity(Gravity.CENTER_VERTICAL);tv.setMaxLines(2);tv.setAutoSizeTextTypeUniformWithConfiguration(11,13,1,android.util.TypedValue.COMPLEX_UNIT_SP);tv.setPadding(dp(5),0,0,0);tile.addView(tv,new LinearLayout.LayoutParams(0,-1,1));
         return tile;
     }
     private Button destructiveButton(String label){Button b=button(label,darkTheme?Color.rgb(58,24,24):Color.rgb(255,239,239),danger);b.setBackground(roundBg(darkTheme?Color.rgb(58,24,24):Color.rgb(255,239,239),danger,14,1));return b;}
@@ -1000,7 +1073,7 @@ public class MainActivity extends Activity {
         boolean active=("home".equals(page) && ("home".equals(currentPage)||"welcome".equals(currentPage))) || page.equals(currentPage);
         LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);item.setGravity(Gravity.CENTER);item.setPadding(dp(2),dp(6),dp(2),dp(4));
         TextView iv=text(icon,23,active,active?accent:muted);iv.setGravity(Gravity.CENTER);item.addView(iv,new LinearLayout.LayoutParams(-1,dp(34)));
-        TextView tv=text(label,11,active,active?accent:muted);tv.setGravity(Gravity.CENTER);item.addView(tv,new LinearLayout.LayoutParams(-1,dp(24)));
+        TextView tv=text(label,11,active,active?accent:muted);tv.setGravity(Gravity.CENTER);tv.setMaxLines(1);tv.setAutoSizeTextTypeUniformWithConfiguration(9,11,1,android.util.TypedValue.COMPLEX_UNIT_SP);item.addView(tv,new LinearLayout.LayoutParams(-1,dp(24)));
         if(active)item.setBackground(roundBg(darkTheme?Color.rgb(28,29,25):Color.rgb(255,248,228),Color.TRANSPARENT,14,0));
         item.setOnClickListener(v->navigateBottom(page));nav.addView(item,new LinearLayout.LayoutParams(0,dp(68),1));
     }
