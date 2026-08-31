@@ -1,0 +1,1 @@
+AppDoctor 1.0.0 build trigger
