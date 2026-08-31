@@ -1,38 +1,51 @@
 package ch.piiwii.modeconvoi;
 
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.util.Base64;
 
 public final class VolkswagenIconPack {
+    private static final int CELL=192;
+    private static final int COLS=5;
+    private static Bitmap spriteCache;
+    private static final Bitmap[] bitmapCache=new Bitmap[10];
+
     public static final class Item {
         public final String id;
         public final String label;
-        private final String base64;
-        Item(String id,String label,String base64){this.id=id;this.label=label;this.base64=base64;}
-        public Bitmap bitmap(){
-            try{byte[] raw=Base64.decode(base64,Base64.DEFAULT);return BitmapFactory.decodeByteArray(raw,0,raw.length);}catch(Throwable ignored){return null;}
-        }
-        public String base64(){return base64;}
+        private final int index;
+        Item(String id,String label,int index){this.id=id;this.label=label;this.index=index;}
+        public Bitmap bitmap(Resources resources){return bitmapAt(resources,index);}
     }
 
     private static final Item[] ITEMS={
-        new Item("vw:beetle","Coccinelle",VwIcon01.DATA),
-        new Item("vw:t1","Combi T1",VwIcon02.DATA),
-        new Item("vw:golf1","Golf 1 GTI",VwIcon03.DATA),
-        new Item("vw:golf2","Golf 2 GTI",VwIcon04.DATA),
-        new Item("vw:golf3","Golf 3",VwIcon05.DATA),
-        new Item("vw:golf4","Golf 4",VwIcon06.DATA),
-        new Item("vw:polo6n2","Polo 6N2 GTI",VwIcon07.DATA),
-        new Item("vw:passatb5","Passat B5 Variant",VwIcon08.DATA),
-        new Item("vw:jetta2","Jetta 2",VwIcon09.DATA),
-        new Item("vw:newbeetle","New Beetle",VwIcon10.DATA)
+        new Item("vw:beetle","Coccinelle",0),
+        new Item("vw:t1","Combi T1",1),
+        new Item("vw:golf1","Golf 1 GTI",2),
+        new Item("vw:golf2","Golf 2 GTI",3),
+        new Item("vw:golf3","Golf 3",4),
+        new Item("vw:golf4","Golf 4",5),
+        new Item("vw:polo6n2","Polo 6N2 GTI",6),
+        new Item("vw:passatb5","Passat B5 Variant",7),
+        new Item("vw:jetta2","Jetta 2",8),
+        new Item("vw:newbeetle","New Beetle",9)
     };
 
     private VolkswagenIconPack(){}
     public static Item[] items(){return ITEMS.clone();}
     public static Item find(String id){if(id==null)return null;for(Item item:ITEMS)if(item.id.equals(id))return item;return null;}
     public static boolean isVolkswagen(String id){return find(id)!=null;}
-    public static Bitmap bitmapFor(String id){Item item=find(id);return item==null?null:item.bitmap();}
-    public static String base64For(String id){Item item=find(id);return item==null?"":item.base64();}
+    public static int indexOf(String id){Item item=find(id);return item==null?-1:item.index;}
+    public static Bitmap bitmapFor(Resources resources,String id){Item item=find(id);return item==null?null:bitmapAt(resources,item.index);}
+
+    private static synchronized Bitmap bitmapAt(Resources resources,int index){
+        if(index<0||index>=bitmapCache.length||resources==null)return null;
+        if(bitmapCache[index]!=null&&!bitmapCache[index].isRecycled())return bitmapCache[index];
+        if(spriteCache==null||spriteCache.isRecycled())spriteCache=BitmapFactory.decodeResource(resources,R.drawable.vw_sprite_192);
+        if(spriteCache==null)return null;
+        int x=(index%COLS)*CELL,y=(index/COLS)*CELL;
+        if(x+CELL>spriteCache.getWidth()||y+CELL>spriteCache.getHeight())return null;
+        bitmapCache[index]=Bitmap.createBitmap(spriteCache,x,y,CELL,CELL);
+        return bitmapCache[index];
+    }
 }

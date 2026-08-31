@@ -156,13 +156,15 @@ public final class ConvoySessionManager {
     }
 
     private JSONObject participantBody() throws Exception {
+        String icon=prefs.get("profileVehicleIcon", "🚗");
+        String image=VolkswagenIconPack.isVolkswagen(icon)?"":prefs.get("profileVehicleImage", "");
         return new JSONObject()
                 .put("name", prefs.get("profileName", "Conducteur"))
                 .put("vehicle", prefs.get("profileVehicle", "Véhicule"))
                 .put("vehicleColor", prefs.get("profileColor", ""))
-                .put("vehicleIcon", prefs.get("profileVehicleIcon", "🚗"))
+                .put("vehicleIcon", icon)
                 .put("vehicleMarkerColor", prefs.get("profileVehicleMarkerColor", "#FFB514"))
-                .put("vehicleImage", prefs.get("profileVehicleImage", ""));
+                .put("vehicleImage", image);
     }
 
     private JSONObject authenticatedParticipantBody() throws Exception {

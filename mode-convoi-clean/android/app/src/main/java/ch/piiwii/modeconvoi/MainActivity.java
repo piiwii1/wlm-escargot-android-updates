@@ -856,23 +856,21 @@ public class MainActivity extends Activity {
     private void pollOnce(){if(pollingController!=null)pollingController.refreshNow();}
 
     private View participantAvatar(JSONObject p,int size,int fallbackColor){
-        String image=p==null?prefs.get("profileVehicleImage",""):p.optString("vehicleImage","");
-        if(image!=null&&!image.isEmpty()){
+        String icon=p==null?prefs.get("profileVehicleIcon","🚗"):p.optString("vehicleIcon","🚗");
+        if(VolkswagenIconPack.isVolkswagen(icon)){
             try{
-                Bitmap b=VehicleImageCache.decode(image);
+                Bitmap b=VolkswagenIconPack.bitmapFor(getResources(),icon);
                 if(b!=null){
-                    boolean transparentVehicle=image.startsWith("iVBOR");
-                    ImageView iv=new ImageView(this);
-                    iv.setScaleType(transparentVehicle?ImageView.ScaleType.FIT_CENTER:ImageView.ScaleType.CENTER_CROP);
-                    iv.setPadding(transparentVehicle?dp(3):0,transparentVehicle?dp(3):0,transparentVehicle?dp(3):0,transparentVehicle?dp(3):0);
-                    iv.setImageBitmap(b);
-                    iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));
-                    iv.setClipToOutline(!transparentVehicle);
-                    return iv;
+                    ImageView iv=new ImageView(this);iv.setScaleType(ImageView.ScaleType.FIT_CENTER);iv.setPadding(dp(2),dp(2),dp(2),dp(2));iv.setImageBitmap(b);
+                    iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));iv.setClipToOutline(false);return iv;
                 }
             }catch(Exception ignored){}
         }
-        String icon=p==null?prefs.get("profileVehicleIcon","🚗"):p.optString("vehicleIcon","🚗");if(icon.isEmpty()||VolkswagenIconPack.isVolkswagen(icon))icon="🚗";
+        String image=p==null?prefs.get("profileVehicleImage",""):p.optString("vehicleImage","");
+        if(image!=null&&!image.isEmpty()){
+            try{Bitmap b=VehicleImageCache.decode(image);if(b!=null){ImageView iv=new ImageView(this);iv.setScaleType(ImageView.ScaleType.CENTER_CROP);iv.setImageBitmap(b);iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));iv.setClipToOutline(true);return iv;}}catch(Exception ignored){}
+        }
+        if(icon.isEmpty())icon="🚗";
         TextView v=text(icon,size>=46?24:19,false,participantMarkerColor(p,fallbackColor));v.setGravity(Gravity.CENTER);v.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));return v;
     }
     private int participantMarkerColor(JSONObject p,int fallback){String c=p==null?prefs.get("profileVehicleMarkerColor",""):p.optString("vehicleMarkerColor","");try{if(c!=null&&!c.isEmpty())return Color.parseColor(c);}catch(Exception ignored){}return fallback;}
@@ -896,6 +894,8 @@ public class MainActivity extends Activity {
     private void vehicleAppearanceDialog(){
         ScrollView scroll=new ScrollView(this);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(8),dp(18),dp(14));scroll.addView(box);
+        if(VolkswagenIconPack.isVolkswagen(prefs.get("profileVehicleIcon","")))prefs.remove("profileVehicleImage");
+        final ArrayList<View> vehicleChoiceViews=new ArrayList<>();
         vehiclePreview=new FrameLayout(this);vehiclePreview.setPadding(dp(8),dp(8),dp(8),dp(8));box.addView(vehiclePreview,new LinearLayout.LayoutParams(-1,dp(92)));refreshVehiclePreview();
 
         // Icônes génériques : une seule ligne visible, deux lignes supplémentaires à déplier.
@@ -906,10 +906,10 @@ public class MainActivity extends Activity {
         GridLayout iconsFirst=new GridLayout(this);iconsFirst.setColumnCount(5);
         GridLayout iconsMore=new GridLayout(this);iconsMore.setColumnCount(5);iconsMore.setVisibility(View.GONE);
         for(int i=0;i<all.length;i++){
-            final String ic=all[i];TextView b=text(ic,25,false,fg);b.setGravity(Gravity.CENTER);
+            final String ic=all[i];TextView b=text(ic,25,false,fg);b.setGravity(Gravity.CENTER);b.setTag("vehicle-choice:"+ic);vehicleChoiceViews.add(b);
             boolean selected=ic.equals(prefs.get("profileVehicleIcon","🚗")) && prefs.get("profileVehicleImage","").isEmpty();
             b.setBackground(roundBg(control,selected?accent:border,12,selected?2:1));
-            b.setOnClickListener(v->{prefs.put("profileVehicleIcon",ic);prefs.remove("profileVehicleImage");refreshVehiclePreview();});
+            b.setOnClickListener(v->{prefs.put("profileVehicleIcon",ic);prefs.remove("profileVehicleImage");refreshVehicleChoiceSelection(vehicleChoiceViews);refreshVehiclePreview();});
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(56);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));
             (i<5?iconsFirst:iconsMore).addView(b,lp);
         }
@@ -925,25 +925,26 @@ public class MainActivity extends Activity {
         String selectedVehicleIcon=prefs.get("profileVehicleIcon","🚗");
         for(int i=0;i<vwItems.length;i++){
             final VolkswagenIconPack.Item item=vwItems[i];
-            FrameLayout slot=new FrameLayout(this);slot.setContentDescription(item.label);
+            FrameLayout slot=new FrameLayout(this);slot.setContentDescription(item.label);slot.setTag("vehicle-choice:"+item.id);vehicleChoiceViews.add(slot);
             boolean selected=item.id.equals(selectedVehicleIcon);
             slot.setBackground(roundBg(control,selected?accent:border,12,selected?2:1));
-            ImageView carIcon=new ImageView(this);carIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);carIcon.setPadding(dp(4),dp(4),dp(4),dp(4));carIcon.setImageBitmap(item.bitmap());
+            ImageView carIcon=new ImageView(this);carIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);carIcon.setPadding(dp(2),dp(2),dp(2),dp(2));carIcon.setImageBitmap(item.bitmap(getResources()));
             slot.addView(carIcon,new FrameLayout.LayoutParams(-1,-1));
-            slot.setOnClickListener(v->{prefs.put("profileVehicleIcon",item.id);prefs.put("profileVehicleImage",item.base64());refreshVehiclePreview();});
+            slot.setOnClickListener(v->{prefs.put("profileVehicleIcon",item.id);prefs.remove("profileVehicleImage");refreshVehicleChoiceSelection(vehicleChoiceViews);refreshVehiclePreview();});
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(58);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));
             (i<5?vwFirst:vwMore).addView(slot,lp);
         }
         box.addView(vwFirst,new LinearLayout.LayoutParams(-1,-2));box.addView(vwMore,new LinearLayout.LayoutParams(-1,-2));
-        TextView vwHint=text("10 modèles Volkswagen · appuie sur une voiture pour l'utiliser sur la carte.",11,false,muted);vwHint.setPadding(dp(4),dp(3),dp(4),0);box.addView(vwHint);
+        TextView vwHint=text("10 modèles Volkswagen HD · appuie sur une voiture pour l'utiliser sur la carte.",11,false,muted);vwHint.setPadding(dp(4),dp(3),dp(4),0);box.addView(vwHint);
         vwHeader.setOnClickListener(v->{boolean open=vwMore.getVisibility()==View.VISIBLE;vwMore.setVisibility(open?View.GONE:View.VISIBLE);vwChevron.setText(open?"⌄":"⌃");});
 
         TextView cl=text("COULEUR DU REPÈRE",11,true,accent);cl.setPadding(0,dp(14),0,dp(6));box.addView(cl);
         GridLayout colors=new GridLayout(this);colors.setColumnCount(4);String[] cs={"#FFB514","#EF4444","#3B82F6","#22C55E","#A855F7","#F97316","#E5E7EB","#111827"};
+        final ArrayList<View> markerColorViews=new ArrayList<>();
         for(String c:cs){
             boolean selected=c.equalsIgnoreCase(prefs.get("profileVehicleMarkerColor","#FFB514"));
-            TextView dot=text("●",38,false,Color.parseColor(c));dot.setGravity(Gravity.CENTER);dot.setBackground(roundBg(control,selected?accent:border,14,selected?2:1));
-            dot.setOnClickListener(v->{prefs.put("profileVehicleMarkerColor",c);refreshVehiclePreview();});
+            TextView dot=text("●",38,false,Color.parseColor(c));dot.setGravity(Gravity.CENTER);dot.setTag("marker-color:"+c);markerColorViews.add(dot);dot.setBackground(roundBg(control,selected?accent:border,14,selected?2:1));
+            dot.setOnClickListener(v->{prefs.put("profileVehicleMarkerColor",c);refreshMarkerColorSelection(markerColorViews);refreshVehiclePreview();});
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(60);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(4),dp(4),dp(4),dp(4));colors.addView(dot,lp);
         }
         box.addView(colors,new LinearLayout.LayoutParams(-1,-2));
@@ -952,6 +953,14 @@ public class MainActivity extends Activity {
         TextView hint=text("Choisis une icône, une couleur de repère ou une photo. L’aperçu est mis à jour immédiatement.",12,false,muted);hint.setPadding(0,dp(8),0,0);box.addView(hint);
         Dialog dlg=styledDialog("Mon véhicule",scroll,"FERMER",d->{vehiclePreview=null;return true;},"ENREGISTRER",d->{syncProfileToServer();vehiclePreview=null;if("participants".equals(currentPage))renderParticipantsPage();else if("map".equals(currentPage))pushMap();else if("home".equals(currentPage))refreshSnapshotArea();return true;},false);
         dlg.setOnDismissListener(d->vehiclePreview=null);
+    }
+    private void refreshVehicleChoiceSelection(List<View> views){
+        String selected=prefs.get("profileVehicleIcon","🚗");boolean custom=!prefs.get("profileVehicleImage","").isEmpty();
+        for(View v:views){Object tag=v.getTag();if(!(tag instanceof String)||!((String)tag).startsWith("vehicle-choice:"))continue;String choice=((String)tag).substring("vehicle-choice:".length());boolean active=!custom&&choice.equals(selected);v.setBackground(roundBg(control,active?accent:border,12,active?2:1));}
+    }
+    private void refreshMarkerColorSelection(List<View> views){
+        String selected=prefs.get("profileVehicleMarkerColor","#FFB514");
+        for(View v:views){Object tag=v.getTag();if(!(tag instanceof String)||!((String)tag).startsWith("marker-color:"))continue;String value=((String)tag).substring("marker-color:".length());boolean active=value.equalsIgnoreCase(selected);v.setBackground(roundBg(control,active?accent:border,14,active?2:1));}
     }
     private void refreshVehiclePreview(){if(vehiclePreview==null)return;vehiclePreview.removeAllViews();View av=participantAvatar(null,72,accent);FrameLayout.LayoutParams ap=new FrameLayout.LayoutParams(dp(72),dp(72),Gravity.CENTER);vehiclePreview.addView(av,ap);}
     private void pickVehicleImage(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("image/*");startActivityForResult(i,REQ_VEHICLE_IMAGE);}
@@ -1009,7 +1018,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.39","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.40","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
