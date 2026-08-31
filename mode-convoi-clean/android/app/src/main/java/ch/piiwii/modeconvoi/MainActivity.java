@@ -866,6 +866,7 @@ public class MainActivity extends Activity {
                 }
             }catch(Exception ignored){}
         }
+        if(VolkswagenIconPack.isVolkswagen(icon))icon="🚗";
         String image=p==null?prefs.get("profileVehicleImage",""):p.optString("vehicleImage","");
         if(image!=null&&!image.isEmpty()){
             try{Bitmap b=VehicleImageCache.decode(image);if(b!=null){ImageView iv=new ImageView(this);iv.setScaleType(ImageView.ScaleType.CENTER_CROP);iv.setImageBitmap(b);iv.setBackground(roundBg(control,participantMarkerColor(p,fallbackColor),size/2,1));iv.setClipToOutline(true);return iv;}}catch(Exception ignored){}
@@ -1018,7 +1019,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.40","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.41","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
