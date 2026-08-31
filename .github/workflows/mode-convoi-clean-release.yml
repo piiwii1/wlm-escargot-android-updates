@@ -23,6 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo 'retry after verified Volkswagen chunk repair'
           python .tmp0342/apply_0342_v2.py
           git diff --check
           grep -q "versionCode 45" mode-convoi-clean/android/app/build.gradle
