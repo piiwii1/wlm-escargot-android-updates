@@ -395,25 +395,16 @@ public class MainActivity extends Activity {
         target.addView(positionCard("MOI",me,accent,true));
         target.addView(positionCard("DERRIÈRE MOI",rel.behind,Color.rgb(55,158,225),false));
 
-        JSONObject myStatus=me==null?null:me.optJSONObject("activeStatus");
-        if(myStatus!=null){
-            TextView chip=text("●  "+myStatus.optString("label","Statut actif"),12,true,Color.rgb(132,218,84));
-            chip.setGravity(Gravity.CENTER);chip.setMaxLines(2);chip.setPadding(dp(12),dp(8),dp(12),dp(8));
-            chip.setBackground(roundBg(darkTheme?Color.rgb(26,48,23):Color.rgb(235,249,232),Color.rgb(62,103,47),16,1));
-            LinearLayout holder=new LinearLayout(this);holder.setGravity(Gravity.CENTER);holder.setPadding(0,dp(2),0,dp(2));holder.addView(chip,new LinearLayout.LayoutParams(-1,-2));target.addView(holder);
-        }
-
         ConvoyPositionResolver.RallyInfo rallyInfo=positionResolver.rallyInfo(snapshot);
         if(rallyInfo!=null){
             JSONObject rally=rallyInfo.rally;
-            LinearLayout box=cardBox();box.setPadding(dp(14),dp(12),dp(12),dp(12));
-            LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout rallyRow=new LinearLayout(this);rallyRow.setGravity(Gravity.CENTER_VERTICAL);rallyRow.setPadding(dp(9),dp(5),dp(7),dp(5));rallyRow.setBackground(roundBg(control,border,12,1));
+            LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(-1,-2);rlp.setMargins(0,dp(2),0,dp(2));rallyRow.setLayoutParams(rlp);
+            TextView pin=text("📍",19,false,accent);pin.setGravity(Gravity.CENTER);rallyRow.addView(pin,new LinearLayout.LayoutParams(dp(34),dp(38)));
             LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);
-            labels.addView(text("📍  POINT DE REGROUPEMENT",11,true,accent));
-            TextView rallyName=text(rally.optString("name","Point de regroupement"),17,true,fg);rallyName.setMaxLines(2);rallyName.setPadding(0,dp(3),0,0);labels.addView(rallyName);
-            TextView rallySub=text(rallyInfo.subtitle,12,false,muted);rallySub.setMaxLines(2);rallySub.setPadding(0,dp(3),0,0);labels.addView(rallySub);
-            row.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
-            Button gps=smallButton("GPS ➤",Color.TRANSPARENT,accent);gps.setBackground(roundBg(Color.TRANSPARENT,accent,11,1));gps.setOnClickListener(v->openGps(rally));LinearLayout.LayoutParams glp=new LinearLayout.LayoutParams(dp(72),dp(38));glp.setMargins(dp(8),0,0,0);row.addView(gps,glp);box.addView(row);target.addView(box);
+            TextView rallyName=text(rally.optString("name","Point de regroupement"),13,true,fg);rallyName.setMaxLines(1);rallyName.setAutoSizeTextTypeUniformWithConfiguration(11,13,1,android.util.TypedValue.COMPLEX_UNIT_SP);labels.addView(rallyName);
+            TextView rallySub=text(rallyInfo.subtitle,10,false,muted);rallySub.setMaxLines(1);rallySub.setAutoSizeTextTypeUniformWithConfiguration(9,10,1,android.util.TypedValue.COMPLEX_UNIT_SP);labels.addView(rallySub);rallyRow.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+            Button gps=smallButton("GPS",Color.TRANSPARENT,accent);gps.setBackground(roundBg(Color.TRANSPARENT,accent,10,1));gps.setOnClickListener(v->openGps(rally));rallyRow.addView(gps,new LinearLayout.LayoutParams(dp(58),dp(34)));target.addView(rallyRow);
         }
     }
 
