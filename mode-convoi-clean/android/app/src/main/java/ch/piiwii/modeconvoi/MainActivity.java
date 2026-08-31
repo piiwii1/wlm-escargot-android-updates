@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private ConvoyPollingController pollingController;
     private ConvoySessionManager sessionManager;
     private ConvoyMapController mapController;
+    private ConvoyPositionResolver positionResolver;
     private int bg, card, fg, muted, accent, danger, border, control, navSurface;
     private boolean darkTheme;
     private static final int REQ_LOCATION = 1001, REQ_NOTIF = 1002, REQ_AUDIO = 1003, REQ_VEHICLE_IMAGE = 2001;
@@ -88,6 +89,7 @@ public class MainActivity extends Activity {
         applyPalette();
         sessionManager = new ConvoySessionManager(prefs,DEFAULT_SERVER);
         mapController = new ConvoyMapController(prefs,()->snapshot);
+        positionResolver = new ConvoyPositionResolver(prefs);
         pollingController = new ConvoyPollingController(this,prefs,DEFAULT_SERVER,new ConvoyPollingController.Listener(){
             @Override public void onSnapshot(JSONObject s,boolean renamed,long synchronizedAt){
                 snapshot=s;
@@ -323,37 +325,17 @@ public class MainActivity extends Activity {
     }
 
     private void renderSnapshot(LinearLayout target) {
-        JSONObject me=findMe(); Relative rel=computeRelative();
+        JSONObject me=positionResolver.findMe(snapshot); ConvoyPositionResolver.Relative rel=positionResolver.resolveRelative(snapshot);
         target.addView(positionCard("DEVANT MOI",rel.ahead,Color.rgb(91,196,62),false)); target.addView(positionCard("MOI",me,accent,true)); target.addView(positionCard("DERRIÈRE MOI",rel.behind,Color.rgb(55,158,225),false));
         JSONObject myStatus=me==null?null:me.optJSONObject("activeStatus");if(myStatus!=null){TextView chip=text("●  "+myStatus.optString("label","Statut actif"),12,true,Color.rgb(132,218,84));chip.setGravity(Gravity.CENTER);chip.setPadding(dp(12),0,dp(12),0);chip.setBackground(roundBg(Color.rgb(26,48,23),Color.rgb(62,103,47),18,1));LinearLayout holder=new LinearLayout(this);holder.setGravity(Gravity.CENTER);holder.addView(chip,new LinearLayout.LayoutParams(-2,dp(34)));target.addView(holder);}
-        JSONObject rally=snapshot.optJSONObject("rally");if(rally!=null){LinearLayout box=cardBox();box.addView(text("📍  POINT DE REGROUPEMENT",11,true,accent));box.addView(text(rally.optString("name","Point de regroupement"),18,true,fg));
-            String desired=rally.optString("desiredTime",""); if(!desired.isEmpty()) box.addView(text("Heure souhaitée : "+desired,12,true,accent));target.addView(box);}
+        ConvoyPositionResolver.RallyInfo rallyInfo=positionResolver.rallyInfo(snapshot);if(rallyInfo!=null){JSONObject rally=rallyInfo.rally;LinearLayout box=cardBox();box.addView(text("📍  POINT DE REGROUPEMENT",11,true,accent));box.addView(text(rally.optString("name","Point de regroupement"),18,true,fg));
+            if(!rallyInfo.desiredTime.isEmpty()) box.addView(text("Heure souhaitée : "+rallyInfo.desiredTime,12,true,accent));target.addView(box);}
     }
     private View positionCard(String title,JSONObject p,int stripeColor,boolean own){LinearLayout outer=cardBox();outer.setBackground(roundBg(card,own?accent:border,16,own?2:1));LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);titleRow.addView(text(title,11,true,stripeColor),new LinearLayout.LayoutParams(0,dp(30),1));if(own){TextView active=text("ACTIF",11,true,Color.rgb(131,220,74));active.setGravity(Gravity.CENTER);active.setPadding(dp(10),0,dp(10),0);active.setBackground(roundBg(Color.rgb(24,48,20),Color.rgb(92,159,55),12,1));titleRow.addView(active,new LinearLayout.LayoutParams(-2,dp(28)));}outer.addView(titleRow);if(p==null){outer.addView(text("Position indisponible",17,true,fg));return outer;}LinearLayout info=new LinearLayout(this);info.setGravity(Gravity.CENTER_VERTICAL);View carIcon=participantAvatar(p,48,stripeColor);info.addView(carIcon,new LinearLayout.LayoutParams(dp(48),dp(48)));LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);names.setPadding(dp(12),0,dp(6),0);names.addView(text(p.optString("name",prefs.get("profileName","Moi")),19,true,fg));names.addView(text(p.optString("vehicle",prefs.get("profileVehicle","Véhicule")),13,false,muted));
         String role=p.optString("role","");
         if("leader".equals(role)) names.addView(text("★ Chef de convoi",11,true,Color.rgb(91,196,62)));
         else if("sweep".equals(role)) names.addView(text("◆ Voiture balai",11,true,Color.rgb(55,158,225)));info.addView(names,new LinearLayout.LayoutParams(0,-2,1));String relative=own?"":p.optString("_relative","");if(!relative.isEmpty())info.addView(text(relative.replace(" devant","").replace(" derrière",""),16,true,fg));outer.addView(info);JSONObject st=p.optJSONObject("activeStatus");if(st!=null)outer.addView(text("⚑  "+st.optString("label",""),12,true,accent));return outer;}
 
-
-    private static class Relative { JSONObject ahead, behind; }
-    private Relative computeRelative() {
-        Relative r=new Relative(); if(snapshot==null)return r; JSONObject me=findMe(); if(me==null)return r; JSONObject ml=me.optJSONObject("location"); if(ml==null)return r;
-        long serverTime=snapshot.optLong("serverTime",System.currentTimeMillis()); long myPosAt=ml.optLong("receivedAt",0); if(myPosAt<=0||serverTime-myPosAt>120000)return r;
-        double myLat=ml.optDouble("lat"),myLon=ml.optDouble("lon"); JSONObject rally=snapshot.optJSONObject("rally"); double myRally=Double.NaN;
-        if(rally!=null)myRally=GeoUtils.distanceMeters(myLat,myLon,rally.optDouble("lat"),rally.optDouble("lon"));
-        Double heading=ml.has("bearing")&&!ml.isNull("bearing")?ml.optDouble("bearing"):null; double bestA=Double.POSITIVE_INFINITY,bestB=Double.POSITIVE_INFINITY;
-        JSONArray ps=snapshot.optJSONArray("participants"); if(ps==null)return r;
-        for(int i=0;i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p==null||p.optString("id").equals(prefs.get("participantId","")))continue;JSONObject l=p.optJSONObject("location");if(l==null)continue;
-            long posAt=l.optLong("receivedAt",0); if(posAt<=0||serverTime-posAt>120000)continue;
-            double dist=GeoUtils.distanceMeters(myLat,myLon,l.optDouble("lat"),l.optDouble("lon")); boolean ahead;
-            if(Double.isFinite(myRally)){double od=GeoUtils.distanceMeters(l.optDouble("lat"),l.optDouble("lon"),rally.optDouble("lat"),rally.optDouble("lon")); ahead=od<myRally;}
-            else if(heading!=null){double br=GeoUtils.bearing(myLat,myLon,l.optDouble("lat"),l.optDouble("lon"));ahead=GeoUtils.signedProjection(dist,br,heading)>0;}
-            else continue;
-            try{p.put("_relative","≈ "+GeoUtils.humanDistance(dist)+(ahead?" devant":" derrière"));}catch(Exception ignored){}
-            if(ahead&&dist<bestA){bestA=dist;r.ahead=p;} if(!ahead&&dist<bestB){bestB=dist;r.behind=p;}
-        } return r;
-    }
-    private JSONObject findMe(){JSONArray ps=snapshot==null?null:snapshot.optJSONArray("participants");if(ps==null)return null;String id=prefs.get("participantId","");for(int i=0;i<ps.length();i++){JSONObject p=ps.optJSONObject(i);if(p!=null&&id.equals(p.optString("id")))return p;}return null;}
 
     private void renderMapPage() {
         currentPage = "map";
@@ -405,8 +387,9 @@ public class MainActivity extends Activity {
         mapStage.addView(mapView,new FrameLayout.LayoutParams(-1,-1));
 
         if(snapshot!=null){
-            JSONObject rally=snapshot.optJSONObject("rally");
-            if(rally!=null){
+            ConvoyPositionResolver.RallyInfo rallyInfo=positionResolver.rallyInfo(snapshot);
+            if(rallyInfo!=null){
+                JSONObject rally=rallyInfo.rally;
                 LinearLayout overlay=new LinearLayout(this);
                 overlay.setOrientation(LinearLayout.HORIZONTAL);
                 overlay.setGravity(Gravity.CENTER_VERTICAL);
@@ -416,20 +399,7 @@ public class MainActivity extends Activity {
                 LinearLayout labels=new LinearLayout(this);
                 labels.setOrientation(LinearLayout.VERTICAL);
                 labels.addView(text("📍  "+rally.optString("name","Point de regroupement"),13,true,fg));
-                StringBuilder sub=new StringBuilder();
-                String desired=rally.optString("desiredTime","");
-                JSONObject me=findMe();
-                JSONObject ml=me==null?null:me.optJSONObject("location");
-                if(ml!=null){
-                    double d=GeoUtils.distanceMeters(ml.optDouble("lat"),ml.optDouble("lon"),rally.optDouble("lat"),rally.optDouble("lon"));
-                    sub.append(GeoUtils.humanDistance(d));
-                }
-                if(!desired.isEmpty()){
-                    if(sub.length()>0)sub.append("  ·  ");
-                    sub.append(desired);
-                }
-                if(sub.length()==0)sub.append("Point de regroupement actif");
-                labels.addView(text(sub.toString(),11,false,muted));
+                labels.addView(text(rallyInfo.subtitle,11,false,muted));
                 overlay.addView(labels,new LinearLayout.LayoutParams(0,dp(48),1));
 
                 Button open=smallButton("GPS ➤",accent,Color.rgb(17,18,19));
@@ -556,7 +526,7 @@ public class MainActivity extends Activity {
         LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),0,dp(20),0);
         EditText n=input("Nom","Point de regroupement"); EditText desired=input("Heure souhaitée (ex. 14:30)",""); EditText lat=input("Latitude",""); EditText lon=input("Longitude","");
         l.addView(n);l.addView(desired);l.addView(lat);l.addView(lon);
-        JSONObject me=findMe();JSONObject loc=me==null?null:me.optJSONObject("location");if(loc!=null){lat.setText(String.valueOf(loc.optDouble("lat")));lon.setText(String.valueOf(loc.optDouble("lon")));}
+        JSONObject loc=positionResolver.ownLocation(snapshot);if(loc!=null){lat.setText(String.valueOf(loc.optDouble("lat")));lon.setText(String.valueOf(loc.optDouble("lon")));}
         new AlertDialog.Builder(this).setTitle("Point de regroupement").setView(l).setPositiveButton("Partager",(d,w)->setRally(n.getText().toString(),desired.getText().toString(),lat.getText().toString(),lon.getText().toString())).setNegativeButton("Annuler",null).show();
     }
     private void setRally(String name,String desiredTime,String latS,String lonS){try{double lat=Double.parseDouble(latS.replace(',','.')),lon=Double.parseDouble(lonS.replace(',','.'));runBusy("Partage…",()->sessionManager.setRally(name,desiredTime,lat,lon),r->pollOnce());}catch(Exception e){toast("Coordonnées invalides");}}
@@ -874,7 +844,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.32","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.33","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
