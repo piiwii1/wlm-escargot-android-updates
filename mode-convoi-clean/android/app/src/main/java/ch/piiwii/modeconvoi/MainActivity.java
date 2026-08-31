@@ -20,7 +20,6 @@ import android.webkit.WebView;
 import android.widget.*;
 import org.json.*;
 import java.util.*;
-import java.net.URLEncoder;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.concurrent.*;
@@ -42,13 +41,8 @@ public class MainActivity extends Activity {
     private boolean mapPageReady=false;
     private LinearLayout snapshotArea;
     private String currentPage = "welcome";
-    private boolean polling;
-    private boolean pollInFlight=false;
-    private boolean pollScheduled=false;
     private boolean busyOperation=false;
-    private final Runnable pollRunnable=()->{ pollScheduled=false; pollOnce(); };
-    private int consecutivePollFailures = 0;
-    private long lastSuccessfulSyncAt = 0;
+    private ConvoyPollingController pollingController;
     private int bg, card, fg, muted, accent, danger, border, control, navSurface;
     private boolean darkTheme;
     private static final int REQ_LOCATION = 1001, REQ_NOTIF = 1002, REQ_AUDIO = 1003, REQ_VEHICLE_IMAGE = 2001;
@@ -93,6 +87,30 @@ public class MainActivity extends Activity {
         else if(savedServer.isEmpty()) prefs.put("serverUrl",DEFAULT_SERVER);
         if(oldLocalServer && prefs.hasActiveConvoy()) { prefs.clearSession(); snapshot=null; prefs.put("serverUrl",DEFAULT_SERVER); }
         applyPalette();
+        pollingController = new ConvoyPollingController(this,prefs,DEFAULT_SERVER,new ConvoyPollingController.Listener(){
+            @Override public void onSnapshot(JSONObject s,boolean renamed,long synchronizedAt){
+                snapshot=s;
+                if(liveTalkie!=null)liveTalkie.ensureStarted();
+                if(renamed&&"home".equals(currentPage))render();
+                else if(mapView!=null)pushMap();
+                else if("home".equals(currentPage))refreshSnapshotArea();
+                else if("participants".equals(currentPage))renderParticipantsPage();
+            }
+            @Override public void onConnectionState(ConvoyPollingController.ConnectionState state,int failures){
+                if(connectionBadge==null)return;
+                if(state==ConvoyPollingController.ConnectionState.CONNECTED){
+                    connectionBadge.setText("● CONNECTÉ");connectionBadge.setTextColor(Color.rgb(90,200,120));
+                }else if(state==ConvoyPollingController.ConnectionState.RECONNECTING){
+                    connectionBadge.setText("● RECONNEXION");connectionBadge.setTextColor(accent);
+                }else{
+                    connectionBadge.setText("● HORS LIGNE");connectionBadge.setTextColor(danger);
+                }
+            }
+            @Override public void onSessionInvalidated(int statusCode){
+                toast(statusCode==404?"Convoi fermé ou introuvable":"Accès au convoi retiré");
+                endSession();
+            }
+        });
         NotificationHelper.ensureAlertChannel(this);
         handleDeepLink(getIntent());
         render();
@@ -100,7 +118,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleDeepLink(intent); render(); }
     @Override protected void onResume() { super.onResume(); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
     @Override protected void onPause() { super.onPause(); stopPolling(); }
-    @Override protected void onDestroy() { if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onDestroy() { if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
 
     private boolean saveProfileChecked(EditText pseudo,EditText vehicle,EditText color,EditText server){
         String name=pseudo.getText().toString().trim();
@@ -782,54 +800,9 @@ public class MainActivity extends Activity {
         if(talkieState!=null){talkieState.setText(message);talkieState.setTextColor(color);}
     }
 
-    private void startPolling(){
-        if(!prefs.hasActiveConvoy())return;
-        polling=true;
-        schedulePoll(0);
-    }
-    private void stopPolling(){
-        polling=false;
-        pollScheduled=false;
-        ui.removeCallbacks(pollRunnable);
-    }
-    private void schedulePoll(long delay){
-        if(!polling||!prefs.hasActiveConvoy()||pollScheduled||pollInFlight)return;
-        pollScheduled=true;
-        ui.postDelayed(pollRunnable,Math.max(0,delay));
-    }
-    private void pollOnce(){
-        if(!prefs.hasActiveConvoy()){stopPolling();return;}
-        if(pollInFlight)return;
-        pollInFlight=true;
-        io.execute(()->{
-            try{
-                String path="/api/convoys/"+prefs.get("code","")+"?participantId="+URLEncoder.encode(prefs.get("participantId",""),"UTF-8")+"&token="+URLEncoder.encode(prefs.get("token",""),"UTF-8");
-                JSONObject s=ConvoyApi.get(prefs.get("serverUrl",DEFAULT_SERVER),path);
-                ui.post(()->{
-                    pollInFlight=false;
-                    String newName=s.optString("name",""); boolean renamed=!newName.isEmpty()&&!newName.equals(prefs.get("convoyName",""));
-                    if(renamed)prefs.put("convoyName",newName);
-                    snapshot=s;ConvoyEventProcessor.process(this,prefs,s); consecutivePollFailures=0; lastSuccessfulSyncAt=System.currentTimeMillis();
-                    if(liveTalkie!=null)liveTalkie.ensureStarted();
-                    if(renamed&&"home".equals(currentPage))render();
-                    else if(mapView!=null)pushMap();
-                    else if("home".equals(currentPage))refreshSnapshotArea();
-                    else if("participants".equals(currentPage))renderParticipantsPage();
-                    if(connectionBadge!=null){connectionBadge.setText("● CONNECTÉ");connectionBadge.setTextColor(Color.rgb(90,200,120));}
-                    schedulePoll(3500);
-                });
-            }catch(Exception e){
-                ui.post(()->{
-                    pollInFlight=false;
-                    if(e instanceof ConvoyApi.ApiException){int sc=((ConvoyApi.ApiException)e).statusCode;if(sc==401||sc==404){toast(sc==404?"Convoi fermé ou introuvable":"Accès au convoi retiré");endSession();return;}}
-                    consecutivePollFailures++;
-                    if(connectionBadge!=null){connectionBadge.setText(consecutivePollFailures<3?"● RECONNEXION":"● HORS LIGNE");connectionBadge.setTextColor(consecutivePollFailures<3?accent:danger);}
-                    long retry=Math.min(30000L,5000L*(1L<<Math.min(3,Math.max(0,consecutivePollFailures-1))));
-                    schedulePoll(retry);
-                });
-            }
-        });
-    }
+    private void startPolling(){if(pollingController!=null)pollingController.start();}
+    private void stopPolling(){if(pollingController!=null)pollingController.stop();}
+    private void pollOnce(){if(pollingController!=null)pollingController.refreshNow();}
 
     private View participantAvatar(JSONObject p,int size,int fallbackColor){
         String image=p==null?prefs.get("profileVehicleImage",""):p.optString("vehicleImage","");
@@ -942,7 +915,8 @@ public class MainActivity extends Activity {
         sectionLabel(content,"CONNEXION");
         LinearLayout diagnostic=cardBox();
         TextView diag=text("● Vérification du serveur…",13,true,muted); diagnostic.addView(diag);
-        TextView sync=text(lastSuccessfulSyncAt>0?"Dernière synchronisation : "+ageText(Math.max(0,System.currentTimeMillis()-lastSuccessfulSyncAt)):"Aucune synchronisation récente",12,false,muted); sync.setPadding(0,dp(4),0,dp(6)); diagnostic.addView(sync);
+        long lastSyncAt=pollingController==null?0L:pollingController.lastSuccessfulSyncAt();
+        TextView sync=text(lastSyncAt>0?"Dernière synchronisation : "+ageText(Math.max(0,System.currentTimeMillis()-lastSyncAt)):"Aucune synchronisation récente",12,false,muted); sync.setPadding(0,dp(4),0,dp(6)); diagnostic.addView(sync);
         Button test=outlinedButton("↻   TESTER LA CONNEXION",accent); test.setOnClickListener(v->testServerConnectionDetailed(diag,sync)); diagnostic.addView(test);
         content.addView(diagnostic);
         testServerConnectionDetailed(diag,sync);
@@ -965,7 +939,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.17","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.29","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
