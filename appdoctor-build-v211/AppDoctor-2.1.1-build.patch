@@ -1,0 +1,66 @@
+--- AppDoctor-2.1.0-source/app/build.gradle	2026-08-31 09:03:12.963307104 +0000
++++ AppDoctor-2.1.1-source/app/build.gradle	2026-08-31 09:36:54.746094508 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.appdoctor'
+         minSdk 26
+         targetSdk 35
+-        versionCode 4
+-        versionName '2.1.0'
++        versionCode 5
++        versionName '2.1.1'
+     }
+ 
+     buildTypes {
+--- AppDoctor-2.1.0-source/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java	2026-08-31 09:02:35.118535239 +0000
++++ AppDoctor-2.1.1-source/app/src/main/java/ch/piiwii/appdoctor/MainActivity.java	2026-08-31 09:36:55.437017657 +0000
+@@ -64,7 +64,7 @@
+     private static final int SAVE_REPORT_REQUEST = 901;
+     private static final int NOTIFICATION_PERMISSION_REQUEST = 903;
+     private static final long DAY = 24L * 60L * 60L * 1000L;
+-    private static final String VERSION = "2.1.0";
++    private static final String VERSION = "2.1.1";
+     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+ 
+     private Button startButton;
+@@ -261,16 +261,32 @@
+ 
+     private void openIntegratedPairing() {
+         PairCodeReceiver.showPairingNotification(this);
+-        statusView.setText("Première activation Android : active « Débogage sans fil », touche « Associer l'appareil avec un code », puis saisis les 6 chiffres dans la notification AppDoctor. C'est à faire une seule fois.");
++        statusView.setText("Une seule chose à activer : DÉBOGAGE SANS FIL. Ensuite ouvre cette ligne et choisis « Associer l'appareil avec un code d'association ».");
+         waitingDeveloperSettings = true;
+-        try {
+-            Intent direct = new Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS");
+-            if (direct.resolveActivity(getPackageManager()) != null) startActivity(direct);
+-            else startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));
+-        } catch (Throwable t) {
+-            try { startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)); }
+-            catch (Throwable ignored) { waitingDeveloperSettings = false; pendingStart = false; }
+-        }
++        Intent direct = new Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS");
++        if (direct.resolveActivity(getPackageManager()) != null) {
++            try {
++                Toast.makeText(this, "Active uniquement « Débogage sans fil »", Toast.LENGTH_LONG).show();
++                startActivity(direct);
++                return;
++            } catch (Throwable ignored) {}
++        }
++        new android.app.AlertDialog.Builder(this)
++                .setTitle("Une seule chose à activer")
++                .setMessage("Dans Options de développement :\n\n1. Descends jusqu'à la section DÉBOGAGE.\n2. Active uniquement « Débogage sans fil ».\n3. Touche ensuite la ligne « Débogage sans fil ».\n4. Choisis « Associer l'appareil avec un code d'association ».\n\nNe touche à aucun autre réglage.")
++                .setNegativeButton("ANNULER", (d, w) -> { waitingDeveloperSettings = false; pendingStart = false; updateUi(); })
++                .setPositiveButton("OUVRIR", (d, w) -> {
++                    try {
++                        Toast.makeText(this, "➡ Active uniquement « Débogage sans fil »", Toast.LENGTH_LONG).show();
++                        startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS));
++                    } catch (Throwable ignored) {
++                        waitingDeveloperSettings = false;
++                        pendingStart = false;
++                        statusView.setText("Impossible d'ouvrir les Options de développement.");
++                        updateUi();
++                    }
++                })
++                .show();
+     }
+ 
+     private void attemptConnectAfterSettings() {
