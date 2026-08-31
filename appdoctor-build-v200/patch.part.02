@@ -1,0 +1,94 @@
+9,6 +462,15 @@
+                 .thenComparing((AppResult a) -> -a.score)
+                 .thenComparing(a -> a.label.toLowerCase(Locale.ROOT)));
+ 
++        DeepSnapshot deepSnapshot = null;
++        if (deep && shellService != null) {
++            deepSnapshot = runDeepSystemScan(results);
++            results.sort(Comparator
++                    .comparing((AppResult a) -> !a.manualInstall)
++                    .thenComparing((AppResult a) -> -a.score)
++                    .thenComparing(a -> a.label.toLowerCase(Locale.ROOT)));
++        }
++
+         int priority = 0, warning = 0, ok = 0, manual = 0;
+         for (AppResult r : results) {
+             if (r.manualInstall) manual++;
+@@ -328,13 +480,14 @@
+         }
+ 
+         StringBuilder sb = new StringBuilder(64_000);
+-        sb.append("APPDOCTOR — RAPPORT ").append(VERSION).append('\n');
++        sb.append("APPDOCTOR — RAPPORT ").append(VERSION).append(deep ? " — DIAGNOSTIC APPROFONDI" : " — ANALYSE RAPIDE").append('\n');
+         sb.append("========================================\n");
+         sb.append("Date : ").append(formatDate(now)).append('\n');
+         sb.append("Téléphone : ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
+         sb.append("Android : ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+         sb.append("ABI téléphone : ").append(String.join(", ", Build.SUPPORTED_ABIS)).append('\n');
+         sb.append("Statistiques d'utilisation : ").append(usageAllowed ? "AUTORISÉES" : "NON AUTORISÉES").append('\n');
++        sb.append("Shizuku / ADB shell : ").append(deep && shellService != null ? "ACTIF" : "NON UTILISÉ").append('\n');
+         sb.append("Internet AppDoctor : NON (permission INTERNET absente)\n\n");
+ 
+         sb.append(deviceSnapshot()).append('\n');
+@@ -364,7 +517,7 @@
+         sb.append('\n');
+ 
+         sb.append("IMPORTANT\n");
+-        sb.append("Le score est un indicateur de points à contrôler, pas une preuve qu'une application fait planter le téléphone. Sans root/ADB/Shizuku, Android ne permet pas à AppDoctor de lire librement les crash logs privés des autres applications ni leur consommation batterie exacte en mAh.\n\n");
++        sb.append("Le score est un indicateur de points à contrôler, pas une preuve qu'une application fait planter le téléphone. En analyse rapide, Android limite fortement les informations inter-applications. En diagnostic approfondi, AppDoctor utilise Shizuku/ADB shell pour interroger les services système, mais le score reste un indicateur et non une preuve absolue de causalité.\n\n");
+ 
+         if (!usageAllowed) {
+             sb.append("ℹ STATISTIQUES MANQUANTES\n");
+@@ -390,6 +543,100 @@
+         return sb.toString();
+     }
+ 
++    private DeepSnapshot runDeepSystemScan(List<AppResult> results) {
++        DeepSnapshot d = new DeepSnapshot();
++        try {
++            status("Diagnostic système : identité ADB/shell…", 8);
++            d.identity = shellExec("id");
++            status("Diagnostic système : batterie / wakelocks…", 16);
++            d.batterystats = shellExec("dumpsys batterystats --charged");
++            status("Diagnostic système : processus sur 3 h…", 28);
++            d.procstats = shellExec("dumpsys procstats --hours 3");
++            status("Diagnostic système : services actifs…", 40);
++            d.services = shellExec("dumpsys activity services");
++            status("Diagnostic système : tâches planifiées…", 52);
++            d.jobs = shellExec("dumpsys jobscheduler");
++            status("Diagnostic système : veille / whitelist…", 61);
++            d.deviceIdle = shellExec("dumpsys deviceidle whitelist");
++            status("Diagnostic système : crashs récents…", 70);
++            d.crashes = shellExec("dumpsys dropbox --print data_app_crash");
++            status("Diagnostic système : ANR récents…", 78);
++            d.anrs = shellExec("dumpsys dropbox --print data_app_anr");
++
++            int limit = Math.min(30, results.size());
++            for (int i = 0; i < limit; i++) {
++                AppResult r = results.get(i);
++                status("AppOps " + (i + 1) + "/" + limit + " : " + r.label, 78 + ((i + 1) * 17 / Math.max(1, limit)));
++                String appops = shellExec("cmd appops get " + r.packageName);
++                enrichFromDeep(r, appops, d);
++            }
++        } catch (Throwable t) {
++            d.error = t.getClass().getSimpleName() + ": " + safe(t.getMessage());
++        }
++        return d;
++    }
++
++    private void enrichFromDeep(AppResult r, String appops, DeepSnapshot d) {
++        r.deepAnalyzed = true;
++        r.appOpsSummary = compactAppOps(appops);
++        r.batteryMentions = occurrences(d.batterystats, r.packageName);
++        r.procMentions = occurrences(d.procstats, r.packageName);
++        r.activeServiceMentions = occurrences(d.services, r.packageName);
++        r.jobMentions = occurrences(d.jobs, r.packageName);
++        r.crashMentions = occurrences(d.crashes, r.packageName);
++        r.anrMentions = occurrences(d.anrs, r.packageName);
++        r.deviceIdleWhitelisted = containsIgnoreCase(d.deviceIdle, r.packageName);
++
++        if (r.activeServiceMentions > 0) r.addBattery(Math.min(8, 2 + r.activeServiceMentions), "Service(s) actuellement visibles dans ActivityManager : " + r.activeServiceMentions);
++        if (r.jobMentions > 2) r.addBattery(Math.min(8, 2 + r.jobMentions / 2), "Présence importante dans JobScheduler : " + r.jobMentions + " occurrence(s)");
++        if (r.deviceIdleWhitelisted && !r.batteryAllowlisted) r.addBattery(8, "Présente dans la whitelist DeviceIdle système");
++        if (r.crashMentions > 0) r.addBuild(Math.min(35, 15 + r.crashMentions * 5), "Crash système récent détecté dans DropBox : " + r.crashMentions + " occurrence(s)");
++        if (r.anrMentions > 0) r.addBuild(Math.min(40, 20 + r.anrMentions * 6), "ANR récent détecté 
