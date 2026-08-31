@@ -40,7 +40,7 @@ jobs:
           echo 'eb5fe74d6b0aacf74b067a882c46296c23255cbe4c9dd445f7c28a63c2627d7b  /tmp/v111.gz' | sha256sum -c -
           gunzip -c /tmp/v111.gz > /tmp/v111.patch
           echo 'c620de2b460331c2ae737a3200086255a048e15c521bd2fc38ed0ecbab243916  /tmp/v111.patch' | sha256sum -c -
-          (cd cr111 && patch -p1 < /tmp/v111.patch)
+          (cd cr111 && patch -p4 < /tmp/v111.patch)
           grep -q "versionName '1.11.0'" cr111/app/build.gradle
           grep -q "versionCode 12" cr111/app/build.gradle
           grep -q 'computePhysicalOrder' cr111/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
