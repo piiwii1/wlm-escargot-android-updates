@@ -1,0 +1,178 @@
+package ch.piiwii.appdoctor;
+
+import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.AppOpsManager;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.InstallSourceInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
+import android.content.pm.ServiceInfo;
+import android.content.pm.Signature;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.os.BatteryManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.PowerManager;
+import android.os.Process;
+import android.os.StatFs;
+import android.provider.Settings;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.OutputStream;
+import java.security.MessageDigest;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+public class MainActivity extends Activity {
+    private static final int SAVE_REPORT_REQUEST = 901;
+    private static final long DAY = 24L * 60L * 60L * 1000L;
+    private static final String VERSION = "1.1.0";
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private Button analyzeButton;
+    private Button copyButton;
+    private Button saveButton;
+    private Button shareButton;
+    private Button usageButton;
+    private TextView statusView;
+    private TextView reportView;
+    private ProgressBar progressBar;
+    private String lastReport = "";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        buildUi();
+        updateUsageButton();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (usageButton != null) updateUsageButton();
+    }
+
+    @Override
+    protected void onDestroy() {
+        executor.shutdownNow();
+        super.onDestroy();
+    }
+
+    private void buildUi() {
+        ScrollView root = new ScrollView(this);
+        root.setFillViewport(true);
+        root.setBackgroundColor(Color.rgb(243, 244, 246));
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(18), dp(22), dp(18), dp(30));
+        root.addView(content, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView title = new TextView(this);
+        title.setText("AppDoctor");
+        title.setTextSize(30);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setTextColor(Color.rgb(17, 24, 39));
+        content.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Diagnostic Android local • v" + VERSION);
+        subtitle.setTextSize(15);
+        subtitle.setTextColor(Color.rgb(75, 85, 99));
+        subtitle.setPadding(0, dp(3), 0, dp(16));
+        content.addView(subtitle);
+
+        TextView privacy = cardText("Analyse locale uniquement. AppDoctor ne possède aucune permission Internet. Les APK installées manuellement sont placées en tête du rapport, avec des scores séparés Construction / Batterie / Sécurité.");
+        content.addView(privacy);
+
+        analyzeButton = makeButton("ANALYSER", true);
+        analyzeButton.setOnClickListener(v -> startAnalysis());
+        content.addView(analyzeButton, buttonParams());
+
+        usageButton = makeButton("AUTORISER LES STATISTIQUES", false);
+        usageButton.setOnClickListener(v -> {
+            try {
+                Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            } catch (Exception e) {
+                startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
+            }
+        });
+        content.addView(usageButton, buttonParams());
+
+        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setIndeterminate(false);
+        progressBar.setMax(100);
+        progressBar.setProgress(0);
+        progressBar.setVisibility(View.GONE);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6));
+        progressParams.setMargins(0, dp(10), 0, dp(4));
+        content.addView(progressBar, progressParams);
+
+        statusView = new TextView(this);
+        statusView.setText("Prêt à analyser.");
+        statusView.setTextSize(14);
+        statusView.setTextColor(Color.rgb(55, 65, 81));
+        statusView.setPadding(dp(2), dp(8), dp(2), dp(8));
+        content.addView(statusView);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        copyButton = makeButton("COPIER", false);
+        saveButton = makeButton("ENREGISTRER", false);
+        copyButton.setEnabled(false);
+        saveButton.setEnabled(false);
+        copyButton.setOnClickListener(v -> copyReport());
+        saveButton.setOnClickListener(v -> saveReport());
+        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        half.setMargins(0, dp(7), dp(5), dp(4));
+        actions.addView(copyButton, half);
+        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        half2.setMargins(dp(5), dp(7), 0, dp(4));
+        actions.addView(saveButton, half2);
+        content.addView(actions);
+
+        shareButton = makeButton("PARTAGER LE RAPPORT", false);
+        shareButton.setEnabled(false);
+        shareButton.setOnClickListener(v -> shareReport());
+        content.addView(shareButton, buttonParams());
+
+        reportView = new TextView(this);
