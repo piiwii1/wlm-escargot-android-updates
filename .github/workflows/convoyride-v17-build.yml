@@ -25,17 +25,18 @@ jobs:
           cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
           (cd cr17 && patch -p4 < /tmp/convoyride-v16.patch)
           cat convoyride-v17/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v17.patch
-          echo '5160ab31577d511c58d20a8b97c60f3df6b31843dbd7dc02a8191b7692a86474  /tmp/convoyride-v17.patch' | sha256sum -c -
-          (cd cr17 && patch -p4 < /tmp/convoyride-v17.patch)
+          echo 'b955c2d54ef718d2bda07239a9247ec66d223b3141b65af797e612ef0797e9e6  /tmp/convoyride-v17.patch' | sha256sum -c -
+          (cd cr17 && patch -p1 < /tmp/convoyride-v17.patch)
           grep -q "versionName '1.7.0'" cr17/app/build.gradle
           grep -q "versionCode 8" cr17/app/build.gradle
           grep -q "com.google.zxing:core:3.5.3" cr17/app/build.gradle
           grep -q 'android:scheme="convoyride"' cr17/app/src/main/AndroidManifest.xml
+          grep -q 'android:host="join"' cr17/app/src/main/AndroidManifest.xml
           grep -q 'android:launchMode="singleTop"' cr17/app/src/main/AndroidManifest.xml
-          grep -q 'showJoinQr' cr17/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
-          grep -q 'handleJoinIntent' cr17/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q 'showInviteQr' cr17/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q 'handleIncomingIntent' cr17/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
