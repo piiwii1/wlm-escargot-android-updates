@@ -34,14 +34,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p appdoctor-build-v210/out appdoctor-build-v210/work
-          cat appdoctor-build-v210/source.b64.part.* | base64 -d > appdoctor-build-v210/source.zip
+          cat appdoctor-build-v210/source.b64.part.00 appdoctor-build-v210/source.b64.part.01 appdoctor-build-v210/source.b64.part.02 appdoctor-build-v210/source.b64.part.03 appdoctor-build-v210/source.b64.tail.0 appdoctor-build-v210/source.b64.tail.1 appdoctor-build-v210/source.b64.tail.2 | base64 -d > appdoctor-build-v210/source.zip
           unzip -t appdoctor-build-v210/source.zip
           unzip -q appdoctor-build-v210/source.zip -d appdoctor-build-v210/work
           ROOT=appdoctor-build-v210/work/AppDoctor-2.1.0-source
           test -f "$ROOT/app/build.gradle"
           echo "$ROOT" > appdoctor-build-v210/root.txt
-          grep -nE 'versionCode|versionName' "$ROOT/app/build.gradle" || true
-          grep -nE 'PairCodeReceiver|AppDoctorApplication|INTERNET' "$ROOT/app/src/main/AndroidManifest.xml" || true
 
       - name: Build release APK
         id: compile
