@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
     private String currentPage = "welcome";
     private boolean busyOperation=false;
     private ConvoyPollingController pollingController;
+    private ConvoySessionManager sessionManager;
     private int bg, card, fg, muted, accent, danger, border, control, navSurface;
     private boolean darkTheme;
     private static final int REQ_LOCATION = 1001, REQ_NOTIF = 1002, REQ_AUDIO = 1003, REQ_VEHICLE_IMAGE = 2001;
@@ -87,6 +88,7 @@ public class MainActivity extends Activity {
         else if(savedServer.isEmpty()) prefs.put("serverUrl",DEFAULT_SERVER);
         if(oldLocalServer && prefs.hasActiveConvoy()) { prefs.clearSession(); snapshot=null; prefs.put("serverUrl",DEFAULT_SERVER); }
         applyPalette();
+        sessionManager = new ConvoySessionManager(prefs,DEFAULT_SERVER);
         pollingController = new ConvoyPollingController(this,prefs,DEFAULT_SERVER,new ConvoyPollingController.Listener(){
             @Override public void onSnapshot(JSONObject s,boolean renamed,long synchronizedAt){
                 snapshot=s;
@@ -289,32 +291,11 @@ public class MainActivity extends Activity {
     }
 
     private void createConvoy(String name) {
-        if(!prefs.hasActiveConvoy()) prefs.put("serverUrl",DEFAULT_SERVER);
-        runBusy("Création…",()->{
-            ConvoyApi.get(prefs.get("serverUrl",DEFAULT_SERVER),"/health");
-            JSONObject participant=new JSONObject().put("name",prefs.get("profileName","Conducteur")).put("vehicle",prefs.get("profileVehicle","Véhicule")).put("vehicleColor",prefs.get("profileColor","")).put("vehicleIcon",prefs.get("profileVehicleIcon","🚗")).put("vehicleMarkerColor",prefs.get("profileVehicleMarkerColor","#FFB514")).put("vehicleImage",prefs.get("profileVehicleImage",""));
-            JSONObject body=new JSONObject().put("convoyName",name).put("participant",participant);
-            JSONObject r=ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys",body,null);
-            saveSession(r); return r;
-        }, r->{ ensurePermissionsAndService(); render(); startPolling(); ui.postDelayed(this::showConvoyQr,250); });
+        runBusy("Création…",()->sessionManager.create(name), r->{ ensurePermissionsAndService(); render(); startPolling(); ui.postDelayed(this::showConvoyQr,250); });
     }
     private void joinConvoy(String raw) {
-        final String code=raw.replaceAll("[^A-Za-z0-9]","").toUpperCase(Locale.ROOT);
-        if(code.length()!=6){toast("Code invalide");return;}
-        if(!prefs.hasActiveConvoy()) prefs.put("serverUrl",DEFAULT_SERVER);
-        runBusy("Connexion…",()->{
-            ConvoyApi.get(prefs.get("serverUrl",DEFAULT_SERVER),"/health");
-            JSONObject body=new JSONObject().put("name",prefs.get("profileName","Conducteur")).put("vehicle",prefs.get("profileVehicle","Véhicule")).put("vehicleColor",prefs.get("profileColor","")).put("vehicleIcon",prefs.get("profileVehicleIcon","🚗")).put("vehicleMarkerColor",prefs.get("profileVehicleMarkerColor","#FFB514")).put("vehicleImage",prefs.get("profileVehicleImage",""));
-            JSONObject r=ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+code+"/join",body,null);
-            saveSession(r); prefs.remove("pendingJoin"); return r;
-        }, r->{ ensurePermissionsAndService(); render(); startPolling(); });
-    }
-    private void saveSession(JSONObject r) {
-        prefs.put("code",r.optString("code")); prefs.put("convoyName",r.optString("convoyName")); prefs.put("participantId",r.optString("participantId")); prefs.put("token",r.optString("token"));
-        prefs.remove("talkieLastError"); prefs.putLong("lastVoiceId",0); prefs.putLong("liveSignalLastId",0);
-        if(r.has("participantName")&&!r.optString("participantName","").isEmpty())prefs.put("profileName",r.optString("participantName"));
-        if(r.has("adminKey")) prefs.put("adminKey",r.optString("adminKey"));
-        if(r.has("lastEventId")) prefs.putLong("lastEventId",r.optLong("lastEventId"));
+        try{sessionManager.normalizeJoinCode(raw);}catch(Exception e){toast("Code invalide");return;}
+        runBusy("Connexion…",()->sessionManager.join(raw), r->{ ensurePermissionsAndService(); render(); startPolling(); });
     }
 
     private void renderConvoyHome() {
@@ -579,7 +560,7 @@ public class MainActivity extends Activity {
     }
     private void renameConvoy(String raw){
         String name=raw==null?"":raw.trim(); if(name.length()<2){toast("Nom trop court");return;}
-        try{JSONObject b=authBody().put("name",name);runBusy("Mise à jour…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/name",b,prefs.get("adminKey","")),r->{prefs.put("convoyName",r.optString("convoyName",name));render();});}catch(Exception e){toast(e.getMessage());}
+        runBusy("Mise à jour…",()->sessionManager.rename(name),r->render());
     }
     private void manageParticipantsDialog(){
         JSONArray ps=snapshot==null?null:snapshot.optJSONArray("participants"); if(ps==null){toast("Participants indisponibles");return;}
@@ -605,7 +586,7 @@ public class MainActivity extends Activity {
         }).show();
     }
     private void setParticipantRole(String targetId,String role){
-        try{JSONObject b=authBody().put("targetParticipantId",targetId).put("role",role);runBusy("Mise à jour du rôle…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/role",b,prefs.get("adminKey","")),r->pollOnce());}catch(Exception e){toast(e.getMessage());}
+        runBusy("Mise à jour du rôle…",()->sessionManager.setParticipantRole(targetId,role),r->pollOnce());
     }
     private void confirmRemoveParticipant(JSONObject target){
         String name=target.optString("name","ce participant");
@@ -613,7 +594,7 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Annuler",null).setPositiveButton("Retirer",(d,w)->removeParticipant(target.optString("id"))).show();
     }
     private void removeParticipant(String targetId){
-        try{JSONObject b=authBody().put("targetParticipantId",targetId);runBusy("Suppression…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/remove",b,prefs.get("adminKey","")),r->pollOnce());}catch(Exception e){toast(e.getMessage());}
+        runBusy("Suppression…",()->sessionManager.removeParticipant(targetId),r->pollOnce());
     }
     private void rallyDialog(){
         LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(20),0,dp(20),0);
@@ -622,7 +603,7 @@ public class MainActivity extends Activity {
         JSONObject me=findMe();JSONObject loc=me==null?null:me.optJSONObject("location");if(loc!=null){lat.setText(String.valueOf(loc.optDouble("lat")));lon.setText(String.valueOf(loc.optDouble("lon")));}
         new AlertDialog.Builder(this).setTitle("Point de regroupement").setView(l).setPositiveButton("Partager",(d,w)->setRally(n.getText().toString(),desired.getText().toString(),lat.getText().toString(),lon.getText().toString())).setNegativeButton("Annuler",null).show();
     }
-    private void setRally(String name,String desiredTime,String latS,String lonS){try{double lat=Double.parseDouble(latS.replace(',','.')),lon=Double.parseDouble(lonS.replace(',','.')); JSONObject b=authBody().put("name",name).put("desiredTime",desiredTime.trim()).put("lat",lat).put("lon",lon);runBusy("Partage…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/rally",b,prefs.get("adminKey","")),r->pollOnce());}catch(Exception e){toast("Coordonnées invalides");}}
+    private void setRally(String name,String desiredTime,String latS,String lonS){try{double lat=Double.parseDouble(latS.replace(',','.')),lon=Double.parseDouble(lonS.replace(',','.'));runBusy("Partage…",()->sessionManager.setRally(name,desiredTime,lat,lon),r->pollOnce());}catch(Exception e){toast("Coordonnées invalides");}}
     private void openGps(JSONObject r){try{double lat=r.optDouble("lat"),lon=r.optDouble("lon");String q=Uri.encode(r.optString("name","Point de regroupement"));Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse("geo:"+lat+","+lon+"?q="+lat+","+lon+"("+q+")"));startActivity(Intent.createChooser(i,"Ouvrir dans le GPS"));}catch(Exception e){toast("Aucune application GPS disponible");}}
     private void showConvoyQr(){
         String code=prefs.get("code","").trim().toUpperCase(Locale.ROOT);
@@ -661,11 +642,11 @@ public class MainActivity extends Activity {
         styledDialog("ARRÊT GÉNÉRAL ?",body,"ANNULER",null,"ENVOYER",d->{sendGeneralStop();return true;},true);
     }
     private void sendGeneralStop(){
-        try{JSONObject b=authBody();runBusy("Envoi de l’arrêt général…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/emergency-stop",b,prefs.get("adminKey","")),r->pollOnce());}catch(Exception e){toast(e.getMessage());}
+        runBusy("Envoi de l’arrêt général…",()->sessionManager.sendGeneralStop(),r->pollOnce());
     }
 
     private void leaveConvoy(){leaveConvoyStyled();}
-    private void confirmClose(){LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.addView(text("Tous les participants seront déconnectés et le partage GPS sera arrêté.",14,false,fg));styledDialog("Fermer le convoi ?",body,"ANNULER",null,"FERMER",d->{try{JSONObject b=authBody();runBusy("Fermeture…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/close",b,prefs.get("adminKey","")),r->endSession());}catch(Exception e){toast(e.getMessage());}return true;},true);}
+    private void confirmClose(){LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.addView(text("Tous les participants seront déconnectés et le partage GPS sera arrêté.",14,false,fg));styledDialog("Fermer le convoi ?",body,"ANNULER",null,"FERMER",d->{runBusy("Fermeture…",()->sessionManager.close(),r->endSession());return true;},true);}
     private void endSession(){stopPolling();stopService(new Intent(this,LocationShareService.class));prefs.clearSession();if(liveTalkie!=null)liveTalkie.ensureStarted();snapshot=null;render();}
 
     private void sessionStatusDialog(){
@@ -693,7 +674,7 @@ public class MainActivity extends Activity {
         styledDialog("Quitter le convoi ?",body,"ANNULER",null,"QUITTER",dlg->{dlg.dismiss();leaveConvoyNow();return false;},true);
     }
     private void leaveConvoyNow(){
-        try{JSONObject b=authBody();io.execute(()->{try{ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/leave",b,null);}catch(Exception ignored){}ui.post(this::endSession);});}catch(Exception e){endSession();}
+        io.execute(()->{sessionManager.leaveBestEffort();ui.post(this::endSession);});
     }
 
     private boolean hasLocationPermission(){
@@ -939,7 +920,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.29","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.30","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
