@@ -1,0 +1,136 @@
+me, IBinder service) {
++            shellService = IAppDoctorShell.Stub.asInterface(service);
++            updateAccessStatus();
++            if (pendingDeepAnalysis) startAnalysis(true);
++        }
++        @Override public void onServiceDisconnected(ComponentName name) {
++            shellService = null;
++            updateAccessStatus();
++        }
++    };
++
++    private void updateAccessStatus() {
++        if (usageButton == null) return;
++        boolean usage = hasUsageAccess();
++        boolean binder = isShizukuRunning();
++        boolean shizuku = binder && hasShizukuPermission();
++        usageButton.setText(usage ? "✓ STATISTIQUES AUTORISÉES" : "1. AUTORISER LES STATISTIQUES");
++        usageButton.setEnabled(!usage);
++        if (shizukuButton != null) {
++            if (!binder) shizukuButton.setText("2. DÉMARRER / INSTALLER SHIZUKU");
++            else if (!shizuku) shizukuButton.setText("2. AUTORISER SHIZUKU");
++            else shizukuButton.setText("✓ SHIZUKU AUTORISÉ");
++            shizukuButton.setEnabled(!shizuku);
++        }
++        if (accessStatusView != null) {
++            accessStatusView.setText("Accès diagnostic\n"
++                    + (usage ? "✅" : "❌") + " Statistiques d'utilisation\n"
++                    + (binder ? "✅" : "❌") + " Shizuku démarré\n"
++                    + (shizuku ? "✅" : "❌") + " Autorisation ADB/shell\n\n"
++                    + (usage && shizuku ? "Diagnostic approfondi prêt." : "Le mode approfondi demandera les accès manquants."));
++        }
++    }
++
++    private boolean isShizukuRunning() {
++        try { return Shizuku.pingBinder() && !Shizuku.isPreV11(); }
++        catch (Throwable t) { return false; }
++    }
++
++    private boolean hasShizukuPermission() {
++        try { return isShizukuRunning() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED; }
++        catch (Throwable t) { return false; }
++    }
++
++    private void requestOrOpenShizuku() {
++        if (isShizukuRunning()) {
++            try {
++                if (hasShizukuPermission()) { updateAccessStatus(); return; }
++                if (Shizuku.shouldShowRequestPermissionRationale()) {
++                    Toast.makeText(this, "Autorisation Shizuku refusée. Réactive-la dans Shizuku.", Toast.LENGTH_LONG).show();
++                    openShizukuManager();
++                } else {
++                    Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
++                }
++            } catch (Throwable t) {
++                Toast.makeText(this, "Shizuku : " + safe(t.getMessage()), Toast.LENGTH_LONG).show();
++            }
++        } else openShizukuManager();
++    }
++
++    private void openShizukuManager() {
++        try {
++            Intent launch = getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
++            if (launch == null) launch = getPackageManager().getLaunchIntentForPackage("rikka.shizuku");
++            if (launch != null) { startActivity(launch); return; }
++        } catch (Throwable ignored) {}
++        try {
++            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")));
++        } catch (Throwable t) {
++            Toast.makeText(this, "Installe et démarre Shizuku, puis reviens ici.", Toast.LENGTH_LONG).show();
++        }
++    }
++
++    private void prepareDeepAnalysis() {
++        pendingDeepAnalysis = true;
++        if (!hasUsageAccess()) {
++            Toast.makeText(this, "Étape 1 : autorise l'accès aux statistiques puis reviens dans AppDoctor.", Toast.LENGTH_LONG).show();
++            try { startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); } catch (Throwable ignored) {}
++            return;
++        }
++        if (!isShizukuRunning() || !hasShizukuPermission()) {
++            requestOrOpenShizuku();
++            return;
++        }
++        bindShellAndRunDeep();
++    }
++
++    private void bindShellAndRunDeep() {
++        try {
++            if (shellService != null) { startAnalysis(true); return; }
++            statusView.setText("Connexion au service diagnostic ADB/shell…");
++            userServiceArgs = new Shizuku.UserServiceArgs(new ComponentName(getPackageName(), AppDoctorShellService.class.getName()))
++                    .processNameSuffix("appdoctor_shell").daemon(false).debuggable(false).version(2).tag("deep-v2");
++            Shizuku.bindUserService(userServiceArgs, userServiceConnection);
++        } catch (Throwable t) {
++            pendingDeepAnalysis = false;
++            Toast.makeText(this, "Impossible de lancer le diagnostic Shizuku : " + safe(t.getMessage()), Toast.LENGTH_LONG).show();
++            updateAccessStatus();
++        }
+     }
+ 
+     private boolean hasUsageAccess() {
+@@ -241,7 +383,7 @@
+         }
+     }
+ 
+-    private void startAnalysis() {
++    private void startAnalysis(boolean deep) {
+         analyzeButton.setEnabled(false);
+         copyButton.setEnabled(false);
+         saveButton.setEnabled(false);
+@@ -254,7 +396,7 @@
+         executor.execute(() -> {
+             String result;
+             try {
+-                result = runAnalysis();
++                result = runAnalysis(deep);
+             } catch (Throwable t) {
+                 result = "ERREUR APPDOCTOR " + VERSION + "\n\n" + t.getClass().getSimpleName() + ": " + safe(t.getMessage());
+             }
+@@ -269,12 +411,13 @@
+                 saveButton.setEnabled(true);
+                 shareButton.setEnabled(true);
+                 statusView.setText("Analyse terminée. Rapport prêt à copier, enregistrer ou partager.");
+-                updateUsageButton();
++                pendingDeepAnalysis = false;
++                updateAccessStatus();
+             });
+         });
+     }
+ 
+-    private String runAnalysis() {
++    private String runAnalysis(boolean deep) {
+         PackageManager pm = getPackageManager();
+         boolean usageAllowed = hasUsageAccess();
+         long now = System.currentTimeMillis();
+@@ -31
