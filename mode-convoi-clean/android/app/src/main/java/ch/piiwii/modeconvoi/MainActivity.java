@@ -624,18 +624,16 @@ public class MainActivity extends Activity {
 
     private void copyConvoyCode(){String code=prefs.get("code","");if(code.isEmpty()){toast("Aucun convoi actif");return;}ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Code Mode Convoi",code));toast("Code "+code+" copié");}
 
-    private void sendStatus(String status){try{JSONObject b=authBody().put("status",status);runBusy("Envoi…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/status",b,null),r->pollOnce());}catch(Exception e){toast(e.getMessage());}}
+    private void sendStatus(String status){runBusy("Envoi…",()->sessionManager.sendStatus(status),r->pollOnce());}
     private void customStatusDialog(){
         EditText message=input("Message court",""); message.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(80)});
         new AlertDialog.Builder(this).setTitle("Autre message").setMessage("80 caractères maximum").setView(message)
                 .setNegativeButton("Annuler",null).setPositiveButton("Envoyer",(d,w)->sendCustomStatus(message.getText().toString())).show();
     }
     private void sendCustomStatus(String raw){
-        String message=raw==null?"":raw.trim(); if(message.isEmpty()){toast("Message vide");return;} if(message.length()>80)message=message.substring(0,80);
-        final String value=message;
-        try{JSONObject b=authBody().put("status","custom").put("custom",value);runBusy("Envoi…",()->ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/status",b,null),r->pollOnce());}catch(Exception e){toast(e.getMessage());}
+        String message=raw==null?"":raw.trim(); if(message.isEmpty()){toast("Message vide");return;}
+        runBusy("Envoi…",()->sessionManager.sendCustomStatus(message),r->pollOnce());
     }
-    private JSONObject authBody() throws JSONException{return new JSONObject().put("participantId",prefs.get("participantId","")).put("token",prefs.get("token",""));}
 
     private void confirmGeneralStop(){
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.addView(text("Tous les participants recevront immédiatement une alerte d’arrêt général.",14,false,fg));
@@ -870,7 +868,7 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode,resultCode,data);if(requestCode!=REQ_VEHICLE_IMAGE||resultCode!=RESULT_OK||data==null||data.getData()==null)return;
         try(InputStream in=getContentResolver().openInputStream(data.getData())){Bitmap src=BitmapFactory.decodeStream(in);if(src==null){toast("Image illisible");return;}int w=src.getWidth(),h=src.getHeight(),side=Math.min(w,h);Bitmap crop=Bitmap.createBitmap(src,(w-side)/2,(h-side)/2,side,side);Bitmap small=Bitmap.createScaledBitmap(crop,96,96,true);ByteArrayOutputStream out=new ByteArrayOutputStream();small.compress(Bitmap.CompressFormat.JPEG,72,out);String b64=Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP);if(b64.length()>24000){toast("Image trop lourde");return;}prefs.put("profileVehicleImage",b64);refreshVehiclePreview();toast("Image du véhicule enregistrée");}catch(Exception e){toast("Impossible de lire cette image");}
     }
-    private void syncProfileToServer(){if(!prefs.hasActiveConvoy())return;io.execute(()->{try{JSONObject b=authBody().put("name",prefs.get("profileName","Conducteur")).put("vehicle",prefs.get("profileVehicle","Véhicule")).put("vehicleColor",prefs.get("profileColor","")).put("vehicleIcon",prefs.get("profileVehicleIcon","🚗")).put("vehicleMarkerColor",prefs.get("profileVehicleMarkerColor","#FFB514")).put("vehicleImage",prefs.get("profileVehicleImage",""));ConvoyApi.post(prefs.get("serverUrl",""),"/api/convoys/"+prefs.get("code","")+"/profile",b,null);ui.post(()->{toast("Profil mis à jour");pollOnce();});}catch(Exception e){ui.post(()->toast("Profil local enregistré · serveur à mettre à jour"));}});}
+    private void syncProfileToServer(){if(!prefs.hasActiveConvoy())return;io.execute(()->{try{sessionManager.syncProfile();ui.post(()->{toast("Profil mis à jour");pollOnce();});}catch(Exception e){ui.post(()->toast("Profil local enregistré · serveur à mettre à jour"));}});}
     private void showFullScreenMap(){
         if(fullScreenMapDialog!=null&&fullScreenMapDialog.isShowing())return;final Dialog d=new Dialog(this,android.R.style.Theme_Black_NoTitleBar_Fullscreen);fullScreenMapDialog=d;FrameLayout frame=new FrameLayout(this);frame.setBackgroundColor(Color.rgb(10,12,14));
         WebView w=new WebView(this);fullScreenMapView=w;fullScreenMapReady=false;w.getSettings().setJavaScriptEnabled(true);w.getSettings().setDomStorageEnabled(true);w.getSettings().setLoadsImagesAutomatically(true);w.getSettings().setBlockNetworkImage(false);w.setBackgroundColor(bg);w.setWebViewClient(new android.webkit.WebViewClient(){@Override public void onPageFinished(WebView v,String url){fullScreenMapReady=true;pushFullScreenMap();scheduleFullScreenMapRefresh(d);}});frame.addView(w,new FrameLayout.LayoutParams(-1,-1));
@@ -920,7 +918,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.30","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.31","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){
