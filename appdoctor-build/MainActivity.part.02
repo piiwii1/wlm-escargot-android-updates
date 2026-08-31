@@ -1,0 +1,163 @@
+}
+        if (u30 != null) {
+            r.usage30 = u30.getTotalTimeInForeground();
+            r.lastUsed = Math.max(r.lastUsed, u30.getLastTimeUsed());
+        }
+
+        score(r);
+        return r;
+    }
+
+    private void score(AppResult r) {
+        if (r.debuggable) r.add(35, "Build DEBUGGABLE installé");
+        if (r.testOnly) r.add(25, "Application marquée TEST_ONLY");
+
+        if (r.targetSdk < 31) r.add(25, "targetSdk très ancien (" + r.targetSdk + ")");
+        else if (r.targetSdk < 33) r.add(15, "targetSdk ancien (" + r.targetSdk + ")");
+        else if (r.targetSdk < 35) r.add(5, "targetSdk pas au niveau actuel de ce build (" + r.targetSdk + ")");
+
+        if (has(r, "android.permission.WAKE_LOCK")) r.add(4, "WAKE_LOCK déclaré");
+        if (has(r, "android.permission.RECEIVE_BOOT_COMPLETED")) r.add(4, "Démarrage au boot déclaré");
+        if (has(r, "android.permission.ACCESS_BACKGROUND_LOCATION")) r.add(7, "Localisation en arrière-plan déclarée");
+        if (has(r, "android.permission.SCHEDULE_EXACT_ALARM") || has(r, "android.permission.USE_EXACT_ALARM")) r.add(5, "Alarmes exactes déclarées");
+        if (has(r, "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")) r.add(8, "Peut demander à ignorer l'optimisation batterie");
+        if (has(r, "android.permission.FOREGROUND_SERVICE")) r.add(2, "Foreground service possible");
+        if (r.batteryAllowlisted) r.add(10, "Application actuellement exclue de l'optimisation batterie");
+
+        if (r.exportedUnprotected > 0) r.add(Math.min(12, 3 + r.exportedUnprotected * 2), r.exportedUnprotected + " composant(s) exporté(s) sans permission");
+        if (r.cleartext) r.add(4, "Trafic HTTP en clair autorisé");
+        if (r.services > 10) r.add(4, "Nombre élevé de services déclarés (" + r.services + ")");
+        if (r.receivers > 10) r.add(3, "Nombre élevé de receivers déclarés (" + r.receivers + ")");
+        if (r.apkSize > 100L * 1024L * 1024L) r.add(5, "APK très volumineuse (>100 Mo)");
+        else if (r.apkSize > 50L * 1024L * 1024L) r.add(2, "APK volumineuse (>50 Mo)");
+        if (r.dexCount > 5) r.add(2, "Beaucoup de fichiers DEX (" + r.dexCount + ")");
+    }
+
+    private boolean has(AppResult r, String p) {
+        return r.permissions.contains(p);
+    }
+
+    private Map<String, UsageStats> usageMap(long begin, long end) {
+        try {
+            UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+            if (usm == null) return Collections.emptyMap();
+            Map<String, UsageStats> m = usm.queryAndAggregateUsageStats(begin, end);
+            return m == null ? Collections.emptyMap() : m;
+        } catch (Throwable t) {
+            return Collections.emptyMap();
+        }
+    }
+
+    private int countExportedUnprotected(PackageInfo pi) {
+        int count = 0;
+        if (pi.activities != null) for (ActivityInfo i : pi.activities) if (isExportedUnprotected(i)) count++;
+        if (pi.services != null) for (ServiceInfo i : pi.services) if (isExportedUnprotected(i)) count++;
+        if (pi.receivers != null) for (ActivityInfo i : pi.receivers) if (isExportedUnprotected(i)) count++;
+        if (pi.providers != null) for (ProviderInfo i : pi.providers) {
+            if (i != null && i.exported && empty(i.readPermission) && empty(i.writePermission)) count++;
+        }
+        return count;
+    }
+
+    private boolean isExportedUnprotected(ActivityInfo info) {
+        return info != null && info.exported && empty(info.permission);
+    }
+
+    private boolean isExportedUnprotected(ServiceInfo info) {
+        return info != null && info.exported && empty(info.permission);
+    }
+
+    private boolean empty(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    private String installer(PackageManager pm, String pkg) {
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                InstallSourceInfo source = pm.getInstallSourceInfo(pkg);
+                String installing = source.getInstallingPackageName();
+                String initiating = source.getInitiatingPackageName();
+                if (!empty(installing)) return installing;
+                if (!empty(initiating)) return initiating;
+                return "inconnu";
+            }
+            String v = pm.getInstallerPackageName(pkg);
+            return empty(v) ? "inconnu" : v;
+        } catch (Throwable t) {
+            return "inconnu";
+        }
+    }
+
+    private boolean looksManual(String installer) {
+        if (installer == null) return true;
+        String s = installer.toLowerCase(Locale.ROOT);
+        if (s.equals("inconnu")) return true;
+        if (s.contains("packageinstaller") || s.contains("permissioncontroller") || s.contains("documentsui")) return true;
+        return !(s.contains("vending") || s.contains("galaxy.store") || s.contains("samsung.android.app") ||
+                s.contains("amazon.venezia") || s.contains("appmarket") || s.contains("fdroid"));
+    }
+
+    private long apkSize(ApplicationInfo ai) {
+        long total = 0;
+        try {
+            if (ai.sourceDir != null) total += new File(ai.sourceDir).length();
+            if (ai.splitSourceDirs != null) for (String p : ai.splitSourceDirs) if (p != null) total += new File(p).length();
+        } catch (Throwable ignored) {}
+        return total;
+    }
+
+    private ApkScan scanApks(ApplicationInfo ai) {
+        ApkScan out = new ApkScan();
+        List<String> paths = new ArrayList<>();
+        if (ai.sourceDir != null) paths.add(ai.sourceDir);
+        if (ai.splitSourceDirs != null) paths.addAll(Arrays.asList(ai.splitSourceDirs));
+        for (String path : paths) {
+            if (path == null) continue;
+            try (ZipFile zip = new ZipFile(path)) {
+                java.util.Enumeration<? extends ZipEntry> en = zip.entries();
+                while (en.hasMoreElements()) {
+                    String n = en.nextElement().getName();
+                    if (n.matches("classes(\\d*)\\.dex")) out.dexCount++;
+                    if (n.startsWith("lib/") && n.endsWith(".so")) {
+                        String[] parts = n.split("/");
+                        if (parts.length >= 3) out.abis.add(parts[1]);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        return out;
+    }
+
+    private String safeLabel(PackageManager pm, ApplicationInfo ai) {
+        try {
+            CharSequence label = pm.getApplicationLabel(ai);
+            return label == null ? ai.packageName : label.toString();
+        } catch (Throwable t) {
+            return ai.packageName;
+        }
+    }
+
+    private void copyReport() {
+        if (lastReport.isEmpty()) return;
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(ClipData.newPlainText("Rapport AppDoctor", lastReport));
+        Toast.makeText(this, "Rapport copié", Toast.LENGTH_SHORT).show();
+    }
+
+    private void saveReport() {
+        if (lastReport.isEmpty()) return;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_TITLE, "AppDoctor-rapport-" + new SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.ROOT).format(new Date()) + ".txt");
+        startActivityForResult(intent, SAVE_REPORT_REQUEST);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SAVE_REPORT_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            try (OutputStream os = getContentResolver().openOutputStream(data.getData())) {
+                if (os == null) throw new IllegalStateException("Impossible d'ouvrir le fichier");
+                os.write(lastReport.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+               
