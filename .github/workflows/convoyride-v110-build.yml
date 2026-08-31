@@ -1,0 +1,86 @@
+name: Build ConvoyRide V1.10.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/convoyride-v110-build.yml'
+      - 'convoyride-v110b64/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct verified V1.10 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat convoyride-v15-source/source-part-* | base64 -d > /tmp/ConvoyRide-V1.5.0-source.zip
+          echo '9618adb3c1c52a94af1f4a655f816ea37f4d9ff44d1ab6b465e627abe21a1afc  /tmp/ConvoyRide-V1.5.0-source.zip' | sha256sum -c -
+          rm -rf cr110
+          mkdir -p cr110
+          unzip -q /tmp/ConvoyRide-V1.5.0-source.zip -d cr110
+          cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
+          (cd cr110 && patch -p4 < /tmp/convoyride-v16.patch)
+          cat convoyride-v17b64/part-* | base64 -d > /tmp/convoyride-v17.patch.gz
+          echo 'af47abf9e1b463ae6905f24b8bb5499e9629c06c5889d9e21c3df704c1ac1e96  /tmp/convoyride-v17.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/convoyride-v17.patch.gz > /tmp/convoyride-v17.patch
+          echo 'b955c2d54ef718d2bda07239a9247ec66d223b3141b65af797e612ef0797e9e6  /tmp/convoyride-v17.patch' | sha256sum -c -
+          (cd cr110 && patch -p1 < /tmp/convoyride-v17.patch)
+          cat convoyride-v18b64/part-* | base64 -d > /tmp/convoyride-v18.patch.gz
+          echo 'd4d855095e87d8a2018fa34b903f25256b88cd50fb4b41553f736bcbc3dbf9c8  /tmp/convoyride-v18.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/convoyride-v18.patch.gz > /tmp/convoyride-v18.patch
+          echo '92bd1cca522482b0fb63472445442382c4b208bbe9870a6ddebad76be0ea1b45  /tmp/convoyride-v18.patch' | sha256sum -c -
+          (cd cr110 && patch -p1 < /tmp/convoyride-v18.patch)
+          cat convoyride-v19b64/part-* | base64 -d > /tmp/convoyride-v19.patch.gz
+          echo '14ed91a70cf85875fb303473046b4789ab3d08a6af971255752041e04c9f37c1  /tmp/convoyride-v19.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/convoyride-v19.patch.gz > /tmp/convoyride-v19.patch
+          echo 'ef0855100661d7ce7791e6254f9c08b8ee114f6e189dc007aa61438bb3bb2596  /tmp/convoyride-v19.patch' | sha256sum -c -
+          (cd cr110 && patch -p1 < /tmp/convoyride-v19.patch)
+          cat convoyride-v110b64/part-* | base64 -d > /tmp/convoyride-v110.patch.gz
+          echo '06b711c0cb9a2c2e2b7c50c05d29ba4cd8b69543fda346e124251da2d0b78949  /tmp/convoyride-v110.patch.gz' | sha256sum -c -
+          gunzip -c /tmp/convoyride-v110.patch.gz > /tmp/convoyride-v110.patch
+          echo '8be2d8febb71b5aabadc54385bcab2b01907ed1cef0755f28a378c1aea60afe3  /tmp/convoyride-v110.patch' | sha256sum -c -
+          (cd cr110 && patch -p1 < /tmp/convoyride-v110.patch)
+          grep -q "versionName '1.10.0'" cr110/app/build.gradle
+          grep -q "versionCode 11" cr110/app/build.gradle
+          grep -q 'projectNear' cr110/app/src/main/java/ch/piiwii/convoyride/RouteModel.java
+          grep -q 'splitCandidateSamples' cr110/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q 'routeCacheJson' cr110/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build release
+        run: gradle -p cr110 --no-daemon assembleRelease
+
+      - name: Align and inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
+            cr110/app/build/outputs/apk/release/app-release-unsigned.apk \
+            ConvoyRide-V1.10.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ConvoyRide-V1.10.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ConvoyRide-V1.10.0-aligned-unsigned.apk | head -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ConvoyRide-V1.10.0-unsigned
+          if-no-files-found: error
+          retention-days: 7
+          path: ConvoyRide-V1.10.0-aligned-unsigned.apk
