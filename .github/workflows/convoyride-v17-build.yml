@@ -24,7 +24,7 @@ jobs:
           unzip -q /tmp/ConvoyRide-V1.5.0-source.zip -d cr17
           cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
           (cd cr17 && patch -p4 < /tmp/convoyride-v16.patch)
-          base64 -d convoyride-v17/patch.b64 | gunzip > /tmp/convoyride-v17.patch
+          cat convoyride-v17/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v17.patch
           echo '5160ab31577d511c58d20a8b97c60f3df6b31843dbd7dc02a8191b7692a86474  /tmp/convoyride-v17.patch' | sha256sum -c -
           (cd cr17 && patch -p4 < /tmp/convoyride-v17.patch)
           grep -q "versionName '1.7.0'" cr17/app/build.gradle
