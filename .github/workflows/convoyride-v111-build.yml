@@ -1,0 +1,74 @@
+name: Build ConvoyRide V1.11.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/convoyride-v111-build.yml'
+      - 'convoyride-v111b64/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct verified V1.11 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat convoyride-v15-source/source-part-* | base64 -d > /tmp/ConvoyRide-V1.5.0-source.zip
+          echo '9618adb3c1c52a94af1f4a655f816ea37f4d9ff44d1ab6b465e627abe21a1afc  /tmp/ConvoyRide-V1.5.0-source.zip' | sha256sum -c -
+          rm -rf cr111 && mkdir -p cr111
+          unzip -q /tmp/ConvoyRide-V1.5.0-source.zip -d cr111
+          cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/v16.patch
+          (cd cr111 && patch -p4 < /tmp/v16.patch)
+          cat convoyride-v17b64/part-* | base64 -d > /tmp/v17.gz
+          echo 'af47abf9e1b463ae6905f24b8bb5499e9629c06c5889d9e21c3df704c1ac1e96  /tmp/v17.gz' | sha256sum -c -
+          gunzip -c /tmp/v17.gz > /tmp/v17.patch && (cd cr111 && patch -p1 < /tmp/v17.patch)
+          cat convoyride-v18b64/part-* | base64 -d > /tmp/v18.gz
+          echo 'd4d855095e87d8a2018fa34b903f25256b88cd50fb4b41553f736bcbc3dbf9c8  /tmp/v18.gz' | sha256sum -c -
+          gunzip -c /tmp/v18.gz > /tmp/v18.patch && (cd cr111 && patch -p1 < /tmp/v18.patch)
+          cat convoyride-v19b64/part-* | base64 -d > /tmp/v19.gz
+          echo '14ed91a70cf85875fb303473046b4789ab3d08a6af971255752041e04c9f37c1  /tmp/v19.gz' | sha256sum -c -
+          gunzip -c /tmp/v19.gz > /tmp/v19.patch && (cd cr111 && patch -p1 < /tmp/v19.patch)
+          cat convoyride-v110b64/part-* | base64 -d > /tmp/v110.gz
+          echo '06b711c0cb9a2c2e2b7c50c05d29ba4cd8b69543fda346e124251da2d0b78949  /tmp/v110.gz' | sha256sum -c -
+          gunzip -c /tmp/v110.gz > /tmp/v110.patch && (cd cr111 && patch -p1 < /tmp/v110.patch)
+          cat convoyride-v111b64/part-* | base64 -d > /tmp/v111.gz
+          echo 'eb5fe74d6b0aacf74b067a882c46296c23255cbe4c9dd445f7c28a63c2627d7b  /tmp/v111.gz' | sha256sum -c -
+          gunzip -c /tmp/v111.gz > /tmp/v111.patch
+          echo 'c620de2b460331c2ae737a3200086255a048e15c521bd2fc38ed0ecbab243916  /tmp/v111.patch' | sha256sum -c -
+          (cd cr111 && patch -p1 < /tmp/v111.patch)
+          grep -q "versionName '1.11.0'" cr111/app/build.gradle
+          grep -q "versionCode 12" cr111/app/build.gradle
+          grep -q 'computePhysicalOrder' cr111/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q 'Voiture-balai' cr111/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q 'position réelle' cr111/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build release
+        run: gradle -p cr111 --no-daemon assembleRelease
+      - name: Align and inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 cr111/app/build/outputs/apk/release/app-release-unsigned.apk ConvoyRide-V1.11.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ConvoyRide-V1.11.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ConvoyRide-V1.11.0-aligned-unsigned.apk | head -5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ConvoyRide-V1.11.0-unsigned
+          if-no-files-found: error
+          retention-days: 7
+          path: ConvoyRide-V1.11.0-aligned-unsigned.apk
