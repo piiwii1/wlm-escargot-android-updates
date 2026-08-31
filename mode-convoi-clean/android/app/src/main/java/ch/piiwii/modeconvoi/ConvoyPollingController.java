@@ -66,6 +66,7 @@ public final class ConvoyPollingController implements AutoCloseable {
     public void stop() {
         synchronized (stateLock) {
             running = false;
+            inFlight = false;
             refreshRequested = false;
             generation++;
             if (pending != null) pending.cancel(false);
@@ -95,6 +96,7 @@ public final class ConvoyPollingController implements AutoCloseable {
             if (closed) return;
             closed = true;
             running = false;
+            inFlight = false;
             refreshRequested = false;
             generation++;
             if (pending != null) pending.cancel(false);
@@ -107,6 +109,16 @@ public final class ConvoyPollingController implements AutoCloseable {
         if (closed || !running || !prefs.hasActiveConvoy()) return;
         final long scheduledGeneration = generation;
         pending = network.schedule(() -> poll(scheduledGeneration), Math.max(0L, delayMs), TimeUnit.MILLISECONDS);
+    }
+
+    private boolean abandonIfStale(long scheduledGeneration) {
+        synchronized (stateLock) {
+            if (closed || !running || scheduledGeneration != generation || !prefs.hasActiveConvoy()) {
+                inFlight = false;
+                return true;
+            }
+            return false;
+        }
     }
 
     private void poll(long scheduledGeneration) {
@@ -125,6 +137,11 @@ public final class ConvoyPollingController implements AutoCloseable {
                     prefs,
                     fallbackServer,
                     ConvoySnapshotRepository.FOREGROUND_MAX_AGE_MS);
+
+            // A pause/resume may have replaced this polling generation while the HTTP request was running.
+            // Never process events or update the UI from that stale request.
+            if (abandonIfStale(scheduledGeneration)) return;
+
             ConvoyEventProcessor.process(context, prefs, snapshot);
 
             String newName = snapshot.optString("name", "");
@@ -145,11 +162,21 @@ public final class ConvoyPollingController implements AutoCloseable {
             }
 
             main.post(() -> {
+                synchronized (stateLock) {
+                    if (closed || !running || scheduledGeneration != generation) return;
+                }
                 if (listener == null) return;
                 listener.onConnectionState(ConnectionState.CONNECTED, 0);
                 listener.onSnapshot(snapshot, renamed, synchronizedAt);
             });
         } catch (Exception error) {
+            synchronized (stateLock) {
+                if (closed || !running || scheduledGeneration != generation) {
+                    inFlight = false;
+                    return;
+                }
+            }
+
             int statusCode = error instanceof ConvoyApi.ApiException
                     ? ((ConvoyApi.ApiException) error).statusCode : 0;
 
@@ -158,6 +185,7 @@ public final class ConvoyPollingController implements AutoCloseable {
                     inFlight = false;
                     running = false;
                     refreshRequested = false;
+                    generation++;
                     if (pending != null) pending.cancel(false);
                     pending = null;
                 }
@@ -181,6 +209,9 @@ public final class ConvoyPollingController implements AutoCloseable {
             }
 
             main.post(() -> {
+                synchronized (stateLock) {
+                    if (closed || !running || scheduledGeneration != generation) return;
+                }
                 if (listener == null) return;
                 listener.onConnectionState(
                         failures < 3 ? ConnectionState.RECONNECTING : ConnectionState.OFFLINE,
