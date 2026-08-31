@@ -3,8 +3,6 @@ package ch.piiwii.appdoctor;
 import android.content.Context;
 import android.os.RemoteException;
 
-import androidx.annotation.Keep;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.concurrent.TimeUnit;
@@ -14,7 +12,6 @@ public class AppDoctorShellService extends IAppDoctorShell.Stub {
 
     public AppDoctorShellService() {}
 
-    @Keep
     public AppDoctorShellService(Context context) {}
 
     @Override
