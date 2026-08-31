@@ -1,0 +1,11 @@
+name: AppDoctor Runner Test
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/appdoctor-runner-test.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'AppDoctor runner OK'
