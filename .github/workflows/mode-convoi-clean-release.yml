@@ -23,6 +23,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          p=Path('mode-convoi-clean/android/app/src/main/res/drawable-nodpi/vw_sprite_192.webp')
+          raw=p.read_bytes()
+          if raw.startswith(b'RIFF') and raw[8:12]==b'WEBP':
+              p.write_text(base64.b64encode(raw).decode())
+          PY
           python mode-convoi-clean/tools/patch_0340.py
           git diff --check
           git status --short
