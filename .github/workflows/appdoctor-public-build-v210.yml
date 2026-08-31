@@ -39,6 +39,8 @@ jobs:
           unzip -q appdoctor-build-v210/source.zip -d appdoctor-build-v210/work
           ROOT=appdoctor-build-v210/work/AppDoctor-2.1.0-source
           test -f "$ROOT/app/build.gradle"
+          sed -i 's/^android\.useAndroidX=.*/android.useAndroidX=true/' "$ROOT/gradle.properties"
+          grep -q '^android.useAndroidX=true' "$ROOT/gradle.properties"
           echo "$ROOT" > appdoctor-build-v210/root.txt
 
       - name: Build release APK
