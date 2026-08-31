@@ -25,7 +25,6 @@ jobs:
           cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
           (cd cr17 && patch -p4 < /tmp/convoyride-v16.patch)
 
-          # V1.7 patch chunks are exact non-overlapping slices.
           cat convoyride-v17b64/part-* | base64 -d > /tmp/convoyride-v17.patch.gz
           echo 'af47abf9e1b463ae6905f24b8bb5499e9629c06c5889d9e21c3df704c1ac1e96  /tmp/convoyride-v17.patch.gz' | sha256sum -c -
           gunzip -c /tmp/convoyride-v17.patch.gz > /tmp/convoyride-v17.patch
@@ -58,7 +57,7 @@ jobs:
       - name: Build release
         run: gradle -p cr17 --no-daemon assembleRelease
 
-      - name: Align and inspect
+      - name: Align
         shell: bash
         run: |
           set -euo pipefail
@@ -66,13 +65,43 @@ jobs:
             cr17/app/build/outputs/apk/release/app-release-unsigned.apk \
             ConvoyRide-V1.7.0-aligned-unsigned.apk
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ConvoyRide-V1.7.0-aligned-unsigned.apk
-          sha256sum ConvoyRide-V1.7.0-aligned-unsigned.apk > ConvoyRide-V1.7.0-aligned-unsigned.apk.sha256
+
+      - name: Checkout ConvoyRide signing material
+        uses: actions/checkout@v4
+        with:
+          repository: piiwii1/wpab-builds
+          path: signing-repo
+          persist-credentials: false
+
+      - name: Sign and verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIGN_DIR="signing-repo/convoyride/signing"
+          base64 -d "$SIGN_DIR/convoyride.keystore.b64" > /tmp/ConvoyRide-release.jks
+          ALIAS=$(sed -n 's/^alias=//p' "$SIGN_DIR/signing.properties")
+          STOREPASS=$(sed -n 's/^storePassword=//p' "$SIGN_DIR/signing.properties")
+          KEYPASS=$(sed -n 's/^keyPassword=//p' "$SIGN_DIR/signing.properties")
+          echo "::add-mask::$STOREPASS"
+          echo "::add-mask::$KEYPASS"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks /tmp/ConvoyRide-release.jks \
+            --ks-key-alias "$ALIAS" \
+            --ks-pass "pass:$STOREPASS" \
+            --key-pass "pass:$KEYPASS" \
+            --out ConvoyRide-V1.7.0.apk \
+            ConvoyRide-V1.7.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs ConvoyRide-V1.7.0.apk | tee ConvoyRide-V1.7.0-signature-verification.txt
+          grep -qi 'd3043b12bc332c6ff2d15c4e659e064d1a8f28817d84d14eb9ef55408a7052a0' ConvoyRide-V1.7.0-signature-verification.txt
+          sha256sum ConvoyRide-V1.7.0.apk > ConvoyRide-V1.7.0.apk.sha256
+          rm -f /tmp/ConvoyRide-release.jks
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ConvoyRide-V1.7.0-unsigned
+          name: ConvoyRide-V1.7.0-signed
           if-no-files-found: error
           retention-days: 7
           path: |
-            ConvoyRide-V1.7.0-aligned-unsigned.apk
-            ConvoyRide-V1.7.0-aligned-unsigned.apk.sha256
+            ConvoyRide-V1.7.0.apk
+            ConvoyRide-V1.7.0.apk.sha256
+            ConvoyRide-V1.7.0-signature-verification.txt
