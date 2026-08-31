@@ -1,0 +1,73 @@
+diff -ruN cr16src/app/build.gradle cr17src/app/build.gradle
+--- cr16src/app/build.gradle	2026-08-31 07:29:29.000000000 +0000
++++ cr17src/app/build.gradle	2026-08-31 08:55:02.648665304 +0000
+@@ -8,7 +8,12 @@
+         applicationId 'ch.piiwii.convoyride'
+         minSdk 26
+         targetSdk 35
+-        versionCode 7
+-        versionName '1.6.0'
++        versionCode 8
++        versionName '1.7.0'
+     }
+ }
++
++
++dependencies {
++    implementation 'com.google.zxing:core:3.5.3'
++}
+diff -ruN cr16src/app/src/main/AndroidManifest.xml cr17src/app/src/main/AndroidManifest.xml
+--- cr16src/app/src/main/AndroidManifest.xml	2026-08-31 07:29:29.000000000 +0000
++++ cr17src/app/src/main/AndroidManifest.xml	2026-08-31 08:55:02.648872026 +0000
+@@ -8,11 +8,17 @@
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+   <application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:label="ConvoyRide" android:theme="@style/AppTheme" android:usesCleartextTraffic="true">
+     <service android:name=".ConvoyService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="location" />
+-    <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait">
++    <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait" android:launchMode="singleTop">
+       <intent-filter>
+         <action android:name="android.intent.action.MAIN" />
+         <category android:name="android.intent.category.LAUNCHER" />
+       </intent-filter>
++      <intent-filter>
++        <action android:name="android.intent.action.VIEW" />
++        <category android:name="android.intent.category.DEFAULT" />
++        <category android:name="android.intent.category.BROWSABLE" />
++        <data android:scheme="convoyride" android:host="join" />
++      </intent-filter>
+     </activity>
+   </application>
+ </manifest>
+diff -ruN cr16src/app/src/main/java/ch/piiwii/convoyride/MainActivity.java cr17src/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+--- cr16src/app/src/main/java/ch/piiwii/convoyride/MainActivity.java	2026-08-31 07:29:29.000000000 +0000
++++ cr17src/app/src/main/java/ch/piiwii/convoyride/MainActivity.java	2026-08-31 08:55:02.649608336 +0000
+@@ -5,6 +5,7 @@
+ import android.content.*;
+ import android.content.pm.PackageManager;
+ import android.graphics.Color;
++import android.graphics.Bitmap;
+ import android.graphics.drawable.GradientDrawable;
+ import android.location.*;
+ import android.net.Uri;
+@@ -16,6 +17,9 @@
+ import android.widget.*;
+ import java.util.*;
+ import java.io.*;
++import com.google.zxing.BarcodeFormat;
++import com.google.zxing.common.BitMatrix;
++import com.google.zxing.qrcode.QRCodeWriter;
+ 
+ public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
+     public static volatile boolean appVisible=false;
+@@ -46,6 +50,7 @@
+     private TextView routeImportStatus;
+     private boolean routePickerForActiveRide=false;
+     private static final int PICK_GPX=91;
++    private String pendingJoinCode="";
+ 
+     private String rideName="Tour du Valais", rideCode="VW26R7", driverName="PiiWii", vehicleName="VW Polo 6N2 GTI";
+     private int vehicleCount=34, myIndex=18, gapThreshold=700;
+@@ -61,8 +66,10 @@
+         prefs=getSharedPreferences("convoyride",MODE_PRIVATE);
+         driverName=prefs.getString("driverName","PiiWii"); vehicleName=prefs.getString("vehicleName","VW Polo 6N2 GTI"); gapThreshold=prefs.getInt("gapThreshold",700); navVoice=prefs.getBoolean("navVoice",true); navVibration=prefs.getBoolean("navVibration",true); backgroundTracking=prefs.getBoolean("backgroundTracking",true); backgroundVoice=prefs.getBoolean("backgroundVoice",true);
+        
