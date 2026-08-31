@@ -34,7 +34,11 @@ public class MainActivity extends Activity {
     private final ExecutorService io = Executors.newCachedThreadPool();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private LinearLayout root, content;
-    private FrameLayout bottomNav;
+    private FrameLayout bottomNav, screenRoot;
+    private TextView talkieSpeakerBanner;
+    private boolean activityForeground=false;
+    private String activeTalkieSpeaker="";
+    private Runnable talkieSpeakerClearRunnable;
     private ScrollView mainScroll;
     private TextView connectionBadge;
     private JSONObject snapshot;
@@ -87,6 +91,7 @@ public class MainActivity extends Activity {
                     }
                 }
             }
+            handleTalkieSpeakerState(label,receiving);
         });
         ParticipantDefaults.ensure(prefs);
         String savedServer=prefs.get("serverUrl","");
@@ -130,9 +135,9 @@ public class MainActivity extends Activity {
         render();
     }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handleDeepLink(intent); render(); }
-    @Override protected void onResume() { super.onResume(); if(visualAlertController!=null)ConvoyForegroundAlertBus.register(visualAlertController); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
-    @Override protected void onPause() { if(visualAlertController!=null)ConvoyForegroundAlertBus.unregister(visualAlertController); super.onPause(); stopPolling(); }
-    @Override protected void onDestroy() { if(visualAlertController!=null){ConvoyForegroundAlertBus.unregister(visualAlertController);visualAlertController.close();} if(mapController!=null)mapController.close(); if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onResume() { super.onResume(); activityForeground=true; NotificationHelper.clearTalkieSpeaker(this); if(visualAlertController!=null)ConvoyForegroundAlertBus.register(visualAlertController); if (prefs.hasActiveConvoy()) { startPolling(); startShareServiceIfPermitted(); if(liveTalkie!=null)liveTalkie.ensureStarted(); } }
+    @Override protected void onPause() { activityForeground=false; if(visualAlertController!=null)ConvoyForegroundAlertBus.unregister(visualAlertController); super.onPause(); stopPolling(); }
+    @Override protected void onDestroy() { NotificationHelper.clearTalkieSpeaker(this); if(talkieSpeakerClearRunnable!=null)ui.removeCallbacks(talkieSpeakerClearRunnable); if(visualAlertController!=null){ConvoyForegroundAlertBus.unregister(visualAlertController);visualAlertController.close();} if(mapController!=null)mapController.close(); if(pollingController!=null)pollingController.close(); if(liveTalkie!=null)liveTalkie.close(); io.shutdownNow(); super.onDestroy(); }
 
     private boolean saveProfileChecked(EditText pseudo,EditText vehicle,EditText color,EditText server){
         String name=pseudo.getText().toString().trim();
@@ -184,9 +189,12 @@ public class MainActivity extends Activity {
         convoyCountView = null;
         talkieState = null;
         talkiePttButton = null;
+        talkieSpeakerBanner = null;
+        screenRoot = null;
         applyPalette();
 
         FrameLayout screen = new FrameLayout(this);
+        screenRoot=screen;
         screen.setBackgroundColor(bg);
 
         LinearLayout shell = new LinearLayout(this);
@@ -216,15 +224,66 @@ public class MainActivity extends Activity {
 
         bottomNav = buildBottomNav();
         shell.addView(bottomNav,new LinearLayout.LayoutParams(-1,-2));
+        installTalkieSpeakerBanner(screen);
 
         screen.setOnApplyWindowInsetsListener((v,insets)->{
             int topInset = insets.getSystemWindowInsetTop();
             int bottomInset = insets.getSystemWindowInsetBottom();
             shell.setPadding(0,topInset,0,0);
             if(bottomNav!=null) bottomNav.setPadding(dp(4),dp(4),dp(4),bottomInset+dp(4));
+            if(talkieSpeakerBanner!=null){FrameLayout.LayoutParams blp=(FrameLayout.LayoutParams)talkieSpeakerBanner.getLayoutParams();blp.bottomMargin=bottomInset+dp(94);talkieSpeakerBanner.setLayoutParams(blp);}
             return insets;
         });
         screen.requestApplyInsets();
+    }
+
+    private void installTalkieSpeakerBanner(FrameLayout screen){
+        TextView banner=text("",14,true,Color.WHITE);
+        banner.setGravity(Gravity.CENTER);
+        banner.setMaxLines(1);
+        banner.setPadding(dp(16),0,dp(16),0);
+        banner.setMaxWidth(Math.max(dp(260),getResources().getDisplayMetrics().widthPixels-dp(32)));
+        banner.setBackground(roundBg(Color.rgb(24,82,116),Color.rgb(70,180,255),18,2));
+        banner.setElevation(dp(12));
+        banner.setVisibility(View.GONE);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-2,dp(44),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
+        lp.bottomMargin=dp(94);
+        screen.addView(banner,lp);
+        talkieSpeakerBanner=banner;
+    }
+
+    private void handleTalkieSpeakerState(String label,boolean receiving){
+        if(!receiving||label==null)return;
+        String speaker=talkieSpeakerName(label);
+        if(speaker.isEmpty())speaker="Un participant";
+        boolean changed=!speaker.equals(activeTalkieSpeaker);
+        activeTalkieSpeaker=speaker;
+        if(talkieSpeakerClearRunnable!=null)ui.removeCallbacks(talkieSpeakerClearRunnable);
+        if(activityForeground){
+            NotificationHelper.clearTalkieSpeaker(this);
+            if(talkieSpeakerBanner!=null){
+                talkieSpeakerBanner.setText(label.toUpperCase(Locale.ROOT));
+                talkieSpeakerBanner.setVisibility(View.VISIBLE);
+            }
+        }else if(changed){
+            NotificationHelper.notifyTalkieSpeaker(this,speaker);
+        }
+        talkieSpeakerClearRunnable=()->{
+            activeTalkieSpeaker="";
+            if(talkieSpeakerBanner!=null)talkieSpeakerBanner.setVisibility(View.GONE);
+            NotificationHelper.clearTalkieSpeaker(this);
+        };
+        ui.postDelayed(talkieSpeakerClearRunnable,1100);
+    }
+
+    private String talkieSpeakerName(String label){
+        if(label==null||!label.startsWith("🔊"))return "";
+        String value=label.substring("🔊".length()).trim();
+        int talks=value.toLowerCase(Locale.ROOT).indexOf(" parle");
+        if(talks>0)return value.substring(0,talks).trim();
+        if(value.toLowerCase(Locale.ROOT).startsWith("réception audio"))return "Un participant";
+        int meter=value.indexOf("  ");
+        return (meter>0?value.substring(0,meter):value).trim();
     }
 
     private void header() {
@@ -353,31 +412,38 @@ public class MainActivity extends Activity {
         snapshotArea=new LinearLayout(this);snapshotArea.setOrientation(LinearLayout.VERTICAL);content.addView(snapshotArea,new LinearLayout.LayoutParams(-1,-2));refreshSnapshotArea();
 
         compactSectionLabel(content,"ACTIONS CONDUITE");
-        GridLayout primary=new GridLayout(this);primary.setColumnCount(4);
+        GridLayout primary=new GridLayout(this);primary.setColumnCount(2);
         String[][] driving={{"🛑","Arrêt","stop"},{"⛽","Essence","fuel"},{"🚻","WC","wc"},{"⚠️","Problème","problem"}};
         for(String[] st:driving){
             View b=quickActionTile(st[0],st[1]);b.setOnClickListener(v->sendStatus(st[2]));
-            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(66);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));primary.addView(b,lp);
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(64);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));primary.addView(b,lp);
         }
         content.addView(primary,new LinearLayout.LayoutParams(-1,-2));
 
-        boolean moreOpen=prefs.getBool("homeMoreActionsExpanded",false);
         LinearLayout moreHeader=new LinearLayout(this);moreHeader.setGravity(Gravity.CENTER_VERTICAL);moreHeader.setPadding(dp(10),dp(4),dp(8),dp(4));moreHeader.setBackground(roundBg(control,border,13,1));
         LinearLayout.LayoutParams mhLp=new LinearLayout.LayoutParams(-1,dp(42));mhLp.setMargins(dp(3),dp(5),dp(3),dp(2));moreHeader.setLayoutParams(mhLp);
         TextView moreLabel=text("PLUS D’ACTIONS",11,true,muted);moreHeader.addView(moreLabel,new LinearLayout.LayoutParams(0,-1,1));
-        TextView moreChevron=text(moreOpen?"⌃":"⌄",20,true,accent);moreChevron.setGravity(Gravity.CENTER);moreHeader.addView(moreChevron,new LinearLayout.LayoutParams(dp(38),-1));content.addView(moreHeader);
-
-        LinearLayout secondary=new LinearLayout(this);secondary.setOrientation(LinearLayout.VERTICAL);secondary.setVisibility(moreOpen?View.VISIBLE:View.GONE);
-        GridLayout moreGrid=new GridLayout(this);moreGrid.setColumnCount(2);
-        String[][] extra={{"☕","Pause","pause"},{"🚗","Voiture","car_problem"},{"↗️","Je rejoins","joining"},{"👍","OK","ok"}};
-        for(String[] st:extra){View b=quickActionTile(st[0],st[1]);b.setOnClickListener(v->sendStatus(st[2]));GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(62);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));moreGrid.addView(b,lp);}secondary.addView(moreGrid,new LinearLayout.LayoutParams(-1,-2));
-        Button custom=outlinedButton("✎   AUTRE MESSAGE",Color.rgb(94,99,104));custom.setOnClickListener(v->customStatusDialog());secondary.addView(custom);
-        Button clear=ghostButton("ANNULER MON STATUT");clear.setOnClickListener(v->sendStatus("clear"));secondary.addView(clear);
-        Button receive=ghostButton(prefs.getBool("talkieReceive",true)?"🔊  RÉCEPTION TALKIE : OUI":"🔇  RÉCEPTION TALKIE : NON");
-        receive.setOnClickListener(v->{boolean on=!prefs.getBool("talkieReceive",true);prefs.putBool("talkieReceive",on);if(liveTalkie!=null)liveTalkie.setReceiveEnabled(on);receive.setText(on?"🔊  RÉCEPTION TALKIE : OUI":"🔇  RÉCEPTION TALKIE : NON");toast(on?"Réception live activée":"Réception live coupée");});secondary.addView(receive);
-        content.addView(secondary);
-        moreHeader.setOnClickListener(v->{boolean open=secondary.getVisibility()==View.VISIBLE;secondary.setVisibility(open?View.GONE:View.VISIBLE);moreChevron.setText(open?"⌄":"⌃");prefs.putBool("homeMoreActionsExpanded",!open);});
+        TextView moreChevron=text("›",22,true,accent);moreChevron.setGravity(Gravity.CENTER);moreHeader.addView(moreChevron,new LinearLayout.LayoutParams(dp(38),-1));content.addView(moreHeader);
+        moreHeader.setOnClickListener(v->showDrivingMoreActionsDialog());
     }
+    private void showDrivingMoreActionsDialog(){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+        GridLayout grid=new GridLayout(this);grid.setColumnCount(2);
+        final Dialog[] ref=new Dialog[1];
+        String[][] extra={{"☕","Pause","pause"},{"🚗","Voiture","car_problem"},{"↗️","Je rejoins","joining"},{"👍","OK","ok"}};
+        for(String[] st:extra){
+            View b=quickActionTile(st[0],st[1]);
+            b.setOnClickListener(v->{if(ref[0]!=null)ref[0].dismiss();sendStatus(st[2]);});
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=0;lp.height=dp(58);lp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);lp.setMargins(dp(3),dp(3),dp(3),dp(3));grid.addView(b,lp);
+        }
+        box.addView(grid,new LinearLayout.LayoutParams(-1,-2));
+        Button custom=outlinedButton("✎   AUTRE MESSAGE",Color.rgb(94,99,104));custom.setOnClickListener(v->{if(ref[0]!=null)ref[0].dismiss();customStatusDialog();});box.addView(custom);
+        Button clear=ghostButton("ANNULER MON STATUT");clear.setOnClickListener(v->{if(ref[0]!=null)ref[0].dismiss();sendStatus("clear");});box.addView(clear);
+        Button receive=ghostButton(prefs.getBool("talkieReceive",true)?"🔊  RÉCEPTION TALKIE : OUI":"🔇  RÉCEPTION TALKIE : NON");
+        receive.setOnClickListener(v->{boolean on=!prefs.getBool("talkieReceive",true);prefs.putBool("talkieReceive",on);if(liveTalkie!=null)liveTalkie.setReceiveEnabled(on);receive.setText(on?"🔊  RÉCEPTION TALKIE : OUI":"🔇  RÉCEPTION TALKIE : NON");toast(on?"Réception live activée":"Réception live coupée");});box.addView(receive);
+        ref[0]=styledDialog("Plus d’actions",box,"FERMER",null,null,null,false);
+    }
+
     private String snapshotCountText(){if(snapshot==null)return "Connexion au convoi…";JSONArray ps=snapshot.optJSONArray("participants");int total=ps==null?0:ps.length();return total+" voiture"+(total>1?"s":"")+" connectée"+(total>1?"s":"");}
 
     private void refreshSnapshotArea() {
@@ -924,7 +990,7 @@ public class MainActivity extends Activity {
         }
 
         sectionLabel(content,"À PROPOS");
-        cardTitle(content,"Mode Convoi 0.3.36","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
+        cardTitle(content,"Mode Convoi 0.3.37","Le code à 6 caractères identifie un convoi. Le QR contient exactement ce code et permet aux autres téléphones de le rejoindre sans le saisir.");
     }
 
     private void advancedSettingsDialog(){

@@ -78,6 +78,7 @@ public final class LiveTalkieManager {
     private volatile boolean pollScheduled = false;
     private volatile String lastError = "";
     private volatile boolean receivingAudio = false;
+    private volatile String receivingPeerName = "";
     private volatile double receiveLevel = 0.0;
     private volatile double micLevel = 0.0;
     private volatile boolean meterScheduled = false;
@@ -225,6 +226,7 @@ public final class LiveTalkieManager {
         transmitting = false;
         transmittingSince = 0L;
         receivingAudio = false;
+        receivingPeerName = "";
         receiveLevel = 0.0;
         micLevel = 0.0;
         synchronized (peerLock) {
@@ -295,6 +297,7 @@ public final class LiveTalkieManager {
         }
         if (list.isEmpty()) {
             receivingAudio = false;
+            receivingPeerName = "";
             receiveLevel = 0.0;
             micLevel = 0.0;
             notifyState(stateLabel());
@@ -304,19 +307,27 @@ public final class LiveTalkieManager {
         final AtomicInteger pending = new AtomicInteger(list.size());
         final Object meterLock = new Object();
         final double[] levels = new double[]{0.0, 0.0}; // inbound, microphone
+        final PeerState[] loudest = new PeerState[]{null};
         for (PeerState p : list) {
             try {
                 p.pc.getStats(report -> {
                     AudioStats one = audioStats(report);
                     evaluateMediaHealth(p, one);
                     synchronized (meterLock) {
-                        levels[0] = Math.max(levels[0], one.inboundLevel);
+                        if (one.inboundLevel > levels[0]) {
+                            levels[0] = one.inboundLevel;
+                            loudest[0] = p;
+                        }
                         levels[1] = Math.max(levels[1], one.micLevel);
                     }
                     if (pending.decrementAndGet() == 0) {
                         receiveLevel = levels[0];
                         micLevel = levels[1];
                         receivingAudio = receiveEnabled && !transmitting && receiveLevel >= 0.012;
+                        if (receivingAudio && loudest[0] != null) {
+                            String n = loudest[0].displayName == null ? "" : loudest[0].displayName.trim();
+                            receivingPeerName = n.isEmpty() ? "Un participant" : n;
+                        } else receivingPeerName = "";
                         if (receivingAudio) ensureReceivePath();
                         notifyState(stateLabel());
                         scheduleAudioMeter(180);
@@ -467,9 +478,11 @@ public final class LiveTalkieManager {
             // Do not keep creating WebRTC sessions for phones that have been absent for several minutes.
             if (lastSeen > 0 && now - lastSeen > 180_000L) continue;
             seen.add(id);
+            String displayName = p.optString("name", "").trim();
             PeerState ps;
             synchronized (peerLock) { ps = peers.get(id); }
-            if (ps == null) createPeer(id);
+            if (ps == null) ps = createPeer(id);
+            if (ps != null && !displayName.isEmpty()) ps.displayName = displayName;
         }
         List<String> remove = new ArrayList<>();
         synchronized (peerLock) {
@@ -761,7 +774,7 @@ public final class LiveTalkieManager {
         boolean tx = transmitting;
         String shown = label;
         if (tx) shown = "🎙️ EN DIRECT  " + meter(micLevel);
-        else if (receivingAudio) shown = "🔊 RÉCEPTION AUDIO  " + meter(receiveLevel);
+        else if (receivingAudio) shown = "🔊 " + (receivingPeerName.isEmpty()?"Un participant":receivingPeerName) + " parle  " + meter(receiveLevel);
         final String finalLabel = shown;
         main.post(() -> listener.onLiveTalkieState(finalLabel, connected, total, tx));
     }
@@ -848,6 +861,7 @@ public final class LiveTalkieManager {
         volatile boolean initiator = false;
         volatile boolean localTrackBound = false;
         volatile boolean connected = false;
+        volatile String displayName = "";
         volatile boolean remoteDescriptionSet = false;
         volatile AudioTrack remoteTrack = null;
         volatile long connectedAt = 0L;
