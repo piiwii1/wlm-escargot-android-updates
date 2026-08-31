@@ -1,23 +1,54 @@
-name: Mode Convoi Clean Release Build
+name: Mode Convoi 0.3.42 Guarded Migration Build
 
 on:
   push:
     branches: [mode-convoi-apk-build]
     paths:
       - '.github/workflows/mode-convoi-clean-release.yml'
-      - 'mode-convoi-clean/**'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build-release:
+  migrate-build-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: mode-convoi-apk-build
+          fetch-depth: 0
+
+      - name: Apply guarded 0.3.42 migration and clean transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .tmp0342/apply_0342_v2.py
+          git diff --check
+          grep -q "versionCode 45" mode-convoi-clean/android/app/build.gradle
+          grep -q "versionName '0.3.42'" mode-convoi-clean/android/app/build.gradle
+          grep -q 'new Item("vw:polog40","Polo G40",19)' mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/VolkswagenIconPack.java
+          grep -q '20 modèles Volkswagen HD' mode-convoi-clean/android/app/src/main/java/ch/piiwii/modeconvoi/MainActivity.java
+          test -f mode-convoi-clean/android/app/src/main/res/drawable-nodpi/vw_sprite_more_192.webp
+          test -f mode-convoi-clean/android/app/src/main/res/drawable-nodpi/app_icon_convoi.webp
+          test ! -e .tmp0342
+          grep -q 'contents: read' .github/workflows/mode-convoi-clean-release.yml
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          checks={
+            'mode-convoi-clean/android/app/src/main/res/drawable-nodpi/vw_sprite_more_192.webp':'a04dd15f758843d13de20b721fece26bd3748e9d6b77b34a6254829f6336c2af',
+            'mode-convoi-clean/android/app/src/main/res/drawable-nodpi/app_icon_convoi.webp':'d4f14a1f7f3a884fbb16506199750358c18fc5b54979932a9434a173b4673cc1'
+          }
+          for p,want in checks.items():
+              got=hashlib.sha256(Path(p).read_bytes()).hexdigest()
+              assert got==want,(p,got,want)
+          PY
+          git config user.name 'piiwii1'
+          git config user.email 'piiwii32@gmail.com'
+          git add -A
+          git commit -m 'Mode Convoi 0.3.42: 20 Volkswagen and Convoi launcher [skip ci]'
+          git push origin HEAD:mode-convoi-apk-build
 
       - uses: actions/setup-java@v4
         with:
@@ -33,7 +64,7 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build release directly from canonical source
+      - name: Build final release from migrated source
         run: gradle -p mode-convoi-clean/android --no-daemon assembleRelease
 
       - name: Package unsigned release
