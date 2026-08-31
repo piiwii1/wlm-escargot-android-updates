@@ -25,6 +25,7 @@ jobs:
           cat convoyride-v16/patch-part-* | base64 -d | gunzip > /tmp/convoyride-v16.patch
           (cd cr17 && patch -p4 < /tmp/convoyride-v16.patch)
 
+          # V1.7 patch chunks are exact non-overlapping slices.
           cat convoyride-v17b64/part-* | base64 -d > /tmp/convoyride-v17.patch.gz
           echo 'af47abf9e1b463ae6905f24b8bb5499e9629c06c5889d9e21c3df704c1ac1e96  /tmp/convoyride-v17.patch.gz' | sha256sum -c -
           gunzip -c /tmp/convoyride-v17.patch.gz > /tmp/convoyride-v17.patch
