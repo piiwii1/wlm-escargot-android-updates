@@ -30,15 +30,18 @@ jobs:
           gunzip -c /tmp/convoyride-v17.patch.gz > /tmp/convoyride-v17.patch
           echo 'b955c2d54ef718d2bda07239a9247ec66d223b3141b65af797e612ef0797e9e6  /tmp/convoyride-v17.patch' | sha256sum -c -
           (cd cr18 && patch -p1 < /tmp/convoyride-v17.patch)
-          cat convoyride-v18b64/part-* | base64 -d > /tmp/convoyride-v18.patch.gz
+          cat convoyride-v18b64/part-0* | base64 -d > /tmp/convoyride-v18.patch.gz
           echo 'd4d855095e87d8a2018fa34b903f25256b88cd50fb4b41553f736bcbc3dbf9c8  /tmp/convoyride-v18.patch.gz' | sha256sum -c -
           gunzip -c /tmp/convoyride-v18.patch.gz > /tmp/convoyride-v18.patch
           echo '92bd1cca522482b0fb63472445442382c4b208bbe9870a6ddebad76be0ea1b45  /tmp/convoyride-v18.patch' | sha256sum -c -
           (cd cr18 && patch -p1 < /tmp/convoyride-v18.patch)
+          echo '062877d353849eee0d8431906563b4e1126620c304ec12db1b1747f8e59fb618  convoyride-v18b64/speedfix.patch' | sha256sum -c -
+          (cd cr18 && patch -p1 < ../convoyride-v18b64/speedfix.patch)
           grep -q "versionName '1.8.0'" cr18/app/build.gradle
           grep -q "versionCode 9" cr18/app/build.gradle
           grep -q 'showAlerts' cr18/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
           grep -q 'bottomNav' cr18/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
+          grep -q 'updateSpeedBadge' cr18/app/src/main/java/ch/piiwii/convoyride/MainActivity.java
           grep -q 'PURPLE' cr18/app/src/main/java/ch/piiwii/convoyride/Ui.java
 
       - uses: actions/setup-java@v5
