@@ -28,10 +28,11 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Warm AGP cache
+      - name: Warm isolated AGP cache
         run: |
           set -euo pipefail
-          mkdir -p /tmp/dummy/app/src/main/java/test/toolchain
+          rm -rf /tmp/isolated-gradle /tmp/dummy
+          mkdir -p /tmp/isolated-gradle /tmp/dummy/app/src/main/java/test/toolchain
           cat > /tmp/dummy/settings.gradle <<'EOF'
           pluginManagement {
             repositories { google(); mavenCentral(); gradlePluginPortal() }
@@ -64,27 +65,26 @@ jobs:
           cat > /tmp/dummy/app/src/main/java/test/toolchain/MainActivity.java <<'EOF'
           package test.toolchain; public class MainActivity extends android.app.Activity { }
           EOF
-          gradle --no-daemon -p /tmp/dummy :app:assembleRelease
+          GRADLE_USER_HOME=/tmp/isolated-gradle gradle --no-daemon -p /tmp/dummy :app:assembleRelease
+          du -sh /tmp/isolated-gradle/caches/modules-2
 
-      - name: Pack toolchain
+      - name: Pack minimal toolchain
         run: |
           set -euo pipefail
           GRADLE_BIN="$(readlink -f "$(command -v gradle)")"
           GRADLE_HOME="$(dirname "$(dirname "$GRADLE_BIN")")"
-          mkdir -p /tmp/toolchain/android-sdk /tmp/toolchain/gradle-cache
+          rm -rf /tmp/toolchain
+          mkdir -p /tmp/toolchain/android-sdk /tmp/toolchain/gradle-cache/caches
           cp -a "$GRADLE_HOME" /tmp/toolchain/gradle-8.9
           cp -a "$ANDROID_HOME/platforms/android-35" /tmp/toolchain/android-sdk/
           cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/toolchain/android-sdk/
-          cp -a "$HOME/.gradle/caches/modules-2" /tmp/toolchain/gradle-cache/
-          cp -a "$HOME/.gradle/caches/8.9" /tmp/toolchain/gradle-cache/ || true
-          cp -a "$HOME/.gradle/caches/jars-9" /tmp/toolchain/gradle-cache/ || true
-          cp -a "$HOME/.gradle/caches/transforms-4" /tmp/toolchain/gradle-cache/ || true
-          tar -C /tmp -czf android-toolchain-8.9-agp8.7.3-sdk35.tar.gz toolchain
-          ls -lh android-toolchain-8.9-agp8.7.3-sdk35.tar.gz
+          cp -a /tmp/isolated-gradle/caches/modules-2 /tmp/toolchain/gradle-cache/caches/
+          tar -C /tmp -czf android-toolchain-minimal.tar.gz toolchain
+          ls -lh android-toolchain-minimal.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-toolchain-8.9-agp8.7.3-sdk35
-          path: android-toolchain-8.9-agp8.7.3-sdk35.tar.gz
+          name: android-toolchain-minimal
+          path: android-toolchain-minimal.tar.gz
           retention-days: 1
           if-no-files-found: error
