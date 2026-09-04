@@ -1,0 +1,28 @@
+name: Handoff Gros Live 2.4.3
+
+on:
+  push:
+    paths:
+      - '.github/workflows/groslive-v243-handoff.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified APK
+        run: |
+          curl -L --fail --retry 3 'https://piiwii.ch/wp-content/uploads/2026/09/GrosLive2026-v2.4.3.apk' -o /tmp/GrosLive2026-v2.4.3.apk
+          echo '3e1ba2b4f2a612918f5c06ccd7941842372387a787a7ea137fe48cf81a5677f0  /tmp/GrosLive2026-v2.4.3.apk' | sha256sum -c -
+          sha256sum /tmp/GrosLive2026-v2.4.3.apk > /tmp/GrosLive2026-v2.4.3-SHA256.txt
+      - name: Upload handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrosLive2026-v2.4.3
+          path: |
+            /tmp/GrosLive2026-v2.4.3.apk
+            /tmp/GrosLive2026-v2.4.3-SHA256.txt
