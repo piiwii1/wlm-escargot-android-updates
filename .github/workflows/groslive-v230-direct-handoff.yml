@@ -21,8 +21,14 @@ jobs:
           mkdir -p handoff-groslive-v230
           curl -fL --retry 3 --connect-timeout 15 --max-time 180 'https://piiwii.ch/wp-content/uploads/2026/09/GrosLive2026-v2.3.0.apk' -o handoff-groslive-v230/GrosLive2026-v2.3.0.apk
           echo 'ef204a47eb24cfc3e3666268902d66415ed8e6034579547743ca5e64d36221b5  handoff-groslive-v230/GrosLive2026-v2.3.0.apk' | sha256sum -c -
-          rm -f handoff-groslive-v230/part-*
           printf 'Gros Live 2026 v2.3.0 / versionCode 8\nSHA-256: ef204a47eb24cfc3e3666268902d66415ed8e6034579547743ca5e64d36221b5\n' > handoff-groslive-v230/README.txt
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrosLive2026-v2.3.0
+          path: handoff-groslive-v230/GrosLive2026-v2.3.0.apk
+          if-no-files-found: error
+          retention-days: 30
       - name: Commit APK
         shell: bash
         run: |
@@ -30,5 +36,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add handoff-groslive-v230
-          git commit -m 'Add Gros Live 2.3.0 direct APK handoff [skip ci]'
+          git diff --cached --quiet || git commit -m 'Refresh Gros Live 2.3.0 direct APK handoff [skip ci]'
           git push
