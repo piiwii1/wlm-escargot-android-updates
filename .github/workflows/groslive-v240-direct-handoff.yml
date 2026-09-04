@@ -1,0 +1,42 @@
+name: Gros Live 2.4.0 direct handoff
+
+on:
+  push:
+    paths:
+      - '.github/workflows/groslive-v240-direct-handoff.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified Gros Live 2.4.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/groslive240
+          curl -fL --retry 3 --connect-timeout 15 --max-time 180 'https://piiwii.ch/wp-content/uploads/2026/09/GrosLive2026-v2.4.0.apk' -o /tmp/groslive240/GrosLive2026-v2.4.0.apk
+          echo 'fd43ba6ce08910747c4a2fd275f43ca880fc68ce183736a1c6abb00a5d3da2cd  /tmp/groslive240/GrosLive2026-v2.4.0.apk' | sha256sum -c -
+          unzip -t /tmp/groslive240/GrosLive2026-v2.4.0.apk >/dev/null
+          printf 'Gros Live 2026 v2.4.0\nversionCode: 9\nSHA-256: fd43ba6ce08910747c4a2fd275f43ca880fc68ce183736a1c6abb00a5d3da2cd\n' > /tmp/groslive240/VERIFICATION.txt
+      - name: Try source package
+        shell: bash
+        run: |
+          set +e
+          curl -fL --retry 1 --connect-timeout 10 --max-time 120 'https://piiwii.ch/wp-content/uploads/2026/09/GrosLive2026-v2.4.0-SOURCES.zip' -o /tmp/groslive240/GrosLive2026-v2.4.0-SOURCES.zip
+          if [ -f /tmp/groslive240/GrosLive2026-v2.4.0-SOURCES.zip ]; then
+            GOT="$(sha256sum /tmp/groslive240/GrosLive2026-v2.4.0-SOURCES.zip | awk '{print $1}')"
+            if [ "$GOT" != 'd304de114a9f130418746541afb18c42a1a00766e1c23b19ed214db0e91ac732' ]; then rm -f /tmp/groslive240/GrosLive2026-v2.4.0-SOURCES.zip; fi
+          fi
+          exit 0
+      - name: Upload handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrosLive2026-v2.4.0
+          retention-days: 30
+          if-no-files-found: error
+          path: /tmp/groslive240/*
