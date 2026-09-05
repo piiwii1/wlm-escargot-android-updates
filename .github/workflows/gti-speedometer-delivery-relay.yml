@@ -23,7 +23,7 @@ jobs:
           curl -fL --retry 3 --connect-timeout 20 'https://litter.catbox.moe/m0aumi.apk' -o /tmp/Compteur-GTI-1.0.0.apk
           echo '720c943dc4619e0ec6f153bd5948e3ab942e138e53901823dcad4f787bd67de6  /tmp/Compteur-GTI-1.0.0.apk' | sha256sum -c -
 
-      - name: Publish verified APK in repository
+      - name: Keep verified public repository copy
         run: |
           set -euo pipefail
           mkdir -p piiwii-delivery/gti-speedometer
@@ -31,5 +31,16 @@ jobs:
           git config user.name 'PiiWii Delivery Bot'
           git config user.email 'actions@users.noreply.github.com'
           git add piiwii-delivery/gti-speedometer/Compteur-GTI-1.0.0.apk
-          git commit -m 'Deliver Compteur GTI 1.0.0 signed APK' || exit 0
-          git push origin HEAD:main
+          if ! git diff --cached --quiet; then
+            git commit -m 'Deliver Compteur GTI 1.0.0 signed APK'
+            git push origin HEAD:main
+          fi
+
+      - name: Upload verified APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compteur-GTI-1.0.0
+          path: /tmp/Compteur-GTI-1.0.0.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
