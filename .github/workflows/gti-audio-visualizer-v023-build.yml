@@ -41,11 +41,25 @@ jobs:
           test "$(wc -c < /tmp/source.b64)" = "53736"
           base64 -d /tmp/source.b64 > /tmp/source.zip
           echo "3b96afc22e1c9c27af970bdcd20a6418e345c33505ea2e27067f8bad72764344  /tmp/source.zip" | sha256sum -c -
-          echo "a743bd50a61a27c555f9fd0af46345b867d267770a5d9f8f29b479b336d30661  gti-audio-visualizer-v023/patch.zip" | sha256sum -c -
+
+          cat \
+            gti-audio-visualizer-v023/patch.part00 \
+            gti-audio-visualizer-v023/patch.part01 \
+            gti-audio-visualizer-v023/patch.part02 \
+            gti-audio-visualizer-v023/patch.part03 \
+            gti-audio-visualizer-v023/patch.part04 \
+            gti-audio-visualizer-v023/patch.part05 \
+            gti-audio-visualizer-v023/patch.part06 \
+            gti-audio-visualizer-v023/patch.part07 \
+            gti-audio-visualizer-v023/patch.part08 > /tmp/patch.b64
+          test "$(wc -c < /tmp/patch.b64)" = "31084"
+          base64 -d /tmp/patch.b64 > /tmp/patch.zip
+          echo "a743bd50a61a27c555f9fd0af46345b867d267770a5d9f8f29b479b336d30661  /tmp/patch.zip" | sha256sum -c -
+
           rm -rf /tmp/gti-v023
           mkdir -p /tmp/gti-v023
           unzip -q /tmp/source.zip -d /tmp/gti-v023
-          unzip -qo gti-audio-visualizer-v023/patch.zip -d /tmp/gti-v023
+          unzip -qo /tmp/patch.zip -d /tmp/gti-v023
           grep -n "versionName '0.2.3'" /tmp/gti-v023/app/build.gradle
           grep -n "versionCode 5" /tmp/gti-v023/app/build.gradle
           grep -n "class GtiBasePainter" /tmp/gti-v023/app/src/main/java/ch/piiwii/gtivisualizer/GtiBasePainter.java
