@@ -20,7 +20,7 @@ jobs:
       - name: Download and verify signed APK
         run: |
           set -euo pipefail
-          curl -fL --retry 3 --connect-timeout 20 'https://tmpfiles.org/dl/wOwKkg7hLMwe/compteur-gti-1.0.0.apk' -o /tmp/Compteur-GTI-1.0.0.apk
+          curl -fL --retry 3 --connect-timeout 20 'https://litter.catbox.moe/m0aumi.apk' -o /tmp/Compteur-GTI-1.0.0.apk
           echo '720c943dc4619e0ec6f153bd5948e3ab942e138e53901823dcad4f787bd67de6  /tmp/Compteur-GTI-1.0.0.apk' | sha256sum -c -
 
       - name: Publish verified APK in repository
