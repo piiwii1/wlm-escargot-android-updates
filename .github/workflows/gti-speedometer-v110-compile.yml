@@ -1,0 +1,634 @@
+name: Compteur GTI 1.1.0 Compile
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/gti-speedometer-v110-compile.yml'
+      - 'piiwii-delivery/gti-speedometer/v110-src/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Android source
+        shell: bash
+        run: |
+          set -euo pipefail
+          P='piiwii-delivery/gti-speedometer/v110-src'
+          mkdir -p "$P/app/src/main/java/ch/piiwii/gtispeed" "$P/app/src/main/res/layout" "$P/app/src/main/res/xml" "$P/app/src/main/res/values" "$P/app/src/main/res/drawable"
+
+          cat > "$P/app/src/main/AndroidManifest.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="Compteur GTI"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".SpeedService"
+                      android:exported="false"
+                      android:foregroundServiceType="location" />
+
+                  <receiver
+                      android:name=".GtiSpeedWidgetProvider"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.appwidget.provider"
+                          android:resource="@xml/gti_speed_widget_info" />
+                  </receiver>
+
+                  <receiver
+                      android:name=".BootReceiver"
+                      android:enabled="true"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                      </intent-filter>
+                  </receiver>
+              </application>
+          </manifest>
+          EOF
+
+          cat > "$P/app/src/main/java/ch/piiwii/gtispeed/GtiPrefs.java" <<'EOF'
+          package ch.piiwii.gtispeed;
+
+          import android.content.Context;
+          import android.content.SharedPreferences;
+
+          final class GtiPrefs {
+              private static final String NAME = "gti_speed_prefs";
+              private GtiPrefs() {}
+              static SharedPreferences p(Context c) { return c.getSharedPreferences(NAME, Context.MODE_PRIVATE); }
+              static float rise(Context c) { return p(c).getFloat("rise_alpha", 0.42f); }
+              static float fall(Context c) { return p(c).getFloat("fall_alpha", 0.32f); }
+              static float zero(Context c) { return p(c).getFloat("zero_alpha", 0.55f); }
+              static void resetOriginal(Context c) {
+                  p(c).edit()
+                      .putFloat("rise_alpha", 0.42f)
+                      .putFloat("fall_alpha", 0.32f)
+                      .putFloat("zero_alpha", 0.55f)
+                      .apply();
+              }
+              static void diag(Context c, float raw, float filtered, float accuracy, long fixTime, boolean hasFix) {
+                  p(c).edit()
+                      .putFloat("diag_raw", raw)
+                      .putFloat("diag_filtered", filtered)
+                      .putFloat("diag_accuracy", accuracy)
+                      .putLong("diag_fix_time", fixTime)
+                      .putBoolean("diag_has_fix", hasFix)
+                      .apply();
+              }
+              static float lastFiltered(Context c) { return p(c).getFloat("diag_filtered", 0f); }
+          }
+          EOF
+
+          cat > "$P/app/src/main/java/ch/piiwii/gtispeed/GaugeRenderer.java" <<'EOF'
+          package ch.piiwii.gtispeed;
+
+          import android.graphics.Bitmap;
+          import android.graphics.Canvas;
+          import android.graphics.Color;
+          import android.graphics.LinearGradient;
+          import android.graphics.Paint;
+          import android.graphics.Path;
+          import android.graphics.RadialGradient;
+          import android.graphics.RectF;
+          import android.graphics.Shader;
+          import android.graphics.Typeface;
+          import java.util.Locale;
+
+          final class GaugeRenderer {
+              static final int REF_W = 380;
+              static final int REF_H = 350;
+              private static final float CX = 190f;
+              private static final float CY = 175f;
+              private static final float START = 135f;
+              private static final float SWEEP = 270f;
+              private static final float MAX = 240f;
+              private static final float OUTER = 164f;
+              private static final float FACE = 151f;
+              private static final float TICK_OUT = 146f;
+              private static final float LABEL_R = 121f;
+              private static final float RED_R = 108f;
+
+              private GaugeRenderer() {}
+
+              static Bitmap render(float speed) {
+                  Bitmap b = Bitmap.createBitmap(REF_W, REF_H, Bitmap.Config.ARGB_8888);
+                  Canvas c = new Canvas(b);
+                  draw(c, clamp(speed, 0f, MAX));
+                  return b;
+              }
+
+              private static void draw(Canvas c, float speed) {
+                  c.drawColor(Color.TRANSPARENT);
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+                  // Ombre / profondeur du combiné.
+                  p.setStyle(Paint.Style.FILL);
+                  p.setColor(0x66000000);
+                  p.setShadowLayer(7f, 0f, 3f, 0xCC000000);
+                  c.drawCircle(CX, CY + 1.5f, OUTER, p);
+                  p.clearShadowLayer();
+
+                  // Cerclage métallique GTI, propre et symétrique.
+                  p.setShader(new LinearGradient(CX - OUTER, CY - OUTER, CX + OUTER, CY + OUTER,
+                          new int[]{0xFF25272A,0xFFF0F1F2,0xFF666A6E,0xFF17191B,0xFFDADDE0},
+                          null, Shader.TileMode.CLAMP));
+                  c.drawCircle(CX, CY, OUTER, p);
+                  p.setShader(null);
+                  p.setColor(0xFF050607); c.drawCircle(CX, CY, 160f, p);
+                  p.setColor(0xFFBFC3C7); c.drawCircle(CX, CY, 157.5f, p);
+                  p.setColor(0xFF222427); c.drawCircle(CX, CY, 155.5f, p);
+
+                  // Fond profond noir / anthracite.
+                  p.setShader(new RadialGradient(CX, CY, FACE,
+                          new int[]{0xFF111416, 0xFF090B0D, 0xFF020304},
+                          new float[]{0f, .62f, 1f}, Shader.TileMode.CLAMP));
+                  c.drawCircle(CX, CY, FACE, p);
+                  p.setShader(null);
+
+                  drawHoneycomb(c);
+                  drawOuterAccent(c);
+                  drawTicks(c);
+                  drawRedRing(c);
+                  drawNeedle(c, speed);
+                  drawNumbers(c);
+                  drawBrand(c);
+                  drawDigital(c, speed);
+              }
+
+              private static void drawHoneycomb(Canvas c) {
+                  c.save();
+                  Path clip = new Path();
+                  clip.addCircle(CX, CY, FACE - 4f, Path.Direction.CW);
+                  c.clipPath(clip);
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  p.setStyle(Paint.Style.STROKE);
+                  p.setStrokeWidth(.8f);
+                  p.setColor(0x2E596068);
+                  float r = 8.2f;
+                  float w = (float)(Math.sqrt(3) * r);
+                  float stepY = 1.5f * r;
+                  int row = 0;
+                  for (float y = CY - FACE - r; y <= CY + FACE + r; y += stepY, row++) {
+                      float off = (row & 1) == 0 ? 0f : w / 2f;
+                      for (float x = CX - FACE - w + off; x <= CX + FACE + w; x += w) {
+                          Path h = new Path();
+                          for (int i=0;i<6;i++) {
+                              double a = Math.toRadians(60*i - 30);
+                              float hx = x + (float)Math.cos(a)*r;
+                              float hy = y + (float)Math.sin(a)*r;
+                              if (i==0) h.moveTo(hx,hy); else h.lineTo(hx,hy);
+                          }
+                          h.close();
+                          c.drawPath(h,p);
+                      }
+                  }
+                  c.restore();
+              }
+
+              private static void drawOuterAccent(Canvas c) {
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  p.setStyle(Paint.Style.STROKE);
+                  p.setStrokeCap(Paint.Cap.ROUND);
+                  RectF r = new RectF(CX-153f,CY-153f,CX+153f,CY+153f);
+                  p.setStrokeWidth(7f); p.setColor(0x331D0003); c.drawArc(r, 135f, 82f, false, p);
+                  p.setStrokeWidth(3.2f); p.setColor(0xFFF01827); c.drawArc(r, 137f, 78f, false, p);
+                  p.setStrokeCap(Paint.Cap.BUTT);
+              }
+
+              private static void drawTicks(Canvas c) {
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  p.setStyle(Paint.Style.STROKE);
+                  p.setStrokeCap(Paint.Cap.SQUARE);
+                  // Une position tous les 2 km/h : 121 repères exactement répartis sur 270°.
+                  for (int s=0;s<=240;s+=2) {
+                      boolean major = s%20==0;
+                      boolean medium = !major && s%10==0;
+                      float in;
+                      if (major) { in=132.5f; p.setStrokeWidth(2.7f); p.setColor(0xFFF5F6F7); }
+                      else if (medium) { in=137.5f; p.setStrokeWidth(1.8f); p.setColor(0xFFDDE0E3); }
+                      else { in=141.5f; p.setStrokeWidth(1.05f); p.setColor(0xFF9EA5AB); }
+                      line(c,p,angle(s),in,TICK_OUT);
+                  }
+              }
+
+              private static void drawRedRing(Canvas c) {
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  p.setStyle(Paint.Style.STROKE);
+                  p.setStrokeCap(Paint.Cap.SQUARE);
+                  RectF r = new RectF(CX-RED_R,CY-RED_R,CX+RED_R,CY+RED_R);
+                  p.setStrokeWidth(1.1f); p.setColor(0x6636070C); c.drawArc(r,START,SWEEP,false,p);
+                  for (int s=0;s<=240;s+=4) {
+                      boolean major=s%20==0;
+                      p.setColor(major?0xFFE61728:0xFF850D18);
+                      p.setStrokeWidth(major?2.4f:1.15f);
+                      line(c,p,angle(s),major?RED_R-8f:RED_R-4f,RED_R+1f);
+                  }
+              }
+
+              private static void drawNumbers(Canvas c) {
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
+                  p.setTextAlign(Paint.Align.CENTER);
+                  p.setTypeface(Typeface.create("sans-serif-condensed", Typeface.NORMAL));
+                  p.setTextSize(21.5f);
+                  p.setColor(0xFFF0F2F4);
+                  p.setShadowLayer(2f,0f,1f,0xFF000000);
+                  Paint.FontMetrics fm=p.getFontMetrics();
+                  float adj=-(fm.ascent+fm.descent)/2f;
+                  for(int s=0;s<=240;s+=20){
+                      double a=Math.toRadians(angle(s));
+                      float x=CX+(float)Math.cos(a)*LABEL_R;
+                      float y=CY+(float)Math.sin(a)*LABEL_R+adj;
+                      c.drawText(Integer.toString(s),x,y,p);
+                  }
+                  p.clearShadowLayer();
+              }
+
+              private static void drawNeedle(Canvas c,float speed){
+                  double a=Math.toRadians(angle(speed));
+                  float ux=(float)Math.cos(a), uy=(float)Math.sin(a), px=-uy, py=ux;
+                  float tip=140f, tail=17f, hw=5.2f;
+                  Path n=new Path();
+                  n.moveTo(CX+ux*tip,CY+uy*tip);
+                  n.lineTo(CX+px*hw,CY+py*hw);
+                  n.lineTo(CX-ux*tail+px*2.7f,CY-uy*tail+py*2.7f);
+                  n.lineTo(CX-ux*tail-px*2.7f,CY-uy*tail-py*2.7f);
+                  n.lineTo(CX-px*hw,CY-py*hw);
+                  n.close();
+                  Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+                  p.setStyle(Paint.Style.FILL); p.setColor(0x99000000);
+                  c.save(); c.translate(2f,2f); c.drawPath(n,p); c.restore();
+                  p.setShader(new LinearGradient(CX,CY,CX+ux*tip,CY+uy*tip,0xFFFF3543,0xFFE80619,Shader.TileMode.CLAMP));
+                  c.drawPath(n,p); p.setShader(null);
+                  p.setColor(0xFF17191B); c.drawCircle(CX,CY,9f,p);
+                  p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.7f); p.setColor(0xFFC3C7CA); c.drawCircle(CX,CY,9f,p);
+                  p.setStyle(Paint.Style.FILL); p.setColor(0xFFED1324); c.drawCircle(CX,CY,4.5f,p);
+              }
+
+              private static void drawBrand(Canvas c){
+                  Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
+                  p.setTextAlign(Paint.Align.CENTER);
+                  p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));
+                  p.setTextSize(23f); p.setColor(0xFFD5D8DB); p.setShadowLayer(2f,0f,1f,Color.BLACK);
+                  c.drawText("km/h",CX,238f,p);
+                  p.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD));
+                  p.setTextSize(39f); p.setColor(0xFFF01828); p.setShadowLayer(2.5f,0f,1.5f,0xFF260000);
+                  c.drawText("GTI",CX,287f,p); p.clearShadowLayer();
+              }
+
+              private static void drawDigital(Canvas c,float speed){
+                  Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
+                  p.setTextAlign(Paint.Align.CENTER); p.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+                  p.setTextSize(78f); p.setColor(Color.WHITE); p.setShadowLayer(3f,0f,2f,Color.BLACK);
+                  c.drawText(String.format(Locale.ROOT,"%d",Math.round(speed)),CX,207f,p); p.clearShadowLayer();
+              }
+
+              private static float angle(float s){ return START+SWEEP*(s/MAX); }
+              private static void line(Canvas c,Paint p,float deg,float r1,float r2){
+                  double a=Math.toRadians(deg); float x=(float)Math.cos(a), y=(float)Math.sin(a);
+                  c.drawLine(CX+x*r1,CY+y*r1,CX+x*r2,CY+y*r2,p);
+              }
+              private static float clamp(float v,float lo,float hi){return Math.max(lo,Math.min(hi,v));}
+          }
+          EOF
+
+          cat > "$P/app/src/main/java/ch/piiwii/gtispeed/GtiWidgetUpdater.java" <<'EOF'
+          package ch.piiwii.gtispeed;
+
+          import android.appwidget.AppWidgetManager;
+          import android.content.ComponentName;
+          import android.content.Context;
+          import android.graphics.Bitmap;
+          import android.widget.RemoteViews;
+
+          final class GtiWidgetUpdater {
+              private GtiWidgetUpdater() {}
+              static void updateAll(Context context, float speed) {
+                  AppWidgetManager m=AppWidgetManager.getInstance(context);
+                  ComponentName cn=new ComponentName(context,GtiSpeedWidgetProvider.class);
+                  int[] ids=m.getAppWidgetIds(cn);
+                  if(ids==null||ids.length==0) return;
+                  Bitmap bitmap=GaugeRenderer.render(speed);
+                  for(int id:ids){
+                      RemoteViews rv=new RemoteViews(context.getPackageName(),R.layout.widget_speed);
+                      rv.setImageViewBitmap(R.id.gauge_image,bitmap);
+                      // Aucun PendingIntent : toucher le compteur n'ouvre jamais l'application.
+                      m.updateAppWidget(id,rv);
+                  }
+              }
+              static boolean hasWidgets(Context c){
+                  int[] ids=AppWidgetManager.getInstance(c).getAppWidgetIds(new ComponentName(c,GtiSpeedWidgetProvider.class));
+                  return ids!=null&&ids.length>0;
+              }
+          }
+          EOF
+
+          cat > "$P/app/src/main/java/ch/piiwii/gtispeed/GtiSpeedWidgetProvider.java" <<'EOF'
+          package ch.piiwii.gtispeed;
+
+          import android.appwidget.AppWidgetManager;
+          import android.appwidget.AppWidgetProvider;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+
+          public class GtiSpeedWidgetProvider extends AppWidgetProvider {
+              private static void start(Context c){
+                  Intent i=new Intent(c,SpeedService.class);
+                  if(Build.VERSION.SDK_INT>=26)c.startForegroundService(i);else c.startService(i);
+              }
+              @Override public void onEnabled(Context c){ super.onEnabled(c); start(c); }
+              @Override public void onUpdate(Context c, AppWidgetManager m,int[] ids){
+                  super.onUpdate(c,m,ids); GtiWidgetUpdater.updateAll(c,GtiPrefs.lastFiltered(c)); start(c);
+              }
+              @Override public void onDeleted(Context c,int[] ids){super.onDeleted(c,ids);}
+              @Override public void onDisabled(Context c){super.onDisabled(c); c.stopService(new Intent(c,SpeedService.class));}
+          }
+          EOF
+
+          cat > "$P/app/src/main/java/ch/piiwii/gtispeed/BootReceiver.java" <<'EOF'
+          package ch.piiwii.gtispeed;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+          public class BootReceiver extends BroadcastReceiver {
+              @Override public void onReceive(Context c,Intent i){
+                  if(!GtiWidgetUpdater.hasWidgets(c))return;
+                  Intent s=new Intent(c,SpeedService.class);
+                  if(Build.VERSION.SDK_INT>=26)c.startForegroundService(s);else c.startService(s);
+              }
+          }
+          EOF
+
+          cat > "$P/app/src/main/java/ch/piiwii/gtispeed/SpeedService.java" <<'EOF'
+          package ch.piiwii.gtispeed;
+
+          import android.Manifest;
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.location.Location;
+          import android.location.LocationListener;
+          import android.location.LocationManager;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.IBinder;
+          import android.os.Looper;
+          import android.os.SystemClock;
+
+          public class SpeedService extends Service implements LocationListener {
+              private static final String CH="gti_speed_location";
+              private static final int NOTIF=1101;
+              private final Handler h=new Handler(Looper.getMainLooper());
+              private LocationManager lm;
+              private float raw=0f, filtered=0f, accuracy=999f;
+              private long lastGoodElapsed=0L, lastFixWall=0L;
+
+              private final Runnable tick=new Runnable(){
+                  @Override public void run(){
+                      long age=lastGoodElapsed==0?Long.MAX_VALUE:SystemClock.elapsedRealtime()-lastGoodElapsed;
+                      if(age>2800){
+                          filtered += GtiPrefs.zero(SpeedService.this)*(0f-filtered);
+                          if(filtered<0.45f)filtered=0f;
+                          raw=0f;
+                      }
+                      GtiPrefs.diag(SpeedService.this,raw,filtered,accuracy,lastFixWall,lastGoodElapsed!=0&&age<=2800);
+                      GtiWidgetUpdater.updateAll(SpeedService.this,filtered);
+                      h.postDelayed(this,200L);
+                  }
+              };
+
+              @Override public void onCreate(){
+                  super.onCreate();
+                  createChannel();
+                  Intent open=new Intent(this,MainActivity.class);
+                  PendingIntent pi=PendingIntent.getActivity(this,0,open,Build.VERSION.SDK_INT>=23?PendingIntent.FLAG_IMMUTABLE:0);
+                  Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,CH):new Notification.Builder(this);
+                  b.setContentTitle("Compteur GTI").setContentText("Vitesse GPS active").setSmallIcon(R.drawable.ic_speed_notification).setOngoing(true).setContentIntent(pi);
+                  startForeground(NOTIF,b.build());
+                  lm=(LocationManager)getSystemService(LOCATION_SERVICE);
+                  requestGps();
+                  h.post(tick);
+              }
+
+              private void createChannel(){
+                  if(Build.VERSION.SDK_INT>=26){
+                      NotificationChannel c=new NotificationChannel(CH,"Compteur GTI GPS",NotificationManager.IMPORTANCE_LOW);
+                      c.setDescription("Service GPS du compteur GTI");
+                      ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(c);
+                  }
+              }
+
+              private void requestGps(){
+                  if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return;
+                  try{ lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,200L,0f,this,Looper.getMainLooper()); }catch(Exception ignored){}
+              }
+
+              @Override public int onStartCommand(Intent i,int flags,int startId){requestGps();return START_STICKY;}
+
+              @Override public void onLocationChanged(Location l){
+                  long nowElapsed=SystemClock.elapsedRealtime();
+                  long locElapsed=Build.VERSION.SDK_INT>=17?l.getElapsedRealtimeNanos()/1_000_000L:nowElapsed;
+                  long age=Math.max(0L,nowElapsed-locElapsed);
+                  accuracy=l.hasAccuracy()?l.getAccuracy():999f;
+                  float v=l.hasSpeed()?l.getSpeed()*3.6f:0f;
+                  boolean valid=age<=2500&&accuracy<=80f&&v>=0f&&v<=280f;
+                  if(!valid)return;
+                  if(v<1.5f)v=0f;
+                  raw=v;
+                  float alpha=v>filtered?GtiPrefs.rise(this):GtiPrefs.fall(this);
+                  if(v==0f)alpha=GtiPrefs.zero(this);
+                  filtered += alpha*(v-filtered);
+                  if(v==0f&&filtered<0.45f)filtered=0f;
+                  lastGoodElapsed=nowElapsed;
+                  lastFixWall=System.currentTimeMillis();
+                  GtiPrefs.diag(this,raw,filtered,accuracy,lastFixWall,true);
+              }
+              @Override public void onProviderEnabled(String p){}
+              @Override public void onProviderDisabled(String p){}
+              @Override public void onStatusChanged(String p,int s,Bundle e){}
+              @Override public void onDestroy(){h.removeCallbacksAndMessages(null);try{if(lm!=null)lm.removeUpdates(this);}catch(Exception ignored){}super.onDestroy();}
+              @Override public IBinder onBind(Intent i){return null;}
+          }
+          EOF
+
+          cat > "$P/app/src/main/java/ch/piiwii/gtispeed/MainActivity.java" <<'EOF'
+          package ch.piiwii.gtispeed;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.appwidget.AppWidgetManager;
+          import android.content.ComponentName;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.graphics.Color;
+          import android.location.LocationManager;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.provider.Settings;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.TextView;
+          import java.util.Locale;
+
+          public class MainActivity extends Activity {
+              private TextView diag;
+              private final Handler h=new Handler(Looper.getMainLooper());
+              private final Runnable refresh=new Runnable(){@Override public void run(){updateDiag();h.postDelayed(this,1000);}};
+
+              @Override protected void onCreate(Bundle b){
+                  super.onCreate(b);
+                  ScrollView sc=new ScrollView(this); sc.setBackgroundColor(Color.rgb(7,8,9));
+                  LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(28,24,28,30); sc.addView(box);
+                  TextView title=text("COMPTEUR GTI",30,Color.WHITE); title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD); box.addView(title);
+                  TextView sub=text("Widget externe 380 × 350 px • GPS réel • preset GTI d'origine",16,0xFFB9BDC2); box.addView(sub);
+                  box.addView(space(14));
+
+                  Button perm=button("Autoriser la localisation"); perm.setOnClickListener(v->requestLocation()); box.addView(perm);
+                  Button start=button("Activer / relancer le compteur GPS"); start.setOnClickListener(v->startSpeed()); box.addView(start);
+                  Button gps=button("Ouvrir les réglages GPS"); gps.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))); box.addView(gps);
+                  Button reset=button("Rétablir le compteur GTI d'origine"); reset.setOnClickListener(v->{GtiPrefs.resetOriginal(this);GtiWidgetUpdater.updateAll(this,GtiPrefs.lastFiltered(this));}); box.addView(reset);
+
+                  TextView h2=text("DIAGNOSTIC",20,0xFFF01828); h2.setTypeface(android.graphics.Typeface.DEFAULT_BOLD); h2.setPadding(0,22,0,8); box.addView(h2);
+                  diag=text("",16,0xFFE6E7E8); diag.setLineSpacing(3f,1f); box.addView(diag);
+                  setContentView(sc);
+                  if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)startSpeed();
+              }
+
+              private void requestLocation(){
+                  if(Build.VERSION.SDK_INT>=23)requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},42);
+              }
+              @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){super.onRequestPermissionsResult(r,p,g);if(r==42&&g.length>0&&g[0]==PackageManager.PERMISSION_GRANTED)startSpeed();}
+              private void startSpeed(){Intent i=new Intent(this,SpeedService.class);if(Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);}
+
+              private void updateDiag(){
+                  boolean perm=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;
+                  LocationManager lm=(LocationManager)getSystemService(LOCATION_SERVICE);
+                  boolean gps=false;try{gps=lm.isProviderEnabled(LocationManager.GPS_PROVIDER);}catch(Exception ignored){}
+                  android.content.SharedPreferences p=GtiPrefs.p(this);
+                  long t=p.getLong("diag_fix_time",0); long age=t==0?-1:Math.max(0,System.currentTimeMillis()-t);
+                  int count=AppWidgetManager.getInstance(this).getAppWidgetIds(new ComponentName(this,GtiSpeedWidgetProvider.class)).length;
+                  diag.setText(String.format(Locale.ROOT,
+                      "Permission localisation : %s\nGPS activé : %s\nPosition reçue : %s\nPrécision GPS : %.1f m\nÂge dernière position : %s\nVitesse GPS brute : %.1f km/h\nVitesse filtrée : %.1f km/h\nWidget actif : %s (%d)\nTaille de référence : 380 × 350 px\nVersion : 1.1.0 (2)",
+                      perm?"OK":"KO",gps?"oui":"non",p.getBoolean("diag_has_fix",false)?"oui":"non",p.getFloat("diag_accuracy",999f),age<0?"—":(age+" ms"),p.getFloat("diag_raw",0),p.getFloat("diag_filtered",0),count>0?"oui":"non",count));
+              }
+              private TextView text(String s,int sp,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(sp);t.setTextColor(color);t.setPadding(0,6,0,6);return t;}
+              private Button button(String s){Button b=new Button(this);b.setText(s);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(0,6,0,6);b.setLayoutParams(lp);return b;}
+              private View space(int h){View v=new View(this);v.setLayoutParams(new LinearLayout.LayoutParams(1,h));return v;}
+              @Override protected void onResume(){super.onResume();h.removeCallbacks(refresh);h.post(refresh);}
+              @Override protected void onPause(){h.removeCallbacks(refresh);super.onPause();}
+          }
+          EOF
+
+          cat > "$P/app/src/main/res/layout/widget_speed.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="380dp" android:layout_height="350dp" android:background="@android:color/transparent">
+              <ImageView android:id="@+id/gauge_image" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" android:contentDescription="@string/widget_desc" />
+          </FrameLayout>
+          EOF
+
+          cat > "$P/app/src/main/res/xml/gti_speed_widget_info.xml" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+              android:minWidth="380dp" android:minHeight="350dp"
+              android:minResizeWidth="330dp" android:minResizeHeight="304dp"
+              android:updatePeriodMillis="0"
+              android:initialLayout="@layout/widget_speed"
+              android:resizeMode="horizontal|vertical"
+              android:widgetCategory="home_screen" />
+          EOF
+
+          cat > "$P/app/src/main/res/values/strings.xml" <<'EOF'
+          <resources><string name="app_name">Compteur GTI</string><string name="widget_desc">Compteur de vitesse GTI</string></resources>
+          EOF
+          cat > "$P/app/src/main/res/values/styles.xml" <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#F01828</item><item name="android:navigationBarColor">#000000</item><item name="android:windowLightNavigationBar">false</item></style></resources>
+          EOF
+          cat > "$P/app/src/main/res/drawable/ic_speed_notification.xml" <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FFFFFFFF" android:pathData="M12,3a9,9 0,1 0,9 9h-2a7,7 0,1 1,-2.05 -4.95L12,12l1.4,1.4 4.95,-4.95A8.96,8.96 0,0 0,12 3z"/></vector>
+          EOF
+          cat > "$P/app/src/main/res/drawable/ic_launcher.xml" <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:fillColor="#FF090A0B" android:pathData="M24,2a22,22 0,1 0,0 44a22,22 0,1 0,0 -44"/><path android:strokeColor="#FFE6E6E6" android:strokeWidth="2" android:fillColor="@android:color/transparent" android:pathData="M24,5a19,19 0,1 0,0 38a19,19 0,1 0,0 -38"/><path android:strokeColor="#FFF01828" android:strokeWidth="3" android:strokeLineCap="round" android:fillColor="@android:color/transparent" android:pathData="M24,24 L11,36"/></vector>
+          EOF
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compile
+        working-directory: piiwii-delivery/gti-speedometer/v110-src
+        run: gradle --no-daemon clean assembleRelease
+
+      - name: Package delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          P='piiwii-delivery/gti-speedometer/v110-src'
+          mkdir -p /tmp/gti-delivery
+          cp "$P/app/build/outputs/apk/release/app-release-unsigned.apk" /tmp/gti-delivery/Compteur-GTI-1.1.0-UNSIGNED.apk
+          (cd "$P" && zip -qr /tmp/gti-delivery/Compteur-GTI-1.1.0-SOURCE.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          sha256sum /tmp/gti-delivery/Compteur-GTI-1.1.0-UNSIGNED.apk /tmp/gti-delivery/Compteur-GTI-1.1.0-SOURCE.zip
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compteur-GTI-1.1.0-build
+          path: /tmp/gti-delivery/*
+          retention-days: 1
+          compression-level: 0
