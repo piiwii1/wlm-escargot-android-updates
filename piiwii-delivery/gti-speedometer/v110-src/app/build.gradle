@@ -1,0 +1,27 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ch.piiwii.gtispeed'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ch.piiwii.gtispeed'
+        minSdk 23
+        targetSdk 29
+        versionCode 2
+        versionName '1.1.0'
+    }
+
+    lint {
+        disable 'ExpiredTargetSdkVersion'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+}
