@@ -7,23 +7,29 @@ on:
       - '.github/workflows/gti-speedometer-delivery-relay.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   relay:
     runs-on: ubuntu-latest
     steps:
-      - name: Download signed delivery
+      - name: Checkout delivery repository
+        uses: actions/checkout@v4
+
+      - name: Download and verify signed APK
         run: |
           set -euo pipefail
-          curl -fL --retry 3 'https://tmpfiles.org/dl/wOwKkg7hLMwe/compteur-gti-1.0.0.apk' -o Compteur-GTI-1.0.0.apk
-          curl -fL --retry 3 'https://tmpfiles.org/dl/wPw9k57tLLlJ/compteur-gti-1.0.0-source.zip' -o Compteur-GTI-1.0.0-SOURCE.zip
-          echo '720c943dc4619e0ec6f153bd5948e3ab942e138e53901823dcad4f787bd67de6  Compteur-GTI-1.0.0.apk' | sha256sum -c -
-          echo 'dfe24022c36e43bd7b0a5ecadaf88c8a71b0fa1f9be48736f7db90390106c32c  Compteur-GTI-1.0.0-SOURCE.zip' | sha256sum -c -
-      - name: Upload delivery artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Compteur-GTI-1.0.0-delivery
-          path: |
-            Compteur-GTI-1.0.0.apk
-            Compteur-GTI-1.0.0-SOURCE.zip
-          retention-days: 1
-          compression-level: 0
+          curl -fL --retry 3 --connect-timeout 20 'https://tmpfiles.org/dl/wOwKkg7hLMwe/compteur-gti-1.0.0.apk' -o /tmp/Compteur-GTI-1.0.0.apk
+          echo '720c943dc4619e0ec6f153bd5948e3ab942e138e53901823dcad4f787bd67de6  /tmp/Compteur-GTI-1.0.0.apk' | sha256sum -c -
+
+      - name: Publish verified APK in repository
+        run: |
+          set -euo pipefail
+          mkdir -p piiwii-delivery/gti-speedometer
+          cp /tmp/Compteur-GTI-1.0.0.apk piiwii-delivery/gti-speedometer/Compteur-GTI-1.0.0.apk
+          git config user.name 'PiiWii Delivery Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add piiwii-delivery/gti-speedometer/Compteur-GTI-1.0.0.apk
+          git commit -m 'Deliver Compteur GTI 1.0.0 signed APK' || exit 0
+          git push origin HEAD:main
