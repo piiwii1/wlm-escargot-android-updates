@@ -7,7 +7,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
-import android.provider.Settings;
 import android.widget.RemoteViews;
 
 import java.util.Locale;
@@ -24,41 +23,49 @@ public class GTIGpsWidgetProvider extends AppWidgetProvider {
         updateOne(context, manager, appWidgetId);
     }
 
+    @Override
+    public void onEnabled(Context context) {
+        super.onEnabled(context);
+        updateAll(context);
+    }
+
     private static int immutableFlag() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0;
     }
 
     private static void updateOne(Context context, AppWidgetManager manager, int id) {
         RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_gti_gps);
-        boolean active = GpsState.prefs(context).getBoolean(GpsState.KEY_PANEL_ENABLED, false);
-        boolean overlayAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
-
-        if (!overlayAllowed) {
-            rv.setTextViewText(R.id.widget_status, "Autorisation panneau requise · toucher AFFICHER CARTE");
-        } else {
-            rv.setTextViewText(R.id.widget_status,
-                    active ? "Carte MapLibre active · panneau 380 × 350" : "Carte prête · panneau externe masqué");
-        }
+        boolean panel = GpsState.prefs(context).getBoolean(GpsState.KEY_PANEL_ENABLED, false);
+        boolean tracker = GpsState.prefs(context).getBoolean(GpsState.KEY_TRACKING_ENABLED, false);
+        rv.setTextViewText(R.id.widget_status,
+                panel ? "Carte MapLibre active · navigation prête"
+                        : tracker ? "GPS actif · panneau carte masqué" : "Carte prête · GPS en attente");
 
         long t = GpsState.prefs(context).getLong(GpsState.KEY_LAST_TIME, 0L);
         if (t > 0L) {
-            double lat = Double.longBitsToDouble(GpsState.prefs(context).getLong(GpsState.KEY_LAST_LAT, 0L));
-            double lon = Double.longBitsToDouble(GpsState.prefs(context).getLong(GpsState.KEY_LAST_LON, 0L));
             float acc = GpsState.prefs(context).getFloat(GpsState.KEY_LAST_ACC, -1f);
             long age = Math.max(0L, (System.currentTimeMillis() - t) / 1000L);
-            String text = String.format(Locale.US, "GPS %.5f, %.5f · %.0f m · %d s", lat, lon, acc, age);
+            String text = acc >= 0
+                    ? String.format(Locale.getDefault(), "GPS · %.0f m · %d s", acc, age)
+                    : "GPS · position reçue · " + age + " s";
             rv.setTextViewText(R.id.widget_position, text);
         } else {
-            rv.setTextViewText(R.id.widget_position,
-                    active ? "GPS : acquisition en cours…" : "GPS : aucune position enregistrée");
+            rv.setTextViewText(R.id.widget_position, "GPS : aucune position enregistrée");
         }
 
-        // Le bouton explicite passe désormais par l'activité pour pouvoir demander
-        // l'autorisation SYSTEM_ALERT_WINDOW si nécessaire. Une fois autorisé,
-        // l'activité démarre le panneau et revient automatiquement au launcher.
-        Intent show = new Intent(context, MainActivity.class)
-                .setAction(MainActivity.ACTION_REQUEST_SHOW_MAP)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (GpsState.navigationActive(context)) {
+            String name = shortName(GpsState.prefs(context).getString(GpsState.KEY_DEST_NAME, "Destination"));
+            float distance = GpsState.prefs(context).getFloat(GpsState.KEY_ROUTE_DISTANCE_M, 0f);
+            float duration = GpsState.prefs(context).getFloat(GpsState.KEY_ROUTE_DURATION_S, 0f);
+            String next = GpsState.prefs(context).getString(GpsState.KEY_NEXT_INSTRUCTION, "Suivez l’itinéraire");
+            rv.setTextViewText(R.id.widget_note,
+                    "► " + name + "\n" + MainActivity.formatDistance(distance) + " · " + MainActivity.formatDuration(duration) + "\n" + next);
+        } else {
+            rv.setTextViewText(R.id.widget_note,
+                    "Carte MapLibre + GPS indépendant. Ouvre RÉGLAGES pour choisir une destination et calculer un itinéraire.");
+        }
+
+        Intent show = new Intent(context, MainActivity.class).setAction(MainActivity.ACTION_REQUEST_SHOW_MAP);
         PendingIntent showPi = PendingIntent.getActivity(context, 100 + id, show,
                 PendingIntent.FLAG_UPDATE_CURRENT | immutableFlag());
         rv.setOnClickPendingIntent(R.id.widget_open_map, showPi);
@@ -68,6 +75,13 @@ public class GTIGpsWidgetProvider extends AppWidgetProvider {
                 PendingIntent.FLAG_UPDATE_CURRENT | immutableFlag());
         rv.setOnClickPendingIntent(R.id.widget_settings, settingsPi);
         manager.updateAppWidget(id, rv);
+    }
+
+    private static String shortName(String s) {
+        if (s == null || s.trim().isEmpty()) return "Destination";
+        String[] p = s.split(",");
+        if (p.length >= 2) return p[0].trim() + ", " + p[1].trim();
+        return s.trim();
     }
 
     public static void updateAll(Context context) {
