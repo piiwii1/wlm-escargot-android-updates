@@ -1,0 +1,114 @@
+name: Temporary Android Buildkit
+
+on:
+  push:
+    branches:
+      - tmp-android-buildkit-20260907
+
+jobs:
+  buildkit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Ensure Android SDK 36
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Resolve Navigation SDK and AGP caches
+        shell: bash
+        run: |
+          set -euxo pipefail
+          WORK=/tmp/navprobe
+          mkdir -p "$WORK/app/src/main/java/com/example/navprobe"
+          cat > "$WORK/settings.gradle" <<'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'NavProbe'
+          include ':app'
+          EOF
+          cat > "$WORK/build.gradle" <<'EOF'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.13.2' }
+          }
+          EOF
+          cat > "$WORK/app/build.gradle" <<'EOF'
+          apply plugin: 'com.android.application'
+          configurations.configureEach {
+              exclude group: 'com.google.android.gms', module: 'play-services-maps'
+          }
+          android {
+              namespace 'com.example.navprobe'
+              compileSdk 36
+              defaultConfig {
+                  applicationId 'com.example.navprobe'
+                  minSdk 24
+                  targetSdk 36
+                  versionCode 1
+                  versionName '1.0'
+                  multiDexEnabled true
+                  resConfigs 'fr'
+              }
+              compileOptions {
+                  coreLibraryDesugaringEnabled true
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
+              }
+          }
+          dependencies {
+              implementation 'com.google.android.libraries.navigation:navigation:7.9.0'
+              implementation 'org.chromium.net:cronet-fallback:119.6045.31'
+              coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs_nio:2.1.5'
+          }
+          EOF
+          cat > "$WORK/app/src/main/AndroidManifest.xml" <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@android:style/Theme.Material.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
+          EOF
+          cat > "$WORK/app/src/main/java/com/example/navprobe/MainActivity.java" <<'EOF'
+          package com.example.navprobe;
+          import android.app.Activity;
+          public class MainActivity extends Activity {}
+          EOF
+          cd "$WORK"
+          gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Package portable buildkit
+        shell: bash
+        run: |
+          set -euxo pipefail
+          KIT="$RUNNER_TEMP/android-buildkit"
+          mkdir -p "$KIT/android-sdk/platforms" "$KIT/android-sdk/build-tools" "$KIT/gradle-user-home/caches"
+          cp -a "$ANDROID_HOME/platforms/android-36" "$KIT/android-sdk/platforms/"
+          cp -a "$ANDROID_HOME/build-tools/36.0.0" "$KIT/android-sdk/build-tools/"
+          GRADLE_BIN="$(readlink -f "$(command -v gradle)")"
+          GRADLE_HOME="$(dirname "$(dirname "$GRADLE_BIN")")"
+          cp -a "$GRADLE_HOME" "$KIT/gradle-8.13"
+          cp -a "$HOME/.gradle/caches/modules-2" "$KIT/gradle-user-home/caches/"
+          if [ -d "$HOME/.gradle/caches/8.13" ]; then cp -a "$HOME/.gradle/caches/8.13" "$KIT/gradle-user-home/caches/"; fi
+          tar -C "$KIT" -czf "$RUNNER_TEMP/android-buildkit-nav790.tar.gz" .
+          ls -lh "$RUNNER_TEMP/android-buildkit-nav790.tar.gz"
+
+      - name: Upload buildkit
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-buildkit-nav790
+          path: ${{ runner.temp }}/android-buildkit-nav790.tar.gz
+          retention-days: 1
+          compression-level: 0
