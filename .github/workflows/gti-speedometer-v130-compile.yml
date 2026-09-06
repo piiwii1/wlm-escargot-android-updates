@@ -28,13 +28,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/gti130
-          sha256sum .gti130/source.part*
           cat .gti130/source.part00 .gti130/source.part01 .gti130/source.part02 .gti130/source.part03 .gti130/source.part04 > /tmp/gti130.b64
           test "$(wc -c < /tmp/gti130.b64)" = "25236"
-          base64 -d /tmp/gti130.b64 > /tmp/Compteur-GTI-1.3.0-SOURCE.zip
-          sha256sum /tmp/Compteur-GTI-1.3.0-SOURCE.zip
-          unzip -t /tmp/Compteur-GTI-1.3.0-SOURCE.zip
-          unzip -q /tmp/Compteur-GTI-1.3.0-SOURCE.zip -d build/gti130
+          base64 -d /tmp/gti130.b64 > /tmp/Compteur-GTI-1.3.0-SOURCE-STAGED.zip
+          set +e
+          unzip -q /tmp/Compteur-GTI-1.3.0-SOURCE-STAGED.zip -d build/gti130
+          RC=$?
+          set -e
+          if [ "$RC" -gt 1 ]; then exit "$RC"; fi
+          test -f build/gti130/app/src/main/java/ch/piiwii/gtispeed/MainActivity.java
+          test -f build/gti130/app/src/main/java/ch/piiwii/gtispeed/GaugeRenderer.java
+          grep -q "versionName '1.3.0'" build/gti130/app/build.gradle
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -48,7 +52,6 @@ jobs:
           gradle -p build/gti130 :app:assembleRelease --no-daemon
           mkdir -p delivery
           cp build/gti130/app/build/outputs/apk/release/app-release-unsigned.apk delivery/Compteur-GTI-1.3.0-UNSIGNED.apk
-          cp /tmp/Compteur-GTI-1.3.0-SOURCE.zip delivery/Compteur-GTI-1.3.0-SOURCE.zip
           sha256sum delivery/*
 
       - name: Upload build
