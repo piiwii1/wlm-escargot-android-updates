@@ -46,18 +46,9 @@ final class WidgetRenderer {
     }
 
     private static RectF fitPanel(float w, float h) {
-        float panelW;
-        float panelH;
-        if (w / h > SKIN_ASPECT) {
-            panelH = h;
-            panelW = h * SKIN_ASPECT;
-        } else {
-            panelW = w;
-            panelH = w / SKIN_ASPECT;
-        }
-        float left = (w - panelW) * 0.5f;
-        float top = (h - panelH) * 0.5f;
-        return new RectF(left, top, left + panelW, top + panelH);
+        // The launcher slot is much taller than the reference artwork. Letterboxing made the
+        // lower GPS/precision strip tiny and unreadable. Fill the real widget bounds instead.
+        return new RectF(0f, 0f, w, h);
     }
 
     private static void drawLiveData(Canvas c, Context context) {
@@ -127,7 +118,7 @@ final class WidgetRenderer {
             tri.close(); c.drawPath(tri,p); p.clearShadowLayer();
         }
         String text;
-        if (!hasAltitude) text = "--";
+        if (!hasAltitude || Double.isNaN(trend)) text = "—";
         else if (neutral) text = "0 m";
         else text = (up ? "+" : "−") + Math.abs(Math.round(trend)) + " m";
         Paint tp = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
@@ -143,30 +134,72 @@ final class WidgetRenderer {
         boolean callbackFresh = AltitudeState.isRawGpsFresh(context);
         int bars = gpsBars(AltitudeState.hAcc(context), callbackFresh);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-        final float x = 848f, baseline = 500f, barW = 28f, gap = 15f;
-        final float[] heights = {28f,49f,72f,96f};
-        for (int i=0;i<4;i++) {
-            float l=x+i*(barW+gap), t=baseline-heights[i];
-            p.setColor(i<bars ? RED : Color.rgb(62,65,72));
-            if (i<bars) p.setShadowLayer(8f,0f,0f,Color.argb(165,255,22,28));
-            c.drawRect(l,t,l+barW,baseline,p); p.clearShadowLayer();
+        p.setStrokeCap(Paint.Cap.ROUND);
+
+        // Keep the four bars entirely between the “GPS” label and the vertical separator.
+        // Each slot has a visible outline; active signal is a genuinely filled inner bar.
+        final float x = 878f, baseline = 510f, barW = 18f, gap = 9f;
+        final float[] heights = {24f, 42f, 62f, 84f};
+        for (int i = 0; i < 4; i++) {
+            float l = x + i * (barW + gap);
+            float t = baseline - heights[i];
+            RectF slot = new RectF(l, t, l + barW, baseline);
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.rgb(34, 36, 42));
+            c.drawRoundRect(slot, 5f, 5f, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(2.5f);
+            p.setColor(Color.rgb(92, 96, 105));
+            c.drawRoundRect(slot, 5f, 5f, p);
+            if (i < bars) {
+                RectF fill = new RectF(l + 3f, t + 3f, l + barW - 3f, baseline - 3f);
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(RED);
+                p.setShadowLayer(7f, 0f, 0f, Color.argb(170, 255, 24, 30));
+                c.drawRoundRect(fill, 3f, 3f, p);
+                p.clearShadowLayer();
+            }
         }
+        p.setStyle(Paint.Style.FILL);
     }
 
     private static void drawAccuracy(Canvas c, Context context, boolean gpsFresh) {
-        String value; boolean good=false;
-        if (gpsFresh) {
-            float acc = !Float.isNaN(AltitudeState.acceptedVAcc(context)) ? AltitudeState.acceptedVAcc(context) : AltitudeState.acceptedHAcc(context);
-            if (!Float.isNaN(acc) && acc <= 120f) { value = "±" + Math.max(1, Math.round(acc)) + " m"; good=true; }
-            else value = "—";
-        } else if (AltitudeState.isBaroFresh(context)) { value = "BARO"; good=true; }
-        else value = "—";
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        String value;
+        boolean good = false;
+        if (AltitudeState.isRawGpsFresh(context)) {
+            float acc = bestVisibleAccuracy(context);
+            if (!Float.isNaN(acc)) {
+                value = "±" + Math.max(1, Math.round(acc)) + " m";
+                good = acc <= 120f;
+            } else {
+                value = "± ?";
+            }
+        } else if (AltitudeState.isBaroFresh(context)) {
+            value = "BARO";
+            good = true;
+        } else {
+            value = "—";
+        }
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG | Paint.DITHER_FLAG);
         p.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        p.setColor(good ? WHITE : MUTED);
-        p.setTextSize(48f);
-        fitText(p, value, 175f, 30f);
-        c.drawText(value, 1368f, 498f, p);
+        p.setColor(good ? WHITE : (AltitudeState.isRawGpsFresh(context) ? Color.rgb(220, 220, 224) : MUTED));
+        p.setTextAlign(Paint.Align.RIGHT);
+        p.setTextSize(46f);
+        fitText(p, value, 178f, 29f);
+        p.setShadowLayer(good ? 5f : 0f, 0f, 2f, Color.argb(120, 0, 0, 0));
+        c.drawText(value, 1520f, 503f, p);
+        p.clearShadowLayer();
+    }
+
+    private static float bestVisibleAccuracy(Context context) {
+        float v = AltitudeState.vAcc(context);
+        if (!Float.isNaN(v) && v > 0f && v < 500f) return v;
+        float h = AltitudeState.hAcc(context);
+        if (!Float.isNaN(h) && h > 0f && h < 500f) return h;
+        v = AltitudeState.acceptedVAcc(context);
+        if (!Float.isNaN(v) && v > 0f && v < 500f) return v;
+        h = AltitudeState.acceptedHAcc(context);
+        return (!Float.isNaN(h) && h > 0f && h < 500f) ? h : Float.NaN;
     }
 
     private static void drawHeadingMarker(Canvas c, Context context) {
@@ -184,10 +217,10 @@ final class WidgetRenderer {
 
     private static int gpsBars(float accuracy, boolean enabled) {
         if (!enabled || Float.isNaN(accuracy)) return 0;
-        if (accuracy < 10f) return 4;
-        if (accuracy <= 25f) return 3;
-        if (accuracy <= 40f) return 2;
-        if (accuracy <= 70f) return 1;
+        if (accuracy <= 8f) return 4;
+        if (accuracy <= 20f) return 3;
+        if (accuracy <= 45f) return 2;
+        if (accuracy <= 120f) return 1;
         return 0;
     }
 
