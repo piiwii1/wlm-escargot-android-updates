@@ -47,6 +47,23 @@ jobs:
       - name: Install SDK
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
+      - name: Export apksigner
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" apksigner.jar
+          sha256sum apksigner.jar > apksigner.jar.sha256
+
+      - name: Upload apksigner
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apksigner-35
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            apksigner.jar
+            apksigner.jar.sha256
+
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
