@@ -1,0 +1,98 @@
+name: CI GTI Altimeter Widget 1.2.1
+
+on:
+  push:
+    branches: [ci-gti-altimeter-widget-1.2.1]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild 1.2.0 base project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci/gtia120.part.00 ci/gtia120.part.01 ci/gtia120.part.02 ci/gtia120.part.03 ci/gtia120.part.04 ci/gtia120.part.05 ci/gtia120.part.06.00 ci/gtia120.part.06.01 ci/gtia120.part.06.02 ci/gtia120.part.06.03 ci/gtia120.part.06.04 ci/gtia120.part.07.00 ci/gtia120.part.07.01 ci/gtia120.part.07.02 ci/gtia120.part.07.03 ci/gtia120.part.07.04 ci/gtia120.part.07.05 ci/gtia120.part.07.06 ci/gtia120.part.07.07 ci/gtia120.part.07.08 ci/gtia120.part.07.09 ci/gtia120.part.07.10 ci/gtia120.part.07.11 ci/gtia120.part.07.12 ci/gtia120.part.07.13 ci/gtia120.part.07.14 ci/gtia120.part.07.15 | tr -d '\n\r' | base64 -d > /tmp/gtialtimeter-base.zip
+          unzip -t /tmp/gtialtimeter-base.zip
+          rm -rf ci-gtialtimeter-1.2.1-project
+          mkdir ci-gtialtimeter-1.2.1-project
+          unzip -q /tmp/gtialtimeter-base.zip -d ci-gtialtimeter-1.2.1-project
+
+      - name: Apply 1.2.1 faithful reference redesign
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('ci-gtialtimeter-1.2.1-project/app/build.gradle')
+          s=p.read_text()
+          s=s.replace('versionCode 5','versionCode 6').replace("versionName '1.2.0'","versionName '1.2.1'")
+          p.write_text(s)
+          PY
+          cp ci/gtia121-WidgetRenderer.java ci-gtialtimeter-1.2.1-project/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java
+          mkdir -p ci-gtialtimeter-1.2.1-project/app/src/main/res/drawable-nodpi
+          cat ci/gtia121skin.part.00 ci/gtia121skin.part.01 ci/gtia121skin.part.02 ci/gtia121skin.part.03 ci/gtia121skin.part.04 ci/gtia121skin.part.05 ci/gtia121skin.part.06 | tr -d '\n\r' | base64 -d > ci-gtialtimeter-1.2.1-project/app/src/main/res/drawable-nodpi/altimeter_skin_reference.png
+          file ci-gtialtimeter-1.2.1-project/app/src/main/res/drawable-nodpi/altimeter_skin_reference.png
+
+      - name: Verify source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "applicationId 'ch.piiwii.gtialtimeter'" ci-gtialtimeter-1.2.1-project/app/build.gradle
+          grep -q "versionCode 6" ci-gtialtimeter-1.2.1-project/app/build.gradle
+          grep -q "versionName '1.2.1'" ci-gtialtimeter-1.2.1-project/app/build.gradle
+          grep -q "GTIAltimeterWidgetProvider" ci-gtialtimeter-1.2.1-project/app/src/main/AndroidManifest.xml
+          grep -q 'android:minWidth="164dp"' ci-gtialtimeter-1.2.1-project/app/src/main/res/xml/gti_altimeter_widget_info.xml
+          grep -q 'android:minHeight="92dp"' ci-gtialtimeter-1.2.1-project/app/src/main/res/xml/gti_altimeter_widget_info.xml
+          grep -q 'altimeter_skin_reference' ci-gtialtimeter-1.2.1-project/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java
+          test -s ci-gtialtimeter-1.2.1-project/app/src/main/res/drawable-nodpi/altimeter_skin_reference.png
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        run: gradle -p ci-gtialtimeter-1.2.1-project --no-daemon --stacktrace clean assembleRelease
+
+      - name: Zipalign and inspect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          "$BT/zipalign" -p -f 4 ci-gtialtimeter-1.2.1-project/app/build/outputs/apk/release/app-release-unsigned.apk GTI-Altimeter-Widget-1.2.1-aligned-unsigned.apk
+          "$BT/zipalign" -c -v 4 GTI-Altimeter-Widget-1.2.1-aligned-unsigned.apk
+          "$BT/aapt" dump badging GTI-Altimeter-Widget-1.2.1-aligned-unsigned.apk > GTI-Altimeter-Widget-1.2.1-badging.txt
+          grep -q "package: name='ch.piiwii.gtialtimeter' versionCode='6' versionName='1.2.1'" GTI-Altimeter-Widget-1.2.1-badging.txt
+          cp "$BT/lib/apksigner.jar" apksigner.jar
+          sha256sum GTI-Altimeter-Widget-1.2.1-aligned-unsigned.apk apksigner.jar > CI-SHA256.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTI-Altimeter-Widget-1.2.1-build
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            GTI-Altimeter-Widget-1.2.1-aligned-unsigned.apk
+            GTI-Altimeter-Widget-1.2.1-badging.txt
+            CI-SHA256.txt
+            apksigner.jar
