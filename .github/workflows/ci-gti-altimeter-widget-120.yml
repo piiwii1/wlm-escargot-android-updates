@@ -18,7 +18,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat ci/gtia120.part.00 ci/gtia120.part.01 ci/gtia120.part.02 ci/gtia120.part.03 ci/gtia120.part.04 ci/gtia120.part.05 ci/gtia120.part.06 ci/gtia120.part.07 | tr -d '\n\r' | base64 -d > /tmp/gtialtimeter-1.2.0-project.zip
+          cat ci/gtia120.part.00 ci/gtia120.part.01 ci/gtia120.part.02 ci/gtia120.part.03 ci/gtia120.part.04 ci/gtia120.part.05 ci/gtia120.part.06.00 ci/gtia120.part.06.01 ci/gtia120.part.06.02 ci/gtia120.part.06.03 ci/gtia120.part.06.04 ci/gtia120.part.07.00 ci/gtia120.part.07.01 ci/gtia120.part.07.02 ci/gtia120.part.07.03 ci/gtia120.part.07.04 ci/gtia120.part.07.05 ci/gtia120.part.07.06 ci/gtia120.part.07.07 ci/gtia120.part.07.08 ci/gtia120.part.07.09 ci/gtia120.part.07.10 ci/gtia120.part.07.11 ci/gtia120.part.07.12 ci/gtia120.part.07.13 ci/gtia120.part.07.14 ci/gtia120.part.07.15 | tr -d '\n\r' | base64 -d > /tmp/gtialtimeter-1.2.0-project.zip
           unzip -t /tmp/gtialtimeter-1.2.0-project.zip
           rm -rf ci-gtialtimeter-1.2.0-project
           mkdir ci-gtialtimeter-1.2.0-project
