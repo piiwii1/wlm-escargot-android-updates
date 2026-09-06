@@ -22,9 +22,18 @@ jobs:
           echo '63f3d1eb58e9c027edda799ce840f5dcfa4cf714aa0da12c2c2b7b8c9d7cb44e  /tmp/src.zip' | sha256sum -c -
           mkdir -p /tmp/src
           unzip -q /tmp/src.zip -d /tmp/src
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/src/GTI-GPS-Widget-1.0.0/app/build.gradle')
+          s = p.read_text()
+          if "ExpiredTargetSdkVersion" not in s:
+              s = s.replace("    buildTypes {\n", "    lint {\n        // targetSdk 28 is intentional for TS18/Topway compatibility; this APK is not a Google Play build.\n        disable 'ExpiredTargetSdkVersion'\n    }\n\n    buildTypes {\n")
+          p.write_text(s)
+          PY
           grep -q "applicationId 'ch.piiwii.gtigps'" /tmp/src/GTI-GPS-Widget-1.0.0/app/build.gradle
           grep -q "versionCode 1" /tmp/src/GTI-GPS-Widget-1.0.0/app/build.gradle
           grep -q "versionName '1.0.0'" /tmp/src/GTI-GPS-Widget-1.0.0/app/build.gradle
+          grep -q "ExpiredTargetSdkVersion" /tmp/src/GTI-GPS-Widget-1.0.0/app/build.gradle
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
