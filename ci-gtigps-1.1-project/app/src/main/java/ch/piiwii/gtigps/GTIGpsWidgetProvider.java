@@ -7,6 +7,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.provider.Settings;
 import android.widget.RemoteViews;
 
 import java.util.Locale;
@@ -30,7 +31,14 @@ public class GTIGpsWidgetProvider extends AppWidgetProvider {
     private static void updateOne(Context context, AppWidgetManager manager, int id) {
         RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_gti_gps);
         boolean active = GpsState.prefs(context).getBoolean(GpsState.KEY_PANEL_ENABLED, false);
-        rv.setTextViewText(R.id.widget_status, active ? "Carte MapLibre active · panneau 380 × 350" : "Carte prête · panneau externe masqué");
+        boolean overlayAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
+
+        if (!overlayAllowed) {
+            rv.setTextViewText(R.id.widget_status, "Autorisation panneau requise · toucher AFFICHER CARTE");
+        } else {
+            rv.setTextViewText(R.id.widget_status,
+                    active ? "Carte MapLibre active · panneau 380 × 350" : "Carte prête · panneau externe masqué");
+        }
 
         long t = GpsState.prefs(context).getLong(GpsState.KEY_LAST_TIME, 0L);
         if (t > 0L) {
@@ -41,11 +49,17 @@ public class GTIGpsWidgetProvider extends AppWidgetProvider {
             String text = String.format(Locale.US, "GPS %.5f, %.5f · %.0f m · %d s", lat, lon, acc, age);
             rv.setTextViewText(R.id.widget_position, text);
         } else {
-            rv.setTextViewText(R.id.widget_position, "GPS : aucune position enregistrée");
+            rv.setTextViewText(R.id.widget_position,
+                    active ? "GPS : acquisition en cours…" : "GPS : aucune position enregistrée");
         }
 
-        Intent show = new Intent(context, ActionReceiver.class).setAction(ActionReceiver.ACTION_SHOW);
-        PendingIntent showPi = PendingIntent.getBroadcast(context, 100 + id, show,
+        // Le bouton explicite passe désormais par l'activité pour pouvoir demander
+        // l'autorisation SYSTEM_ALERT_WINDOW si nécessaire. Une fois autorisé,
+        // l'activité démarre le panneau et revient automatiquement au launcher.
+        Intent show = new Intent(context, MainActivity.class)
+                .setAction(MainActivity.ACTION_REQUEST_SHOW_MAP)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent showPi = PendingIntent.getActivity(context, 100 + id, show,
                 PendingIntent.FLAG_UPDATE_CURRENT | immutableFlag());
         rv.setOnClickPendingIntent(R.id.widget_open_map, showPi);
 
