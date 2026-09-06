@@ -1,0 +1,80 @@
+name: CI GTI Altimeter Widget 1.0.0
+
+on:
+  push:
+    branches: [ci-gti-altimeter-widget-1.0.0]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild and extract source project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci/gtialtimeter-project.b64.* | tr -d '\n\r' | base64 -d > /tmp/gtialtimeter-project.zip
+          unzip -t /tmp/gtialtimeter-project.zip
+          rm -rf ci-gtialtimeter-1.0-project
+          mkdir ci-gtialtimeter-1.0-project
+          unzip -q /tmp/gtialtimeter-project.zip -d ci-gtialtimeter-1.0-project
+
+      - name: Verify source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "applicationId 'ch.piiwii.gtialtimeter'" ci-gtialtimeter-1.0-project/app/build.gradle
+          grep -q "versionCode 1" ci-gtialtimeter-1.0-project/app/build.gradle
+          grep -q "versionName '1.0.0'" ci-gtialtimeter-1.0-project/app/build.gradle
+          grep -q "GTIAltimeterWidgetProvider" ci-gtialtimeter-1.0-project/app/src/main/AndroidManifest.xml
+          grep -q 'android:minWidth="164dp"' ci-gtialtimeter-1.0-project/app/src/main/res/xml/gti_altimeter_widget_info.xml
+          grep -q 'android:minHeight="92dp"' ci-gtialtimeter-1.0-project/app/src/main/res/xml/gti_altimeter_widget_info.xml
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        run: gradle -p ci-gtialtimeter-1.0-project --no-daemon --stacktrace clean assembleRelease
+
+      - name: Zipalign and inspect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          "$BT/zipalign" -p -f 4 ci-gtialtimeter-1.0-project/app/build/outputs/apk/release/app-release-unsigned.apk GTI-Altimeter-Widget-1.0.0-aligned-unsigned.apk
+          "$BT/zipalign" -c -v 4 GTI-Altimeter-Widget-1.0.0-aligned-unsigned.apk
+          "$BT/aapt" dump badging GTI-Altimeter-Widget-1.0.0-aligned-unsigned.apk > GTI-Altimeter-Widget-1.0.0-badging.txt
+          grep -q "package: name='ch.piiwii.gtialtimeter' versionCode='1' versionName='1.0.0'" GTI-Altimeter-Widget-1.0.0-badging.txt
+          cp "$BT/lib/apksigner.jar" apksigner.jar
+          sha256sum GTI-Altimeter-Widget-1.0.0-aligned-unsigned.apk apksigner.jar > CI-SHA256.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTI-Altimeter-Widget-1.0.0-build
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            GTI-Altimeter-Widget-1.0.0-aligned-unsigned.apk
+            GTI-Altimeter-Widget-1.0.0-badging.txt
+            CI-SHA256.txt
+            apksigner.jar
