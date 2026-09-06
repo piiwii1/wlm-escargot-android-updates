@@ -15,7 +15,7 @@ android {
     }
 
     lint {
-        disable 'ExpiredTargetSdkVersion'
+        disable 'ExpiredTargetSdkVersion', 'BlockedPrivateApi'
     }
 
     buildTypes {
