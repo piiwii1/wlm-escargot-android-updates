@@ -49,6 +49,11 @@ jobs:
           rootProject.name = 'NavProbe'
           include ':app'
           EOF
+          cat > "$WORK/gradle.properties" <<'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
+          EOF
           cat > "$WORK/build.gradle" <<'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
