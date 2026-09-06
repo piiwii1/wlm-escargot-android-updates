@@ -78,3 +78,5 @@ jobs:
             GTI-Altimeter-Widget-1.1.1-badging.txt
             CI-SHA256.txt
             apksigner.jar
+
+# trigger after source synchronization
