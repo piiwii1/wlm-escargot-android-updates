@@ -1,0 +1,1 @@
+GTI GPS Widget rebuild after intentional targetSdk lint exemption
