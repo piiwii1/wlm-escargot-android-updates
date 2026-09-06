@@ -1,0 +1,78 @@
+name: Export GTI Altimeter 1.2.2 Sources
+
+on:
+  push:
+    branches: [ci-gti-altimeter-widget-1.2.2]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild 1.2.0 base project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci/gtia120.part.00 ci/gtia120.part.01 ci/gtia120.part.02 ci/gtia120.part.03 ci/gtia120.part.04 ci/gtia120.part.05 ci/gtia120.part.06.00 ci/gtia120.part.06.01 ci/gtia120.part.06.02 ci/gtia120.part.06.03 ci/gtia120.part.06.04 ci/gtia120.part.07.00 ci/gtia120.part.07.01 ci/gtia120.part.07.02 ci/gtia120.part.07.03 ci/gtia120.part.07.04 ci/gtia120.part.07.05 ci/gtia120.part.07.06 ci/gtia120.part.07.07 ci/gtia120.part.07.08 ci/gtia120.part.07.09 ci/gtia120.part.07.10 ci/gtia120.part.07.11 ci/gtia120.part.07.12 ci/gtia120.part.07.13 ci/gtia120.part.07.14 ci/gtia120.part.07.15 | tr -d '\n\r' | base64 -d > /tmp/gtialtimeter-base.zip
+          unzip -q /tmp/gtialtimeter-base.zip -d project
+
+      - name: Apply 1.2.1 reference skin
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p project/app/src/main/res/drawable-nodpi
+          cat ci/gtia121skin.part.00 ci/gtia121skin.part.01 ci/gtia121skin.part.02 ci/gtia121skin.part.03 ci/gtia121skin.part.04 ci/gtia121skin.part.05 ci/gtia121skin.part.06 | tr -d '\n\r' | base64 -d > project/app/src/main/res/drawable-nodpi/altimeter_skin_reference.png
+
+      - name: Apply 1.2.2 recovery sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA=project/app/src/main/java/ch/piiwii/gtialtimeter
+          cp ci/gtia122-AltitudeState.java "$JAVA/AltitudeState.java"
+          cp ci/gtia122-AltitudeService.java "$JAVA/AltitudeService.java"
+          cp ci/gtia122-ServiceWatchdog.java "$JAVA/ServiceWatchdog.java"
+          cp ci/gtia122-WatchdogReceiver.java "$JAVA/WatchdogReceiver.java"
+          cp ci/gtia122-BootReceiver.java "$JAVA/BootReceiver.java"
+          cp ci/gtia122-GTIAltimeterWidgetProvider.java "$JAVA/GTIAltimeterWidgetProvider.java"
+          cp ci/gtia122-WidgetRenderer.java "$JAVA/WidgetRenderer.java"
+          cp ci/gtia122-MainActivity.java "$JAVA/MainActivity.java"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('project/app/build.gradle')
+          s=p.read_text().replace('versionCode 5','versionCode 7').replace("versionName '1.2.0'","versionName '1.2.2'")
+          p.write_text(s)
+          m=Path('project/app/src/main/AndroidManifest.xml')
+          s=m.read_text()
+          marker='''        <receiver\n            android:name=".BootReceiver"'''
+          insertion='''        <receiver\n            android:name=".WatchdogReceiver"\n            android:enabled="true"\n            android:exported="false" />\n\n        <receiver\n            android:name=".BootReceiver"'''
+          if '.WatchdogReceiver' not in s:
+              s=s.replace(marker,insertion)
+          s=s.replace('android:exported="false"\n            android:foregroundServiceType="location" />', 'android:exported="false"\n            android:stopWithTask="false"\n            android:foregroundServiceType="location" />')
+          m.write_text(s)
+          PY
+
+      - name: Verify and pack exact sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "versionCode 7" project/app/build.gradle
+          grep -q "versionName '1.2.2'" project/app/build.gradle
+          grep -q "WatchdogReceiver" project/app/src/main/AndroidManifest.xml
+          grep -q "displayAltitude" project/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeState.java
+          (cd project && zip -qr ../GTI-Altimeter-Widget-1.2.2-SOURCES.zip . -x '*/build/*' '.gradle/*')
+          sha256sum GTI-Altimeter-Widget-1.2.2-SOURCES.zip > SOURCES-SHA256.txt
+
+      - name: Upload exact sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTI-Altimeter-Widget-1.2.2-sources
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            GTI-Altimeter-Widget-1.2.2-SOURCES.zip
+            SOURCES-SHA256.txt
