@@ -14,14 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract source project
+      - name: Rebuild and extract source project
         shell: bash
         run: |
           set -euo pipefail
-          unzip -t ci/gtialtimeter-1.1.1-project.zip
+          cat ci/gtialtimeter-project.b64.00 ci/gtialtimeter-project.b64.01 ci/gtialtimeter-project.b64.02 ci/gtialtimeter-project.b64.03 | tr -d '\n\r' | base64 -d > /tmp/gtialtimeter-1.1.1-project.zip
+          unzip -t /tmp/gtialtimeter-1.1.1-project.zip
           rm -rf ci-gtialtimeter-1.1.1-project
           mkdir ci-gtialtimeter-1.1.1-project
-          unzip -q ci/gtialtimeter-1.1.1-project.zip -d ci-gtialtimeter-1.1.1-project
+          unzip -q /tmp/gtialtimeter-1.1.1-project.zip -d ci-gtialtimeter-1.1.1-project
 
       - name: Verify source identity
         shell: bash
