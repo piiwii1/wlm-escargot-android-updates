@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GTI GPS Widget</string>
+    <string name="widget_description">Carte GPS GTI externe 380 × 350</string>
+</resources>
