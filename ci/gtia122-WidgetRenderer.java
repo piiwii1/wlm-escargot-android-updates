@@ -119,7 +119,7 @@ final class WidgetRenderer {
         }
         String text;
         if (!hasAltitude || Double.isNaN(trend)) text = "—";
-        else if (neutral) text = "0 m";
+        else if (neutral) text = "—";
         else text = (up ? "+" : "−") + Math.abs(Math.round(trend)) + " m";
         Paint tp = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         tp.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
