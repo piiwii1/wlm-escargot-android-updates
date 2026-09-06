@@ -31,6 +31,11 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <service
+            android:name=".GpsTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <receiver
             android:name=".GTIGpsWidgetProvider"
             android:exported="true">
