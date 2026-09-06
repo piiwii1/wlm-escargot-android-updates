@@ -114,12 +114,23 @@ jobs:
           cp -a "$HOME/.gradle/caches/modules-2" "$KIT/gradle-user-home/caches/"
           if [ -d "$HOME/.gradle/caches/8.13" ]; then cp -a "$HOME/.gradle/caches/8.13" "$KIT/gradle-user-home/caches/"; fi
           tar -C "$KIT" -czf "$RUNNER_TEMP/android-buildkit-nav790.tar.gz" .
-          ls -lh "$RUNNER_TEMP/android-buildkit-nav790.tar.gz"
+          split -b 390M -d -a 2 "$RUNNER_TEMP/android-buildkit-nav790.tar.gz" "$RUNNER_TEMP/android-buildkit-nav790.part"
+          ls -lh "$RUNNER_TEMP"/android-buildkit-nav790.part*
+          test -f "$RUNNER_TEMP/android-buildkit-nav790.part00"
+          test -f "$RUNNER_TEMP/android-buildkit-nav790.part01"
 
-      - name: Upload buildkit
+      - name: Upload buildkit part 00
         uses: actions/upload-artifact@v4
         with:
-          name: android-buildkit-nav790
-          path: ${{ runner.temp }}/android-buildkit-nav790.tar.gz
+          name: android-buildkit-nav790-part00
+          path: ${{ runner.temp }}/android-buildkit-nav790.part00
+          retention-days: 1
+          compression-level: 0
+
+      - name: Upload buildkit part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-buildkit-nav790-part01
+          path: ${{ runner.temp }}/android-buildkit-nav790.part01
           retention-days: 1
           compression-level: 0
