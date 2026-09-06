@@ -1,0 +1,1 @@
+Trigger GTI GPS Widget 1.1.0 build after workflow registration.
