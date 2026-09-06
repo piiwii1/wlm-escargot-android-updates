@@ -44,19 +44,22 @@ jobs:
       - name: Build release APK
         run: gradle -p ci-gtigps-1.1-project --no-daemon --stacktrace clean assembleRelease
 
-      - name: Collect APK
+      - name: Zipalign release APK
         shell: bash
         run: |
           set -euo pipefail
-          cp ci-gtigps-1.1-project/app/build/outputs/apk/release/app-release-unsigned.apk GTI-GPS-Widget-1.1.0-unsigned.apk
-          sha256sum GTI-GPS-Widget-1.1.0-unsigned.apk > GTI-GPS-Widget-1.1.0-unsigned.apk.sha256
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
+            ci-gtigps-1.1-project/app/build/outputs/apk/release/app-release-unsigned.apk \
+            GTI-GPS-Widget-1.1.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -p 4 GTI-GPS-Widget-1.1.0-aligned-unsigned.apk
+          sha256sum GTI-GPS-Widget-1.1.0-aligned-unsigned.apk > GTI-GPS-Widget-1.1.0-aligned-unsigned.apk.sha256
 
-      - name: Upload unsigned APK
+      - name: Upload aligned unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTI-GPS-Widget-1.1.0-unsigned
+          name: GTI-GPS-Widget-1.1.0-aligned-unsigned
           if-no-files-found: error
           retention-days: 3
           path: |
-            GTI-GPS-Widget-1.1.0-unsigned.apk
-            GTI-GPS-Widget-1.1.0-unsigned.apk.sha256
+            GTI-GPS-Widget-1.1.0-aligned-unsigned.apk
+            GTI-GPS-Widget-1.1.0-aligned-unsigned.apk.sha256
