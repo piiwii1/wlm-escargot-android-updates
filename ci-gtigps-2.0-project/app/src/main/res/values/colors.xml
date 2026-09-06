@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="gti_red">#D71920</color>
+    <color name="gti_bg">#090909</color>
+    <color name="gti_panel">#DD111111</color>
+    <color name="gti_text">#F1F1F1</color>
+    <color name="gti_muted">#A7A7A7</color>
+</resources>

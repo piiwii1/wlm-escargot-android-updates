@@ -1,0 +1,75 @@
+name: CI GTI GPS Widget 2.0.0
+
+on:
+  push:
+    branches: [ci-gti-gps-widget-2.0.0]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "applicationId 'ch.piiwii.gtigps'" ci-gtigps-2.0-project/app/build.gradle
+          grep -q "versionCode 5" ci-gtigps-2.0-project/app/build.gradle
+          grep -q "versionName '2.0.0'" ci-gtigps-2.0-project/app/build.gradle
+          grep -q "com.google.android.apps.maps" ci-gtigps-2.0-project/app/src/main/AndroidManifest.xml
+          grep -q "setLaunchBounds" ci-gtigps-2.0-project/app/src/main/java/ch/piiwii/gtigps/GoogleMapsWindow.java
+          grep -q "setLaunchWindowingMode" ci-gtigps-2.0-project/app/src/main/java/ch/piiwii/gtigps/GoogleMapsWindow.java
+          ! grep -R -q "maplibre\|OSRM" ci-gtigps-2.0-project/app || true
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        run: gradle -p ci-gtigps-2.0-project --no-daemon --stacktrace clean assembleRelease
+
+      - name: Zipalign release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
+            ci-gtigps-2.0-project/app/build/outputs/apk/release/app-release-unsigned.apk \
+            GTI-GPS-Widget-2.0.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -p 4 GTI-GPS-Widget-2.0.0-aligned-unsigned.apk
+          sha256sum GTI-GPS-Widget-2.0.0-aligned-unsigned.apk > GTI-GPS-Widget-2.0.0-aligned-unsigned.apk.sha256
+
+      - name: Export apksigner
+        shell: bash
+        run: |
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" apksigner.jar
+          sha256sum apksigner.jar > apksigner.jar.sha256
+
+      - name: Upload build bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTI-GPS-Widget-2.0.0-build
+          if-no-files-found: error
+          retention-days: 3
+          path: |
+            GTI-GPS-Widget-2.0.0-aligned-unsigned.apk
+            GTI-GPS-Widget-2.0.0-aligned-unsigned.apk.sha256
+            apksigner.jar
+            apksigner.jar.sha256
