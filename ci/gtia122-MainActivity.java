@@ -115,7 +115,7 @@ public class MainActivity extends Activity {
         diagnostics.setPadding(dp(12), dp(4), dp(12), dp(4));
         root.addView(diagnostics);
 
-        TextView note = text("Altitude : GPS WGS84 filtré en priorité. La v1.2.2 maintient le service par watchdog et utilise le baromètre comme secours relatif après calibration GPS. La boussole matérielle reste prioritaire à l’arrêt ; en mouvement, le cap GPS est prioritaire.", 12, Color.rgb(165,168,175), false);
+        TextView note = text("Altitude : GPS WGS84 filtré en priorité. La v1.2.3 maintient le service par watchdog et utilise le baromètre comme secours relatif après calibration GPS. La boussole matérielle reste prioritaire à l’arrêt ; en mouvement, le cap GPS est prioritaire.", 12, Color.rgb(165,168,175), false);
         note.setPadding(0, dp(14), 0, 0);
         root.addView(note);
         setContentView(scroll);
@@ -128,13 +128,13 @@ public class MainActivity extends Activity {
         if (liveAltitude != null) liveAltitude.setText(valid ? Math.round(altitude) + " m" : "Recherche…");
         if (liveStatus != null) {
             String precision;
-            if (AltitudeState.isGpsFresh(this)) {
-                float acc = !Float.isNaN(AltitudeState.acceptedVAcc(this)) ? AltitudeState.acceptedVAcc(this) : AltitudeState.acceptedHAcc(this);
-                precision = Float.isNaN(acc) ? "Préc. —" : "±" + Math.max(1, Math.round(acc)) + " m";
+            if (AltitudeState.isRawGpsFresh(this)) {
+                float acc = bestVisibleAccuracy(this);
+                precision = Float.isNaN(acc) ? "Précision —" : "Précision ±" + Math.max(1, Math.round(acc)) + " m";
             } else if (AltitudeState.isBaroFresh(this)) {
-                precision = "BARO";
+                precision = "Précision BARO";
             } else {
-                precision = "Préc. —";
+                precision = "Précision —";
             }
             String cap = Float.isNaN(AltitudeState.heading(this)) ? "cap —" : Math.round(AltitudeState.heading(this)) + "° " + cardinal(AltitudeState.heading(this));
             liveStatus.setText(AltitudeState.displaySource(this) + " · " + (AltitudeState.serviceAlive(this) ? "service OK" : "service à relancer") + "\n" + precision + " · " + cap);
@@ -155,6 +155,7 @@ public class MainActivity extends Activity {
         addRow("Latitude / longitude", coord(AltitudeState.lat(this)) + " / " + coord(AltitudeState.lon(this)), null);
         addRow("Précision horizontale", meters(AltitudeState.hAcc(this)), null);
         addRow("Précision verticale", meters(AltitudeState.vAcc(this)), null);
+        addRow("Précision affichée", meters(bestVisibleAccuracy(this)), null);
         addRow("Précision fix accepté", meters(!Float.isNaN(AltitudeState.acceptedVAcc(this)) ? AltitudeState.acceptedVAcc(this) : AltitudeState.acceptedHAcc(this)), null);
         addRow("Altitude GPS brute", meters(AltitudeState.raw(this)), null);
         addRow("Altitude GPS filtrée", meters(AltitudeState.filtered(this)), null);
@@ -241,6 +242,16 @@ public class MainActivity extends Activity {
         b.setBackground(bg); return b;
     }
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+    private static float bestVisibleAccuracy(android.content.Context c) {
+        float v = AltitudeState.vAcc(c);
+        if (!Float.isNaN(v) && v > 0f && v < 500f) return v;
+        float h = AltitudeState.hAcc(c);
+        if (!Float.isNaN(h) && h > 0f && h < 500f) return h;
+        v = AltitudeState.acceptedVAcc(c);
+        if (!Float.isNaN(v) && v > 0f && v < 500f) return v;
+        h = AltitudeState.acceptedHAcc(c);
+        return (!Float.isNaN(h) && h > 0f && h < 500f) ? h : Float.NaN;
+    }
     private static String coord(double v) { return Double.isNaN(v) ? "—" : String.format(Locale.US, "%.6f", v); }
     private static String meters(double v) { return Double.isNaN(v) ? "—" : String.format(Locale.US, "%.1f m", v); }
     private static String meters(float v) { return Float.isNaN(v) ? "—" : String.format(Locale.US, "%.1f m", v); }
