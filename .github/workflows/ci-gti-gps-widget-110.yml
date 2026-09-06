@@ -1,65 +1,10 @@
-name: CI GTI GPS Widget 1.1.0
+name: CI GTI GPS Widget 1.1.1
 
 on:
-  push:
-    branches: [ci-gti-gps-widget-1.1.0]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Verify source identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q "applicationId 'ch.piiwii.gtigps'" ci-gtigps-1.1-project/app/build.gradle
-          grep -q "versionCode 2" ci-gtigps-1.1-project/app/build.gradle
-          grep -q "versionName '1.1.0'" ci-gtigps-1.1-project/app/build.gradle
-          grep -q "org.maplibre.gl:android-sdk-opengl:13.4.1" ci-gtigps-1.1-project/app/build.gradle
-          grep -q "GTIGpsWidgetProvider" ci-gtigps-1.1-project/app/src/main/AndroidManifest.xml
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Setup Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Build release APK
-        run: gradle -p ci-gtigps-1.1-project --no-daemon --stacktrace clean assembleRelease
-
-      - name: Zipalign release APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
-            ci-gtigps-1.1-project/app/build/outputs/apk/release/app-release-unsigned.apk \
-            GTI-GPS-Widget-1.1.0-aligned-unsigned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -p 4 GTI-GPS-Widget-1.1.0-aligned-unsigned.apk
-          sha256sum GTI-GPS-Widget-1.1.0-aligned-unsigned.apk > GTI-GPS-Widget-1.1.0-aligned-unsigned.apk.sha256
-
-      - name: Upload aligned unsigned APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: GTI-GPS-Widget-1.1.0-aligned-unsigned
-          if-no-files-found: error
-          retention-days: 3
-          path: |
-            GTI-GPS-Widget-1.1.0-aligned-unsigned.apk
-            GTI-GPS-Widget-1.1.0-aligned-unsigned.apk.sha256
+      - run: echo "Temporary pause while 1.1.1 source files are updated"
