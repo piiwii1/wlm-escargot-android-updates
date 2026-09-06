@@ -18,10 +18,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          unzip -t ci/gtialtimeter-1.1-project.zip
+          tr -d '\n\r' < ci/gtialtimeter-1.1-project.b64 | base64 -d > /tmp/gtialtimeter-1.1-project.zip
+          unzip -t /tmp/gtialtimeter-1.1-project.zip
           rm -rf ci-gtialtimeter-1.1-project
           mkdir ci-gtialtimeter-1.1-project
-          unzip -q ci/gtialtimeter-1.1-project.zip -d ci-gtialtimeter-1.1-project
+          unzip -q /tmp/gtialtimeter-1.1-project.zip -d ci-gtialtimeter-1.1-project
 
       - name: Verify source identity
         shell: bash
