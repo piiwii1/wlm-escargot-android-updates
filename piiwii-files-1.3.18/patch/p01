@@ -1,0 +1,69 @@
+ut r,ImageView i,TextView n,TextView m,TextView c){row=r;icon=i;name=n;meta=m;chevron=c;}}
+ }
+diff -ruN src1317/app/src/main/java/ch/piiwii/files/MainActivity.java src1318/app/src/main/java/ch/piiwii/files/MainActivity.java
+--- src1317/app/src/main/java/ch/piiwii/files/MainActivity.java	2026-09-07 23:20:41.000000000 +0000
++++ src1318/app/src/main/java/ch/piiwii/files/MainActivity.java	2026-09-07 23:29:48.416946711 +0000
+@@ -6,17 +6,20 @@
+ import android.app.Dialog;
+ import android.app.ProgressDialog;
+ import android.content.ClipData;
++import android.content.ComponentName;
+ import android.content.ClipboardManager;
+ import android.content.Context;
+ import android.content.Intent;
+ import android.content.SharedPreferences;
+ import android.content.pm.PackageInfo;
+ import android.content.pm.PackageManager;
++import android.content.pm.ResolveInfo;
+ import android.database.Cursor;
+ import android.graphics.Color;
+ import android.graphics.Typeface;
+ import android.graphics.drawable.ColorDrawable;
+ import android.graphics.drawable.GradientDrawable;
++import android.graphics.drawable.Drawable;
+ import android.media.MediaPlayer;
+ import android.net.Uri;
+ import android.os.Build;
+@@ -1023,7 +1026,7 @@
+         HorizontalScrollView hsv=new HorizontalScrollView(this); hsv.setHorizontalScrollBarEnabled(false); LinearLayout quick=new LinearLayout(this); quick.setGravity(Gravity.CENTER_VERTICAL);
+         addQuick(quick,"Téléchargements",v->navigate(FileUtils.downloadsDir())); addQuick(quick,"Documents",v->navigate(FileUtils.documentsDir())); addQuick(quick,"Images",v->navigate(FileUtils.picturesDir())); addQuick(quick,"Stockages",v->showHomeTab(HOME_STORAGE)); if(pickerMode==MODE_NORMAL)addQuick(quick,"Accueil",v->showHome()); hsv.addView(quick); browserPanel.addView(hsv,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(48)));
+ 
+-        list=new ListView(this); list.setDivider(null); list.setDividerHeight(0); list.setFastScrollEnabled(false); list.setVerticalScrollBarEnabled(false); list.setScrollbarFadingEnabled(true); list.setPadding(0,dp(4),0,dp(4)); list.setClipToPadding(false); adapter=new FileAdapter(this,selected,pickerMode == MODE_NORMAL ? this::shareFileDirect : null); list.setAdapter(adapter); list.setOnItemClickListener((p,v,pos,id)->onFileClick(adapter.getFile(pos))); list.setOnItemLongClickListener((p,v,pos,id)->{toggleSelection(adapter.getFile(pos));return true;}); browserPanel.addView(list,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
++        list=new ListView(this); list.setDivider(null); list.setDividerHeight(0); list.setFastScrollEnabled(false); list.setVerticalScrollBarEnabled(false); list.setScrollbarFadingEnabled(true); list.setPadding(0,dp(4),0,dp(4)); list.setClipToPadding(false); adapter=new FileAdapter(this,selected); list.setAdapter(adapter); list.setOnItemClickListener((p,v,pos,id)->onFileClick(adapter.getFile(pos))); list.setOnItemLongClickListener((p,v,pos,id)->{toggleSelection(adapter.getFile(pos));return true;}); browserPanel.addView(list,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+ 
+         pasteButton=button("Coller dans ce dossier"); pasteButton.setTextSize(15); pasteButton.setVisibility(View.GONE); pasteButton.setOnClickListener(v->pasteHere()); browserPanel.addView(pasteButton,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(52)));
+ 
+@@ -1455,52 +1458,287 @@
+ 
+     private void shareFileDirect(File file) {
+         if (file == null || !file.exists() || !file.isFile()) return;
+-        try {
+-            Uri uri = FileUtils.documentUri(file);
+-            Intent i = new Intent(Intent.ACTION_SEND);
+-            i.setType(FileUtils.mimeType(file));
+-            i.putExtra(Intent.EXTRA_STREAM, uri);
+-            i.setClipData(ClipData.newRawUri("fichier", uri));
+-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+-            startActivity(Intent.createChooser(i, "Partager avec…"));
+-        } catch (Exception e) {
+-            Toast.makeText(this, "Partage impossible : " + e.getMessage(), Toast.LENGTH_LONG).show();
+-        }
++        LinkedHashSet<File> one = new LinkedHashSet<>();
++        one.add(file);
++        Intent i = buildShareIntent(one);
++        if (i != null) showPreferredShareChooser(i);
+     }
+ 
+-    private void shareSelection() {
+-        if (selected.isEmpty()) return;
++    private Intent buildShareIntent(Collection<File> files) {
++        ArrayList<File> actual = new ArrayList<>();
++        for (File f : files) if (f != null && f.exists() && f.isFile()) actual.add(f);
++        if (actual.isEmpty()) return null;
+         ArrayList<Uri> uris = new ArrayList<>();
+-        for (File f : selected) if (f.isFile()) uris.add(FileUtils.documentUri(f));
+-        if (uris.isEmpty()) return;
++        for (File f : actual) uris.add(FileUtils.documentUri(f));
+         Intent i;
+         if (uris.size() == 1) {
+-            i = new Intent(Intent.ACTION_SEND); i.setType(FileUti
