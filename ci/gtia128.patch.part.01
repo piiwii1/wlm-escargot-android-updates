@@ -1,0 +1,141 @@
++        // for a short time during boot even though it becomes available moments later.
++        if (!subscribedProviders.contains(LocationManager.GPS_PROVIDER)) {
++            try {
++                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500L, 0f, this, Looper.getMainLooper());
++                subscribedProviders.add(LocationManager.GPS_PROVIDER);
++                any = true;
++            } catch (SecurityException | IllegalArgumentException ignored) { }
++        }
++        locationSubscriptionsActive = any || !subscribedProviders.isEmpty();
++    }
++
++    private void registerGnssStatusIfPossible() {
++        if (locationManager == null || gnssCallbackRegistered || Build.VERSION.SDK_INT < 24) return;
++        if (Build.VERSION.SDK_INT >= 23
++                && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
++        try {
++            gnssCallbackRegistered = locationManager.registerGnssStatusCallback(gnssCallback, handler);
++        } catch (RuntimeException ignored) { }
++    }
++
++    private void seedRecentLastKnownLocation() {
++        if (locationManager == null) return;
++        if (Build.VERSION.SDK_INT >= 23
++                && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
++        Location best = null;
++        long bestAge = Long.MAX_VALUE;
++        try {
++            List<String> providers = locationManager.getProviders(true);
++            if (providers == null) return;
++            for (String provider : providers) {
++                try {
++                    Location candidate = locationManager.getLastKnownLocation(provider);
++                    if (candidate == null) continue;
++                    long age = locationAgeMs(candidate);
++                    if (age >= 0L && age <= LAST_KNOWN_MAX_AGE_MS && age < bestAge) {
++                        best = candidate;
++                        bestAge = age;
++                    }
++                } catch (SecurityException | IllegalArgumentException ignored) { }
++            }
++        } catch (RuntimeException ignored) { }
++        if (best != null) handleLocation(best, true);
+     }
+ 
+     private void refreshProviderState() {
+-        boolean enabled = false;
+-        try { enabled = locationManager != null && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER); }
++        boolean gps = false;
++        boolean network = false;
++        try { gps = locationManager != null && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER); }
+         catch (Exception ignored) { }
+-        AltitudeState.setGpsEnabled(this, enabled);
++        try { network = locationManager != null && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER); }
++        catch (Exception ignored) { }
++        AltitudeState.setGpsEnabled(this, gps);
++        AltitudeState.setNetworkEnabled(this, network);
++    }
++
++    private static long locationAgeMs(Location location) {
++        if (location == null) return Long.MAX_VALUE;
++        if (Build.VERSION.SDK_INT >= 17 && location.getElapsedRealtimeNanos() > 0L) {
++            long delta = SystemClock.elapsedRealtimeNanos() - location.getElapsedRealtimeNanos();
++            if (delta >= 0L) return delta / 1000000L;
++        }
++        long t = location.getTime();
++        if (t <= 0L) return Long.MAX_VALUE;
++        return Math.abs(System.currentTimeMillis() - t);
++    }
++
++    private static long normalizedFixTime(Location location, long now) {
++        long age = locationAgeMs(location);
++        if (age >= 0L && age < 5L * 60L * 1000L) return now - age;
++        long wall = location.getTime();
++        return wall > 0L && Math.abs(now - wall) < 5L * 60L * 1000L ? wall : now;
+     }
+ 
+     @Override public void onLocationChanged(Location location) {
++        handleLocation(location, false);
++    }
++
++    private void handleLocation(Location location, boolean fromLastKnown) {
+         if (location == null) return;
+         long now = System.currentTimeMillis();
+-        long fixTime = location.getTime() > 0 ? location.getTime() : now;
+-        AltitudeState.noteGpsCallback(this, fixTime);
+-        AltitudeState.touchService(this);
+-
+-        if (location.hasBearing() && (!location.hasSpeed() || location.getSpeed() >= 1.2f)) {
+-            AltitudeState.saveHeading(this, location.getBearing(), "GPS");
+-        }
++        long age = locationAgeMs(location);
++        long fixTime = normalizedFixTime(location, now);
++        String provider = location.getProvider() == null ? "inconnu" : location.getProvider();
+ 
+         float hAcc = location.hasAccuracy() ? location.getAccuracy() : Float.NaN;
+         float vAcc = Float.NaN;
+         if (Build.VERSION.SDK_INT >= 26 && location.hasVerticalAccuracy()) vAcc = location.getVerticalAccuracyMeters();
+         double raw = location.hasAltitude() ? location.getAltitude() : Double.NaN;
+ 
+-        if (Math.abs(now - fixTime) > 20000L) {
++        AltitudeState.noteLocationCallback(this, fixTime, provider, hAcc, vAcc);
++        AltitudeState.touchService(this);
++
++        if (location.hasBearing() && (!location.hasSpeed() || location.getSpeed() >= 1.2f)) {
++            AltitudeState.saveHeading(this, location.getBearing(), LocationManager.GPS_PROVIDER.equals(provider) ? "GPS" : provider.toUpperCase());
++        }
++
++        long staleLimit = fromLastKnown ? LAST_KNOWN_MAX_AGE_MS : LOCATION_STALE_MS;
++        if (age > staleLimit) {
+             AltitudeState.saveRejected(this, location.getLatitude(), location.getLongitude(), hAcc, raw, vAcc, fixTime,
+-                    "position GPS périmée");
++                    "position " + provider + " périmée");
+             updateNotificationFromState();
+             GtiWidgetUpdater.updateAll(this);
+             return;
+         }
+         if (!location.hasAltitude()) {
+             AltitudeState.saveRejected(this, location.getLatitude(), location.getLongitude(), hAcc, Double.NaN, vAcc, fixTime,
+-                    "altitude GPS absente");
++                    "altitude absente · " + provider);
+             updateNotificationFromState();
+             GtiWidgetUpdater.updateAll(this);
+             return;
+@@ -172,19 +295,21 @@
+ 
+         double corrected = raw;
+         AltitudeFilter.Result result = filter.push(corrected, hAcc, vAcc, fixTime);
++        String source = LocationManager.GPS_PROVIDER.equals(provider) ? "GPS" : provider.toUpperCase();
+         if (result.accepted) {
+             AltitudeState.saveLocation(this, location.getLatitude(), location.getLongitude(), hAcc,
+-                    raw, corrected, result.filtered, vAcc, fixTime, "GPS", false);
++                    raw, corrected, result.filtered, vAcc, fixTime, source, false);
+             maybeCalibrateBarometer(result.filtered);
+-            updateTrend(result.filtered, fixTime, "GPS");
++            updateTrend(result.filtered, fixTime, source);
+         } else if (shouldUseProvisionalRecovery(raw, hAcc, vAcc, now)) {
+             AltitudeFilter.Result recovered = filter.resetTo(corrected, fixTime);
+             invalidateBadBarometerAnchor(raw, hAcc);
++            String provisional = source + " PROV";
+             AltitudeState.saveLocation(this, location.getLatitude(), location.getLongitude(), hAcc,
+-                    raw, corrected, recovered.filtered, vAcc, fixTime, "GPS PROV", false);
