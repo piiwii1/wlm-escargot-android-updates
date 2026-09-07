@@ -1,0 +1,37 @@
+--- a/app/src/main/java/ch/piiwii/files/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/files/MainActivity.java
+@@ -413,6 +413,34 @@
+         nav.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+     }
+ 
++    private void addBrowserBottomNav() {
++        LinearLayout nav = new LinearLayout(this);
++        nav.setGravity(Gravity.CENTER);
++        nav.setPadding(dp(3), dp(5), dp(3), dp(2));
++        nav.setBackground(rounded(SURFACE, 16));
++        addNavButton(nav, "⌂", "Accueil", v -> showHome());
++        addNavButton(nav, "▣", "Fichiers", v -> navigate(Environment.getExternalStorageDirectory()));
++        addNavButton(nav, "↻", "Récents", v -> showRecents());
++        addNavButton(nav, "★", "Favoris", v -> showFavorites());
++        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
++        lp.setMargins(0, dp(5), 0, 0);
++        browserPanel.addView(nav, lp);
++    }
++
++    private void addNavButton(LinearLayout nav, String glyph, String label, View.OnClickListener action) {
++        LinearLayout item = new LinearLayout(this);
++        item.setOrientation(LinearLayout.VERTICAL);
++        item.setGravity(Gravity.CENTER);
++        TextView g = text(glyph, 18, Color.WHITE, true);
++        g.setGravity(Gravity.CENTER);
++        item.addView(g);
++        TextView l = text(label, 10, MUTED, true);
++        l.setGravity(Gravity.CENTER);
++        item.addView(l);
++        item.setOnClickListener(action);
++        nav.addView(item, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
++    }
++
+     private void buildBrowserPanel() {
+         browserPanel=new LinearLayout(this); browserPanel.setOrientation(LinearLayout.VERTICAL); browserPanel.setVisibility(View.GONE);
+         LinearLayout top=new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL);
