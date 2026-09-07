@@ -18,7 +18,6 @@ import android.os.Build;
 final class WidgetRenderer {
     private static final float SKIN_W = 1566f;
     private static final float SKIN_H = 576f;
-    private static final float SKIN_ASPECT = SKIN_W / SKIN_H;
     private static final int RED = Color.rgb(245, 24, 31);
     private static final int WHITE = Color.rgb(248, 248, 250);
     private static final int MUTED = Color.rgb(112, 116, 124);
@@ -33,7 +32,7 @@ final class WidgetRenderer {
         Bitmap out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(out);
         canvas.drawColor(Color.TRANSPARENT);
-        RectF panel = fitPanel(width, height);
+        RectF panel = new RectF(0f, 0f, width, height);
         Bitmap skin = BitmapFactory.decodeResource(context.getResources(), R.drawable.altimeter_skin_reference);
         Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
         if (skin != null) canvas.drawBitmap(skin, null, panel, bitmapPaint);
@@ -43,12 +42,6 @@ final class WidgetRenderer {
         drawLiveData(canvas, context);
         canvas.restore();
         return out;
-    }
-
-    private static RectF fitPanel(float w, float h) {
-        // The launcher slot is much taller than the reference artwork. Letterboxing made the
-        // lower GPS/precision strip tiny and unreadable. Fill the real widget bounds instead.
-        return new RectF(0f, 0f, w, h);
     }
 
     private static void drawLiveData(Canvas c, Context context) {
@@ -92,42 +85,47 @@ final class WidgetRenderer {
     }
 
     private static void drawTrend(Canvas c, Context context, boolean hasAltitude) {
-        final float cx = 1416f;
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-        p.setStrokeCap(Paint.Cap.ROUND);
+        // 1.2.6: hollow arrow only. No opaque fill can cover the background artwork.
+        final float cx = 1418f;
+        final float top = 174f;
+        final float bottom = 238f;
+        final float halfW = 39f;
         double trend = hasAltitude ? AltitudeState.trend(context) : Double.NaN;
         long trendAge = System.currentTimeMillis() - AltitudeState.trendTime(context);
         if (trendAge > 90000L) trend = Double.NaN;
         boolean neutral = Double.isNaN(trend) || Math.abs(trend) < 1.5;
         boolean up = !neutral && trend > 0;
-        if (neutral) {
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(6f);
-            p.setColor(hasAltitude ? Color.rgb(160,163,171) : Color.rgb(95,98,106));
-            Path tri = new Path();
-            tri.moveTo(cx, 166f); tri.lineTo(cx - 48f, 244f); tri.lineTo(cx + 48f, 244f); tri.close();
-            c.drawPath(tri, p);
-            p.setStyle(Paint.Style.FILL);
-        } else {
-            int color = up ? RED : Color.rgb(105,160,225);
-            p.setColor(color);
-            p.setShadowLayer(18f, 0f, 0f, up ? Color.argb(215,255,20,28) : Color.argb(170,90,150,230));
-            Path tri = new Path();
-            if (up) { tri.moveTo(cx,157f); tri.lineTo(cx-49f,242f); tri.lineTo(cx+49f,242f); }
-            else { tri.moveTo(cx,244f); tri.lineTo(cx-49f,159f); tri.lineTo(cx+49f,159f); }
-            tri.close(); c.drawPath(tri,p); p.clearShadowLayer();
+
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(4.5f);
+        p.setStrokeJoin(Paint.Join.ROUND);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        int arrowColor = neutral ? Color.rgb(176,179,187) : (up ? RED : Color.rgb(112,166,230));
+        p.setColor(hasAltitude ? arrowColor : Color.rgb(100,103,110));
+        if (!neutral && hasAltitude) {
+            p.setShadowLayer(9f, 0f, 0f, up ? Color.argb(150,255,24,32) : Color.argb(120,90,150,230));
         }
+        Path tri = new Path();
+        if (!neutral && !up) {
+            tri.moveTo(cx, bottom); tri.lineTo(cx-halfW, top); tri.lineTo(cx+halfW, top);
+        } else {
+            tri.moveTo(cx, top); tri.lineTo(cx-halfW, bottom); tri.lineTo(cx+halfW, bottom);
+        }
+        tri.close();
+        c.drawPath(tri, p);
+        p.clearShadowLayer();
+
         String text;
-        if (!hasAltitude || Double.isNaN(trend)) text = "—";
-        else if (neutral) text = "—";
+        if (!hasAltitude || Double.isNaN(trend) || neutral) text = "—";
         else text = (up ? "+" : "−") + Math.abs(Math.round(trend)) + " m";
         Paint tp = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         tp.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         tp.setColor(hasAltitude ? WHITE : MUTED);
         tp.setTextAlign(Paint.Align.CENTER);
-        tp.setTextSize(48f);
-        fitText(tp, text, 185f, 31f);
-        c.drawText(text, cx, 304f, tp);
+        tp.setTextSize(46f);
+        fitText(tp, text, 178f, 30f);
+        c.drawText(text, cx, 300f, tp);
     }
 
     private static void drawGpsBars(Canvas c, Context context) {
@@ -135,11 +133,9 @@ final class WidgetRenderer {
         int bars = gpsBars(AltitudeState.hAcc(context), callbackFresh);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
         p.setStrokeCap(Paint.Cap.ROUND);
-
-        // Keep the four bars entirely between the “GPS” label and the vertical separator.
-        // Each slot has a visible outline; active signal is a genuinely filled inner bar.
-        final float x = 878f, baseline = 510f, barW = 18f, gap = 9f;
-        final float[] heights = {24f, 42f, 62f, 84f};
+        // 1.2.6: entire signal graph stays below the horizontal separator.
+        final float x = 878f, baseline = 525f, barW = 17f, gap = 9f;
+        final float[] heights = {20f, 34f, 49f, 64f};
         for (int i = 0; i < 4; i++) {
             float l = x + i * (barW + gap);
             float t = baseline - heights[i];
@@ -148,19 +144,18 @@ final class WidgetRenderer {
             p.setColor(Color.rgb(34, 36, 42));
             c.drawRoundRect(slot, 5f, 5f, p);
             p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(2.5f);
+            p.setStrokeWidth(2.2f);
             p.setColor(Color.rgb(92, 96, 105));
             c.drawRoundRect(slot, 5f, 5f, p);
             if (i < bars) {
                 RectF fill = new RectF(l + 3f, t + 3f, l + barW - 3f, baseline - 3f);
                 p.setStyle(Paint.Style.FILL);
                 p.setColor(RED);
-                p.setShadowLayer(7f, 0f, 0f, Color.argb(170, 255, 24, 30));
+                p.setShadowLayer(6f, 0f, 0f, Color.argb(160, 255, 24, 30));
                 c.drawRoundRect(fill, 3f, 3f, p);
                 p.clearShadowLayer();
             }
         }
-        p.setStyle(Paint.Style.FILL);
     }
 
     private static void drawAccuracy(Canvas c, Context context, boolean gpsFresh) {
@@ -171,18 +166,14 @@ final class WidgetRenderer {
             if (!Float.isNaN(acc)) {
                 value = "±" + Math.max(1, Math.round(acc)) + " m";
                 good = acc <= 120f;
-            } else {
-                value = "± ?";
-            }
+            } else value = "± ?";
         } else if (AltitudeState.isBaroFresh(context)) {
             value = "BARO";
             good = true;
-        } else {
-            value = "—";
-        }
+        } else value = "—";
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG | Paint.DITHER_FLAG);
         p.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        p.setColor(good ? WHITE : (AltitudeState.isRawGpsFresh(context) ? Color.rgb(220, 220, 224) : MUTED));
+        p.setColor(good ? WHITE : (AltitudeState.isRawGpsFresh(context) ? Color.rgb(220,220,224) : MUTED));
         p.setTextAlign(Paint.Align.RIGHT);
         p.setTextSize(46f);
         fitText(p, value, 178f, 29f);
