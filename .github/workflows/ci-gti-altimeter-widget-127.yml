@@ -46,7 +46,10 @@ jobs:
           cp ci/gtia127-WidgetRenderer.java "$JAVA/WidgetRenderer.java"
           cp ci/gtia127-MainActivity.java "$JAVA/MainActivity.java"
           cp ci/gtia127-SkinPrefs.java "$JAVA/SkinPrefs.java"
-          python3 ci/gtia127-procedural-silhouette.py "$JAVA/WidgetRenderer.java"
+          # The existing compass_matterhorn_reference resource is the compiled placeholder for
+          # Skin 2. The final transparent user-approved artwork is injected into that resource
+          # after CI and before signing, without changing the resource ID.
+          sed -i 's/R.drawable.altimeter_skin_silhouette/R.drawable.compass_matterhorn_reference/g' "$JAVA/WidgetRenderer.java"
           python3 ci/gtia125-gps-recovery.py "$ROOT"
           python3 - <<'PY'
           from pathlib import Path
@@ -73,9 +76,8 @@ jobs:
           grep -q "versionName '1.2.7'" "$ROOT/app/build.gradle"
           grep -q 'class SkinPrefs' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/SkinPrefs.java"
           grep -q 'Skin 2 · Silhouette' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/MainActivity.java"
-          grep -q 'drawSilhouetteBase' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java"
-          grep -q 'Explicitly erase the Swiss flag area' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java"
-          grep -q 'No panel, no outer rectangle' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java"
+          grep -q 'R.drawable.compass_matterhorn_reference' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java"
+          grep -q 'drawSilhouetteAltitude' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java"
           grep -q 'GPS_PROVISIONAL_AFTER_MS' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeService.java"
           grep -q 'invalidateBarometerCalibration' "$ROOT/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeState.java"
 
@@ -102,14 +104,16 @@ jobs:
           "$BT/aapt" dump badging GTI-Altimeter-Widget-1.2.7-aligned-unsigned.apk > GTI-Altimeter-Widget-1.2.7-badging.txt
           grep -q "package: name='ch.piiwii.gtialtimeter' versionCode='12' versionName='1.2.7'" GTI-Altimeter-Widget-1.2.7-badging.txt
           cp "$BT/lib/apksigner.jar" apksigner.jar
-          sha256sum GTI-Altimeter-Widget-1.2.7-aligned-unsigned.apk apksigner.jar > CI-SHA256.txt
+          cp "$BT/zipalign" zipalign
+          sha256sum GTI-Altimeter-Widget-1.2.7-aligned-unsigned.apk apksigner.jar zipalign > CI-SHA256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: GTI-Altimeter-Widget-1.2.7-build
+          name: GTI-Altimeter-Widget-1.2.7-build-exact-skin
           retention-days: 3
           path: |
             GTI-Altimeter-Widget-1.2.7-aligned-unsigned.apk
             GTI-Altimeter-Widget-1.2.7-badging.txt
             CI-SHA256.txt
             apksigner.jar
+            zipalign
