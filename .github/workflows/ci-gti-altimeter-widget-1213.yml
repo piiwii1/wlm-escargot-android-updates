@@ -76,6 +76,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cat ci/gtia1213s.part.02.{0..3} > ci/gtia1213s.part.02
+          cat ci/gtia1213s.part.08.{0..3} > ci/gtia1213s.part.08
           echo "78baeed659f1399ed86c820737fe0c6c49b3b466f01aefa958509f344ed84f8c  ci/gtia1213s.part.00" | sha256sum -c -
           echo "0b6ef359e5a77c5fdef857a8b8b03e160a4aea822bce2f3dfb873c5b4f98675b  ci/gtia1213s.part.01" | sha256sum -c -
           echo "c41b987a143df3e28d3999601c7ee8377fba19dce03857074de5756e0a8c289b  ci/gtia1213s.part.02" | sha256sum -c -
