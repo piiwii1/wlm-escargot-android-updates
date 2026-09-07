@@ -1,0 +1,117 @@
+name: PiiWii Files 1.3.9 Mockup Home Build
+
+on:
+  push:
+    branches:
+      - piiwii-files-139-build
+    paths:
+      - 'piiwii-files-139-build/**'
+      - '.github/workflows/piiwii-files-139-clean-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Reconstruct verified 1.3.7 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK=/tmp/piiwii-files-139
+          mkdir -p "$WORK/project"
+          echo '1ce1aff417f98c7ee184b7dbee71b659c6ec83aed5d643073ef9569061b313d1  piiwii-files-137-build/source.part.00' | sha256sum -c -
+          echo '2912d7c03e72a9f2a442e654aff80d2c83a6d5ca024d5bb8cc8e9c2a81edbca5  piiwii-files-137-build/source.part.01' | sha256sum -c -
+          echo '22771d37a5f5fd7befd173753a0265debe1bdcfde0d9bbb5be408b1bdda81b08  piiwii-files-137-build/source.part.02' | sha256sum -c -
+          echo 'e58eaab5cc304929514396672d51c6336170d1e52e8f480973fc2c658d86ebac  piiwii-files-137-build/source.part.03' | sha256sum -c -
+          echo '0d09c2e799dce20570c2848455bb272b0516e0c589a4f3a64b8431fc9247ddaa  piiwii-files-137-build/source.part.04' | sha256sum -c -
+          cat piiwii-files-137-build/source.part.00 piiwii-files-137-build/source.part.01 piiwii-files-137-build/source.part.02 piiwii-files-137-build/source.part.03 piiwii-files-137-build/source.part.04 > "$WORK/source.b64"
+          base64 -d "$WORK/source.b64" > "$WORK/source.tar.gz"
+          echo '4c4633dc8f43e866887ee1bdcf85397a60a6af01c25cb1c0d3e491ca11f20754  /tmp/piiwii-files-139/source.tar.gz' | sha256sum -c -
+          tar -xzf "$WORK/source.tar.gz" -C "$WORK/project"
+
+      - name: Rebuild stable 1.3.8 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK=/tmp/piiwii-files-139
+          cd "$WORK/project"
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-138-build/visual-138.patch"
+          base64 -d "$GITHUB_WORKSPACE/piiwii-files-138-build/icons-138.tar.gz.b64" > "$WORK/icons138.tar.gz"
+          echo 'a9154deed37876647251637b34b3ead2276d4763e6e41ed1252b294bd23e73df  /tmp/piiwii-files-139/icons138.tar.gz' | sha256sum -c -
+          tar -xzf "$WORK/icons138.tar.gz" -C app/src/main/res/drawable
+          grep -q "versionCode 12" app/build.gradle
+          grep -q "versionName '1.3.8'" app/build.gradle
+
+      - name: Apply approved mockup home 1.3.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK=/tmp/piiwii-files-139
+          cat "$GITHUB_WORKSPACE/piiwii-files-139-build/ui139.patch.gz.b64.part.00" "$GITHUB_WORKSPACE/piiwii-files-139-build/ui139.patch.gz.b64.part.01" > "$WORK/ui139.patch.gz.b64"
+          base64 -d "$WORK/ui139.patch.gz.b64" > "$WORK/ui139.patch.gz"
+          echo '8877b0c94461c8108bab22e2be4ecf4b4f5a4788539a1d093aab7be133441724  /tmp/piiwii-files-139/ui139.patch.gz' | sha256sum -c -
+          gunzip -c "$WORK/ui139.patch.gz" > "$WORK/ui139.patch"
+          cd "$WORK/project"
+          patch -p1 < "$WORK/ui139.patch"
+          grep -q "versionCode 13" app/build.gradle
+          grep -q "versionName '1.3.9'" app/build.gradle
+          grep -q 'Vos fichiers, simplement' app/src/main/java/ch/piiwii/files/MainActivity.java
+          grep -q 'buildHomeBottomNav' app/src/main/java/ch/piiwii/files/MainActivity.java
+          test -f app/src/main/res/drawable/ic_folder_home.xml
+          test -f app/src/main/res/drawable/ic_search.xml
+          test -f app/src/main/res/drawable/ic_more_vert.xml
+
+      - name: Build release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/piiwii-files-139/project
+          gradle --no-daemon clean assembleRelease
+
+      - name: Align and validate APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/piiwii-files-139/out
+          mkdir -p "$OUT"
+          RAW=/tmp/piiwii-files-139/project/app/build/outputs/apk/release/app-release-unsigned.apk
+          APK="$OUT/PiiWii-Files-1.3.9-aligned-unsigned.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/zipalign.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/metadata.txt"
+          grep -q "package: name='ch.piiwii.files' versionCode='13' versionName='1.3.9'" "$OUT/metadata.txt"
+          sha256sum "$APK" > "$OUT/unsigned.sha256"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-files-1.3.9-unsigned
+          path: /tmp/piiwii-files-139/out/
+          if-no-files-found: error
+          retention-days: 90
