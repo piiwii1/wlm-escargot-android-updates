@@ -1,10 +1,10 @@
-name: PiiWii Files 1.3.12 Home Footer Build
+name: PiiWii Files 1.3.13 Launcher Icon Build
 
 on:
   push:
-    branches: [piiwii-files-1312-build]
+    branches: [piiwii-files-1313-icon-build]
     paths:
-      - 'piiwii-files-1312-build/**'
+      - 'piiwii-files-1313-build/**'
       - '.github/workflows/ca113-temp-build.yml'
   workflow_dispatch:
 
@@ -83,8 +83,30 @@ jobs:
           grep -q "versionCode 16" "$W/project/app/build.gradle"
           grep -q "versionName '1.3.12'" "$W/project/app/build.gradle"
           grep -q 'R.drawable.ic_nav_home, "Home"' "$W/project/app/src/main/java/ch/piiwii/files/MainActivity.java"
-          grep -q 'private void showHome() { showHomeTab(HOME_MAIN); }' "$W/project/app/src/main/java/ch/piiwii/files/MainActivity.java"
           test -f "$W/project/app/src/main/res/drawable/ic_nav_home.xml"
+
+      - name: Apply 1.3.13 launcher icon
+        run: |
+          set -euo pipefail
+          W=/tmp/pf1312
+          ICONS="$GITHUB_WORKSPACE/piiwii-files-1313-build/icon-resources.tar.gz"
+          echo 'ae5b531c1a9daf2af00b1e243dc2164b28c723a3a52885d6ace44cffcbf10439  '"$ICONS" | sha256sum -c -
+          cd "$W/project"
+          rm -f app/src/main/res/drawable/ic_launcher.xml
+          tar -xzf "$ICONS" -C app/src/main/res
+          sed -i 's/versionCode 16/versionCode 17/' app/build.gradle
+          sed -i "s/versionName '1.3.12'/versionName '1.3.13'/" app/build.gradle
+          sed -i 's#@drawable/ic_launcher#@mipmap/ic_launcher#g' app/src/main/AndroidManifest.xml
+          sed -i 's/PiiWii Files 1.3.12 (versionCode 16)/PiiWii Files 1.3.13 (versionCode 17)/' app/src/main/java/ch/piiwii/files/MainActivity.java
+          grep -q "versionCode 17" app/build.gradle
+          grep -q "versionName '1.3.13'" app/build.gradle
+          grep -q '@mipmap/ic_launcher' app/src/main/AndroidManifest.xml
+          test -f app/src/main/res/mipmap-mdpi/ic_launcher.png
+          test -f app/src/main/res/mipmap-hdpi/ic_launcher.png
+          test -f app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          test -f app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          test -f app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          test ! -f app/src/main/res/drawable/ic_launcher.xml
 
       - name: Build release
         run: cd /tmp/pf1312/project && gradle --no-daemon clean assembleRelease
@@ -94,16 +116,16 @@ jobs:
           set -euo pipefail
           W=/tmp/pf1312; mkdir -p "$W/out"
           RAW="$W/project/app/build/outputs/apk/release/app-release-unsigned.apk"
-          APK="$W/out/PiiWii-Files-1.3.12-aligned-unsigned.apk"
+          APK="$W/out/PiiWii-Files-1.3.13-aligned-unsigned.apk"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$RAW" "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$W/out/zipalign.txt"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$W/out/metadata.txt"
-          grep -q "package: name='ch.piiwii.files' versionCode='16' versionName='1.3.12'" "$W/out/metadata.txt"
+          grep -q "package: name='ch.piiwii.files' versionCode='17' versionName='1.3.13'" "$W/out/metadata.txt"
           sha256sum "$APK" > "$W/out/unsigned.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: piiwii-files-1.3.12-unsigned
+          name: piiwii-files-1.3.13-unsigned
           path: /tmp/pf1312/out/
           if-no-files-found: error
           retention-days: 90
