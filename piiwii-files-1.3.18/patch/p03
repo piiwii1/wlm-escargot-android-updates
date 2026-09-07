@@ -1,0 +1,94 @@
+View(titleRow);
++
++        ScrollView scroll = new ScrollView(this);
++        scroll.setFillViewport(true);
++        LinearLayout rows = new LinearLayout(this);
++        rows.setOrientation(LinearLayout.VERTICAL);
++        rows.setPadding(0, dp(10), 0, 0);
++        boolean insertedOthers = false;
++        for (ShareTarget target : targets) {
++            if (!insertedOthers && target.priority >= 10) {
++                TextView other = text("AUTRES APPLICATIONS", 10, MUTED, true);
++                other.setPadding(dp(4), dp(12), 0, dp(5));
++                rows.addView(other);
++                insertedOthers = true;
++            }
++            rows.addView(buildShareTargetRow(dialog, baseIntent, target));
++        }
++        scroll.addView(rows, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++        card.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
++
++        dialog.setContentView(card);
++        Window w = dialog.getWindow();
++        if (w != null) {
++            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
++            w.setDimAmount(.72f);
++            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
++            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams();
++            lp.copyFrom(w.getAttributes());
++            lp.width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(28), dp(520));
++            lp.height = Math.min(getResources().getDisplayMetrics().heightPixels - dp(70), dp(650));
++            lp.gravity = Gravity.CENTER;
++            w.setAttributes(lp);
++        }
++        dialog.show();
++    }
++
++    private View buildShareTargetRow(Dialog dialog, Intent baseIntent, ShareTarget target) {
++        LinearLayout row = new LinearLayout(this);
++        row.setGravity(Gravity.CENTER_VERTICAL);
++        row.setPadding(dp(10), dp(8), dp(10), dp(8));
++        row.setBackground(outlined(SURFACE_2, 14, STROKE));
++        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62));
++        rp.setMargins(0, dp(3), 0, dp(3));
++        row.setLayoutParams(rp);
++
++        ImageView icon = new ImageView(this);
++        try { icon.setImageDrawable(target.info.loadIcon(getPackageManager())); } catch (Throwable ignored) { icon.setImageResource(R.drawable.ic_document); }
++        icon.setPadding(dp(5), dp(5), dp(5), dp(5));
++        row.addView(icon, new LinearLayout.LayoutParams(dp(46), dp(46)));
++
++        LinearLayout labels = new LinearLayout(this);
++        labels.setOrientation(LinearLayout.VERTICAL);
++        labels.setPadding(dp(12), 0, 0, 0);
++        labels.addView(text(preferredDisplayName(target), 14, Color.WHITE, true));
++        String hint = shareTargetHint(target);
++        if (!hint.isEmpty()) labels.addView(text(hint, 10, MUTED, false));
++        row.addView(labels, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++        TextView arrow = text("›", 22, MUTED, false);
++        arrow.setGravity(Gravity.CENTER);
++        row.addView(arrow, new LinearLayout.LayoutParams(dp(28), dp(42)));
++
++        row.setOnClickListener(v -> {
++            try {
++                Intent targeted = new Intent(baseIntent);
++                targeted.setComponent(new ComponentName(target.packageName, target.className));
++                targeted.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
++                startActivity(targeted);
++                dialog.dismiss();
++            } catch (Exception e) {
++                Toast.makeText(this, "Impossible d’ouvrir " + preferredDisplayName(target), Toast.LENGTH_LONG).show();
++            }
++        });
++        return row;
++    }
++
++    private int sharePriority(String label, String pkg) {
++        String l = (label + " " + pkg).toLowerCase(Locale.ROOT);
++        if (l.contains("nextdrop") || l.contains("nexdrop") || l.contains("next drop") || l.contains("nex drop")) return 0;
++        if (pkg.equals("com.microsoft.skydrive") || l.contains("onedrive")) return 1;
++        if (pkg.equals("com.whatsapp")) return 2;
++        if (pkg.equals("com.whatsapp.w4b") || l.contains("whatsapp business")) return 3;
++        if (isMailTarget(label, pkg)) return 4;
++        return 10;
++    }
++
++    private boolean isMailTarget(String label, String pkg) {
++        String l = (label + " " + pkg).toLowerCase(Locale.ROOT);
++        return pkg.equals("com.google.android.gm") || l.contains("gmail") || l.contains("e-mail") || l.contains("email") || l.contains("mail") || l.contains("outlook");
++    }
++
++    private boolean isQuickShareTarget(String label, String pkg) {
++        String l = (label + " " + pkg).toLowerCase(Locale.ROOT);
++        return l.contains("quick share") || l.contains("quickshare") || l.contains("nearby share") || l.contains("nearbyshare")
++                || l.contains("partage rapide") || l.contains(
