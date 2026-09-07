@@ -23,6 +23,7 @@ jobs:
           rm -rf ci-gtialtimeter-1.2.8-project
           mkdir ci-gtialtimeter-1.2.8-project
           unzip -q /tmp/gtialtimeter-base.zip -d ci-gtialtimeter-1.2.8-project
+
           ROOT=ci-gtialtimeter-1.2.8-project
           JAVA="$ROOT/app/src/main/java/ch/piiwii/gtialtimeter"
           mkdir -p "$ROOT/app/src/main/res/drawable-nodpi"
@@ -75,7 +76,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat ci/gtia1213.part.00 ci/gtia1213.part.01 ci/gtia1213.part.02 ci/gtia1213.part.03 | tr -d '\n\r' | base64 -d > /tmp/gtia1213.patch
+          echo "78baeed659f1399ed86c820737fe0c6c49b3b466f01aefa958509f344ed84f8c  ci/gtia1213s.part.00" | sha256sum -c -
+          echo "0b6ef359e5a77c5fdef857a8b8b03e160a4aea822bce2f3dfb873c5b4f98675b  ci/gtia1213s.part.01" | sha256sum -c -
+          echo "c41b987a143df3e28d3999601c7ee8377fba19dce03857074de5756e0a8c289b  ci/gtia1213s.part.02" | sha256sum -c -
+          echo "e6e469999631c6ad5c36ea535d632fe0a48f6d461e1058771fed7235b62c8d68  ci/gtia1213s.part.03" | sha256sum -c -
+          echo "1f8046ffea08323c9fa9a5c55966845a871c25abb4f3425995fa1d0fe6bcdf69  ci/gtia1213s.part.04" | sha256sum -c -
+          echo "15225b0bec648e7980a76b5bfc4fbe72fff1d4d3bca38a81314aa959c1690c78  ci/gtia1213s.part.05" | sha256sum -c -
+          echo "08c26578021d62c3e716384ed1b5956b15ac0cda00db546c51e78295082a35cb  ci/gtia1213s.part.06" | sha256sum -c -
+          echo "61d3eed2f3ad788b6c3023df916a8569280b6ca2c078468ce196589282b4a45b  ci/gtia1213s.part.07" | sha256sum -c -
+          echo "99e0f94d266e9305975899a1f33105e2130766d4afc548c0611b476f53d943a0  ci/gtia1213s.part.08" | sha256sum -c -
+          echo "eb67b35de0fed8033a2e9fd7e745106e31b030788b7c8beeaccc9008aa64f930  ci/gtia1213s.part.09" | sha256sum -c -
+          echo "75dd152e07a1b8b8d37d61dcb8a4bf48a2af1f6b692eae308fd0cfc258bd934c  ci/gtia1213s.part.10" | sha256sum -c -
+          echo "854651f2c8f36c1cefced8fe24f6c5cebb1825299e536ce7e3a032e441ccf9bf  ci/gtia1213s.part.11" | sha256sum -c -
+          cat ci/gtia1213s.part.{00..11} | tr -d '\n\r' | base64 -d > /tmp/gtia1213.patch
           echo "bf82f5e285a6ef9e68733663041f28a77e1ab130eee4ff6ccac1e3b5af67967d  /tmp/gtia1213.patch" | sha256sum -c -
           cd ci-gtialtimeter-1.2.8-project
           patch -p1 < /tmp/gtia1213.patch
@@ -108,8 +121,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
       - name: Build release APK
         run: gradle -p ci-gtialtimeter-1.2.8-project --no-daemon --stacktrace clean assembleRelease
+
       - name: Zipalign and inspect
         shell: bash
         run: |
@@ -123,6 +138,7 @@ jobs:
           cp "$BT/aapt2" aapt2
           chmod +x zipalign aapt2
           sha256sum GTI-Altimeter-Widget-1.2.13-aligned-unsigned.apk apksigner.jar zipalign aapt2 > CI-SHA256.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: GTI-Altimeter-Widget-1.2.13-build
