@@ -1,0 +1,38 @@
+         note.setPadding(0, dp(14), 0, 0);
+         root.addView(note);
+         setContentView(scroll);
+@@ -163,9 +163,11 @@
+         if (liveAltitude != null) liveAltitude.setText(valid ? Math.round(altitude) + " m" : "Recherche…");
+         if (liveStatus != null) {
+             String precision;
+-            if (AltitudeState.isGpsFresh(this)) {
+-                float acc = !Float.isNaN(AltitudeState.acceptedVAcc(this)) ? AltitudeState.acceptedVAcc(this) : AltitudeState.acceptedHAcc(this);
+-                precision = Float.isNaN(acc) ? "Préc. —" : "±" + Math.max(1, Math.round(acc)) + " m";
++            if (AltitudeState.isRawGpsFresh(this)) {
++                float acc = !Float.isNaN(AltitudeState.vAcc(this)) ? AltitudeState.vAcc(this) : AltitudeState.hAcc(this);
++                precision = Float.isNaN(acc) ? "Préc. acquisition" : "±" + Math.max(1, Math.round(acc)) + " m";
++            } else if (AltitudeState.isGnssFresh(this)) {
++                precision = "Préc. acquisition";
+             } else if (AltitudeState.isBaroFresh(this)) {
+                 precision = "BARO";
+             } else {
+@@ -186,6 +188,10 @@
+ 
+         addRow("Permission localisation", hasFineLocation() ? "OK" : "KO", hasFineLocation());
+         addRow("GPS activé", gps ? "OUI" : "NON", gps);
++        addRow("Provider réseau", AltitudeState.networkEnabled(this) ? "OUI" : "NON", null);
++        addRow("Provider dernière position", AltitudeState.lastProvider(this), null);
++        addRow("Satellites visibles / utilisés", AltitudeState.satellitesVisible(this) + " / " + AltitudeState.satellitesUsed(this), null);
++        addRow("Signal GNSS C/N0 moyen", Float.isNaN(AltitudeState.gnssCn0(this)) ? "—" : String.format(Locale.US, "%.1f dB-Hz", AltitudeState.gnssCn0(this)), null);
+         addRow("Position reçue", AltitudeState.positionReceived(this) ? "OUI" : "NON", AltitudeState.positionReceived(this));
+         addRow("Latitude / longitude", coord(AltitudeState.lat(this)) + " / " + coord(AltitudeState.lon(this)), null);
+         addRow("Précision horizontale", meters(AltitudeState.hAcc(this)), null);
+@@ -196,7 +202,7 @@
+         addRow("Altitude barométrique", meters(AltitudeState.baroAltitude(this)), null);
+         addRow("Altitude affichée / finale", meters(AltitudeState.displayAltitude(this)), null);
+         addRow("Tendance 30 s", signedMeters(AltitudeState.trend(this)), null);
+-        addRow("Âge dernière trame GPS", age(AltitudeState.rawFixTime(this)), null);
++        addRow("Âge dernière callback localisation", age(AltitudeState.lastGpsCallback(this)), null);
+         addRow("Âge dernier fix accepté", age(AltitudeState.fixTime(this)), null);
+         addRow("Service altitude", AltitudeState.serviceAlive(this) ? "ACTIF" : "À RELANCER", AltitudeState.serviceAlive(this));
+         addRow("Échantillon rejeté", AltitudeState.lastRejected(this) ? "OUI · " + AltitudeState.rejectReason(this) : "NON", !AltitudeState.lastRejected(this));
