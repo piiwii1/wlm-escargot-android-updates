@@ -1,0 +1,12 @@
+--- a/app/src/main/java/ch/piiwii/files/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/files/MainActivity.java
+@@ -601,8 +601,8 @@
+         LinearLayout tools = new LinearLayout(this);
+         tools.setOrientation(LinearLayout.VERTICAL);
+         tools.setPadding(dp(4), 0, dp(4), dp(6));
+-        tools.addView(storageToolCard(R.drawable.ic_large_file, "Fichiers volumineux", "Voir les plus gros fichiers", this::showLargeFiles));
+-        tools.addView(storageToolCard(R.drawable.ic_cleaner, "Nettoyage rapide", "Choisir ce qui peut être supprimé", this::showQuickCleanup));
++        tools.addView(storageToolCard(R.drawable.ic_large_file, "Fichiers volumineux", "Voir les plus gros fichiers", v -> showLargeFiles()));
++        tools.addView(storageToolCard(R.drawable.ic_cleaner, "Nettoyage rapide", "Choisir ce qui peut être supprimé", v -> showQuickCleanup()));
+         parent.addView(tools, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+     }
