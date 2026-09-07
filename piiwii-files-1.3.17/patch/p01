@@ -1,0 +1,107 @@
+0000
+@@ -269,6 +269,7 @@
+         addSimpleSectionHeader(content, "Stockages détectés", FileUtils.getStorageRoots(this).size() + " volume(s)");
+         addStorageOverview(content);
+         addStorageTypeBreakdown(content);
++        addStorageTools(content);
+         return scroll;
+     }
+ 
+@@ -584,6 +585,8 @@
+         body.addView(value);
+         tile.addView(body, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+         values[index] = value;
++        tile.setContentDescription("Ouvrir " + label);
++        tile.setOnClickListener(v -> showIndexedTypeCollection(index));
+ 
+         GridLayout.LayoutParams gp = new GridLayout.LayoutParams();
+         gp.width = 0;
+@@ -593,6 +596,248 @@
+         grid.addView(tile, gp);
+     }
+ 
++    private void addStorageTools(LinearLayout parent) {
++        addSimpleSectionHeader(parent, "Outils de stockage", "gagner de la place");
++        LinearLayout tools = new LinearLayout(this);
++        tools.setOrientation(LinearLayout.VERTICAL);
++        tools.setPadding(dp(4), 0, dp(4), dp(6));
++        tools.addView(storageToolCard(R.drawable.ic_large_file, "Fichiers volumineux", "Voir les plus gros fichiers", this::showLargeFiles));
++        tools.addView(storageToolCard(R.drawable.ic_cleaner, "Nettoyage rapide", "Choisir ce qui peut être supprimé", this::showQuickCleanup));
++        parent.addView(tools, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++    }
++
++    private View storageToolCard(int iconRes, String title, String subtitle, View.OnClickListener action) {
++        LinearLayout card = new LinearLayout(this);
++        card.setGravity(Gravity.CENTER_VERTICAL);
++        card.setPadding(dp(12), dp(10), dp(10), dp(10));
++        card.setBackground(outlined(SURFACE, 16, STROKE));
++        card.setOnClickListener(action);
++        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
++        cp.setMargins(0, dp(3), 0, dp(3));
++        card.setLayoutParams(cp);
++
++        ImageView icon = new ImageView(this);
++        icon.setImageResource(iconRes);
++        icon.setColorFilter(ACCENT);
++        icon.setPadding(dp(9), dp(9), dp(9), dp(9));
++        icon.setBackground(rounded(SURFACE_2, 12));
++        card.addView(icon, new LinearLayout.LayoutParams(dp(44), dp(44)));
++
++        LinearLayout body = new LinearLayout(this);
++        body.setOrientation(LinearLayout.VERTICAL);
++        body.setPadding(dp(11), 0, 0, 0);
++        body.addView(text(title, 14, Color.WHITE, true));
++        body.addView(text(subtitle, 11, MUTED, false));
++        card.addView(body, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++        TextView arrow = text("›", 23, MUTED, false);
++        arrow.setGravity(Gravity.CENTER);
++        card.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(42)));
++        return card;
++    }
++
++    private void showIndexedTypeCollection(int type) {
++        final String[] titles = {"Photos", "Vidéos", "Musique", "APK"};
++        final String[] subtitles = {"Toutes les photos indexées", "Toutes les vidéos indexées", "Toute la musique indexée", "Applications à installer"};
++        final int[] icons = {R.drawable.ic_image, R.drawable.ic_video, R.drawable.ic_music, R.drawable.ic_package};
++        if (type < 0 || type > 3) return;
++        showCollectionLoading(titles[type], subtitles[type], icons[type]);
++        new Thread(() -> {
++            ArrayList<File> files = queryIndexedFiles(type, 1000);
++            files.sort((a,b) -> Long.compare(b.lastModified(), a.lastModified()));
++            runOnUiThread(() -> renderFileCollection(titles[type], subtitles[type], icons[type], files));
++        }, "PiiWiiFiles-type-collection").start();
++    }
++
++    private ArrayList<File> queryIndexedFiles(int type, int limit) {
++        LinkedHashMap<String, File> unique = new LinkedHashMap<>();
++        LinkedHashSet<String> volumes = mediaVolumes();
++        for (String volume : volumes) {
++            Uri uri;
++            String selection = null;
++            String[] args = null;
++            if (type == 0) uri = Uri.parse("content://media/" + volume + "/images/media");
++            else if (type == 1) uri = Uri.parse("content://media/" + volume + "/video/media");
++            else if (type == 2) uri = Uri.parse("content://media/" + volume + "/audio/media");
++            else {
++                uri = MediaStore.Files.getContentUri(volume);
++                selection = MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?";
++                args = new String[]{"%.apk"};
++            }
++            addIndexedFiles(uri, selection, args, unique, limit, MediaStore.MediaColumns.DATE_MODIFIED + " DESC");
++            if (unique.size() >= limit) break;
++        }
++        return new ArrayList<>(unique.values());
++    }
++
++    private LinkedHashSet<String> mediaVolumes() {
++        LinkedHashSet<String> volumes = new LinkedHashSet<>();
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++            try { volumes.addAll(MediaStore.getExternalVolumeNames(this)); } catch (Exception ignored) { }
++        }
++        if (volumes.isEmpty()) volumes.add("external");
++        return volumes;
++    }
++
++    private void addIndexedFiles(Uri uri, String selection, String[] args, LinkedHashMap<String, File> out, int limit, String sortOrder) {
++        Cursor c = null;
++      
