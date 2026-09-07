@@ -1,0 +1,116 @@
+--- a/app/src/main/java/ch/piiwii/files/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/files/MainActivity.java
+@@ -179,14 +179,14 @@
+         int cols = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ? 4 : 2;
+         grid.setColumnCount(cols);
+         grid.setUseDefaultMargins(false);
+-        addHomeCard(grid, "↓", "Téléchargements", "Fichiers reçus", ACCENT, v -> navigate(FileUtils.downloadsDir()), cols);
+-        addHomeCard(grid, "▤", "Documents", "PDF, textes…", Color.rgb(176, 145, 255), v -> navigate(FileUtils.documentsDir()), cols);
+-        addHomeCard(grid, "▧", "Images", "Photos & captures", Color.rgb(255, 126, 174), v -> navigate(FileUtils.picturesDir()), cols);
+-        addHomeCard(grid, "♪", "Musique", "Audio", Color.rgb(101, 225, 175), v -> navigate(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)), cols);
+-        addHomeCard(grid, "▶", "Vidéos", "Films & clips", Color.rgb(255, 177, 91), v -> navigate(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)), cols);
+-        addHomeCard(grid, "A", "APK", "Installer une app", Color.rgb(105, 190, 255), v -> showApkList(), cols);
+-        addHomeCard(grid, "Z", "Archives", "ZIP, RAR, 7Z", Color.rgb(255, 215, 98), v -> showArchivesList(), cols);
+-        addHomeCard(grid, "★", "Favoris", "Dossiers préférés", Color.rgb(152, 202, 118), v -> showFavorites(), cols);
++        addHomeCard(grid, R.drawable.ic_download, "Téléchargements", "Fichiers reçus", ACCENT, v -> navigate(FileUtils.downloadsDir()), cols);
++        addHomeCard(grid, R.drawable.ic_document, "Documents", "PDF, textes…", Color.rgb(176, 145, 255), v -> navigate(FileUtils.documentsDir()), cols);
++        addHomeCard(grid, R.drawable.ic_image, "Images", "Photos & captures", Color.rgb(255, 126, 174), v -> navigate(FileUtils.picturesDir()), cols);
++        addHomeCard(grid, R.drawable.ic_music, "Musique", "Audio", Color.rgb(101, 225, 175), v -> navigate(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)), cols);
++        addHomeCard(grid, R.drawable.ic_video, "Vidéos", "Films & clips", Color.rgb(255, 177, 91), v -> navigate(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)), cols);
++        addHomeCard(grid, R.drawable.ic_package, "APK", "Installer une app", Color.rgb(105, 190, 255), v -> showApkList(), cols);
++        addHomeCard(grid, R.drawable.ic_archive, "Archives", "ZIP, RAR, 7Z", Color.rgb(255, 215, 98), v -> showArchivesList(), cols);
++        addHomeCard(grid, R.drawable.ic_star, "Favoris", "Dossiers préférés", Color.rgb(152, 202, 118), v -> showFavorites(), cols);
+         content.addView(grid, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+ 
+         LinearLayout bottom = new LinearLayout(this);
+@@ -216,16 +216,14 @@
+         root.addView(homePanel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+     }
+ 
+-    private void addHomeCard(GridLayout grid, String glyph, String title, String subtitle, int accent, View.OnClickListener action, int cols) {
++    private void addHomeCard(GridLayout grid, int iconRes, String title, String subtitle, int accent, View.OnClickListener action, int cols) {
+         LinearLayout card = new LinearLayout(this);
+         card.setOrientation(LinearLayout.HORIZONTAL);
+         card.setGravity(Gravity.CENTER_VERTICAL);
+         card.setPadding(dp(14), dp(10), dp(12), dp(10));
+         card.setBackground(outlined(SURFACE, 17, STROKE));
+         card.setOnClickListener(action);
+-        TextView icon = text(glyph, 22, Color.WHITE, true);
+-        icon.setGravity(Gravity.CENTER);
+-        icon.setBackground(rounded(accent, 13));
++        ImageView icon = iconTile(iconRes, accent, 48, 12);
+         card.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
+         LinearLayout tt = new LinearLayout(this);
+         tt.setOrientation(LinearLayout.VERTICAL);
+@@ -244,6 +242,24 @@
+         grid.addView(card, gp);
+     }
+ 
++
++    private ImageView iconTile(int iconRes, int accent, int sizeDp, int paddingDp) {
++        ImageView icon = new ImageView(this);
++        icon.setImageResource(iconRes);
++        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
++        icon.setPadding(dp(paddingDp), dp(paddingDp), dp(paddingDp), dp(paddingDp));
++        icon.setBackground(outlined(accent, Math.max(12, sizeDp / 4), Color.argb(58, 255, 255, 255)));
++        return icon;
++    }
++
++    private int storageIconFor(File rootFile) {
++        if (sameFile(rootFile, Environment.getExternalStorageDirectory())) return R.drawable.ic_storage_internal;
++        String path = rootFile == null ? "" : rootFile.getAbsolutePath().toLowerCase(Locale.ROOT);
++        if (path.contains("usb") || path.contains("udisk") || path.contains("otg")) return R.drawable.ic_storage_usb;
++        if (path.contains("sd") || path.contains("ext") || path.contains("external")) return R.drawable.ic_storage_sd;
++        return R.drawable.ic_storage_drive;
++    }
++
+     private void addStorageOverview(LinearLayout parent) {
+         List<File> roots = FileUtils.getStorageRoots(this);
+         if (roots.isEmpty()) {
+@@ -297,10 +313,9 @@
+ 
+         LinearLayout top = new LinearLayout(this);
+         top.setGravity(Gravity.CENTER_VERTICAL);
+-        TextView icon = text(large ? "▣" : "◉", large ? 23 : 18, Color.WHITE, true);
+-        icon.setGravity(Gravity.CENTER);
+-        icon.setBackground(rounded(accent, 12));
+-        top.addView(icon, new LinearLayout.LayoutParams(large ? dp(50) : dp(42), large ? dp(50) : dp(42)));
++        int iconSize = large ? 50 : 42;
++        ImageView icon = iconTile(storageIconFor(rootFile), accent, iconSize, large ? 12 : 10);
++        top.addView(icon, new LinearLayout.LayoutParams(dp(iconSize), dp(iconSize)));
+         LinearLayout names = new LinearLayout(this);
+         names.setOrientation(LinearLayout.VERTICAL);
+         names.setPadding(dp(10), 0, 0, 0);
+@@ -414,9 +429,7 @@
+         card.setGravity(Gravity.CENTER_VERTICAL);
+         card.setPadding(dp(14), dp(10), dp(12), dp(10));
+         card.setBackground(outlined(SURFACE, 17, STROKE));
+-        TextView icon = text("↻", 22, Color.WHITE, true);
+-        icon.setGravity(Gravity.CENTER);
+-        icon.setBackground(rounded(Color.rgb(90, 170, 255), 13));
++        ImageView icon = iconTile(R.drawable.ic_history, Color.rgb(90, 170, 255), 48, 12);
+         card.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
+         LinearLayout texts = new LinearLayout(this);
+         texts.setOrientation(LinearLayout.VERTICAL);
+@@ -1076,7 +1089,7 @@
+ 
+     private void diagnostics() {
+         StringBuilder s = new StringBuilder();
+-        s.append("PiiWii Files 1.3.5 (versionCode 9)\nPackage : ").append(getPackageName())
++        s.append("PiiWii Files 1.3.8 (versionCode 12)\nPackage : ").append(getPackageName())
+                 .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+                 .append("\nStockage principal : ").append(Environment.getExternalStorageDirectory().getAbsolutePath())
+                 .append("\nPermissions écriture : ").append(Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED ? "OK" : "NON");
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.files'
+         minSdk 26
+         targetSdk 29
+-        versionCode 11
+-        versionName '1.3.7'
++        versionCode 12
++        versionName '1.3.8'
+     }
+ 
+     buildTypes {
