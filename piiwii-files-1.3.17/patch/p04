@@ -1,0 +1,70 @@
+@ -1208,6 +1453,21 @@
+                 }).setNegativeButton("ANNULER", null).show();
+     }
+ 
++    private void shareFileDirect(File file) {
++        if (file == null || !file.exists() || !file.isFile()) return;
++        try {
++            Uri uri = FileUtils.documentUri(file);
++            Intent i = new Intent(Intent.ACTION_SEND);
++            i.setType(FileUtils.mimeType(file));
++            i.putExtra(Intent.EXTRA_STREAM, uri);
++            i.setClipData(ClipData.newRawUri("fichier", uri));
++            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
++            startActivity(Intent.createChooser(i, "Partager avec…"));
++        } catch (Exception e) {
++            Toast.makeText(this, "Partage impossible : " + e.getMessage(), Toast.LENGTH_LONG).show();
++        }
++    }
++
+     private void shareSelection() {
+         if (selected.isEmpty()) return;
+         ArrayList<Uri> uris = new ArrayList<>();
+@@ -1464,7 +1724,7 @@
+ 
+         LinearLayout info = new LinearLayout(this);
+         info.setPadding(dp(6), 0, dp(6), dp(6));
+-        info.addView(text(files.size() + (files.size() == 1 ? " fichier" : " fichiers") + "  •  Téléchargements", 12, MUTED, false));
++        info.addView(text(files.size() + (files.size() == 1 ? " fichier" : " fichiers") + "  •  " + subtitle, 12, MUTED, false));
+         page.addView(info);
+ 
+         if (files.isEmpty()) {
+@@ -1481,7 +1741,7 @@
+             collection.setFastScrollEnabled(false);
+             collection.setPadding(0, dp(3), 0, dp(5));
+             collection.setClipToPadding(false);
+-            FileAdapter collectionAdapter = new FileAdapter(this, new LinkedHashSet<>());
++            FileAdapter collectionAdapter = new FileAdapter(this, new LinkedHashSet<>(), this::shareFileDirect);
+             collectionAdapter.setFiles(files.toArray(new File[0]));
+             collection.setAdapter(collectionAdapter);
+             collection.setOnItemClickListener((p, v, pos, id) -> onFileClick(collectionAdapter.getFile(pos)));
+@@ -1558,7 +1818,7 @@
+ 
+     private void diagnostics() {
+         StringBuilder s = new StringBuilder();
+-        s.append("PiiWii Files 1.3.16 (versionCode 20)\nPackage : ").append(getPackageName())
++        s.append("PiiWii Files 1.3.17 (versionCode 21)\nPackage : ").append(getPackageName())
+                 .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+                 .append("\nStockage principal : ").append(Environment.getExternalStorageDirectory().getAbsolutePath())
+                 .append("\nPermissions écriture : ").append(Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED ? "OK" : "NON");
+diff -ruN src/app/src/main/res/drawable/ic_cleaner.xml src1317/app/src/main/res/drawable/ic_cleaner.xml
+--- src/app/src/main/res/drawable/ic_cleaner.xml	1970-01-01 00:00:00.000000000 +0000
++++ src1317/app/src/main/res/drawable/ic_cleaner.xml	2026-09-07 23:15:55.783428477 +0000
+@@ -0,0 +1,3 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
++    <path android:fillColor="#FFFFFFFF" android:pathData="M15,2l1.2,3.1L19,6.3l-2.8,1.2L15,11l-1.2,-3.5L11,6.3l2.8,-1.2zM7,6l1,2.4L10.5,9.5 8,10.6 7,13l-1,-2.4L3.5,9.5 6,8.4zM6,14h12l-1.2,8H7.2z"/>
++</vector>
+diff -ruN src/app/src/main/res/drawable/ic_large_file.xml src1317/app/src/main/res/drawable/ic_large_file.xml
+--- src/app/src/main/res/drawable/ic_large_file.xml	1970-01-01 00:00:00.000000000 +0000
++++ src1317/app/src/main/res/drawable/ic_large_file.xml	2026-09-07 23:15:55.771428473 +0000
+@@ -0,0 +1,3 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
++    <path android:fillColor="#FFFFFFFF" android:pathData="M6,2h8l4,4v16H6zM13,3.5V7h3.5zM8,11h8v2H8zM8,15h8v2H8zM8,19h5v2H8z"/>
++</vector>
+diff -ruN src/app/src/main/res/drawable/ic_share.xml src1317/app/src/main/res/drawable/ic_share.xml
+--- src/app/src/main/res/drawable/ic_share.xml	1970-01-01 00:00:00.000000000 +0000
++++ src1317/app/src/main/res/drawable/ic_share.xml	2026-09-07 23:15:05.815391500 +0000
+@@ -0,0 +1,3 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
++    <path android:fillColor="#FFFFFFFF" android:pathData="M18,16c-0.76,0 -1.44,0.3 -1.96,0.77L8.91,12.7c0.05,-0.23 0.09,-0.46 0.09,-0.7s-0.03,-0.47 -0.09,-0.7l7.05,-4.11A2.99,2.99 0,1 0,15,5c0,0.24 0.04,0.47 0.09,0.7L8.04,9.81A3,3 0,1 0,8.04,14.19l7.12,4.16c-0.05,0.21 -0.08,0.43 -0.08,0.65A2.92,2.92 0,1 0,18,16z"/>
++</vector>
