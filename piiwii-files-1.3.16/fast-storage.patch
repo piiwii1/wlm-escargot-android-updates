@@ -1,0 +1,227 @@
+--- a/app/src/main/java/ch/piiwii/files/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/files/MainActivity.java
+@@ -9,8 +9,10 @@
+ import android.content.ClipboardManager;
+ import android.content.Context;
+ import android.content.Intent;
++import android.content.SharedPreferences;
+ import android.content.pm.PackageInfo;
+ import android.content.pm.PackageManager;
++import android.database.Cursor;
+ import android.graphics.Color;
+ import android.graphics.Typeface;
+ import android.graphics.drawable.ColorDrawable;
+@@ -22,6 +24,7 @@
+ import android.os.Environment;
+ import android.os.Handler;
+ import android.os.Looper;
++import android.provider.MediaStore;
+ import android.provider.Settings;
+ import android.text.TextUtils;
+ import android.view.Gravity;
+@@ -487,7 +490,7 @@
+         header.setPadding(dp(2), 0, dp(2), dp(5));
+         TextView title = text("Espace par type", 15, Color.WHITE, true);
+         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+-        TextView status = text("analyse…", 11, MUTED, false);
++        TextView status = text("mise à jour…", 11, MUTED, false);
+         header.addView(status);
+         section.addView(header);
+ 
+@@ -503,16 +506,58 @@
+         section.addView(grid, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+         parent.addView(section, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+ 
++        long[] cached = loadCachedStorageTypeSizes();
++        if (cached != null) {
++            applyStorageTypeSizes(values, cached);
++            status.setText("mise à jour…");
++        } else {
++            status.setText("analyse rapide…");
++        }
++
+         new Thread(() -> {
+-            long[] sizes = scanStorageTypeSizes();
++            long[] sizes = queryIndexedStorageTypeSizes();
++            if (sizes != null) saveCachedStorageTypeSizes(sizes);
+             runOnUiThread(() -> {
+-                if (isFinishing()) return;
+-                for (int i = 0; i < values.length; i++) {
+-                    if (values[i] != null) values[i].setText(FileUtils.formatSize(sizes[i]));
++                if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
++                if (sizes != null) {
++                    applyStorageTypeSizes(values, sizes);
++                    status.setText("à jour");
++                } else if (cached != null) {
++                    status.setText("valeurs enregistrées");
++                } else {
++                    status.setText("indisponible");
+                 }
+-                status.setText("tous stockages");
+             });
+-        }, "PiiWiiFiles-storage-scan").start();
++        }, "PiiWiiFiles-media-index").start();
++    }
++
++    private void applyStorageTypeSizes(TextView[] values, long[] sizes) {
++        if (values == null || sizes == null) return;
++        for (int i = 0; i < values.length && i < sizes.length; i++) {
++            if (values[i] != null) values[i].setText(FileUtils.formatSize(Math.max(0L, sizes[i])));
++        }
++    }
++
++    private long[] loadCachedStorageTypeSizes() {
++        SharedPreferences p = getSharedPreferences("storage_type_cache", MODE_PRIVATE);
++        if (!p.getBoolean("ready", false)) return null;
++        return new long[]{
++                p.getLong("photos", 0L),
++                p.getLong("videos", 0L),
++                p.getLong("music", 0L),
++                p.getLong("apk", 0L)
++        };
++    }
++
++    private void saveCachedStorageTypeSizes(long[] sizes) {
++        if (sizes == null || sizes.length < 4) return;
++        getSharedPreferences("storage_type_cache", MODE_PRIVATE).edit()
++                .putBoolean("ready", true)
++                .putLong("photos", sizes[0])
++                .putLong("videos", sizes[1])
++                .putLong("music", sizes[2])
++                .putLong("apk", sizes[3])
++                .apply();
+     }
+ 
+     private void addStorageTypeTile(GridLayout grid, int iconRes, String label, TextView[] values, int index) {
+@@ -533,7 +578,7 @@
+         body.setOrientation(LinearLayout.VERTICAL);
+         body.setPadding(dp(9), 0, 0, 0);
+         TextView name = text(label, 12, MUTED, false);
+-        TextView value = text("Calcul…", 13, Color.WHITE, true);
++        TextView value = text("…", 13, Color.WHITE, true);
+         value.setSingleLine(true);
+         body.addView(name);
+         body.addView(value);
+@@ -548,50 +593,59 @@
+         grid.addView(tile, gp);
+     }
+ 
+-    private long[] scanStorageTypeSizes() {
++    private long[] queryIndexedStorageTypeSizes() {
+         long[] sizes = new long[4];
+-        List<File> roots = FileUtils.getStorageRoots(this);
+-        HashSet<String> visitedDirs = new HashSet<>();
+-        ArrayDeque<File> stack = new ArrayDeque<>();
+-        for (File root : roots) if (root != null && root.exists() && root.canRead()) stack.add(root);
+-
+-        while (!stack.isEmpty()) {
+-            File current = stack.removeLast();
+-            if (current.isDirectory()) {
+-                String key;
+-                try { key = current.getCanonicalPath(); }
+-                catch (Exception e) { key = current.getAbsolutePath(); }
+-                if (!visitedDirs.add(key)) continue;
+-                File[] children;
+-                try { children = current.listFiles(); }
+-                catch (Exception e) { children = null; }
+-                if (children != null) for (File child : children) if (child != null) stack.add(child);
+-                continue;
+-            }
+-            if (!current.isFile()) continue;
+-            String n = current.getName().toLowerCase(Locale.ROOT);
+-            int type = storageTypeForName(n);
+-            if (type >= 0) {
+-                long len;
+-                try { len = Math.max(0L, current.length()); }
+-                catch (Exception e) { len = 0L; }
+-                sizes[type] += len;
++        int successfulQueries = 0;
++
++        LinkedHashSet<String> volumes = new LinkedHashSet<>();
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++            try { volumes.addAll(MediaStore.getExternalVolumeNames(this)); }
++            catch (Exception ignored) { }
++        }
++        if (volumes.isEmpty()) volumes.add("external");
++
++        for (String volume : volumes) {
++            long photos = sumMediaStore(Uri.parse("content://media/" + volume + "/images/media"), null, null);
++            long videos = sumMediaStore(Uri.parse("content://media/" + volume + "/video/media"), null, null);
++            long music = sumMediaStore(Uri.parse("content://media/" + volume + "/audio/media"), null, null);
++            long apk = sumMediaStore(
++                    MediaStore.Files.getContentUri(volume),
++                    MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?",
++                    new String[]{"%.apk"}
++            );
++
++            if (photos >= 0) { sizes[0] += photos; successfulQueries++; }
++            if (videos >= 0) { sizes[1] += videos; successfulQueries++; }
++            if (music >= 0) { sizes[2] += music; successfulQueries++; }
++            if (apk >= 0) { sizes[3] += apk; successfulQueries++; }
++        }
++        return successfulQueries == 0 ? null : sizes;
++    }
++
++    private long sumMediaStore(Uri uri, String selection, String[] selectionArgs) {
++        if (uri == null) return -1L;
++        Cursor cursor = null;
++        try {
++            cursor = getContentResolver().query(
++                    uri,
++                    new String[]{MediaStore.MediaColumns.SIZE},
++                    selection,
++                    selectionArgs,
++                    null
++            );
++            if (cursor == null) return -1L;
++            int sizeColumn = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE);
++            if (sizeColumn < 0) return -1L;
++            long total = 0L;
++            while (cursor.moveToNext()) {
++                if (!cursor.isNull(sizeColumn)) total += Math.max(0L, cursor.getLong(sizeColumn));
+             }
++            return total;
++        } catch (Exception e) {
++            return -1L;
++        } finally {
++            if (cursor != null) cursor.close();
+         }
+-        return sizes;
+-    }
+-
+-    private int storageTypeForName(String name) {
+-        if (endsWithAny(name, ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic", ".heif", ".dng", ".tif", ".tiff")) return 0;
+-        if (endsWithAny(name, ".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".3gp", ".ts", ".m2ts", ".flv")) return 1;
+-        if (endsWithAny(name, ".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".opus", ".wma", ".mid", ".midi")) return 2;
+-        if (name.endsWith(".apk")) return 3;
+-        return -1;
+-    }
+-
+-    private boolean endsWithAny(String value, String... suffixes) {
+-        for (String suffix : suffixes) if (value.endsWith(suffix)) return true;
+-        return false;
+     }
+ 
+     private View storageCard(File rootFile, String title, int accentStart, int accentEnd) {
+@@ -1504,7 +1558,7 @@
+ 
+     private void diagnostics() {
+         StringBuilder s = new StringBuilder();
+-        s.append("PiiWii Files 1.3.15 (versionCode 19)\nPackage : ").append(getPackageName())
++        s.append("PiiWii Files 1.3.16 (versionCode 20)\nPackage : ").append(getPackageName())
+                 .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+                 .append("\nStockage principal : ").append(Environment.getExternalStorageDirectory().getAbsolutePath())
+                 .append("\nPermissions écriture : ").append(Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED ? "OK" : "NON");
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.files'
+         minSdk 26
+         targetSdk 29
+-        versionCode 19
+-        versionName '1.3.15'
++        versionCode 20
++        versionName '1.3.16'
+     }
+ 
+     buildTypes {
