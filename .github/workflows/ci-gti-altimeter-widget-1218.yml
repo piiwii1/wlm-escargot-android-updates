@@ -1,0 +1,102 @@
+name: CI GTI Altimeter Widget 1.2.18
+
+on:
+  push:
+    branches: [ci-gti-altimeter-widget-1.2.18]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Reconstruct verified 1.2.18 and build
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat ci/gtia1214.patch.gz.b64.* > /tmp/gtia1214.patch.gz.b64
+          echo "e39bca16fd8bdc5fa0bcb94f521330fd210208130493710159002d50d6efcea2  /tmp/gtia1214.patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/gtia1214.patch.gz.b64 | gzip -d > /tmp/gtia1214.patch
+          echo "d09b3cd783b0110642ddfd695f7b8af0a4181fbf7d82b26e0d4f93c7ca461eef  /tmp/gtia1214.patch" | sha256sum -c -
+
+          cat ci/gtia1215.patch.gz.b64.* > /tmp/gtia1215.patch.gz.b64
+          echo "7d341623f79f731f842007a0e34aefad48bf7bf555ae900243f3f2852a9c1298  /tmp/gtia1215.patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/gtia1215.patch.gz.b64 | gzip -d > /tmp/gtia1215.patch
+          echo "1c9f2b111ddf2205dd9dbe92c5c124af9e6bfb893cdf246c5fb4cd792c9d2950  /tmp/gtia1215.patch" | sha256sum -c -
+
+          cat ci/gtia1216.patch.gz.b64.* > /tmp/gtia1216.patch.gz.b64
+          echo "3660337ce258bc8ab04d4e8b272c01a5c92511aa254519499703ec739a8fff22  /tmp/gtia1216.patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/gtia1216.patch.gz.b64 | gzip -d > /tmp/gtia1216.patch
+          echo "5e75538f4c7dea9b7f65e3ff2759f15b9cdb14b67f8884f012c2ee2f636c53f9  /tmp/gtia1216.patch" | sha256sum -c -
+
+          cat ci/gtia1217.patch.gz.b64.* > /tmp/gtia1217.patch.gz.b64
+          echo "85c2e811bd3ff06a21f31dba5564d4fddd77579b0fec40548263815743be6af5  /tmp/gtia1217.patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/gtia1217.patch.gz.b64 | gzip -d > /tmp/gtia1217.patch
+          echo "7550871551495f5f12740d0aa8dfad5f782810cfb12642692e8ea1216f6993ef  /tmp/gtia1217.patch" | sha256sum -c -
+
+          cat ci/gtia1218.patch.gz.b64.* > /tmp/gtia1218.patch.gz.b64
+          echo "c2135474a11b3254049f86e3c715cb1d4123f5acccc62eeb7cf1952d621a278a  /tmp/gtia1218.patch.gz.b64" | sha256sum -c -
+          base64 -d /tmp/gtia1218.patch.gz.b64 | gzip -d > /tmp/gtia1218.patch
+          echo "3283f5724a79e49f42664ea05cd97c72f6759eab230dbace4274b03ba5a999af  /tmp/gtia1218.patch" | sha256sum -c -
+
+          cat ci/gtia1213build.part.* > /tmp/gtia1218-build.sh
+          echo "6bb24983f16834fe04cb6a201d7a9a963fe008e63824cd07f2666b0ddab5be48  /tmp/gtia1218-build.sh" | sha256sum -c -
+          sed -i 's/UI_MIN_INTERVAL_MS = 1_000L/UI_MIN_INTERVAL_MS = 1000L/' /tmp/gtia1218-build.sh
+          sed -i '/e6963ee33c8f1cb37bcee0dea6ce9a22efa426634b12f0c9a438f04fe26ceed7/d' /tmp/gtia1218-build.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/gtia1218-build.sh')
+          s=p.read_text()
+          marker='grep -q "versionCode 19" "$ROOT/app/build.gradle"'
+          block='''cd "$ROOT"
+          patch -p1 < /tmp/gtia1214.patch
+          patch -p1 < /tmp/gtia1215.patch
+          patch -p1 < /tmp/gtia1216.patch
+          patch -p1 < /tmp/gtia1217.patch
+          patch -p1 < /tmp/gtia1218.patch
+          cd ..
+
+          grep -q "versionCode 24" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.2.18'" "$ROOT/app/build.gradle"
+          grep -q 'drawSilhouetteStacked' "$JAVA/WidgetRenderer.java"
+          grep -q 'SIL_STACK_COMPASS' "$JAVA/WidgetRenderer.java"
+          grep -q 'targetAspect < 1.55f' "$JAVA/WidgetRenderer.java"
+          grep -q 'drawSilhouetteLiveDataRegion' "$JAVA/WidgetRenderer.java"
+          grep -q 'android:minResizeWidth="72dp"' "$ROOT/app/src/main/res/xml/gti_altimeter_widget_info.xml"
+          grep -q 'android:minResizeHeight="40dp"' "$ROOT/app/src/main/res/xml/gti_altimeter_widget_info.xml"'''
+          if marker not in s:
+              raise SystemExit('verification marker not found')
+          start=s.index(marker)
+          end=s.index('echo "224055843ea8512ba543ab6c3c5d460d49c3812ffc3e99414ce95251fc77ec69', start)
+          s=s[:start]+block+'\n'+s[end:]
+          s=s.replace('GTI-Altimeter-Widget-1.2.13-aligned-unsigned.apk','GTI-Altimeter-Widget-1.2.18-aligned-unsigned.apk')
+          s=s.replace('GTI-Altimeter-Widget-1.2.13-badging.txt','GTI-Altimeter-Widget-1.2.18-badging.txt')
+          s=s.replace("versionCode='19' versionName='1.2.13'","versionCode='24' versionName='1.2.18'")
+          p.write_text(s)
+          PY
+          bash /tmp/gtia1218-build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GTI-Altimeter-Widget-1.2.18-build
+          retention-days: 3
+          path: |
+            GTI-Altimeter-Widget-1.2.18-aligned-unsigned.apk
+            GTI-Altimeter-Widget-1.2.18-badging.txt
+            CI-SHA256.txt
+            apksigner.jar
+            zipalign
+            aapt2
