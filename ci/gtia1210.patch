@@ -1,0 +1,76 @@
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -12,8 +12,8 @@
+         applicationId 'ch.piiwii.gtialtimeter'
+         minSdk 23
+         targetSdk 29
+-        versionCode 14
+-        versionName '1.2.9'
++        versionCode 15
++        versionName '1.2.10'
+     }
+ 
+     lint { disable 'ExpiredTargetSdkVersion' }
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java
+@@ -219,7 +219,7 @@
+         drawSilhouetteTrend(c, context, hasAltitude);
+         drawSilhouetteGpsBars(c, context);
+         drawSilhouetteAccuracy(c, context);
+-        drawHeadingMarker(c, context, 376f, 441f, 262f, 1.45f);
++        drawHeadingMarker(c, context, 376f, 441f, 262f, 1.08f);
+     }
+ 
+     private static void drawSilhouetteAltitude(Canvas c, Long altitude) {
+@@ -374,8 +374,8 @@
+         long age = System.currentTimeMillis() - AltitudeState.headingTime(context);
+         if (Float.isNaN(heading) || age > 15000L) return;
+ 
+-        // Moving heading pointer: 0° = top, 90° = right, 180° = bottom, 270° = left.
+-        // It is updated by the sensor service roughly twice per second instead of the old 4 s heartbeat.
++        // Visual deliberately kept identical to the clean 1.2.8 pointer:
++        // one small red triangle only. No counter-marker, no extra ring, no skin rotation.
+         double rad = Math.toRadians(heading - 90f);
+         float px = cx + (float) Math.cos(rad) * radius;
+         float py = cy + (float) Math.sin(rad) * radius;
+@@ -383,11 +383,11 @@
+         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+         p.setColor(RED);
+         p.setStyle(Paint.Style.FILL);
+-        p.setShadowLayer(10f * scale, 0f, 0f, Color.argb(210, 255, 18, 26));
++        p.setShadowLayer(8f * scale, 0f, 0f, Color.argb(190, 255, 20, 28));
+         Path tri = new Path();
+-        tri.moveTo(0f, -18f * scale);
+-        tri.lineTo(-12f * scale, 12f * scale);
+-        tri.lineTo(12f * scale, 12f * scale);
++        tri.moveTo(0f, -15f * scale);
++        tri.lineTo(-11f * scale, 11f * scale);
++        tri.lineTo(11f * scale, 11f * scale);
+         tri.close();
+         c.save();
+         c.translate(px, py);
+@@ -395,24 +395,6 @@
+         c.drawPath(tri, p);
+         c.restore();
+         p.clearShadowLayer();
+-
+-        // Small silver counter-marker makes direction changes much easier to read at a glance.
+-        double opposite = Math.toRadians(heading + 90f);
+-        float sx = cx + (float) Math.cos(opposite) * (radius - 5f * scale);
+-        float sy = cy + (float) Math.sin(opposite) * (radius - 5f * scale);
+-        Paint tail = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+-        tail.setColor(Color.rgb(225, 226, 230));
+-        tail.setStyle(Paint.Style.FILL);
+-        Path tailTri = new Path();
+-        tailTri.moveTo(0f, -9f * scale);
+-        tailTri.lineTo(-6f * scale, 6f * scale);
+-        tailTri.lineTo(6f * scale, 6f * scale);
+-        tailTri.close();
+-        c.save();
+-        c.translate(sx, sy);
+-        c.rotate(heading + 180f);
+-        c.drawPath(tailTri, tail);
+-        c.restore();
+     }
+ 
+     private static int gpsBars(Context context) {
