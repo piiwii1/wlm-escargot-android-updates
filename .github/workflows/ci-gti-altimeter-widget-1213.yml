@@ -13,106 +13,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-
-      - name: Rebuild exact 1.2.8 project
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat ci/gtia120.part.00 ci/gtia120.part.01 ci/gtia120.part.02 ci/gtia120.part.03 ci/gtia120.part.04 ci/gtia120.part.05 ci/gtia120.part.06.00 ci/gtia120.part.06.01 ci/gtia120.part.06.02 ci/gtia120.part.06.03 ci/gtia120.part.06.04 ci/gtia120.part.07.00 ci/gtia120.part.07.01 ci/gtia120.part.07.02 ci/gtia120.part.07.03 ci/gtia120.part.07.04 ci/gtia120.part.07.05 ci/gtia120.part.07.06 ci/gtia120.part.07.07 ci/gtia120.part.07.08 ci/gtia120.part.07.09 ci/gtia120.part.07.10 ci/gtia120.part.07.11 ci/gtia120.part.07.12 ci/gtia120.part.07.13 ci/gtia120.part.07.14 ci/gtia120.part.07.15 | tr -d '\n\r' | base64 -d > /tmp/gtialtimeter-base.zip
-          unzip -t /tmp/gtialtimeter-base.zip
-          rm -rf ci-gtialtimeter-1.2.8-project
-          mkdir ci-gtialtimeter-1.2.8-project
-          unzip -q /tmp/gtialtimeter-base.zip -d ci-gtialtimeter-1.2.8-project
-
-          ROOT=ci-gtialtimeter-1.2.8-project
-          JAVA="$ROOT/app/src/main/java/ch/piiwii/gtialtimeter"
-          mkdir -p "$ROOT/app/src/main/res/drawable-nodpi"
-          cat ci/gtia121skin.part.00 ci/gtia121skin.part.01 ci/gtia121skin.part.02 ci/gtia121skin.part.03 ci/gtia121skin.part.04 ci/gtia121skin.part.05 ci/gtia121skin.part.06 | tr -d '\n\r' | base64 -d > "$ROOT/app/src/main/res/drawable-nodpi/altimeter_skin_reference.png"
-          cp ci/gtia122-AltitudeState.java "$JAVA/AltitudeState.java"
-          cp ci/gtia122-AltitudeService.java "$JAVA/AltitudeService.java"
-          cp ci/gtia122-ServiceWatchdog.java "$JAVA/ServiceWatchdog.java"
-          cp ci/gtia122-WatchdogReceiver.java "$JAVA/WatchdogReceiver.java"
-          cp ci/gtia122-BootReceiver.java "$JAVA/BootReceiver.java"
-          cp ci/gtia122-GTIAltimeterWidgetProvider.java "$JAVA/GTIAltimeterWidgetProvider.java"
-          cp ci/gtia127-WidgetRenderer.java "$JAVA/WidgetRenderer.java"
-          cp ci/gtia127-MainActivity.java "$JAVA/MainActivity.java"
-          cp ci/gtia127-SkinPrefs.java "$JAVA/SkinPrefs.java"
-          sed -i 's/R.drawable.altimeter_skin_silhouette/R.drawable.compass_matterhorn_reference/g' "$JAVA/WidgetRenderer.java"
-          python3 ci/gtia125-gps-recovery.py "$ROOT"
-          python3 - <<'PY'
-          from pathlib import Path
-          root=Path('ci-gtialtimeter-1.2.8-project')
-          p=root/'app/build.gradle'
-          s=p.read_text().replace('versionCode 5','versionCode 12').replace("versionName '1.2.0'","versionName '1.2.7'")
-          p.write_text(s)
-          m=root/'app/src/main/AndroidManifest.xml'
-          s=m.read_text()
-          marker='''        <receiver\n            android:name=".BootReceiver"'''
-          insertion='''        <receiver\n            android:name=".WatchdogReceiver"\n            android:enabled="true"\n            android:exported="false" />\n\n        <receiver\n            android:name=".BootReceiver"'''
-          if '.WatchdogReceiver' not in s:
-              s=s.replace(marker,insertion)
-          s=s.replace('android:exported="false"\n            android:foregroundServiceType="location" />', 'android:exported="false"\n            android:stopWithTask="false"\n            android:foregroundServiceType="location" />')
-          m.write_text(s)
-          PY
-
-      - name: Restore exact 1.2.8 rollback state
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat ci/gtia128.patch.part.00 ci/gtia128.patch.part.01 ci/gtia128.patch.part.02 ci/gtia128.patch.part.03 ci/gtia128.patch.part.04 > /tmp/gtia128.patch
-          cd ci-gtialtimeter-1.2.8-project
-          patch -p1 < /tmp/gtia128.patch
-          sed -i 's/versionCode 13/versionCode 16/' app/build.gradle
-
-      - name: Apply 1.2.12 precision patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd ci-gtialtimeter-1.2.8-project
-          sed -i 's/versionCode 16/versionCode 13/' app/build.gradle
-          patch -p1 < ../ci/gtia1212.patch
-
-      - name: Apply 1.2.13 architecture patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat ci/gtia1213s.part.02.{0..3} > ci/gtia1213s.part.02
-          cat ci/gtia1213s.part.08.{0..3} > ci/gtia1213s.part.08
-          echo "78baeed659f1399ed86c820737fe0c6c49b3b466f01aefa958509f344ed84f8c  ci/gtia1213s.part.00" | sha256sum -c -
-          echo "0b6ef359e5a77c5fdef857a8b8b03e160a4aea822bce2f3dfb873c5b4f98675b  ci/gtia1213s.part.01" | sha256sum -c -
-          echo "c41b987a143df3e28d3999601c7ee8377fba19dce03857074de5756e0a8c289b  ci/gtia1213s.part.02" | sha256sum -c -
-          echo "e6e469999631c6ad5c36ea535d632fe0a48f6d461e1058771fed7235b62c8d68  ci/gtia1213s.part.03" | sha256sum -c -
-          echo "1f8046ffea08323c9fa9a5c55966845a871c25abb4f3425995fa1d0fe6bcdf69  ci/gtia1213s.part.04" | sha256sum -c -
-          echo "15225b0bec648e7980a76b5bfc4fbe72fff1d4d3bca38a81314aa959c1690c78  ci/gtia1213s.part.05" | sha256sum -c -
-          echo "08c26578021d62c3e716384ed1b5956b15ac0cda00db546c51e78295082a35cb  ci/gtia1213s.part.06" | sha256sum -c -
-          echo "61d3eed2f3ad788b6c3023df916a8569280b6ca2c078468ce196589282b4a45b  ci/gtia1213s.part.07" | sha256sum -c -
-          echo "99e0f94d266e9305975899a1f33105e2130766d4afc548c0611b476f53d943a0  ci/gtia1213s.part.08" | sha256sum -c -
-          echo "eb67b35de0fed8033a2e9fd7e745106e31b030788b7c8beeaccc9008aa64f930  ci/gtia1213s.part.09" | sha256sum -c -
-          echo "75dd152e07a1b8b8d37d61dcb8a4bf48a2af1f6b692eae308fd0cfc258bd934c  ci/gtia1213s.part.10" | sha256sum -c -
-          echo "854651f2c8f36c1cefced8fe24f6c5cebb1825299e536ce7e3a032e441ccf9bf  ci/gtia1213s.part.11" | sha256sum -c -
-          cat ci/gtia1213s.part.{00..11} | tr -d '\n\r' | base64 -d > /tmp/gtia1213.patch
-          echo "bf82f5e285a6ef9e68733663041f28a77e1ab130eee4ff6ccac1e3b5af67967d  /tmp/gtia1213.patch" | sha256sum -c -
-          cd ci-gtialtimeter-1.2.8-project
-          patch -p1 < /tmp/gtia1213.patch
-
-      - name: Verify 1.2.13 target
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT=ci-gtialtimeter-1.2.8-project
-          JAVA="$ROOT/app/src/main/java/ch/piiwii/gtialtimeter"
-          grep -q "versionCode 19" "$ROOT/app/build.gradle"
-          grep -q "versionName '1.2.13'" "$ROOT/app/build.gradle"
-          grep -q 'lastAcceptedRaw' "$JAVA/AltitudeFilter.java"
-          grep -q 'PROVISIONAL_CONFIRM_COUNT = 3' "$JAVA/AltitudeService.java"
-          grep -q 'UI_MIN_INTERVAL_MS = 1_000L' "$JAVA/AltitudeService.java"
-          grep -q 'ELAPSED_REALTIME_WAKEUP' "$JAVA/ServiceWatchdog.java"
-          grep -q 'getCachedSkin' "$JAVA/WidgetRenderer.java"
-          echo "224055843ea8512ba543ab6c3c5d460d49c3812ffc3e99414ce95251fc77ec69  $ROOT/app/src/main/AndroidManifest.xml" | sha256sum -c -
-          echo "bdb44add06d5f067f384e136b7866437b539f0404c557af326d6ba3d90b931a9  $ROOT/app/src/main/res/layout/widget_altimeter.xml" | sha256sum -c -
-          echo "becffd5900ff3f7a4aab7e4eac714b60ee3aef5d5a8c2a4fca57069980221e62  $ROOT/app/src/main/res/drawable-nodpi/altimeter_skin_reference.png" | sha256sum -c -
-          echo "e6963ee33c8f1cb37bcee0dea6ce9a22efa426634b12f0c9a438f04fe26ceed7  $ROOT/app/src/main/res/drawable-nodpi/compass_matterhorn_reference.png" | sha256sum -c -
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -123,24 +23,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
-      - name: Build release APK
-        run: gradle -p ci-gtialtimeter-1.2.8-project --no-daemon --stacktrace clean assembleRelease
-
-      - name: Zipalign and inspect
+      - name: Reconstruct and run verified build script
         shell: bash
         run: |
           set -euo pipefail
-          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
-          "$BT/zipalign" -p -f 4 ci-gtialtimeter-1.2.8-project/app/build/outputs/apk/release/app-release-unsigned.apk GTI-Altimeter-Widget-1.2.13-aligned-unsigned.apk
-          "$BT/aapt" dump badging GTI-Altimeter-Widget-1.2.13-aligned-unsigned.apk > GTI-Altimeter-Widget-1.2.13-badging.txt
-          grep -q "package: name='ch.piiwii.gtialtimeter' versionCode='19' versionName='1.2.13'" GTI-Altimeter-Widget-1.2.13-badging.txt
-          cp "$BT/lib/apksigner.jar" apksigner.jar
-          cp "$BT/zipalign" zipalign
-          cp "$BT/aapt2" aapt2
-          chmod +x zipalign aapt2
-          sha256sum GTI-Altimeter-Widget-1.2.13-aligned-unsigned.apk apksigner.jar zipalign aapt2 > CI-SHA256.txt
-
+          cat ci/gtia1213build.part.* > /tmp/gtia1213-build.sh
+          echo "6bb24983f16834fe04cb6a201d7a9a963fe008e63824cd07f2666b0ddab5be48  /tmp/gtia1213-build.sh" | sha256sum -c -
+          bash /tmp/gtia1213-build.sh
       - uses: actions/upload-artifact@v4
         with:
           name: GTI-Altimeter-Widget-1.2.13-build

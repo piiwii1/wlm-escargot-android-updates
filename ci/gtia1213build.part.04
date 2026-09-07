@@ -1,0 +1,21 @@
+cda00db546c51e78295082a35cb
+[07]=61d3eed2f3ad788b6c3023df916a8569280b6ca2c078468ce196589282b4a45b
+[08]=99e0f94d266e9305975899a1f33105e2130766d4afc548c0611b476f53d943a0
+[09]=eb67b35de0fed8033a2e9fd7e745106e31b030788b7c8beeaccc9008aa64f930
+[10]=75dd152e07a1b8b8d37d61dcb8a4bf48a2af1f6b692eae308fd0cfc258bd934c
+[11]=854651f2c8f36c1cefced8fe24f6c5cebb1825299e536ce7e3a032e441ccf9bf
+)
+for i in {00..11}; do
+  echo "${expected[$i]}  ci/gtia1213s.part.$i" | sha256sum -c -
+done
+cat ci/gtia1213s.part.{00..11} | tr -d '\n\r' | base64 -d > /tmp/gtia1213.patch
+echo "bf82f5e285a6ef9e68733663041f28a77e1ab130eee4ff6ccac1e3b5af67967d  /tmp/gtia1213.patch" | sha256sum -c -
+cd "$ROOT"
+patch -p1 < /tmp/gtia1213.patch
+cd ..
+
+grep -q "versionCode 19" "$ROOT/app/build.gradle"
+grep -q "versionName '1.2.13'" "$ROOT/app/build.gradle"
+grep -q 'lastAcceptedRaw' "$JAVA/AltitudeFilter.java"
+grep -q 'PROVISIONAL_CONFIRM_COUNT = 3' "$JAVA/AltitudeService.java"
+grep -q 'UI_MIN_INTERVAL_MS = 1_000L' "$JAVA/AltitudeService

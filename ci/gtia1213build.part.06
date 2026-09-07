@@ -1,0 +1,7 @@
+2.13-aligned-unsigned.apk > GTI-Altimeter-Widget-1.2.13-badging.txt
+grep -q "package: name='ch.piiwii.gtialtimeter' versionCode='19' versionName='1.2.13'" GTI-Altimeter-Widget-1.2.13-badging.txt
+cp "$BT/lib/apksigner.jar" apksigner.jar
+cp "$BT/zipalign" zipalign
+cp "$BT/aapt2" aapt2
+chmod +x zipalign aapt2
+sha256sum GTI-Altimeter-Widget-1.2.13-aligned-unsigned.apk apksigner.jar zipalign aapt2 > CI-SHA256.txt

@@ -1,0 +1,12 @@
+.java"
+grep -q 'ELAPSED_REALTIME_WAKEUP' "$JAVA/ServiceWatchdog.java"
+grep -q 'getCachedSkin' "$JAVA/WidgetRenderer.java"
+echo "224055843ea8512ba543ab6c3c5d460d49c3812ffc3e99414ce95251fc77ec69  $ROOT/app/src/main/AndroidManifest.xml" | sha256sum -c -
+echo "bdb44add06d5f067f384e136b7866437b539f0404c557af326d6ba3d90b931a9  $ROOT/app/src/main/res/layout/widget_altimeter.xml" | sha256sum -c -
+echo "becffd5900ff3f7a4aab7e4eac714b60ee3aef5d5a8c2a4fca57069980221e62  $ROOT/app/src/main/res/drawable-nodpi/altimeter_skin_reference.png" | sha256sum -c -
+echo "e6963ee33c8f1cb37bcee0dea6ce9a22efa426634b12f0c9a438f04fe26ceed7  $ROOT/app/src/main/res/drawable-nodpi/compass_matterhorn_reference.png" | sha256sum -c -
+
+gradle -p "$ROOT" --no-daemon --stacktrace clean assembleRelease
+BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+"$BT/zipalign" -p -f 4 "$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk" GTI-Altimeter-Widget-1.2.13-aligned-unsigned.apk
+"$BT/aapt" dump badging GTI-Altimeter-Widget-1.

@@ -1,0 +1,22 @@
+a128.patch.part.04 > /tmp/gtia128.patch
+cd "$ROOT"
+patch -p1 < /tmp/gtia128.patch
+sed -i 's/versionCode 13/versionCode 16/' app/build.gradle
+sed -i 's/versionCode 16/versionCode 13/' app/build.gradle
+patch -p1 < ../ci/gtia1212.patch
+cd ..
+
+cat ci/gtia1213s.part.02.{0..3} > ci/gtia1213s.part.02
+cat ci/gtia1213s.part.08.{0..3} > ci/gtia1213s.part.08
+cat ci/gtia1213s.part.09.{0..3} > ci/gtia1213s.part.09
+cat ci/gtia1213s.part.10.{0..3} > ci/gtia1213s.part.10
+cat ci/gtia1213s.part.11.{0..2} > ci/gtia1213s.part.11
+
+declare -A expected=(
+[00]=78baeed659f1399ed86c820737fe0c6c49b3b466f01aefa958509f344ed84f8c
+[01]=0b6ef359e5a77c5fdef857a8b8b03e160a4aea822bce2f3dfb873c5b4f98675b
+[02]=c41b987a143df3e28d3999601c7ee8377fba19dce03857074de5756e0a8c289b
+[03]=e6e469999631c6ad5c36ea535d632fe0a48f6d461e1058771fed7235b62c8d68
+[04]=1f8046ffea08323c9fa9a5c55966845a871c25abb4f3425995fa1d0fe6bcdf69
+[05]=15225b0bec648e7980a76b5bfc4fbe72fff1d4d3bca38a81314aa959c1690c78
+[06]=08c26578021d62c3e716384ed1b5956b15ac0

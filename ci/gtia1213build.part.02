@@ -1,0 +1,25 @@
+'
+from pathlib import Path
+root=Path('ci-gtialtimeter-1.2.8-project')
+p=root/'app/build.gradle'
+s=p.read_text().replace('versionCode 5','versionCode 12').replace("versionName '1.2.0'","versionName '1.2.7'")
+p.write_text(s)
+m=root/'app/src/main/AndroidManifest.xml'
+s=m.read_text()
+marker='''        <receiver
+            android:name=".BootReceiver"'''
+insertion='''        <receiver
+            android:name=".WatchdogReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <receiver
+            android:name=".BootReceiver"'''
+if '.WatchdogReceiver' not in s:
+    s=s.replace(marker,insertion)
+s=s.replace('android:exported="false"\n            android:foregroundServiceType="location" />',
+            'android:exported="false"\n            android:stopWithTask="false"\n            android:foregroundServiceType="location" />')
+m.write_text(s)
+PY
+
+cat ci/gtia128.patch.part.00 ci/gtia128.patch.part.01 ci/gtia128.patch.part.02 ci/gtia128.patch.part.03 ci/gti
