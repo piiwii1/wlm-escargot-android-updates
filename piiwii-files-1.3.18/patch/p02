@@ -1,0 +1,96 @@
+ls.mimeType(selected.iterator().next())); i.putExtra(Intent.EXTRA_STREAM, uris.get(0));
++            i = new Intent(Intent.ACTION_SEND);
++            i.setType(FileUtils.mimeType(actual.get(0)));
++            i.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+             i.setClipData(ClipData.newRawUri("fichier", uris.get(0)));
+         } else {
+-            i = new Intent(Intent.ACTION_SEND_MULTIPLE); i.setType("*/*"); i.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+-            ClipData clip = ClipData.newRawUri("fichiers", uris.get(0)); for (int x=1;x<uris.size();x++) clip.addItem(new ClipData.Item(uris.get(x))); i.setClipData(clip);
++            i = new Intent(Intent.ACTION_SEND_MULTIPLE);
++            i.setType("*/*");
++            i.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
++            ClipData clip = ClipData.newRawUri("fichiers", uris.get(0));
++            for (int x = 1; x < uris.size(); x++) clip.addItem(new ClipData.Item(uris.get(x)));
++            i.setClipData(clip);
+         }
+         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+-        startActivity(Intent.createChooser(i, "Partager avec…"));
++        return i;
++    }
++
++    private void shareSelection() {
++        if (selected.isEmpty()) return;
++        Intent i = buildShareIntent(selected);
++        if (i == null) {
++            Toast.makeText(this, "Sélectionne au moins un fichier à partager", Toast.LENGTH_SHORT).show();
++            return;
++        }
++        showPreferredShareChooser(i);
++    }
++
++    private static class ShareTarget {
++        final ResolveInfo info;
++        final String label;
++        final String packageName;
++        final String className;
++        final int priority;
++        ShareTarget(ResolveInfo info, String label, String packageName, String className, int priority) {
++            this.info = info; this.label = label; this.packageName = packageName; this.className = className; this.priority = priority;
++        }
++    }
++
++    private void showPreferredShareChooser(Intent baseIntent) {
++        PackageManager pm = getPackageManager();
++        List<ResolveInfo> resolved = pm.queryIntentActivities(baseIntent, PackageManager.MATCH_DEFAULT_ONLY);
++        ArrayList<ShareTarget> targets = new ArrayList<>();
++        HashSet<String> seen = new HashSet<>();
++        for (ResolveInfo ri : resolved) {
++            if (ri == null || ri.activityInfo == null) continue;
++            String pkg = ri.activityInfo.packageName == null ? "" : ri.activityInfo.packageName;
++            String cls = ri.activityInfo.name == null ? "" : ri.activityInfo.name;
++            CharSequence cs = ri.loadLabel(pm);
++            String label = cs == null ? pkg : cs.toString().trim();
++            if (label.isEmpty()) label = pkg;
++            if (isQuickShareTarget(label, pkg)) continue;
++            String key = pkg + "/" + cls;
++            if (!seen.add(key)) continue;
++            targets.add(new ShareTarget(ri, label, pkg, cls, sharePriority(label, pkg)));
++        }
++        targets.sort((a, b) -> {
++            int p = Integer.compare(a.priority, b.priority);
++            if (p != 0) return p;
++            return a.label.compareToIgnoreCase(b.label);
++        });
++
++        if (targets.isEmpty()) {
++            try { startActivity(Intent.createChooser(baseIntent, "Partager avec…")); }
++            catch (Exception e) { Toast.makeText(this, "Aucune application compatible", Toast.LENGTH_LONG).show(); }
++            return;
++        }
++
++        Dialog dialog = new Dialog(this);
++        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
++        LinearLayout card = new LinearLayout(this);
++        card.setOrientation(LinearLayout.VERTICAL);
++        card.setPadding(dp(18), dp(16), dp(18), dp(16));
++        card.setBackground(rounded(SURFACE, 20));
++
++        LinearLayout titleRow = new LinearLayout(this);
++        titleRow.setGravity(Gravity.CENTER_VERTICAL);
++        ImageView shareIcon = new ImageView(this);
++        shareIcon.setImageResource(R.drawable.ic_share);
++        shareIcon.setColorFilter(ACCENT);
++        shareIcon.setPadding(dp(9), dp(9), dp(9), dp(9));
++        shareIcon.setBackground(rounded(SURFACE_2, 12));
++        titleRow.addView(shareIcon, new LinearLayout.LayoutParams(dp(44), dp(44)));
++        LinearLayout titleText = new LinearLayout(this);
++        titleText.setOrientation(LinearLayout.VERTICAL);
++        titleText.setPadding(dp(12), 0, 0, 0);
++        titleText.addView(text("Partager avec", 19, Color.WHITE, true));
++        titleText.addView(text("Tes applications préférées d’abord", 11, MUTED, false));
++        titleRow.addView(titleText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++        TextView close = text("×", 28, MUTED, false);
++        close.setGravity(Gravity.CENTER);
++        close.setOnClickListener(v -> dialog.dismiss());
++        titleRow.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
++        card.add
