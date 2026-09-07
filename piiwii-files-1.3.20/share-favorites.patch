@@ -1,0 +1,282 @@
+diff -ruN piiwii_1319_pristine/app/build.gradle piiwii_1320/app/build.gradle
+--- piiwii_1319_pristine/app/build.gradle	2026-09-07 23:39:51.000000000 +0000
++++ piiwii_1320/app/build.gradle	2026-09-07 23:48:03.150129646 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.files'
+         minSdk 26
+         targetSdk 29
+-        versionCode 23
+-        versionName '1.3.19'
++        versionCode 24
++        versionName '1.3.20'
+     }
+ 
+     buildTypes {
+diff -ruN piiwii_1319_pristine/app/src/main/java/ch/piiwii/files/MainActivity.java piiwii_1320/app/src/main/java/ch/piiwii/files/MainActivity.java
+--- piiwii_1319_pristine/app/src/main/java/ch/piiwii/files/MainActivity.java	2026-09-07 23:39:51.000000000 +0000
++++ piiwii_1320/app/src/main/java/ch/piiwii/files/MainActivity.java	2026-09-07 23:48:03.149836862 +0000
+@@ -1509,6 +1509,36 @@
+         }
+     }
+ 
++    private String shareTargetKey(ShareTarget target) {
++        return target.packageName + "/" + target.className;
++    }
++
++    private LinkedHashSet<String> loadShareFavoriteKeys(List<ShareTarget> targets) {
++        SharedPreferences p = prefs();
++        LinkedHashSet<String> keys = new LinkedHashSet<>();
++        String raw = p.getString("share_favorites_order", "");
++        if (raw != null && !raw.trim().isEmpty()) {
++            for (String key : raw.split("\\n")) if (!key.trim().isEmpty()) keys.add(key.trim());
++        }
++        if (!p.getBoolean("share_favorites_customized", false) && keys.isEmpty()) {
++            for (ShareTarget target : targets) if (target.priority < 10) keys.add(shareTargetKey(target));
++        }
++        return keys;
++    }
++
++    private void saveShareFavoriteKeys(Collection<String> keys) {
++        StringBuilder out = new StringBuilder();
++        for (String key : keys) {
++            if (key == null || key.trim().isEmpty()) continue;
++            if (out.length() > 0) out.append('\n');
++            out.append(key.trim());
++        }
++        prefs().edit()
++                .putString("share_favorites_order", out.toString())
++                .putBoolean("share_favorites_customized", true)
++                .apply();
++    }
++
+     private void showPreferredShareChooser(Intent baseIntent) {
+         PackageManager pm = getPackageManager();
+         List<ResolveInfo> resolved = pm.queryIntentActivities(baseIntent, PackageManager.MATCH_DEFAULT_ONLY);
+@@ -1538,12 +1568,20 @@
+             return;
+         }
+ 
++        LinkedHashSet<String> favoriteKeys = loadShareFavoriteKeys(targets);
++        ArrayList<ShareTarget> preferred = new ArrayList<>();
++        ArrayList<ShareTarget> others = new ArrayList<>();
++        for (ShareTarget target : targets) {
++            if (favoriteKeys.contains(shareTargetKey(target))) preferred.add(target);
++            else others.add(target);
++        }
++
+         Dialog dialog = new Dialog(this);
+         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+         LinearLayout card = new LinearLayout(this);
+         card.setOrientation(LinearLayout.VERTICAL);
+-        card.setPadding(dp(18), dp(16), dp(18), dp(16));
+-        card.setBackground(rounded(SURFACE, 20));
++        card.setPadding(dp(18), dp(16), dp(18), dp(12));
++        card.setBackground(rounded(SURFACE, 22));
+ 
+         LinearLayout titleRow = new LinearLayout(this);
+         titleRow.setGravity(Gravity.CENTER_VERTICAL);
+@@ -1557,7 +1595,7 @@
+         titleText.setOrientation(LinearLayout.VERTICAL);
+         titleText.setPadding(dp(12), 0, 0, 0);
+         titleText.addView(text("Partager avec", 19, Color.WHITE, true));
+-        titleText.addView(text("Choisis une application", 11, MUTED, false));
++        titleText.addView(text("Tes favoris d'abord", 11, MUTED, false));
+         titleRow.addView(titleText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+         TextView close = text("×", 28, MUTED, false);
+         close.setGravity(Gravity.CENTER);
+@@ -1565,54 +1603,95 @@
+         titleRow.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
+         card.addView(titleRow);
+ 
+-        ArrayList<ShareTarget> preferred = new ArrayList<>();
+-        ArrayList<ShareTarget> others = new ArrayList<>();
+-        for (ShareTarget target : targets) {
+-            if (target.priority < 10) preferred.add(target); else others.add(target);
+-        }
++        LinearLayout favoriteHeader = new LinearLayout(this);
++        favoriteHeader.setGravity(Gravity.CENTER_VERTICAL);
++        TextView favoriteTitle = text("FAVORIS", 10, MUTED, true);
++        favoriteTitle.setPadding(dp(4), dp(14), 0, dp(6));
++        favoriteHeader.addView(favoriteTitle, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++        TextView edit = text("Modifier", 12, ACCENT, true);
++        edit.setGravity(Gravity.CENTER);
++        edit.setPadding(dp(12), dp(8), dp(12), dp(8));
++        edit.setBackground(outlined(SURFACE_2, 12, STROKE));
++        edit.setOnClickListener(v -> editShareFavorites(dialog, baseIntent, targets));
++        LinearLayout.LayoutParams ep = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
++        ep.setMargins(0, dp(8), dp(2), dp(2));
++        favoriteHeader.addView(edit, ep);
++        card.addView(favoriteHeader);
+ 
+         if (!preferred.isEmpty()) {
+-            TextView preferredTitle = text("PRINCIPALES", 10, MUTED, true);
+-            preferredTitle.setPadding(dp(4), dp(14), 0, dp(6));
+-            card.addView(preferredTitle);
+-
+             HorizontalScrollView preferredScroll = new HorizontalScrollView(this);
+             preferredScroll.setHorizontalScrollBarEnabled(false);
+             preferredScroll.setFillViewport(false);
+             LinearLayout preferredRow = new LinearLayout(this);
+             preferredRow.setOrientation(LinearLayout.HORIZONTAL);
+             preferredRow.setGravity(Gravity.CENTER_VERTICAL);
+-            for (ShareTarget target : preferred) {
+-                preferredRow.addView(buildShareTargetTile(dialog, baseIntent, target, true));
+-            }
++            for (ShareTarget target : preferred) preferredRow.addView(buildShareTargetTile(dialog, baseIntent, target, true));
+             preferredScroll.addView(preferredRow, new HorizontalScrollView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+             card.addView(preferredScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(104)));
+-        }
+-
+-        if (!others.isEmpty()) {
+-            TextView otherTitle = text("AUTRES APPLICATIONS", 10, MUTED, true);
+-            otherTitle.setPadding(dp(4), dp(10), 0, dp(6));
+-            card.addView(otherTitle);
+-
+-            ScrollView scroll = new ScrollView(this);
+-            scroll.setFillViewport(true);
+-            GridLayout grid = new GridLayout(this);
+-            grid.setColumnCount(4);
+-            grid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+-            grid.setUseDefaultMargins(false);
+-            grid.setPadding(0, 0, 0, dp(4));
+-            for (ShareTarget target : others) {
+-                View tile = buildShareTargetTile(dialog, baseIntent, target, false);
+-                GridLayout.LayoutParams gp = new GridLayout.LayoutParams();
+-                gp.width = 0;
+-                gp.height = dp(96);
+-                gp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
+-                gp.setMargins(dp(3), dp(3), dp(3), dp(3));
+-                grid.addView(tile, gp);
+-            }
+-            scroll.addView(grid, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+-            card.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+-        }
++        } else {
++            TextView empty = text("Aucun favori — touche Modifier pour en choisir", 12, MUTED, false);
++            empty.setGravity(Gravity.CENTER);
++            empty.setPadding(dp(8), dp(18), dp(8), dp(18));
++            empty.setBackground(outlined(SURFACE_2, 14, STROKE));
++            card.addView(empty, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)));
++        }
++
++        Space filler = new Space(this);
++        card.addView(filler, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
++
++        ScrollView otherScroll = new ScrollView(this);
++        otherScroll.setFillViewport(true);
++        otherScroll.setVisibility(View.GONE);
++        GridLayout grid = new GridLayout(this);
++        grid.setColumnCount(4);
++        grid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
++        grid.setUseDefaultMargins(false);
++        grid.setPadding(0, dp(6), 0, dp(4));
++        for (ShareTarget target : others) {
++            View tile = buildShareTargetTile(dialog, baseIntent, target, false);
++            GridLayout.LayoutParams gp = new GridLayout.LayoutParams();
++            gp.width = 0;
++            gp.height = dp(96);
++            gp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f);
++            gp.setMargins(dp(3), dp(3), dp(3), dp(3));
++            grid.addView(tile, gp);
++        }
++        if (others.isEmpty()) {
++            TextView emptyOthers = text("Toutes les applications compatibles sont déjà dans tes favoris.", 12, MUTED, false);
++            emptyOthers.setGravity(Gravity.CENTER);
++            grid.addView(emptyOthers, new GridLayout.LayoutParams(GridLayout.spec(0), GridLayout.spec(0, 4)));
++        }
++        otherScroll.addView(grid, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++        card.addView(otherScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
++
++        LinearLayout otherToggle = new LinearLayout(this);
++        otherToggle.setGravity(Gravity.CENTER_VERTICAL);
++        otherToggle.setPadding(dp(12), dp(9), dp(10), dp(9));
++        otherToggle.setBackground(outlined(SURFACE_2, 14, STROKE));
++        ImageView appsIcon = new ImageView(this);
++        appsIcon.setImageResource(R.drawable.ic_apps);
++        appsIcon.setColorFilter(MUTED);
++        appsIcon.setPadding(dp(6), dp(6), dp(6), dp(6));
++        otherToggle.addView(appsIcon, new LinearLayout.LayoutParams(dp(36), dp(36)));
++        LinearLayout otherText = new LinearLayout(this);
++        otherText.setOrientation(LinearLayout.VERTICAL);
++        otherText.setPadding(dp(8), 0, 0, 0);
++        otherText.addView(text("Autres applications", 14, Color.WHITE, true));
++        TextView count = text(others.size() + " application" + (others.size() > 1 ? "s" : "") + " compatible" + (others.size() > 1 ? "s" : ""), 10, MUTED, false);
++        otherText.addView(count);
++        otherToggle.addView(otherText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++        TextView arrow = text("⌃", 20, MUTED, true);
++        arrow.setGravity(Gravity.CENTER);
++        otherToggle.addView(arrow, new LinearLayout.LayoutParams(dp(34), dp(36)));
++        otherToggle.setOnClickListener(v -> {
++            boolean open = otherScroll.getVisibility() == View.VISIBLE;
++            otherScroll.setVisibility(open ? View.GONE : View.VISIBLE);
++            filler.setVisibility(open ? View.VISIBLE : View.GONE);
++            arrow.setText(open ? "⌃" : "⌄");
++        });
++        LinearLayout.LayoutParams otp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
++        otp.setMargins(0, dp(8), 0, 0);
++        card.addView(otherToggle, otp);
+ 
+         dialog.setContentView(card);
+         Window w = dialog.getWindow();
+@@ -1622,14 +1701,42 @@
+             w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+             android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams();
+             lp.copyFrom(w.getAttributes());
+-            lp.width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(28), dp(560));
+-            lp.height = Math.min(getResources().getDisplayMetrics().heightPixels - dp(70), dp(620));
+-            lp.gravity = Gravity.CENTER;
++            lp.width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(18), dp(560));
++            lp.height = Math.min(getResources().getDisplayMetrics().heightPixels - dp(28), dp(620));
++            lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
++            lp.y = dp(8);
+             w.setAttributes(lp);
+         }
+         dialog.show();
+     }
+ 
++    private void editShareFavorites(Dialog shareDialog, Intent baseIntent, ArrayList<ShareTarget> targets) {
++        LinkedHashSet<String> current = loadShareFavoriteKeys(targets);
++        String[] labels = new String[targets.size()];
++        boolean[] checked = new boolean[targets.size()];
++        for (int i = 0; i < targets.size(); i++) {
++            ShareTarget target = targets.get(i);
++            labels[i] = preferredDisplayName(target);
++            checked[i] = current.contains(shareTargetKey(target));
++        }
++
++        AlertDialog picker = new AlertDialog.Builder(this)
++                .setTitle("Modifier les favoris")
++                .setMultiChoiceItems(labels, checked, (d, which, isChecked) -> checked[which] = isChecked)
++                .setNegativeButton("Annuler", null)
++                .setPositiveButton("Enregistrer", null)
++                .create();
++        picker.setOnShowListener(ignored -> picker.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
++            LinkedHashSet<String> next = new LinkedHashSet<>();
++            for (int i = 0; i < targets.size(); i++) if (checked[i]) next.add(shareTargetKey(targets.get(i)));
++            saveShareFavoriteKeys(next);
++            picker.dismiss();
++            shareDialog.dismiss();
++            showPreferredShareChooser(baseIntent);
++        }));
++        picker.show();
++    }
++
+     private View buildShareTargetTile(Dialog dialog, Intent baseIntent, ShareTarget target, boolean preferred) {
+         LinearLayout tile = new LinearLayout(this);
+         tile.setOrientation(LinearLayout.VERTICAL);
+@@ -2090,7 +2197,7 @@
+ 
+     private void diagnostics() {
+         StringBuilder s = new StringBuilder();
+-        s.append("PiiWii Files 1.3.19 (versionCode 23)\nPackage : ").append(getPackageName())
++        s.append("PiiWii Files 1.3.20 (versionCode 24)\nPackage : ").append(getPackageName())
+                 .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+                 .append("\nStockage principal : ").append(Environment.getExternalStorageDirectory().getAbsolutePath())
+                 .append("\nPermissions écriture : ").append(Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED ? "OK" : "NON");
+diff -ruN piiwii_1319_pristine/app/src/main/res/drawable/ic_apps.xml piiwii_1320/app/src/main/res/drawable/ic_apps.xml
+--- piiwii_1319_pristine/app/src/main/res/drawable/ic_apps.xml	1970-01-01 00:00:00.000000000 +0000
++++ piiwii_1320/app/src/main/res/drawable/ic_apps.xml	2026-09-07 23:48:03.150241498 +0000
+@@ -0,0 +1,3 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
++    <path android:fillColor="#FFFFFFFF" android:pathData="M4,4h4v4H4zM10,4h4v4h-4zM16,4h4v4h-4zM4,10h4v4H4zM10,10h4v4h-4zM16,10h4v4h-4zM4,16h4v4H4zM10,16h4v4h-4zM16,16h4v4h-4z"/>
++</vector>
