@@ -43,7 +43,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/piiwii-files-137
-          cat piiwii-files-137-build/source.part.00 piiwii-files-137-build/source.part.01 > /tmp/piiwii-files-137/source.b64
+          echo '1ce1aff417f98c7ee184b7dbee71b659c6ec83aed5d643073ef9569061b313d1  piiwii-files-137-build/source.part.00' | sha256sum -c -
+          echo '2912d7c03e72a9f2a442e654aff80d2c83a6d5ca024d5bb8cc8e9c2a81edbca5  piiwii-files-137-build/source.part.01' | sha256sum -c -
+          echo '22771d37a5f5fd7befd173753a0265debe1bdcfde0d9bbb5be408b1bdda81b08  piiwii-files-137-build/source.part.02' | sha256sum -c -
+          echo 'e58eaab5cc304929514396672d51c6336170d1e52e8f480973fc2c658d86ebac  piiwii-files-137-build/source.part.03' | sha256sum -c -
+          echo '0d09c2e799dce20570c2848455bb272b0516e0c589a4f3a64b8431fc9247ddaa  piiwii-files-137-build/source.part.04' | sha256sum -c -
+          cat piiwii-files-137-build/source.part.00 \
+              piiwii-files-137-build/source.part.01 \
+              piiwii-files-137-build/source.part.02 \
+              piiwii-files-137-build/source.part.03 \
+              piiwii-files-137-build/source.part.04 \
+              > /tmp/piiwii-files-137/source.b64
           base64 -d /tmp/piiwii-files-137/source.b64 > /tmp/piiwii-files-137/source.tar.gz
           echo '4c4633dc8f43e866887ee1bdcf85397a60a6af01c25cb1c0d3e491ca11f20754  /tmp/piiwii-files-137/source.tar.gz' | sha256sum -c -
           mkdir -p /tmp/piiwii-files-137/project
@@ -71,7 +81,17 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -n 8 > "$OUT/PiiWii-Files-1.3.7-metadata.txt"
           sha256sum "$APK" | sed 's#  .*#  PiiWii-Files-1.3.7-aligned-unsigned.apk#' > "$OUT/PiiWii-Files-1.3.7-unsigned.sha256"
           base64 -w0 "$APK" > /tmp/PiiWii-Files-1.3.7-unsigned.apk.b64
-          split -b 24000 -d -a 3 /tmp/PiiWii-Files-1.3.7-unsigned.apk.b64 "$OUT/PiiWii-Files-1.3.7-unsigned.apk.b64.part."
+          split -b 8000 -d -a 3 /tmp/PiiWii-Files-1.3.7-unsigned.apk.b64 "$OUT/PiiWii-Files-1.3.7-unsigned.apk.b64.part."
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-files-1.3.7-unsigned
+          path: |
+            /tmp/PiiWii-Files-1.3.7-aligned-unsigned.apk
+            piiwii-files-137-build/output/PiiWii-Files-1.3.7-metadata.txt
+            piiwii-files-137-build/output/PiiWii-Files-1.3.7-unsigned.sha256
+          if-no-files-found: error
 
       - name: Commit build output
         shell: bash
