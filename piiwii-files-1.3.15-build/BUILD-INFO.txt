@@ -1,0 +1,4 @@
+PiiWii Files 1.3.15
+versionCode 19
+package ch.piiwii.files
+Feature: compact storage usage by type (Photos, Vidéos, Musique, APK)
