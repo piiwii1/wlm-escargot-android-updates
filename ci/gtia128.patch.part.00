@@ -1,0 +1,160 @@
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -12,8 +12,8 @@
+         applicationId 'ch.piiwii.gtialtimeter'
+         minSdk 23
+         targetSdk 29
+-        versionCode 12
+-        versionName '1.2.7'
++        versionCode 13
++        versionName '1.2.8'
+     }
+ 
+     lint { disable 'ExpiredTargetSdkVersion' }
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeService.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeService.java
+@@ -12,6 +12,7 @@
+ import android.hardware.SensorEvent;
+ import android.hardware.SensorEventListener;
+ import android.hardware.SensorManager;
++import android.location.GnssStatus;
+ import android.location.Location;
+ import android.location.LocationListener;
+ import android.location.LocationManager;
+@@ -19,18 +20,24 @@
+ import android.os.Bundle;
+ import android.os.Handler;
+ import android.os.IBinder;
++
++import java.util.HashSet;
++import java.util.List;
++import java.util.Set;
+ import android.os.Looper;
++import android.os.SystemClock;
+ 
+ public class AltitudeService extends Service implements LocationListener, SensorEventListener {
+     private static final String CHANNEL_ID = "gti_altimeter_gps";
+     private static final int NOTIFICATION_ID = 1042;
+     private static final long HEARTBEAT_MS = 4000L;
+-    private static final long GPS_REREQUEST_AFTER_MS = 25000L;
+-    private static final long GPS_REQUEST_THROTTLE_MS = 18000L;
++    private static final long LOCATION_STALE_MS = 60000L;
++    private static final long LAST_KNOWN_MAX_AGE_MS = 45000L;
++    private static final long SUBSCRIPTION_RECHECK_MS = 60000L;
+     private static final long BARO_BOOTSTRAP_MAX_AGE_MS = 5L * 60L * 1000L;
+-    private static final long GPS_PROVISIONAL_AFTER_MS = 5L * 60L * 1000L;
+-    private static final float GPS_PROVISIONAL_HACC_MAX_M = 180f;
+-    private static final float GPS_PROVISIONAL_VACC_MAX_M = 160f;
++    private static final long GPS_PROVISIONAL_AFTER_MS = 60000L;
++    private static final float GPS_PROVISIONAL_HACC_MAX_M = 260f;
++    private static final float GPS_PROVISIONAL_VACC_MAX_M = 260f;
+ 
+     private final AltitudeFilter filter = new AltitudeFilter();
+     private final Handler handler = new Handler(Looper.getMainLooper());
+@@ -47,19 +54,47 @@
+     private double trendAnchorAlt = Double.NaN;
+     private long trendAnchorTime;
+     private String trendAnchorSource = "";
+-    private long lastGpsRequestAt;
++    private long lastSubscriptionCheckAt;
+     private long lastBaroUiAt;
++    private boolean locationSubscriptionsActive;
++    private boolean gnssCallbackRegistered;
++    private final Set<String> subscribedProviders = new HashSet<>();
++
++    private final GnssStatus.Callback gnssCallback = new GnssStatus.Callback() {
++        @Override public void onSatelliteStatusChanged(GnssStatus status) {
++            int visible = status == null ? 0 : status.getSatelliteCount();
++            int used = 0;
++            float sumCn0 = 0f;
++            int cn0Count = 0;
++            if (status != null) {
++                for (int i = 0; i < visible; i++) {
++                    if (status.usedInFix(i)) used++;
++                    float cn0 = status.getCn0DbHz(i);
++                    if (!Float.isNaN(cn0) && cn0 > 0f) { sumCn0 += cn0; cn0Count++; }
++                }
++            }
++            AltitudeState.saveGnssStatus(AltitudeService.this, visible, used, cn0Count > 0 ? sumCn0 / cn0Count : Float.NaN);
++            GtiWidgetUpdater.updateAll(AltitudeService.this);
++        }
++
++        @Override public void onStopped() {
++            AltitudeState.saveGnssStatus(AltitudeService.this, 0, 0, Float.NaN);
++            GtiWidgetUpdater.updateAll(AltitudeService.this);
++        }
++    };
+ 
+     private final Runnable heartbeat = new Runnable() {
+         @Override public void run() {
+             AltitudeState.touchService(AltitudeService.this);
+             refreshProviderState();
+             long now = System.currentTimeMillis();
+-            long lastCallback = AltitudeState.lastGpsCallback(AltitudeService.this);
+-            if (AltitudeState.gpsEnabled(AltitudeService.this)
+-                    && (lastCallback <= 0L || now - lastCallback > GPS_REREQUEST_AFTER_MS)) {
+-                requestGps(false);
+-            }
++            if (!locationSubscriptionsActive || now - lastSubscriptionCheckAt >= SUBSCRIPTION_RECHECK_MS) {
++                ensureLocationSubscriptions();
++                lastSubscriptionCheckAt = now;
++            }
++            // Important: never remove/re-register the GPS listener on a timer. Some TS18/Topway
++            // firmwares restart acquisition when that happens and can remain stuck without a fix.
++            registerGnssStatusIfPossible();
+             updateNotificationFromState();
+             GtiWidgetUpdater.updateAll(AltitudeService.this);
+             handler.postDelayed(this, HEARTBEAT_MS);
+@@ -105,7 +140,9 @@
+         AltitudeState.setCompassSensors(this, rotationSensor != null || (accelerometer != null && magneticSensor != null));
+ 
+         refreshProviderState();
+-        requestGps(true);
++        ensureLocationSubscriptions();
++        registerGnssStatusIfPossible();
++        seedRecentLastKnownLocation();
+         ServiceWatchdog.schedule(this, ServiceWatchdog.NORMAL_DELAY_MS);
+         handler.post(heartbeat);
+     }
+@@ -114,57 +151,143 @@
+         startForeground(NOTIFICATION_ID, buildNotification("GTI Altimeter actif"));
+         AltitudeState.touchService(this);
+         refreshProviderState();
+-        requestGps(true);
++        ensureLocationSubscriptions();
++        registerGnssStatusIfPossible();
+         ServiceWatchdog.schedule(this, ServiceWatchdog.NORMAL_DELAY_MS);
+         return START_STICKY;
+     }
+ 
+-    private void requestGps(boolean force) {
++    private void ensureLocationSubscriptions() {
+         if (locationManager == null) return;
+         if (Build.VERSION.SDK_INT >= 23
+                 && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
+-        long now = System.currentTimeMillis();
+-        if (!force && now - lastGpsRequestAt < GPS_REQUEST_THROTTLE_MS) return;
+-        lastGpsRequestAt = now;
++        boolean any = false;
+         try {
+-            locationManager.removeUpdates(this);
+-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, this, Looper.getMainLooper());
+-        } catch (SecurityException | IllegalArgumentException ignored) { }
++            List<String> providers = locationManager.getProviders(true);
++            if (providers != null) {
++                for (String provider : providers) {
++                    if (provider == null || subscribedProviders.contains(provider)) {
++                        if (provider != null) any = true;
++                        continue;
++                    }
++                    try {
++                        long minTime = LocationManager.GPS_PROVIDER.equals(provider) ? 500L : 1000L;
++                        locationManager.requestLocationUpdates(provider, minTime, 0f, this, Looper.getMainLooper());
++                        subscribedProviders.add(provider);
++                        any = true;
++                    } catch (SecurityException | IllegalArgumentException ignored) { }
++                }
++            }
++        } catch (RuntimeException ignored) { }
++
++        // Request GPS explicitly as well. On some head units it is omitted from getProviders(true)
