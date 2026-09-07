@@ -1,0 +1,103 @@
+   try {
++            c = getContentResolver().query(uri,
++                    new String[]{MediaStore.MediaColumns.DATA, MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.DATE_MODIFIED, MediaStore.MediaColumns.DISPLAY_NAME},
++                    selection, args, sortOrder);
++            if (c == null) return;
++            int data = c.getColumnIndex(MediaStore.MediaColumns.DATA);
++            while (c.moveToNext() && out.size() < limit) {
++                if (data < 0 || c.isNull(data)) continue;
++                String path = c.getString(data);
++                if (path == null || path.trim().isEmpty()) continue;
++                File f = new File(path);
++                if (f.exists() && f.isFile()) out.put(f.getAbsolutePath(), f);
++            }
++        } catch (Exception ignored) {
++        } finally { if (c != null) c.close(); }
++    }
++
++    private void showLargeFiles() {
++        showCollectionLoading("Fichiers volumineux", "Les fichiers de 50 Mo et plus", R.drawable.ic_large_file);
++        new Thread(() -> {
++            LinkedHashMap<String, File> unique = new LinkedHashMap<>();
++            long min = 50L * 1024L * 1024L;
++            for (String volume : mediaVolumes()) {
++                addIndexedFiles(MediaStore.Files.getContentUri(volume), MediaStore.MediaColumns.SIZE + " >= ?", new String[]{String.valueOf(min)}, unique, 300, MediaStore.MediaColumns.SIZE + " DESC");
++                if (unique.size() >= 300) break;
++            }
++            ArrayList<File> files = new ArrayList<>(unique.values());
++            files.sort((a,b) -> Long.compare(b.length(), a.length()));
++            runOnUiThread(() -> renderFileCollection("Fichiers volumineux", "Les fichiers de 50 Mo et plus", R.drawable.ic_large_file, files));
++        }, "PiiWiiFiles-large-files").start();
++    }
++
++    private void showQuickCleanup() {
++        final ProgressDialog pd = new ProgressDialog(this);
++        pd.setTitle("Nettoyage rapide");
++        pd.setMessage("Analyse ciblée…");
++        pd.setIndeterminate(true);
++        pd.setCancelable(true);
++        pd.show();
++        new Thread(() -> {
++            ArrayList<File> oldDownloads = new ArrayList<>();
++            collectOldFiles(FileUtils.downloadsDir(), oldDownloads, System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L, 400);
++            ArrayList<File> installedApks = findAlreadyInstalledApks();
++            ArrayList<File> archives = queryIndexedBySuffixes(new String[]{".zip", ".rar", ".7z", ".tar", ".gz"}, 400);
++            ArrayList<File> temps = queryIndexedBySuffixes(new String[]{".tmp", ".temp", ".part", ".crdownload"}, 400);
++            runOnUiThread(() -> {
++                if (pd.isShowing()) pd.dismiss();
++                showCleanupGroupsDialog(oldDownloads, installedApks, archives, temps);
++            });
++        }, "PiiWiiFiles-cleanup").start();
++    }
++
++    private void collectOldFiles(File dir, ArrayList<File> out, long before, int limit) {
++        if (dir == null || out.size() >= limit) return;
++        File[] children;
++        try { children = dir.listFiles(); } catch (Exception e) { return; }
++        if (children == null) return;
++        for (File f : children) {
++            if (out.size() >= limit) return;
++            if (f.isDirectory()) collectOldFiles(f, out, before, limit);
++            else if (f.lastModified() > 0 && f.lastModified() < before) out.add(f);
++        }
++    }
++
++    private ArrayList<File> queryIndexedBySuffixes(String[] suffixes, int limit) {
++        LinkedHashMap<String, File> unique = new LinkedHashMap<>();
++        StringBuilder sel = new StringBuilder();
++        ArrayList<String> args = new ArrayList<>();
++        for (String suffix : suffixes) {
++            if (sel.length() > 0) sel.append(" OR ");
++            sel.append(MediaStore.MediaColumns.DISPLAY_NAME).append(" LIKE ?");
++            args.add("%" + suffix);
++        }
++        for (String volume : mediaVolumes()) {
++            addIndexedFiles(MediaStore.Files.getContentUri(volume), sel.toString(), args.toArray(new String[0]), unique, limit, MediaStore.MediaColumns.DATE_MODIFIED + " DESC");
++            if (unique.size() >= limit) break;
++        }
++        return new ArrayList<>(unique.values());
++    }
++
++    private ArrayList<File> findAlreadyInstalledApks() {
++        ArrayList<File> result = new ArrayList<>();
++        PackageManager pm = getPackageManager();
++        for (File apk : queryIndexedFiles(3, 400)) {
++            try {
++                PackageInfo archive = pm.getPackageArchiveInfo(apk.getAbsolutePath(), 0);
++                if (archive == null || archive.packageName == null) continue;
++                PackageInfo installed = pm.getPackageInfo(archive.packageName, 0);
++                long archiveCode = Build.VERSION.SDK_INT >= 28 ? archive.getLongVersionCode() : archive.versionCode;
++                long installedCode = Build.VERSION.SDK_INT >= 28 ? installed.getLongVersionCode() : installed.versionCode;
++                if (installedCode >= archiveCode) result.add(apk);
++            } catch (Exception ignored) { }
++        }
++        return result;
++    }
++
++    private long totalSize(Collection<File> files) {
++        long total = 0L;
++        if (files != null) for (File f : files) if (f != null && f.isFile()) total += Math.max(0L, f.length());
++        return total;
++    }
++
++    private void showCleanupGroupsDialog(ArrayList<File> oldDownloads, ArrayList<File> installedApks, ArrayList<File> archives
