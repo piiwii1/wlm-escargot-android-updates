@@ -1,0 +1,69 @@
+, ArrayList<File> temps) {
++        final String[] labels = {"Téléchargements anciens", "APK déjà installés", "Archives", "Fichiers temporaires"};
++        @SuppressWarnings("unchecked") ArrayList<File>[] groups = new ArrayList[]{oldDownloads, installedApks, archives, temps};
++        String[] items = new String[4];
++        for (int i = 0; i < 4; i++) items[i] = labels[i] + "\n" + groups[i].size() + " fichier(s)  •  " + FileUtils.formatSize(totalSize(groups[i]));
++        new AlertDialog.Builder(this)
++                .setTitle("Nettoyage rapide")
++                .setMessage("Rien n’est supprimé automatiquement. Ouvre une catégorie et choisis les fichiers à supprimer.")
++                .setItems(items, (d, which) -> showCleanupCandidateDialog(labels[which], groups[which]))
++                .setNegativeButton("FERMER", null)
++                .show();
++    }
++
++    private void showCleanupCandidateDialog(String title, ArrayList<File> files) {
++        if (files == null || files.isEmpty()) {
++            Toast.makeText(this, "Rien à nettoyer dans cette catégorie", Toast.LENGTH_SHORT).show();
++            return;
++        }
++        int count = Math.min(files.size(), 150);
++        String[] names = new String[count];
++        boolean[] checked = new boolean[count];
++        for (int i=0; i<count; i++) {
++            File f = files.get(i);
++            names[i] = f.getName() + "\n" + FileUtils.formatSize(f.length());
++        }
++        new AlertDialog.Builder(this)
++                .setTitle(title)
++                .setMultiChoiceItems(names, checked, (d, which, isChecked) -> checked[which] = isChecked)
++                .setPositiveButton("SUPPRIMER SÉLECTION", (d,w) -> {
++                    ArrayList<File> chosen = new ArrayList<>();
++                    for (int i=0;i<count;i++) if (checked[i]) chosen.add(files.get(i));
++                    if (chosen.isEmpty()) { Toast.makeText(this, "Aucun fichier sélectionné", Toast.LENGTH_SHORT).show(); return; }
++                    confirmCleanupDelete(chosen);
++                })
++                .setNegativeButton("ANNULER", null)
++                .show();
++    }
++
++    private void confirmCleanupDelete(ArrayList<File> files) {
++        long bytes = totalSize(files);
++        new AlertDialog.Builder(this)
++                .setTitle("Supprimer " + files.size() + " fichier(s) ?")
++                .setMessage("Espace récupérable : " + FileUtils.formatSize(bytes) + "\nCette action est irréversible.")
++                .setPositiveButton("SUPPRIMER", (d,w) -> new Thread(() -> {
++                    int deleted = 0;
++                    for (File f : files) if (f != null && f.isFile() && f.delete()) deleted++;
++                    int finalDeleted = deleted;
++                    runOnUiThread(() -> {
++                        Toast.makeText(this, finalDeleted + " fichier(s) supprimé(s)", Toast.LENGTH_LONG).show();
++                        showHomeTab(HOME_STORAGE);
++                    });
++                }, "PiiWiiFiles-clean-delete").start())
++                .setNegativeButton("ANNULER", null)
++                .show();
++    }
++
+     private long[] queryIndexedStorageTypeSizes() {
+         long[] sizes = new long[4];
+         int successfulQueries = 0;
+@@ -778,7 +1023,7 @@
+         HorizontalScrollView hsv=new HorizontalScrollView(this); hsv.setHorizontalScrollBarEnabled(false); LinearLayout quick=new LinearLayout(this); quick.setGravity(Gravity.CENTER_VERTICAL);
+         addQuick(quick,"Téléchargements",v->navigate(FileUtils.downloadsDir())); addQuick(quick,"Documents",v->navigate(FileUtils.documentsDir())); addQuick(quick,"Images",v->navigate(FileUtils.picturesDir())); addQuick(quick,"Stockages",v->showHomeTab(HOME_STORAGE)); if(pickerMode==MODE_NORMAL)addQuick(quick,"Accueil",v->showHome()); hsv.addView(quick); browserPanel.addView(hsv,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(48)));
+ 
+-        list=new ListView(this); list.setDivider(null); list.setDividerHeight(0); list.setFastScrollEnabled(false); list.setVerticalScrollBarEnabled(false); list.setScrollbarFadingEnabled(true); list.setPadding(0,dp(4),0,dp(4)); list.setClipToPadding(false); adapter=new FileAdapter(this,selected); list.setAdapter(adapter); list.setOnItemClickListener((p,v,pos,id)->onFileClick(adapter.getFile(pos))); list.setOnItemLongClickListener((p,v,pos,id)->{toggleSelection(adapter.getFile(pos));return true;}); browserPanel.addView(list,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
++        list=new ListView(this); list.setDivider(null); list.setDividerHeight(0); list.setFastScrollEnabled(false); list.setVerticalScrollBarEnabled(false); list.setScrollbarFadingEnabled(true); list.setPadding(0,dp(4),0,dp(4)); list.setClipToPadding(false); adapter=new FileAdapter(this,selected,pickerMode == MODE_NORMAL ? this::shareFileDirect : null); list.setAdapter(adapter); list.setOnItemClickListener((p,v,pos,id)->onFileClick(adapter.getFile(pos))); list.setOnItemLongClickListener((p,v,pos,id)->{toggleSelection(adapter.getFile(pos));return true;}); browserPanel.addView(list,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+ 
+         pasteButton=button("Coller dans ce dossier"); pasteButton.setTextSize(15); pasteButton.setVisibility(View.GONE); pasteButton.setOnClickListener(v->pasteHere()); browserPanel.addView(pasteButton,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(52)));
+ 
+@
