@@ -1,0 +1,78 @@
+"partage à proximité") || pkg.contains("sharelive") || pkg.contains("quickshare");
++    }
++
++    private String preferredDisplayName(ShareTarget target) {
++        if (target.priority == 0) return "Nextdrop";
++        if (target.priority == 1) return "OneDrive";
++        if (target.priority == 2) return "WhatsApp";
++        if (target.priority == 3) return "WhatsApp Business";
++        if (target.priority == 4 && target.packageName.equals("com.google.android.gm")) return "E-mail (Gmail)";
++        return target.label;
++    }
++
++    private String shareTargetHint(ShareTarget target) {
++        if (target.priority == 0) return "Prioritaire";
++        if (target.priority == 1) return "Envoyer vers le cloud";
++        if (target.priority == 2 || target.priority == 3) return "Envoyer dans une conversation";
++        if (target.priority == 4) return "Envoyer par e-mail";
++        return "";
+     }
+ 
+     private void selectionMore() {
+         if (selected.isEmpty()) return;
+-        ArrayList<String> items = new ArrayList<>();
+-        if (selected.size() == 1) items.add("Renommer");
+-        items.add("Partager");
+-        items.add("Informations");
+-        if (selected.size() == 1 && selected.iterator().next().isFile()) items.add("Calculer SHA-256");
+-        items.add("Créer une archive ZIP");
+-        new AlertDialog.Builder(this).setTitle(selected.size() + " élément(s)").setItems(items.toArray(new String[0]), (d,which) -> {
+-            String action = items.get(which);
+-            if (action.equals("Renommer")) renameOne(selected.iterator().next());
+-            else if (action.equals("Partager")) shareSelection();
+-            else if (action.equals("Informations")) showInfo(selected.iterator().next());
+-            else if (action.startsWith("Calculer")) sha256(selected.iterator().next());
+-            else createZipSelection();
+-        }).show();
++        Dialog dialog = new Dialog(this);
++        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
++        LinearLayout card = new LinearLayout(this);
++        card.setOrientation(LinearLayout.VERTICAL);
++        card.setPadding(dp(16), dp(15), dp(16), dp(15));
++        card.setBackground(rounded(SURFACE, 20));
++
++        LinearLayout top = new LinearLayout(this);
++        top.setGravity(Gravity.CENTER_VERTICAL);
++        LinearLayout titles = new LinearLayout(this);
++        titles.setOrientation(LinearLayout.VERTICAL);
++        titles.addView(text(selected.size() == 1 ? selected.iterator().next().getName() : selected.size() + " éléments sélectionnés", 17, Color.WHITE, true));
++        titles.addView(text("Que veux-tu faire ?", 11, MUTED, false));
++        top.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++        TextView close = text("×", 28, MUTED, false); close.setGravity(Gravity.CENTER); close.setOnClickListener(v -> dialog.dismiss());
++        top.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
++        card.addView(top);
++
++        LinearLayout actions = new LinearLayout(this);
++        actions.setOrientation(LinearLayout.VERTICAL);
++        actions.setPadding(0, dp(10), 0, 0);
++        boolean hasFile = false;
++        for (File f : selected) if (f.isFile()) { hasFile = true; break; }
++        if (hasFile) actions.addView(moreActionRow(R.drawable.ic_share, "Partager", "Nextdrop, OneDrive, WhatsApp, e-mail…", true, v -> { dialog.dismiss(); shareSelection(); }));
++        if (selected.size() == 1) actions.addView(moreActionRow(R.drawable.ic_edit, "Renommer", "Changer le nom", false, v -> { File f = selected.iterator().next(); dialog.dismiss(); renameOne(f); }));
++        actions.addView(moreActionRow(R.drawable.ic_info, "Informations", "Taille, type, chemin et date", false, v -> { File f = selected.iterator().next(); dialog.dismiss(); showInfo(f); }));
++        if (selected.size() == 1 && selected.iterator().next().isFile()) actions.addView(moreActionRow(R.drawable.ic_hash, "Calculer SHA-256", "Empreinte du fichier", false, v -> { File f = selected.iterator().next(); dialog.dismiss(); sha256(f); }));
++        actions.addView(moreActionRow(R.drawable.ic_archive, "Créer une archive ZIP", "Compresser la sélection", false, v -> { dialog.dismiss(); createZipSelection(); }));
++        card.addView(actions);
++
++        dialog.setContentView(card);
++        Window w = dialog.getWindow();
++        if (w != null) {
++            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
++            w.setDimAmount(.72f);
++            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
++            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams();
++            lp.copyFrom(w.getAttributes());
++            lp.width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(28), dp(500));
++            lp.height = android.view.WindowManager.LayoutParams.WRAP_CONTENT;
++            lp.gravity = Gravity.CENTER;
++           
