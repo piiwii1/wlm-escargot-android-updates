@@ -1,0 +1,271 @@
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -12,8 +12,8 @@
+         applicationId 'ch.piiwii.gtialtimeter'
+         minSdk 23
+         targetSdk 29
+-        versionCode 13
+-        versionName '1.2.8'
++        versionCode 14
++        versionName '1.2.9'
+     }
+ 
+     lint { disable 'ExpiredTargetSdkVersion' }
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeFilter.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeFilter.java
+@@ -6,6 +6,7 @@
+ import java.util.Deque;
+ import java.util.List;
+ 
++/** Robust altitude filter tuned for noisy Android head-unit GPS receivers. */
+ final class AltitudeFilter {
+     static final class Result {
+         final boolean accepted;
+@@ -16,7 +17,13 @@
+         }
+     }
+ 
+-    private final Deque<Double> window = new ArrayDeque<>();
++    private static final class Sample {
++        final double altitude;
++        final float sigma;
++        Sample(double altitude, float sigma) { this.altitude = altitude; this.sigma = sigma; }
++    }
++
++    private final Deque<Sample> window = new ArrayDeque<>();
+     private double filtered = Double.NaN;
+     private double lastRaw = Double.NaN;
+     private long lastTime = 0L;
+@@ -26,18 +33,21 @@
+         filtered = raw;
+         lastRaw = raw;
+         lastTime = timeMs;
+-        window.addLast(raw);
++        window.addLast(new Sample(raw, 35f));
+         return new Result(true, filtered, "récupération GPS provisoire");
+     }
+ 
+     Result push(double raw, float horizontalAccuracy, float verticalAccuracy, long timeMs) {
+         if (Double.isNaN(raw) || Double.isInfinite(raw)) return new Result(false, filtered, "altitude invalide");
+-        if (!Float.isNaN(horizontalAccuracy) && horizontalAccuracy > 200f) return new Result(false, filtered, "précision horizontale > 200 m");
+-        if (!Float.isNaN(verticalAccuracy) && verticalAccuracy > 180f) return new Result(false, filtered, "précision verticale > 180 m");
++        if (!Float.isNaN(horizontalAccuracy) && horizontalAccuracy > 320f) return new Result(false, filtered, "précision horizontale > 320 m");
++        if (!Float.isNaN(verticalAccuracy) && verticalAccuracy > 280f) return new Result(false, filtered, "précision verticale > 280 m");
++
++        float sigma = estimateSigma(horizontalAccuracy, verticalAccuracy);
+ 
+         if (!Double.isNaN(lastRaw) && lastTime > 0L && timeMs > lastTime) {
+             double dt = Math.max(0.25, (timeMs - lastTime) / 1000.0);
+-            double allowed = 30.0 + 18.0 * dt;
++            // Poor fixes are allowed to move farther; good fixes are held to a tighter physical envelope.
++            double allowed = Math.max(28.0, Math.min(150.0, sigma * 1.7)) + 16.0 * dt;
+             if (Math.abs(raw - lastRaw) > allowed) {
+                 lastRaw = raw;
+                 lastTime = timeMs;
+@@ -47,20 +57,48 @@
+         lastRaw = raw;
+         lastTime = timeMs;
+ 
+-        window.addLast(raw);
+-        while (window.size() > 5) window.removeFirst();
+-        List<Double> sorted = new ArrayList<>(window);
+-        Collections.sort(sorted);
+-        double median = sorted.get(sorted.size() / 2);
++        window.addLast(new Sample(raw, sigma));
++        while (window.size() > 9) window.removeFirst();
++
++        List<Double> values = new ArrayList<>();
++        for (Sample sample : window) values.add(sample.altitude);
++        Collections.sort(values);
++        double median = values.get(values.size() / 2);
++
++        // Weighted robust centre: vertical accuracy when available, otherwise conservative H-accuracy proxy.
++        double sum = 0.0;
++        double weightSum = 0.0;
++        for (Sample sample : window) {
++            double residual = Math.abs(sample.altitude - median);
++            double gate = Math.max(12.0, Math.min(95.0, 2.2 * sample.sigma + 8.0));
++            if (residual > gate) continue;
++            double sigmaM = Math.max(3.0, sample.sigma);
++            double weight = 1.0 / (sigmaM * sigmaM);
++            sum += sample.altitude * weight;
++            weightSum += weight;
++        }
++        double centre = weightSum > 0.0 ? sum / weightSum : median;
+ 
+         if (Double.isNaN(filtered)) {
+-            filtered = median;
++            filtered = centre;
+         } else {
+-            double delta = Math.abs(median - filtered);
+-            double alpha = delta > 15.0 ? 0.48 : (delta > 5.0 ? 0.30 : 0.16);
+-            if (!Float.isNaN(horizontalAccuracy) && horizontalAccuracy > 35f) alpha *= 0.65;
+-            filtered += alpha * (median - filtered);
++            double delta = Math.abs(centre - filtered);
++            double alpha;
++            if (sigma <= 6f) alpha = 0.58;
++            else if (sigma <= 12f) alpha = 0.46;
++            else if (sigma <= 25f) alpha = 0.34;
++            else if (sigma <= 60f) alpha = 0.22;
++            else alpha = 0.12;
++            if (delta > 20.0) alpha = Math.max(alpha, 0.42);
++            else if (delta > 8.0) alpha = Math.max(alpha, 0.30);
++            filtered += alpha * (centre - filtered);
+         }
+         return new Result(true, filtered, "OK");
+     }
++
++    private static float estimateSigma(float hAcc, float vAcc) {
++        if (!Float.isNaN(vAcc) && vAcc > 0f) return Math.max(3f, vAcc);
++        if (!Float.isNaN(hAcc) && hAcc > 0f) return Math.max(5f, hAcc * 1.45f);
++        return 45f;
++    }
+ }
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeState.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeState.java
+@@ -91,6 +91,8 @@
+ 
+     public static void setCompassSensors(Context c, boolean present) { p(c).edit().putBoolean("compass_sensors", present).apply(); }
+     public static boolean compassSensors(Context c) { return p(c).getBoolean("compass_sensors", false); }
++    public static void setCompassAccuracy(Context c, int accuracy) { p(c).edit().putInt("compass_accuracy", accuracy).apply(); }
++    public static int compassAccuracy(Context c) { return p(c).getInt("compass_accuracy", -1); }
+ 
+     public static void setGpsEnabled(Context c, boolean enabled) { p(c).edit().putBoolean("gps_enabled", enabled).apply(); }
+     public static boolean gpsEnabled(Context c) { return p(c).getBoolean("gps_enabled", false); }
+@@ -207,13 +209,34 @@
+     }
+ 
+     public static double displayAltitude(Context c) {
+-        if (isGpsFresh(c)) return filtered(c);
+-        if (isBaroFresh(c)) return baroAltitude(c);
++        boolean gps = isGpsFresh(c);
++        boolean baro = isBaroFresh(c);
++        if (gps && baro) {
++            // Hybrid altitude: GPS keeps absolute altitude, barometer removes short-term jitter.
++            // The worse the GPS vertical precision, the more the barometer stabilises the display.
++            double g = filtered(c);
++            double b = baroAltitude(c);
++            float acc = acceptedVAcc(c);
++            if (Float.isNaN(acc) || acc <= 0f) {
++                float h = acceptedHAcc(c);
++                acc = (!Float.isNaN(h) && h > 0f) ? h * 1.45f : 45f;
++            }
++            double gpsWeight;
++            if (acc <= 6f) gpsWeight = 0.78;
++            else if (acc <= 12f) gpsWeight = 0.64;
++            else if (acc <= 25f) gpsWeight = 0.48;
++            else if (acc <= 60f) gpsWeight = 0.32;
++            else gpsWeight = 0.20;
++            return b + gpsWeight * (g - b);
++        }
++        if (gps) return filtered(c);
++        if (baro) return baroAltitude(c);
+         return Double.NaN;
+     }
+ 
+     public static String displaySource(Context c) {
+-        if (isGpsFresh(c)) return baroCalibrated(c) ? "GPS + BARO" : "GPS";
++        if (isGpsFresh(c) && isBaroFresh(c)) return "GPS + BARO";
++        if (isGpsFresh(c)) return "GPS";
+         if (isBaroFresh(c)) return "BARO";
+         return "—";
+     }
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeService.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeService.java
+@@ -12,6 +12,7 @@
+ import android.hardware.SensorEvent;
+ import android.hardware.SensorEventListener;
+ import android.hardware.SensorManager;
++import android.hardware.GeomagneticField;
+ import android.location.GnssStatus;
+ import android.location.Location;
+ import android.location.LocationListener;
+@@ -26,6 +27,8 @@
+ import java.util.Set;
+ import android.os.Looper;
+ import android.os.SystemClock;
++import android.view.Surface;
++import android.view.WindowManager;
+ 
+ public class AltitudeService extends Service implements LocationListener, SensorEventListener {
+     private static final String CHANNEL_ID = "gti_altimeter_gps";
+@@ -59,6 +62,10 @@
+     private boolean locationSubscriptionsActive;
+     private boolean gnssCallbackRegistered;
+     private final Set<String> subscribedProviders = new HashSet<>();
++    private float smoothedSensorHeading = Float.NaN;
++    private float lastWidgetHeading = Float.NaN;
++    private long lastHeadingWidgetUpdateAt;
++    private long lastAssistanceAt;
+ 
+     private final GnssStatus.Callback gnssCallback = new GnssStatus.Callback() {
+         @Override public void onSatelliteStatusChanged(GnssStatus status) {
+@@ -142,6 +149,7 @@
+         refreshProviderState();
+         ensureLocationSubscriptions();
+         registerGnssStatusIfPossible();
++        requestGpsAssistanceIfUseful();
+         seedRecentLastKnownLocation();
+         ServiceWatchdog.schedule(this, ServiceWatchdog.NORMAL_DELAY_MS);
+         handler.post(heartbeat);
+@@ -153,6 +161,7 @@
+         refreshProviderState();
+         ensureLocationSubscriptions();
+         registerGnssStatusIfPossible();
++        requestGpsAssistanceIfUseful();
+         ServiceWatchdog.schedule(this, ServiceWatchdog.NORMAL_DELAY_MS);
+         return START_STICKY;
+     }
+@@ -171,7 +180,7 @@
+                         continue;
+                     }
+                     try {
+-                        long minTime = LocationManager.GPS_PROVIDER.equals(provider) ? 500L : 1000L;
++                        long minTime = LocationManager.GPS_PROVIDER.equals(provider) ? 250L : 1000L;
+                         locationManager.requestLocationUpdates(provider, minTime, 0f, this, Looper.getMainLooper());
+                         subscribedProviders.add(provider);
+                         any = true;
+@@ -184,7 +193,7 @@
+         // for a short time during boot even though it becomes available moments later.
+         if (!subscribedProviders.contains(LocationManager.GPS_PROVIDER)) {
+             try {
+-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500L, 0f, this, Looper.getMainLooper());
++                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 250L, 0f, this, Looper.getMainLooper());
+                 subscribedProviders.add(LocationManager.GPS_PROVIDER);
+                 any = true;
+             } catch (SecurityException | IllegalArgumentException ignored) { }
+@@ -273,8 +282,9 @@
+         AltitudeState.noteLocationCallback(this, fixTime, provider, hAcc, vAcc);
+         AltitudeState.touchService(this);
+ 
+-        if (location.hasBearing() && (!location.hasSpeed() || location.getSpeed() >= 1.2f)) {
++        if (location.hasBearing() && location.hasSpeed() && location.getSpeed() >= 2.0f) {
+             AltitudeState.saveHeading(this, location.getBearing(), LocationManager.GPS_PROVIDER.equals(provider) ? "GPS" : provider.toUpperCase());
++            maybeUpdateHeadingWidget(location.getBearing());
+         }
+ 
+         long staleLimit = fromLastKnown ? LAST_KNOWN_MAX_AGE_MS : LOCATION_STALE_MS;
+@@ -299,7 +309,7 @@
+         if (result.accepted) {
+             AltitudeState.saveLocation(this, location.getLatitude(), location.getLongitude(), hAcc,
+                     raw, corrected, result.filtered, vAcc, fixTime, source, false);
+-            maybeCalibrateBarometer(result.filtered);
++            maybeCalibrateBarometer(result.filtered, hAcc, vAcc);
+             updateTrend(result.filtered, fixTime, source);
+         } else if (shouldUseProvisionalRecovery(raw, hAcc, vAcc, now)) {
+             AltitudeFilter.Result recovered = filter.resetTo(corrected, fixTime);
+@@ -335,12 +345,33 @@
+         }
+     }
+ 
+-    private void maybeCalibrateBarometer(double acceptedAltitude) {
++    private void maybeCalibrateBarometer(double acceptedAltitude, float hAcc, float vAcc) {
+         float pressure = AltitudeState.pressure(this);
+         long pressureTime = AltitudeState.pressureTime(this);
+         if (Float.isNaN(pressure) || pressureTime <= 0L) return;
+-        if (System.currentTimeMillis() - pressureTime > 10000L) return;
+-        AltitudeState.calibrateBarometer(this, pressure, acceptedAltitude);
++        long now = System.currentTimeMillis();
++        if (now - pressureTime > 10000L) return;
++
++        float gpsAcc = !Float.isNaN(vAcc) && vAcc > 0f ? vAcc
