@@ -1,0 +1,250 @@
++                : (!Float.isNaN(hAcc) && hAcc > 0f ? hAcc * 1.45f : Float.NaN);
++        if (!AltitudeState.baroCalibrated(this)) {
++            AltitudeState.calibrateBarometer(this, pressure, acceptedAltitude);
++            return;
++        }
++
++        // Do not re-anchor the barometer on every noisy GPS sample. Only gently correct drift
++        // from a reasonably good GPS fix after enough time has passed.
++        if (Float.isNaN(gpsAcc) || gpsAcc > 35f) return;
++        long anchorAge = now - AltitudeState.baroAnchorTime(this);
++        if (anchorAge < 45000L) return;
++        double currentBaro = AltitudeState.baroAltitude(this);
++        if (Double.isNaN(currentBaro) || Double.isInfinite(currentBaro)) {
++            AltitudeState.calibrateBarometer(this, pressure, acceptedAltitude);
++            return;
++        }
++        double error = acceptedAltitude - currentBaro;
++        double correction = Math.max(-8.0, Math.min(8.0, error * 0.28));
++        AltitudeState.calibrateBarometer(this, pressure, currentBaro + correction);
+     }
+ 
+     private void bootstrapBarometerIfNeeded(float pressure) {
+@@ -423,10 +454,8 @@
+         }
+         if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+             float[] rotation = new float[9];
+-            float[] orientation = new float[3];
+             SensorManager.getRotationMatrixFromVector(rotation, event.values);
+-            SensorManager.getOrientation(rotation, orientation);
+-            saveSensorHeading(orientation[0]);
++            saveSensorHeading(orientationAzimuth(rotation));
+             return;
+         }
+         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+@@ -440,19 +469,79 @@
+             float[] rotation = new float[9];
+             float[] inclination = new float[9];
+             if (SensorManager.getRotationMatrix(rotation, inclination, gravity, geomagnetic)) {
+-                float[] orientation = new float[3];
+-                SensorManager.getOrientation(rotation, orientation);
+-                saveSensorHeading(orientation[0]);
+-            }
+-        }
++                saveSensorHeading(orientationAzimuth(rotation));
++            }
++        }
++    }
++
++    private float orientationAzimuth(float[] rotation) {
++        float[] adjusted = rotation;
++        try {
++            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
++            int screenRotation = wm == null ? Surface.ROTATION_0 : wm.getDefaultDisplay().getRotation();
++            if (screenRotation != Surface.ROTATION_0) {
++                float[] remapped = new float[9];
++                int x = SensorManager.AXIS_X, y = SensorManager.AXIS_Y;
++                if (screenRotation == Surface.ROTATION_90) { x = SensorManager.AXIS_Y; y = SensorManager.AXIS_MINUS_X; }
++                else if (screenRotation == Surface.ROTATION_180) { x = SensorManager.AXIS_MINUS_X; y = SensorManager.AXIS_MINUS_Y; }
++                else if (screenRotation == Surface.ROTATION_270) { x = SensorManager.AXIS_MINUS_Y; y = SensorManager.AXIS_X; }
++                if (SensorManager.remapCoordinateSystem(rotation, x, y, remapped)) adjusted = remapped;
++            }
++        } catch (RuntimeException ignored) { }
++        float[] orientation = new float[3];
++        SensorManager.getOrientation(adjusted, orientation);
++        return orientation[0];
+     }
+ 
+     private void saveSensorHeading(float azimuthRad) {
+         long gpsHeadingAge = System.currentTimeMillis() - AltitudeState.headingTime(this);
+-        if ("GPS".equals(AltitudeState.headingSource(this)) && gpsHeadingAge < 5000L) return;
++        if ("GPS".equals(AltitudeState.headingSource(this)) && gpsHeadingAge < 4500L) return;
+         float degrees = (float) Math.toDegrees(azimuthRad);
+-        if (degrees < 0f) degrees += 360f;
+-        AltitudeState.saveHeading(this, degrees, "Boussole");
++        while (degrees < 0f) degrees += 360f;
++        while (degrees >= 360f) degrees -= 360f;
++
++        // Magnetic -> true north correction when a recent position is available.
++        double lat = AltitudeState.lat(this), lon = AltitudeState.lon(this);
++        if (!Double.isNaN(lat) && !Double.isNaN(lon)
++                && System.currentTimeMillis() - AltitudeState.lastGpsCallback(this) < 10L * 60L * 1000L) {
++            try {
++                float altitude = Double.isNaN(AltitudeState.displayAltitude(this)) ? 0f : (float) AltitudeState.displayAltitude(this);
++                GeomagneticField field = new GeomagneticField((float) lat, (float) lon, altitude, System.currentTimeMillis());
++                degrees += field.getDeclination();
++                while (degrees < 0f) degrees += 360f;
++                while (degrees >= 360f) degrees -= 360f;
++            } catch (RuntimeException ignored) { }
++        }
++
++        if (Float.isNaN(smoothedSensorHeading)) smoothedSensorHeading = degrees;
++        else {
++            float delta = shortestAngle(degrees - smoothedSensorHeading);
++            smoothedSensorHeading = normalizeHeading(smoothedSensorHeading + 0.22f * delta);
++        }
++        AltitudeState.saveHeading(this, smoothedSensorHeading, "Boussole");
++        maybeUpdateHeadingWidget(smoothedSensorHeading);
++    }
++
++    private void maybeUpdateHeadingWidget(float heading) {
++        long now = System.currentTimeMillis();
++        float delta = Float.isNaN(lastWidgetHeading) ? 360f : Math.abs(shortestAngle(heading - lastWidgetHeading));
++        if (now - lastHeadingWidgetUpdateAt >= 450L && delta >= 1.5f) {
++            lastHeadingWidgetUpdateAt = now;
++            lastWidgetHeading = heading;
++            GtiWidgetUpdater.updateAll(this);
++        }
++    }
++
++    private static float shortestAngle(float angle) {
++        while (angle > 180f) angle -= 360f;
++        while (angle < -180f) angle += 360f;
++        return angle;
++    }
++
++    private static float normalizeHeading(float heading) {
++        while (heading < 0f) heading += 360f;
++        while (heading >= 360f) heading -= 360f;
++        return heading;
+     }
+ 
+     private static void lowPass(float[] input, float[] output) {
+@@ -460,7 +549,22 @@
+         for (int i = 0; i < 3; i++) output[i] += alpha * (input[i] - output[i]);
+     }
+ 
+-    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) { }
++    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {
++        if (sensor == null) return;
++        int type = sensor.getType();
++        if (type == Sensor.TYPE_ROTATION_VECTOR || type == Sensor.TYPE_MAGNETIC_FIELD) {
++            AltitudeState.setCompassAccuracy(this, accuracy);
++        }
++    }
++
++    private void requestGpsAssistanceIfUseful() {
++        if (locationManager == null) return;
++        long now = System.currentTimeMillis();
++        if (now - lastAssistanceAt < 10L * 60L * 1000L) return;
++        lastAssistanceAt = now;
++        try { locationManager.sendExtraCommand(LocationManager.GPS_PROVIDER, "force_time_injection", null); } catch (RuntimeException ignored) { }
++        try { locationManager.sendExtraCommand(LocationManager.GPS_PROVIDER, "force_xtra_injection", null); } catch (RuntimeException ignored) { }
++    }
+ 
+     private void createChannel() {
+         if (Build.VERSION.SDK_INT >= 26) {
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/WidgetRenderer.java
+@@ -77,7 +77,7 @@
+         drawTrend(c, context, hasAltitude);
+         drawGpsBars(c, context);
+         drawAccuracy(c, context, gpsFresh);
+-        drawHeadingMarker(c, context);
++        drawHeadingMarker(c, context, 326f, 288f, 205f, 1.0f);
+     }
+ 
+     private static void drawAltitude(Canvas c, Long altitude) {
+@@ -219,6 +219,7 @@
+         drawSilhouetteTrend(c, context, hasAltitude);
+         drawSilhouetteGpsBars(c, context);
+         drawSilhouetteAccuracy(c, context);
++        drawHeadingMarker(c, context, 376f, 441f, 262f, 1.45f);
+     }
+ 
+     private static void drawSilhouetteAltitude(Canvas c, Long altitude) {
+@@ -368,17 +369,50 @@
+         return (!Float.isNaN(h) && h > 0f && h < 500f) ? h : Float.NaN;
+     }
+ 
+-    private static void drawHeadingMarker(Canvas c, Context context) {
++    private static void drawHeadingMarker(Canvas c, Context context, float cx, float cy, float radius, float scale) {
+         float heading = AltitudeState.heading(context);
+         long age = System.currentTimeMillis() - AltitudeState.headingTime(context);
+-        if (Float.isNaN(heading) || age > 30000L) return;
+-        final float cx=326f, cy=288f, radius=205f;
+-        double rad=Math.toRadians(heading-90f);
+-        float px=cx+(float)Math.cos(rad)*radius, py=cy+(float)Math.sin(rad)*radius;
+-        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+-        p.setColor(RED); p.setShadowLayer(8f,0f,0f,Color.argb(190,255,20,28));
+-        Path tri=new Path(); tri.moveTo(0f,-15f); tri.lineTo(-11f,11f); tri.lineTo(11f,11f); tri.close();
+-        c.save(); c.translate(px,py); c.rotate(heading); c.drawPath(tri,p); c.restore(); p.clearShadowLayer();
++        if (Float.isNaN(heading) || age > 15000L) return;
++
++        // Moving heading pointer: 0° = top, 90° = right, 180° = bottom, 270° = left.
++        // It is updated by the sensor service roughly twice per second instead of the old 4 s heartbeat.
++        double rad = Math.toRadians(heading - 90f);
++        float px = cx + (float) Math.cos(rad) * radius;
++        float py = cy + (float) Math.sin(rad) * radius;
++
++        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
++        p.setColor(RED);
++        p.setStyle(Paint.Style.FILL);
++        p.setShadowLayer(10f * scale, 0f, 0f, Color.argb(210, 255, 18, 26));
++        Path tri = new Path();
++        tri.moveTo(0f, -18f * scale);
++        tri.lineTo(-12f * scale, 12f * scale);
++        tri.lineTo(12f * scale, 12f * scale);
++        tri.close();
++        c.save();
++        c.translate(px, py);
++        c.rotate(heading);
++        c.drawPath(tri, p);
++        c.restore();
++        p.clearShadowLayer();
++
++        // Small silver counter-marker makes direction changes much easier to read at a glance.
++        double opposite = Math.toRadians(heading + 90f);
++        float sx = cx + (float) Math.cos(opposite) * (radius - 5f * scale);
++        float sy = cy + (float) Math.sin(opposite) * (radius - 5f * scale);
++        Paint tail = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
++        tail.setColor(Color.rgb(225, 226, 230));
++        tail.setStyle(Paint.Style.FILL);
++        Path tailTri = new Path();
++        tailTri.moveTo(0f, -9f * scale);
++        tailTri.lineTo(-6f * scale, 6f * scale);
++        tailTri.lineTo(6f * scale, 6f * scale);
++        tailTri.close();
++        c.save();
++        c.translate(sx, sy);
++        c.rotate(heading + 180f);
++        c.drawPath(tailTri, tail);
++        c.restore();
+     }
+ 
+     private static int gpsBars(Context context) {
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/MainActivity.java
+@@ -209,6 +209,7 @@
+         addRow("Boussole matérielle", AltitudeState.compassSensors(this) ? "OUI" : "NON", null);
+         addRow("Cap", Float.isNaN(AltitudeState.heading(this)) ? "—" : Math.round(AltitudeState.heading(this)) + "° " + cardinal(AltitudeState.heading(this)), null);
+         addRow("Source du cap", AltitudeState.headingSource(this), null);
++        addRow("Qualité boussole", compassAccuracyLabel(AltitudeState.compassAccuracy(this)), null);
+         addRow("Baromètre présent", AltitudeState.barometerPresent(this) ? "OUI" : "NON", null);
+         addRow("Pression actuelle", Float.isNaN(AltitudeState.pressure(this)) ? "—" : String.format(Locale.US, "%.1f hPa", AltitudeState.pressure(this)), null);
+         addRow("Baromètre calibré", AltitudeState.baroCalibrated(this) ? "OUI" : "NON", AltitudeState.baroCalibrated(this));
+@@ -220,6 +221,14 @@
+         addRow("Version", BuildConfig.VERSION_NAME + " · code " + BuildConfig.VERSION_CODE, null);
+         addRow("Package", getPackageName(), null);
+         addRow("Provider", GTIAltimeterWidgetProvider.class.getName(), null);
++    }
++
++    private String compassAccuracyLabel(int accuracy) {
++        if (accuracy == android.hardware.SensorManager.SENSOR_STATUS_ACCURACY_HIGH) return "HAUTE";
++        if (accuracy == android.hardware.SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM) return "MOYENNE";
++        if (accuracy == android.hardware.SensorManager.SENSOR_STATUS_ACCURACY_LOW) return "FAIBLE · calibrer";
++        if (accuracy == android.hardware.SensorManager.SENSOR_STATUS_UNRELIABLE) return "NON FIABLE · calibrer";
++        return "—";
+     }
+ 
+     private void addRow(String key, String value, Boolean good) {
