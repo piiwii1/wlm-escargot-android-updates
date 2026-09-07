@@ -1,0 +1,1 @@
+GTI Altimeter Widget 1.2.8 restored build; code unchanged except versionCode for downgrade-safe installation.
