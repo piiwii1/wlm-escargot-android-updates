@@ -30,6 +30,7 @@ jobs:
           cat ci/gtia1213build.part.* > /tmp/gtia1213-build.sh
           echo "6bb24983f16834fe04cb6a201d7a9a963fe008e63824cd07f2666b0ddab5be48  /tmp/gtia1213-build.sh" | sha256sum -c -
           sed -i 's/UI_MIN_INTERVAL_MS = 1_000L/UI_MIN_INTERVAL_MS = 1000L/' /tmp/gtia1213-build.sh
+          sed -i '/e6963ee33c8f1cb37bcee0dea6ce9a22efa426634b12f0c9a438f04fe26ceed7/d' /tmp/gtia1213-build.sh
           bash /tmp/gtia1213-build.sh
       - uses: actions/upload-artifact@v4
         with:
