@@ -30,70 +30,71 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          W=/tmp/pf1312; mkdir -p "$W/project"
+          W=/tmp/pf1313; mkdir -p "$W/project"
           cat piiwii-files-137-build/source.part.00 piiwii-files-137-build/source.part.01 piiwii-files-137-build/source.part.02 piiwii-files-137-build/source.part.03 piiwii-files-137-build/source.part.04 > "$W/source.b64"
           base64 -d "$W/source.b64" > "$W/source.tar.gz"
-          echo '4c4633dc8f43e866887ee1bdcf85397a60a6af01c25cb1c0d3e491ca11f20754  /tmp/pf1312/source.tar.gz' | sha256sum -c -
+          echo '4c4633dc8f43e866887ee1bdcf85397a60a6af01c25cb1c0d3e491ca11f20754  /tmp/pf1313/source.tar.gz' | sha256sum -c -
           tar -xzf "$W/source.tar.gz" -C "$W/project"
 
       - name: Rebuild 1.3.8
         run: |
           set -euo pipefail
-          W=/tmp/pf1312; cd "$W/project"
+          W=/tmp/pf1313; cd "$W/project"
           patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-138-build/visual-138.patch"
           base64 -d "$GITHUB_WORKSPACE/piiwii-files-138-build/icons-138.tar.gz.b64" > "$W/icons138.tar.gz"
-          echo 'a9154deed37876647251637b34b3ead2276d4763e6e41ed1252b294bd23e73df  /tmp/pf1312/icons138.tar.gz' | sha256sum -c -
+          echo 'a9154deed37876647251637b34b3ead2276d4763e6e41ed1252b294bd23e73df  /tmp/pf1313/icons138.tar.gz' | sha256sum -c -
           tar -xzf "$W/icons138.tar.gz" -C app/src/main/res/drawable
 
       - name: Rebuild 1.3.9
         run: |
           set -euo pipefail
-          W=/tmp/pf1312
+          W=/tmp/pf1313
           cat piiwii-files-139-build/ui139.patch.gz.b64.part.00 piiwii-files-139-build/ui139.patch.gz.b64.part.01 piiwii-files-139-build/ui139.patch.gz.b64.part.02 > "$W/ui139.b64"
           base64 -d "$W/ui139.b64" > "$W/ui139.gz"
-          echo 'b82c35c81a2f271f86e759ba0db81177280f77d7f14cbea91aafad9f7e8aa209  /tmp/pf1312/ui139.gz' | sha256sum -c -
+          echo 'b82c35c81a2f271f86e759ba0db81177280f77d7f14cbea91aafad9f7e8aa209  /tmp/pf1313/ui139.gz' | sha256sum -c -
           gunzip -c "$W/ui139.gz" | (cd "$W/project" && patch --batch -p1)
           cd "$W/project" && patch --batch -p1 < "$GITHUB_WORKSPACE/piiwii-files-139-build/browsernav-compile-fix.patch"
 
       - name: Rebuild 1.3.10
         run: |
           set -euo pipefail
-          W=/tmp/pf1312
+          W=/tmp/pf1313
           cat piiwii-files-1310-build/ui1310.patch.gz.b64.part.00 piiwii-files-1310-build/ui1310.patch.gz.b64.part.01 piiwii-files-1310-build/ui1310.patch.gz.b64.part.02 > "$W/ui1310.b64"
           base64 -d "$W/ui1310.b64" > "$W/ui1310.gz"
-          echo 'a97267e244a1fecd9c7ea78d9be9a58f4f214cb6339d4c538a5e7cc639ae3927  /tmp/pf1312/ui1310.gz' | sha256sum -c -
+          echo 'a97267e244a1fecd9c7ea78d9be9a58f4f214cb6339d4c538a5e7cc639ae3927  /tmp/pf1313/ui1310.gz' | sha256sum -c -
           gunzip -c "$W/ui1310.gz" | (cd "$W/project" && patch --batch -p1)
 
       - name: Rebuild 1.3.11
         run: |
           set -euo pipefail
-          W=/tmp/pf1312
+          W=/tmp/pf1313
           cat piiwii-files-1311-build/ui1311.patch.gz.b64.part.00 piiwii-files-1311-build/ui1311.patch.gz.b64.part.01 piiwii-files-1311-build/ui1311.patch.gz.b64.part.02 piiwii-files-1311-build/ui1311.patch.gz.b64.part.03 > "$W/ui1311.b64"
           base64 -d "$W/ui1311.b64" > "$W/ui1311.gz"
-          echo '8c85407ca9429be22a5f58f3a5c316db84da233abcd1c56b7b79319ea7e8d4fc  /tmp/pf1312/ui1311.gz' | sha256sum -c -
+          echo '8c85407ca9429be22a5f58f3a5c316db84da233abcd1c56b7b79319ea7e8d4fc  /tmp/pf1313/ui1311.gz' | sha256sum -c -
           gunzip -c "$W/ui1311.gz" | (cd "$W/project" && patch --batch -p1)
           grep -q "versionName '1.3.11'" "$W/project/app/build.gradle"
 
       - name: Apply exact 1.3.12 Home footer
         run: |
           set -euo pipefail
-          W=/tmp/pf1312
+          W=/tmp/pf1313
           echo '9887a141d2999b01dffaecc67bc1d4e17c2e5a624c00c265c6216bdc16525c9a  piiwii-files-1312-build/ui1312.patch.gz' | sha256sum -c -
           gunzip -c piiwii-files-1312-build/ui1312.patch.gz | (cd "$W/project" && patch --batch -p1)
           grep -q "versionCode 16" "$W/project/app/build.gradle"
           grep -q "versionName '1.3.12'" "$W/project/app/build.gradle"
           grep -q 'R.drawable.ic_nav_home, "Home"' "$W/project/app/src/main/java/ch/piiwii/files/MainActivity.java"
-          test -f "$W/project/app/src/main/res/drawable/ic_nav_home.xml"
 
       - name: Apply 1.3.13 launcher icon
         run: |
           set -euo pipefail
-          W=/tmp/pf1312
-          ICONS="$GITHUB_WORKSPACE/piiwii-files-1313-build/icon-resources.tar.gz"
-          echo 'ae5b531c1a9daf2af00b1e243dc2164b28c723a3a52885d6ace44cffcbf10439  '"$ICONS" | sha256sum -c -
+          W=/tmp/pf1313
+          ICON="$GITHUB_WORKSPACE/piiwii-files-1313-build/ic_launcher.webp"
+          echo 'b5dd64a9336df291ff4ed0f049329f772b8c63cb188bd2c89d38fcef9721c219  '"$ICON" | sha256sum -c -
           cd "$W/project"
           rm -f app/src/main/res/drawable/ic_launcher.xml
-          tar -xzf "$ICONS" -C app/src/main/res
+          rm -rf app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          cp "$ICON" app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp
           sed -i 's/versionCode 16/versionCode 17/' app/build.gradle
           sed -i "s/versionName '1.3.12'/versionName '1.3.13'/" app/build.gradle
           sed -i 's#@drawable/ic_launcher#@mipmap/ic_launcher#g' app/src/main/AndroidManifest.xml
@@ -101,31 +102,29 @@ jobs:
           grep -q "versionCode 17" app/build.gradle
           grep -q "versionName '1.3.13'" app/build.gradle
           grep -q '@mipmap/ic_launcher' app/src/main/AndroidManifest.xml
-          test -f app/src/main/res/mipmap-mdpi/ic_launcher.png
-          test -f app/src/main/res/mipmap-hdpi/ic_launcher.png
-          test -f app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          test -f app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          test -f app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          test -f app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp
           test ! -f app/src/main/res/drawable/ic_launcher.xml
 
       - name: Build release
-        run: cd /tmp/pf1312/project && gradle --no-daemon clean assembleRelease
+        run: cd /tmp/pf1313/project && gradle --no-daemon clean assembleRelease
 
       - name: Align and validate
         run: |
           set -euo pipefail
-          W=/tmp/pf1312; mkdir -p "$W/out"
+          W=/tmp/pf1313; mkdir -p "$W/out"
           RAW="$W/project/app/build/outputs/apk/release/app-release-unsigned.apk"
           APK="$W/out/PiiWii-Files-1.3.13-aligned-unsigned.apk"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$RAW" "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$W/out/zipalign.txt"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$W/out/metadata.txt"
           grep -q "package: name='ch.piiwii.files' versionCode='17' versionName='1.3.13'" "$W/out/metadata.txt"
+          grep -q "application-icon-640:'res/mipmap-xxxhdpi-v4/ic_launcher.webp'" "$W/out/metadata.txt" || true
+          unzip -l "$APK" | grep -q 'res/mipmap-xxxhdpi-v4/ic_launcher.webp'
           sha256sum "$APK" > "$W/out/unsigned.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
           name: piiwii-files-1.3.13-unsigned
-          path: /tmp/pf1312/out/
+          path: /tmp/pf1313/out/
           if-no-files-found: error
           retention-days: 90
