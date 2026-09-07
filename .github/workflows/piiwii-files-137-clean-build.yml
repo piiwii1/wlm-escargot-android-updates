@@ -1,0 +1,77 @@
+name: PiiWii Files 1.3.7 Clean Build
+
+on:
+  push:
+    branches:
+      - piiwii-files-137-build
+    paths-ignore:
+      - 'piiwii-files-137-build/output/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Reconstruct project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-files-137
+          base64 -d piiwii-files-137-build/source.b64 > /tmp/piiwii-files-137/source.tar.gz
+          echo '4c4633dc8f43e866887ee1bdcf85397a60a6af01c25cb1c0d3e491ca11f20754  /tmp/piiwii-files-137/source.tar.gz' | sha256sum -c -
+          mkdir -p /tmp/piiwii-files-137/project
+          tar -xzf /tmp/piiwii-files-137/source.tar.gz -C /tmp/piiwii-files-137/project
+
+      - name: Build release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/piiwii-files-137/project
+          gradle --no-daemon clean assembleRelease
+
+      - name: Export unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/piiwii-files-137-build/output"
+          mkdir -p "$OUT"
+          APK=/tmp/piiwii-files-137/project/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$APK"
+          base64 -w0 "$APK" > "$OUT/PiiWii-Files-1.3.7-unsigned.apk.b64"
+          sha256sum "$APK" | sed 's#  .*#  PiiWii-Files-1.3.7-unsigned.apk#' > "$OUT/PiiWii-Files-1.3.7-unsigned.sha256"
+
+      - name: Commit build output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'PiiWii Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add piiwii-files-137-build/output
+          git commit -m 'PiiWii Files 1.3.7 clean build output'
+          git push origin HEAD:piiwii-files-137-build
