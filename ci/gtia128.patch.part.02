@@ -1,0 +1,135 @@
+-            updateTrend(recovered.filtered, fixTime, "GPS PROV");
++                    raw, corrected, recovered.filtered, vAcc, fixTime, provisional, false);
++            updateTrend(recovered.filtered, fixTime, provisional);
+         } else {
+-            AltitudeState.saveRejected(this, location.getLatitude(), location.getLongitude(), hAcc, raw, vAcc, fixTime, result.reason);
++            AltitudeState.saveRejected(this, location.getLatitude(), location.getLongitude(), hAcc, raw, vAcc, fixTime, result.reason + " · " + provider);
+         }
+         updateNotificationFromState();
+         GtiWidgetUpdater.updateAll(this);
+@@ -279,7 +404,8 @@
+ 
+     @Override public void onProviderEnabled(String provider) {
+         refreshProviderState();
+-        requestGps(true);
++        ensureLocationSubscriptions();
++        registerGnssStatusIfPossible();
+         GtiWidgetUpdater.updateAll(this);
+     }
+     @Override public void onProviderDisabled(String provider) {
+@@ -362,7 +488,14 @@
+         String source = AltitudeState.displaySource(this);
+         String text;
+         if (Double.isNaN(altitude)) {
+-            text = AltitudeState.gpsEnabled(this) ? "Recherche GPS… · service actif" : "GPS désactivé";
++            if (AltitudeState.isGnssFresh(this)) {
++                text = "Acquisition GNSS · " + AltitudeState.satellitesUsed(this) + "/" + AltitudeState.satellitesVisible(this) + " satellites";
++            } else if (AltitudeState.isRawGpsFresh(this)) {
++                float acc = bestAccuracy(AltitudeState.hAcc(this), AltitudeState.vAcc(this));
++                text = "Position reçue" + (Float.isNaN(acc) ? "" : " · ±" + Math.round(acc) + " m") + " · attente altitude";
++            } else {
++                text = AltitudeState.gpsEnabled(this) || AltitudeState.networkEnabled(this) ? "Recherche localisation… · service actif" : "Localisation désactivée";
++            }
+         } else if ("BARO".equals(source)) {
+             text = Math.round(altitude) + " m · BARO";
+         } else {
+@@ -382,6 +515,9 @@
+         handler.removeCallbacksAndMessages(null);
+         if (locationManager != null) {
+             try { locationManager.removeUpdates(this); } catch (SecurityException ignored) { }
++            if (Build.VERSION.SDK_INT >= 24 && gnssCallbackRegistered) {
++                try { locationManager.unregisterGnssStatusCallback(gnssCallback); } catch (RuntimeException ignored) { }
++            }
+         }
+         if (sensorManager != null) sensorManager.unregisterListener(this);
+         if (ServiceWatchdog.hasWidgets(this)) ServiceWatchdog.schedule(this, 5000L);
+--- a/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeState.java
++++ b/app/src/main/java/ch/piiwii/gtialtimeter/AltitudeState.java
+@@ -5,8 +5,8 @@
+ 
+ public final class AltitudeState {
+     private static final String PREFS = "gtialtimeter_state";
+-    private static final long GPS_FRESH_MS = 30000L;
+-    private static final long BARO_FRESH_MS = 15000L;
++    private static final long GPS_FRESH_MS = 60000L;
++    private static final long BARO_FRESH_MS = 20000L;
+     private AltitudeState() {}
+ 
+     private static SharedPreferences p(Context c) {
+@@ -17,17 +17,13 @@
+                                     double rawAlt, double correctedAlt, double filteredAlt,
+                                     float vAcc, long fixTime, String source, boolean rejected) {
+         long now = System.currentTimeMillis();
+-        p(c).edit()
++        SharedPreferences.Editor e = p(c).edit()
+                 .putBoolean("position_received", true)
+                 .putLong("lat", Double.doubleToRawLongBits(lat))
+                 .putLong("lon", Double.doubleToRawLongBits(lon))
+-                .putFloat("hacc", hAcc)
+-                .putFloat("accepted_hacc", hAcc)
+                 .putLong("raw_alt", Double.doubleToRawLongBits(rawAlt))
+                 .putLong("corrected_alt", Double.doubleToRawLongBits(correctedAlt))
+                 .putLong("filtered_alt", Double.doubleToRawLongBits(filteredAlt))
+-                .putFloat("vacc", vAcc)
+-                .putFloat("accepted_vacc", vAcc)
+                 .putLong("fix_time", fixTime)
+                 .putLong("accepted_fix_time", fixTime)
+                 .putLong("raw_fix_time", fixTime)
+@@ -35,16 +31,26 @@
+                 .putLong("last_update", now)
+                 .putString("source", source)
+                 .putString("reject_reason", "—")
+-                .putBoolean("last_rejected", rejected)
+-                .apply();
+-    }
+-
+-    public static void noteGpsCallback(Context c, long fixTime) {
+-        p(c).edit()
++                .putBoolean("last_rejected", rejected);
++        if (!Float.isNaN(hAcc) && hAcc > 0f && hAcc < 10000f) { e.putFloat("hacc", hAcc).putFloat("accepted_hacc", hAcc); }
++        if (!Float.isNaN(vAcc) && vAcc > 0f && vAcc < 10000f) { e.putFloat("vacc", vAcc).putFloat("accepted_vacc", vAcc); }
++        e.apply();
++    }
++
++    public static void noteLocationCallback(Context c, long fixTime, String provider, float hAcc, float vAcc) {
++        SharedPreferences.Editor e = p(c).edit()
+                 .putBoolean("position_received", true)
+                 .putLong("raw_fix_time", fixTime)
+                 .putLong("last_gps_callback", System.currentTimeMillis())
+-                .apply();
++                .putString("last_provider", provider == null ? "—" : provider);
++        // Never erase a previously valid accuracy just because one OEM callback omits it.
++        if (!Float.isNaN(hAcc) && hAcc > 0f && hAcc < 10000f) e.putFloat("hacc", hAcc);
++        if (!Float.isNaN(vAcc) && vAcc > 0f && vAcc < 10000f) e.putFloat("vacc", vAcc);
++        e.apply();
++    }
++
++    public static void noteGpsCallback(Context c, long fixTime) {
++        noteLocationCallback(c, fixTime, "GPS", Float.NaN, Float.NaN);
+     }
+ 
+     public static void saveRejected(Context c, double lat, double lon, float hAcc, double rawAlt,
+@@ -54,13 +60,13 @@
+                 .putBoolean("position_received", true)
+                 .putLong("lat", Double.doubleToRawLongBits(lat))
+                 .putLong("lon", Double.doubleToRawLongBits(lon))
+-                .putFloat("hacc", hAcc)
+-                .putFloat("vacc", vAcc)
+                 .putLong("raw_fix_time", fixTime)
+                 .putLong("last_gps_callback", now)
+                 .putLong("last_update", now)
+                 .putString("reject_reason", reason)
+                 .putBoolean("last_rejected", true);
++        if (!Float.isNaN(hAcc) && hAcc > 0f && hAcc < 10000f) e.putFloat("hacc", hAcc);
++        if (!Float.isNaN(vAcc) && vAcc > 0f && vAcc < 10000f) e.putFloat("vacc", vAcc);
+         if (!Double.isNaN(rawAlt) && !Double.isInfinite(rawAlt)) {
+             e.putLong("raw_alt", Double.doubleToRawLongBits(rawAlt));
+         }
+@@ -88,6 +94,26 @@
+ 
+     public static void setGpsEnabled(Context c, boolean enabled) { p(c).edit().putBoolean("gps_enabled", enabled).apply(); }
+     public static boolean gpsEnabled(Context c) { return p(c).getBoolean("gps_enabled", false); }
++    public static void setNetworkEnabled(Context c, boolean enabled) { p(c).edit().putBoolean("network_enabled", enabled).apply(); }
++    public static boolean networkEnabled(Context c) { return p(c).getBoolean("network_enabled", false); }
++    public static String lastProvider(Context c) { return p(c).getString("last_provider", "—"); }
++
