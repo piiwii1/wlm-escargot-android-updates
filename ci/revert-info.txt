@@ -1,0 +1,1 @@
+Reverting GTI Altimeter Widget to exact 1.2.8 behavior.
