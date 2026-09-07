@@ -1,0 +1,3 @@
+GTI Altimeter Widget 1.2.6 build trigger
+Hollow transparent trend arrow
+GPS bars contained below separator
