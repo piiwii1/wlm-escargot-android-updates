@@ -1,0 +1,103 @@
+name: PiiWii Files 1.3.23 Public Build
+
+on:
+  push:
+    branches: [ piiwii-files-1.3.23-build ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reassemble validated 1.3.22 baseline and apply 1.3.23 patch
+        run: |
+          set -e
+          mkdir -p /tmp/piiwii/project
+          cat piiwii-files-1.3.15-build/payload2/p{00..12} > /tmp/piiwii/project.zip
+          echo 'ed954f07e3ad628f5b02359781954d78026e3467f8b3b59ea0f9a6949732f72d  /tmp/piiwii/project.zip' | sha256sum -c -
+          unzip -q /tmp/piiwii/project.zip -d /tmp/piiwii/project
+          cd /tmp/piiwii/project
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.16/fast-storage.patch"
+          cat "$GITHUB_WORKSPACE"/piiwii-files-1.3.17/patch/p{00..04} > /tmp/piiwii-files-1.3.17.patch
+          patch -p1 < /tmp/piiwii-files-1.3.17.patch
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.17/patch/fix-callbacks.patch"
+          cat "$GITHUB_WORKSPACE"/piiwii-files-1.3.18/patch/p{00..05} > /tmp/piiwii-files-1.3.18.patch
+          patch -p1 < /tmp/piiwii-files-1.3.18.patch
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.19/share-grid.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.20/share-favorites.patch"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/ch/piiwii/files/MainActivity.java')
+          s = p.read_text()
+          start = s.index('        LinearLayout favoriteHeader = new LinearLayout(this);')
+          end = s.index('        dialog.setContentView(card);', start)
+          block = s[start:end]
+          fav_end = block.index('        Space filler = new Space(this);')
+          fav = block[:fav_end]
+          rest = block[fav_end:]
+          s = s[:start] + rest + fav + s[end:]
+          s = s.replace('PiiWii Files 1.3.20 (versionCode 24)', 'PiiWii Files 1.3.21 (versionCode 25)')
+          p.write_text(s)
+          b = Path('app/build.gradle')
+          t = b.read_text().replace('versionCode 24', 'versionCode 25').replace("versionName '1.3.20'", "versionName '1.3.21'")
+          b.write_text(t)
+          PY
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.22/compact-share.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.22/version-label.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.23/changes.patch"
+          grep -E 'applicationId|versionCode|versionName|targetSdk|minSdk' app/build.gradle
+          grep -q "versionCode 27" app/build.gradle
+          grep -q "versionName '1.3.23'" app/build.gradle
+          grep -q "PiiWii Files 1.3.23 (versionCode 27)" app/src/main/java/ch/piiwii/files/MainActivity.java
+          grep -q "confirmCollectionDelete" app/src/main/java/ch/piiwii/files/MainActivity.java
+          grep -q "queryCleanupBySuffixes" app/src/main/java/ch/piiwii/files/MainActivity.java
+          grep -q "Appui long pour sélectionner" app/src/main/java/ch/piiwii/files/MainActivity.java
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        working-directory: /tmp/piiwii/project
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Align and prepare signing tools
+        run: |
+          set -e
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          "$SDK/build-tools/35.0.0/zipalign" -p -f 4 \
+            /tmp/piiwii/project/app/build/outputs/apk/release/app-release-unsigned.apk \
+            /tmp/PiiWii-Files-1.3.23-unsigned-aligned.apk
+          "$SDK/build-tools/35.0.0/zipalign" -c -v 4 /tmp/PiiWii-Files-1.3.23-unsigned-aligned.apk
+          cp "$SDK/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-35.0.0.jar
+          sha256sum /tmp/PiiWii-Files-1.3.23-unsigned-aligned.apk > /tmp/PiiWii-Files-1.3.23-unsigned.sha256
+
+      - name: Upload unsigned build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Files-1.3.23-unsigned-build
+          path: |
+            /tmp/PiiWii-Files-1.3.23-unsigned-aligned.apk
+            /tmp/PiiWii-Files-1.3.23-unsigned.sha256
+            /tmp/apksigner-35.0.0.jar
+          retention-days: 7
+          if-no-files-found: error
