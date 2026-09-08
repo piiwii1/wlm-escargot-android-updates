@@ -1,0 +1,57 @@
++                    report.failed.add(f.getName() + " — " + (f.canWrite() ? "suppression refusée" : "accès refusé/protégé"));
++                }
++            }
++
++            runOnUiThread(() -> {
++                if (pd.isShowing()) pd.dismiss();
++                showCleanupResult(report);
++            });
++        }, "PiiWiiFiles-clean-delete").start();
++    }
++
++    private boolean deleteCleanupFileViaMediaStore(File file) {
++        if (file == null || !file.exists() || !file.isFile()) return !file.exists();
++        String path = file.getAbsolutePath();
++        for (String volume : mediaVolumes()) {
++            try {
++                int deleted = getContentResolver().delete(
++                        MediaStore.Files.getContentUri(volume),
++                        MediaStore.MediaColumns.DATA + " = ?",
++                        new String[]{path});
++                if (deleted > 0 || !file.exists()) return !file.exists();
++            } catch (Exception ignored) { }
++        }
++        return !file.exists();
++    }
++
++    private void showCleanupResult(CleanupDeleteReport report) {
++        StringBuilder message = new StringBuilder();
++        message.append(report.deleted).append(" élément(s) supprimé(s)\n")
++                .append(FileUtils.formatSize(report.deletedBytes)).append(" libérés");
++        if (report.alreadyMissing > 0) message.append("\n").append(report.alreadyMissing).append(" déjà absent(s)");
++        if (!report.failed.isEmpty()) {
++            message.append("\n\n").append(report.failed.size()).append(" élément(s) non supprimé(s) :");
++            int limit = Math.min(8, report.failed.size());
++            for (int i = 0; i < limit; i++) message.append("\n• ").append(report.failed.get(i));
++            if (report.failed.size() > limit) message.append("\n• … et ").append(report.failed.size() - limit).append(" autre(s)");
++        }
++        new AlertDialog.Builder(this)
++                .setTitle(report.failed.isEmpty() ? "Nettoyage terminé" : "Nettoyage terminé avec avertissements")
++                .setMessage(message.toString())
++                .setPositiveButton("RÉANALYSER", (d, w) -> showQuickCleanup())
++                .setNegativeButton("FERMER", null)
++                .show();
++    }
++
+     private long[] queryIndexedStorageTypeSizes() {
+         long[] sizes = new long[4];
+         int successfulQueries = 0;
+@@ -2379,7 +2632,7 @@
+ 
+     private void diagnostics() {
+         StringBuilder s = new StringBuilder();
+-        s.append("PiiWii Files 1.3.23 (versionCode 27)\nPackage : ").append(getPackageName())
++        s.append("PiiWii Files 1.3.24 (versionCode 28)\nPackage : ").append(getPackageName())
+                 .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+                 .append("\nStockage principal : ").append(Environment.getExternalStorageDirectory().getAbsolutePath())
+                 .append("\nPermissions écriture : ").append(Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED ? "OK" : "NON");
