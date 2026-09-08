@@ -1,0 +1,118 @@
++    private void collectOldFiles(File dir, ArrayList<File> out, long before, int maxDepth, int limit) {
++        if (dir == null || maxDepth < 0 || out.size() >= limit) return;
+         File[] children;
+         try { children = dir.listFiles(); } catch (Exception e) { return; }
+         if (children == null) return;
+         for (File f : children) {
+             if (out.size() >= limit) return;
+-            if (f.isDirectory()) collectOldFiles(f, out, before, limit);
+-            else if (f.lastModified() > 0 && f.lastModified() < before) out.add(f);
++            if (f == null) continue;
++            if (f.isDirectory()) {
++                if (maxDepth > 0) collectOldFiles(f, out, before, maxDepth - 1, limit);
++            } else if (f.lastModified() > 0 && f.lastModified() < before) {
++                out.add(f);
++            }
+         }
+     }
+ 
+@@ -763,15 +842,35 @@
+         return new ArrayList<>(unique.values());
+     }
+ 
++    private ArrayList<File> cleanupStandardRoots() {
++        LinkedHashMap<String, File> roots = new LinkedHashMap<>();
++        File[] candidates = new File[]{
++                FileUtils.downloadsDir(),
++                FileUtils.documentsDir(),
++                FileUtils.picturesDir(),
++                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
++                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
++                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
++                new File(Environment.getExternalStorageDirectory(), "Bluetooth")
++        };
++        for (File f : candidates) {
++            if (f == null || !f.exists() || !f.isDirectory()) continue;
++            try { roots.put(f.getCanonicalPath(), f.getCanonicalFile()); }
++            catch (Exception e) { roots.put(f.getAbsolutePath(), f); }
++        }
++        return new ArrayList<>(roots.values());
++    }
++
+     private ArrayList<File> queryCleanupBySuffixes(String[] suffixes, int limit, boolean includeOwnCaches) {
+         LinkedHashMap<String, File> unique = new LinkedHashMap<>();
+         addUniqueFiles(queryIndexedBySuffixes(suffixes, limit), unique, limit);
+ 
+-        // Secours ciblé : on ne rescane jamais tout le stockage. On complète seulement
+-        // les dossiers utilisateur habituels où MediaStore peut être incomplet.
+-        collectTargetedBySuffixes(FileUtils.downloadsDir(), suffixes, 4, unique, limit);
+-        collectTargetedBySuffixes(FileUtils.documentsDir(), suffixes, 3, unique, limit);
+-        collectTargetedBySuffixes(Environment.getExternalStorageDirectory(), suffixes, 0, unique, limit);
++        // Complément direct limité aux dossiers utilisateur habituels. On évite
++        // volontairement un scan récursif complet de tout le stockage.
++        for (File root : cleanupStandardRoots()) {
++            collectTargetedBySuffixes(root, suffixes, 5, unique, limit);
++            if (unique.size() >= limit) break;
++        }
+ 
+         if (includeOwnCaches) {
+             collectAllFilesBounded(getCacheDir(), 6, unique, limit);
+@@ -780,6 +879,48 @@
+         return new ArrayList<>(unique.values());
+     }
+ 
++    private ArrayList<File> collectOwnCacheFiles(int limit) {
++        LinkedHashMap<String, File> unique = new LinkedHashMap<>();
++        collectAllFilesBounded(getCacheDir(), 8, unique, limit);
++        try { collectAllFilesBounded(getExternalCacheDir(), 8, unique, limit); } catch (Exception ignored) { }
++        return new ArrayList<>(unique.values());
++    }
++
++    private ArrayList<File> collectCleanupEmptyDirectories(int limit) {
++        LinkedHashMap<String, File> unique = new LinkedHashMap<>();
++        for (File root : cleanupStandardRoots()) {
++            collectEmptyDirectoriesBounded(root, root, 5, unique, limit);
++            if (unique.size() >= limit) break;
++        }
++        return new ArrayList<>(unique.values());
++    }
++
++    private boolean collectEmptyDirectoriesBounded(File root, File dir, int maxDepth, LinkedHashMap<String, File> out, int limit) {
++        if (dir == null || maxDepth < 0 || out.size() >= limit) return false;
++        File[] children;
++        try { children = dir.listFiles(); } catch (Exception e) { return false; }
++        if (children == null) return false;
++        boolean empty = children.length == 0;
++        if (maxDepth > 0) {
++            empty = true;
++            for (File f : children) {
++                if (f == null) continue;
++                if (f.isDirectory()) {
++                    boolean childEmpty = collectEmptyDirectoriesBounded(root, f, maxDepth - 1, out, limit);
++                    if (!childEmpty) empty = false;
++                } else {
++                    empty = false;
++                }
++                if (out.size() >= limit) break;
++            }
++        }
++        if (empty && !dir.equals(root) && dir.exists() && dir.isDirectory()) {
++            try { out.put(dir.getCanonicalPath(), dir); }
++            catch (Exception e) { out.put(dir.getAbsolutePath(), dir); }
++        }
++        return empty;
++    }
++
+     private void addUniqueFiles(Collection<File> files, LinkedHashMap<String, File> out, int limit) {
+         if (files == null) return;
+         for (File f : files) {
+@@ -826,10 +967,11 @@
+ 
+     private ArrayList<File> findAlreadyInstalledApks() {
+         LinkedHashMap<String, File> candidates = new LinkedHashMap<>();
+-        addUniqueFiles(queryIndexedFiles(3, 400), candidates, 400);
+-        collectTargetedBySuffixes(FileUtils.downloadsDir(), new String[]{".apk"}, 4, candidates, 400);
+-        collectTargetedBySuffixes(FileUtils.documentsDir(), new String[]{".apk"}, 3, candidates, 400);
+-        collectTargetedBySuffixes(Environment.getExternalStorageDirectory(), new String[]{".apk"}, 0, candidates, 400);
++        addUniqueFiles(queryIndexedFiles(3, 500), candidates, 500);
++        for (File root : cleanupStandardRoots()) {
