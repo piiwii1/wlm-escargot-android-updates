@@ -1,0 +1,322 @@
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.files'
+         minSdk 26
+         targetSdk 29
+-        versionCode 26
+-        versionName '1.3.22'
++        versionCode 27
++        versionName '1.3.23'
+     }
+ 
+     buildTypes {
+--- a/app/src/main/java/ch/piiwii/files/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/files/MainActivity.java
+@@ -718,7 +718,7 @@
+     private void showQuickCleanup() {
+         final ProgressDialog pd = new ProgressDialog(this);
+         pd.setTitle("Nettoyage rapide");
+-        pd.setMessage("Analyse ciblée…");
++        pd.setMessage("Analyse ciblée du stockage…");
+         pd.setIndeterminate(true);
+         pd.setCancelable(true);
+         pd.show();
+@@ -726,8 +726,8 @@
+             ArrayList<File> oldDownloads = new ArrayList<>();
+             collectOldFiles(FileUtils.downloadsDir(), oldDownloads, System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L, 400);
+             ArrayList<File> installedApks = findAlreadyInstalledApks();
+-            ArrayList<File> archives = queryIndexedBySuffixes(new String[]{".zip", ".rar", ".7z", ".tar", ".gz"}, 400);
+-            ArrayList<File> temps = queryIndexedBySuffixes(new String[]{".tmp", ".temp", ".part", ".crdownload"}, 400);
++            ArrayList<File> archives = queryCleanupBySuffixes(new String[]{".zip", ".rar", ".7z", ".tar", ".gz"}, 400, false);
++            ArrayList<File> temps = queryCleanupBySuffixes(new String[]{".tmp", ".temp", ".part", ".crdownload"}, 400, true);
+             runOnUiThread(() -> {
+                 if (pd.isShowing()) pd.dismiss();
+                 showCleanupGroupsDialog(oldDownloads, installedApks, archives, temps);
+@@ -763,10 +763,77 @@
+         return new ArrayList<>(unique.values());
+     }
+ 
++    private ArrayList<File> queryCleanupBySuffixes(String[] suffixes, int limit, boolean includeOwnCaches) {
++        LinkedHashMap<String, File> unique = new LinkedHashMap<>();
++        addUniqueFiles(queryIndexedBySuffixes(suffixes, limit), unique, limit);
++
++        // Secours ciblé : on ne rescane jamais tout le stockage. On complète seulement
++        // les dossiers utilisateur habituels où MediaStore peut être incomplet.
++        collectTargetedBySuffixes(FileUtils.downloadsDir(), suffixes, 4, unique, limit);
++        collectTargetedBySuffixes(FileUtils.documentsDir(), suffixes, 3, unique, limit);
++        collectTargetedBySuffixes(Environment.getExternalStorageDirectory(), suffixes, 0, unique, limit);
++
++        if (includeOwnCaches) {
++            collectAllFilesBounded(getCacheDir(), 6, unique, limit);
++            try { collectAllFilesBounded(getExternalCacheDir(), 6, unique, limit); } catch (Exception ignored) { }
++        }
++        return new ArrayList<>(unique.values());
++    }
++
++    private void addUniqueFiles(Collection<File> files, LinkedHashMap<String, File> out, int limit) {
++        if (files == null) return;
++        for (File f : files) {
++            if (out.size() >= limit) return;
++            if (f != null && f.exists() && f.isFile()) out.put(f.getAbsolutePath(), f);
++        }
++    }
++
++    private void collectTargetedBySuffixes(File dir, String[] suffixes, int maxDepth, LinkedHashMap<String, File> out, int limit) {
++        if (dir == null || maxDepth < 0 || out.size() >= limit) return;
++        File[] children;
++        try { children = dir.listFiles(); } catch (Exception e) { return; }
++        if (children == null) return;
++        for (File f : children) {
++            if (out.size() >= limit) return;
++            if (f == null) continue;
++            if (f.isDirectory()) {
++                if (maxDepth > 0) collectTargetedBySuffixes(f, suffixes, maxDepth - 1, out, limit);
++                continue;
++            }
++            String name = f.getName().toLowerCase(Locale.ROOT);
++            for (String suffix : suffixes) {
++                if (name.endsWith(suffix.toLowerCase(Locale.ROOT))) {
++                    out.put(f.getAbsolutePath(), f);
++                    break;
++                }
++            }
++        }
++    }
++
++    private void collectAllFilesBounded(File dir, int maxDepth, LinkedHashMap<String, File> out, int limit) {
++        if (dir == null || maxDepth < 0 || out.size() >= limit) return;
++        File[] children;
++        try { children = dir.listFiles(); } catch (Exception e) { return; }
++        if (children == null) return;
++        for (File f : children) {
++            if (out.size() >= limit) return;
++            if (f == null) continue;
++            if (f.isDirectory()) {
++                if (maxDepth > 0) collectAllFilesBounded(f, maxDepth - 1, out, limit);
++            } else if (f.exists()) out.put(f.getAbsolutePath(), f);
++        }
++    }
++
+     private ArrayList<File> findAlreadyInstalledApks() {
++        LinkedHashMap<String, File> candidates = new LinkedHashMap<>();
++        addUniqueFiles(queryIndexedFiles(3, 400), candidates, 400);
++        collectTargetedBySuffixes(FileUtils.downloadsDir(), new String[]{".apk"}, 4, candidates, 400);
++        collectTargetedBySuffixes(FileUtils.documentsDir(), new String[]{".apk"}, 3, candidates, 400);
++        collectTargetedBySuffixes(Environment.getExternalStorageDirectory(), new String[]{".apk"}, 0, candidates, 400);
++
+         ArrayList<File> result = new ArrayList<>();
+         PackageManager pm = getPackageManager();
+-        for (File apk : queryIndexedFiles(3, 400)) {
++        for (File apk : candidates.values()) {
+             try {
+                 PackageInfo archive = pm.getPackageArchiveInfo(apk.getAbsolutePath(), 0);
+                 if (archive == null || archive.packageName == null) continue;
+@@ -776,6 +843,7 @@
+                 if (installedCode >= archiveCode) result.add(apk);
+             } catch (Exception ignored) { }
+         }
++        result.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+         return result;
+     }
+ 
+@@ -808,19 +876,38 @@
+         boolean[] checked = new boolean[count];
+         for (int i=0; i<count; i++) {
+             File f = files.get(i);
+-            names[i] = f.getName() + "\n" + FileUtils.formatSize(f.length());
++            String parent = f.getParentFile() == null ? "" : f.getParentFile().getName();
++            names[i] = f.getName() + "\n" + FileUtils.formatSize(f.length()) + (parent.isEmpty() ? "" : "  •  " + parent);
+         }
+-        new AlertDialog.Builder(this)
+-                .setTitle(title)
++        AlertDialog dialog = new AlertDialog.Builder(this)
++                .setTitle(title + "  •  " + count + (files.size() > count ? "+" : ""))
+                 .setMultiChoiceItems(names, checked, (d, which, isChecked) -> checked[which] = isChecked)
+-                .setPositiveButton("SUPPRIMER SÉLECTION", (d,w) -> {
+-                    ArrayList<File> chosen = new ArrayList<>();
+-                    for (int i=0;i<count;i++) if (checked[i]) chosen.add(files.get(i));
+-                    if (chosen.isEmpty()) { Toast.makeText(this, "Aucun fichier sélectionné", Toast.LENGTH_SHORT).show(); return; }
+-                    confirmCleanupDelete(chosen);
+-                })
++                .setPositiveButton("SUPPRIMER SÉLECTION", null)
++                .setNeutralButton("TOUT SÉLECTIONNER", null)
+                 .setNegativeButton("ANNULER", null)
+-                .show();
++                .create();
++        dialog.setOnShowListener(v -> {
++            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v2 -> {
++                ArrayList<File> chosen = new ArrayList<>();
++                for (int i=0;i<count;i++) if (checked[i]) chosen.add(files.get(i));
++                if (chosen.isEmpty()) {
++                    Toast.makeText(this, "Aucun fichier sélectionné", Toast.LENGTH_SHORT).show();
++                    return;
++                }
++                dialog.dismiss();
++                confirmCleanupDelete(chosen);
++            });
++            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v2 -> {
++                boolean selectAll = false;
++                for (int i=0;i<count;i++) if (!checked[i]) { selectAll = true; break; }
++                for (int i=0;i<count;i++) {
++                    checked[i] = selectAll;
++                    dialog.getListView().setItemChecked(i, selectAll);
++                }
++                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setText(selectAll ? "TOUT DÉSÉLECTIONNER" : "TOUT SÉLECTIONNER");
++            });
++        });
++        dialog.show();
+     }
+ 
+     private void confirmCleanupDelete(ArrayList<File> files) {
+@@ -830,11 +917,17 @@
+                 .setMessage("Espace récupérable : " + FileUtils.formatSize(bytes) + "\nCette action est irréversible.")
+                 .setPositiveButton("SUPPRIMER", (d,w) -> new Thread(() -> {
+                     int deleted = 0;
+-                    for (File f : files) if (f != null && f.isFile() && f.delete()) deleted++;
++                    long deletedBytes = 0L;
++                    for (File f : files) {
++                        if (f == null || !f.exists()) continue;
++                        long size = f.isFile() ? Math.max(0L, f.length()) : 0L;
++                        if (FileUtils.deleteRecursive(f)) { deleted++; deletedBytes += size; }
++                    }
+                     int finalDeleted = deleted;
++                    long finalDeletedBytes = deletedBytes;
+                     runOnUiThread(() -> {
+-                        Toast.makeText(this, finalDeleted + " fichier(s) supprimé(s)", Toast.LENGTH_LONG).show();
+-                        showHomeTab(HOME_STORAGE);
++                        Toast.makeText(this, finalDeleted + " fichier(s) supprimé(s)  •  " + FileUtils.formatSize(finalDeletedBytes) + " libérés", Toast.LENGTH_LONG).show();
++                        showQuickCleanup();
+                     });
+                 }, "PiiWiiFiles-clean-delete").start())
+                 .setNegativeButton("ANNULER", null)
+@@ -2108,7 +2201,8 @@
+ 
+         LinearLayout info = new LinearLayout(this);
+         info.setPadding(dp(6), 0, dp(6), dp(6));
+-        info.addView(text(files.size() + (files.size() == 1 ? " fichier" : " fichiers") + "  •  " + subtitle, 12, MUTED, false));
++        TextView infoText = text(files.size() + (files.size() == 1 ? " fichier" : " fichiers") + "  •  Appui long pour sélectionner", 12, MUTED, false);
++        info.addView(infoText);
+         page.addView(info);
+ 
+         if (files.isEmpty()) {
+@@ -2118,6 +2212,7 @@
+             emptyHolder.addView(emptyStateCard(iconRes, "Aucun " + title.toLowerCase(Locale.ROOT), "Les fichiers correspondants apparaîtront ici."));
+             page.addView(emptyHolder, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+         } else {
++            LinkedHashSet<File> collectionSelected = new LinkedHashSet<>();
+             ListView collection = new ListView(this);
+             collection.setDivider(null);
+             collection.setDividerHeight(0);
+@@ -2125,11 +2220,61 @@
+             collection.setFastScrollEnabled(false);
+             collection.setPadding(0, dp(3), 0, dp(5));
+             collection.setClipToPadding(false);
+-            FileAdapter collectionAdapter = new FileAdapter(this, new LinkedHashSet<>());
++            FileAdapter collectionAdapter = new FileAdapter(this, collectionSelected);
+             collectionAdapter.setFiles(files.toArray(new File[0]));
+             collection.setAdapter(collectionAdapter);
+-            collection.setOnItemClickListener((p, v, pos, id) -> onFileClick(collectionAdapter.getFile(pos)));
++
++            LinearLayout collectionActions = new LinearLayout(this);
++            collectionActions.setGravity(Gravity.CENTER_VERTICAL);
++            collectionActions.setPadding(dp(3), dp(5), dp(3), dp(5));
++            collectionActions.setVisibility(View.GONE);
++            TextView selectedCount = text("", 12, MUTED, true);
++            Button share = button("Partager");
++            Button infoButton = button("Infos");
++            Button delete = button("Supprimer");
++            delete.setTextColor(Color.rgb(255, 128, 128));
++            collectionActions.addView(selectedCount, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++            LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
++            actionLp.setMargins(dp(4), 0, 0, 0);
++            collectionActions.addView(share, actionLp);
++            collectionActions.addView(infoButton, actionLp);
++            collectionActions.addView(delete, actionLp);
++
++            Runnable updateCollectionSelection = () -> {
++                int n = collectionSelected.size();
++                selectedCount.setText(n + (n == 1 ? " sélectionné" : " sélectionnés"));
++                infoButton.setEnabled(n == 1);
++                collectionActions.setVisibility(n == 0 ? View.GONE : View.VISIBLE);
++                infoText.setText(n == 0
++                        ? files.size() + (files.size() == 1 ? " fichier" : " fichiers") + "  •  Appui long pour sélectionner"
++                        : n + (n == 1 ? " fichier sélectionné" : " fichiers sélectionnés") + "  •  " + FileUtils.formatSize(totalSize(collectionSelected)));
++                collectionAdapter.notifyDataSetChanged();
++            };
++
++            collection.setOnItemLongClickListener((p, v, pos, id) -> {
++                File f = collectionAdapter.getFile(pos);
++                if (!collectionSelected.add(f)) collectionSelected.remove(f);
++                updateCollectionSelection.run();
++                return true;
++            });
++            collection.setOnItemClickListener((p, v, pos, id) -> {
++                File f = collectionAdapter.getFile(pos);
++                if (!collectionSelected.isEmpty()) {
++                    if (!collectionSelected.add(f)) collectionSelected.remove(f);
++                    updateCollectionSelection.run();
++                } else onFileClick(f);
++            });
++            share.setOnClickListener(v -> {
++                Intent intent = buildShareIntent(collectionSelected);
++                if (intent != null) showPreferredShareChooser(intent);
++            });
++            infoButton.setOnClickListener(v -> {
++                if (collectionSelected.size() == 1) showInfo(collectionSelected.iterator().next());
++            });
++            delete.setOnClickListener(v -> confirmCollectionDelete(files, collectionSelected, collectionAdapter, infoText, collectionActions, updateCollectionSelection));
++
+             page.addView(collection, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
++            page.addView(collectionActions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+         }
+         homePanel.addView(page, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+         homePanel.addView(buildHomeBottomNav(HOME_FILES), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)));
+@@ -2137,6 +2282,38 @@
+         homePanel.animate().alpha(1f).setDuration(130).start();
+     }
+ 
++    private void confirmCollectionDelete(ArrayList<File> files, LinkedHashSet<File> selectedFiles, FileAdapter collectionAdapter,
++                                         TextView infoText, LinearLayout collectionActions, Runnable updateSelection) {
++        if (selectedFiles == null || selectedFiles.isEmpty()) return;
++        ArrayList<File> doomed = new ArrayList<>(selectedFiles);
++        long bytes = totalSize(doomed);
++        new AlertDialog.Builder(this)
++                .setTitle("Supprimer " + doomed.size() + " fichier(s) ?")
++                .setMessage("Espace récupérable : " + FileUtils.formatSize(bytes) + "\nCette action est irréversible.")
++                .setPositiveButton("SUPPRIMER", (d,w) -> new Thread(() -> {
++                    int deleted = 0;
++                    long deletedBytes = 0L;
++                    for (File f : doomed) {
++                        if (f == null || !f.exists()) continue;
++                        long size = f.isFile() ? Math.max(0L, f.length()) : 0L;
++                        if (FileUtils.deleteRecursive(f)) { deleted++; deletedBytes += size; }
++                    }
++                    int finalDeleted = deleted;
++                    long finalDeletedBytes = deletedBytes;
++                    runOnUiThread(() -> {
++                        files.removeIf(f -> f == null || !f.exists());
++                        selectedFiles.clear();
++                        collectionAdapter.setFiles(files.toArray(new File[0]));
++                        collectionActions.setVisibility(View.GONE);
++                        infoText.setText(files.size() + (files.size() == 1 ? " fichier" : " fichiers") + "  •  Appui long pour sélectionner");
++                        updateSelection.run();
++                        Toast.makeText(this, finalDeleted + " fichier(s) supprimé(s)  •  " + FileUtils.formatSize(finalDeletedBytes) + " libérés", Toast.LENGTH_LONG).show();
++                    });
++                }, "PiiWiiFiles-collection-delete").start())
++                .setNegativeButton("ANNULER", null)
++                .show();
++    }
++
+     private View buildCollectionHeader(String title, String subtitle, int iconRes) {
+         LinearLayout head = new LinearLayout(this);
+         head.setGravity(Gravity.CENTER_VERTICAL);
+@@ -2202,7 +2379,7 @@
+ 
+     private void diagnostics() {
+         StringBuilder s = new StringBuilder();
+-        s.append("PiiWii Files 1.3.22 (versionCode 26)\nPackage : ").append(getPackageName())
++        s.append("PiiWii Files 1.3.23 (versionCode 27)\nPackage : ").append(getPackageName())
+                 .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+                 .append("\nStockage principal : ").append(Environment.getExternalStorageDirectory().getAbsolutePath())
+                 .append("\nPermissions écriture : ").append(Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED ? "OK" : "NON");
