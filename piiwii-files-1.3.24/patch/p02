@@ -1,0 +1,103 @@
++            collectTargetedBySuffixes(root, new String[]{".apk"}, 5, candidates, 500);
++            if (candidates.size() >= 500) break;
++        }
+ 
+         ArrayList<File> result = new ArrayList<>();
+         PackageManager pm = getPackageManager();
+@@ -849,91 +991,202 @@
+ 
+     private long totalSize(Collection<File> files) {
+         long total = 0L;
+-        if (files != null) for (File f : files) if (f != null && f.isFile()) total += Math.max(0L, f.length());
++        if (files != null) for (File f : files) if (f != null && f.exists()) total += f.isFile() ? Math.max(0L, f.length()) : Math.max(0L, FileUtils.totalSize(f));
+         return total;
+     }
+ 
+-    private void showCleanupGroupsDialog(ArrayList<File> oldDownloads, ArrayList<File> installedApks, ArrayList<File> archives, ArrayList<File> temps) {
+-        final String[] labels = {"Téléchargements anciens", "APK déjà installés", "Archives", "Fichiers temporaires"};
+-        @SuppressWarnings("unchecked") ArrayList<File>[] groups = new ArrayList[]{oldDownloads, installedApks, archives, temps};
+-        String[] items = new String[4];
+-        for (int i = 0; i < 4; i++) items[i] = labels[i] + "\n" + groups[i].size() + " fichier(s)  •  " + FileUtils.formatSize(totalSize(groups[i]));
+-        new AlertDialog.Builder(this)
+-                .setTitle("Nettoyage rapide")
+-                .setMessage("Rien n’est supprimé automatiquement. Ouvre une catégorie et choisis les fichiers à supprimer.")
+-                .setItems(items, (d, which) -> showCleanupCandidateDialog(labels[which], groups[which]))
+-                .setNegativeButton("FERMER", null)
+-                .show();
+-    }
+-
+-    private void showCleanupCandidateDialog(String title, ArrayList<File> files) {
+-        if (files == null || files.isEmpty()) {
+-            Toast.makeText(this, "Rien à nettoyer dans cette catégorie", Toast.LENGTH_SHORT).show();
++    private void showCleanupGroupsDialog(ArrayList<CleanupGroup> groups) {
++        String[] items = new String[groups.size()];
++        boolean[] checked = new boolean[groups.size()];
++        int totalCandidates = 0;
++        long totalBytes = 0L;
++        for (int i = 0; i < groups.size(); i++) {
++            CleanupGroup g = groups.get(i);
++            checked[i] = g.selectedByDefault && !g.files.isEmpty();
++            totalCandidates += g.files.size();
++            totalBytes += g.bytes;
++            items[i] = g.label + "\n" + g.files.size() + " élément(s)  •  " + FileUtils.formatSize(g.bytes);
++        }
++
++        if (totalCandidates == 0) {
++            new AlertDialog.Builder(this)
++                    .setTitle("Nettoyage rapide")
++                    .setMessage("Analyse terminée. Aucun élément nettoyable n’a été trouvé dans les zones accessibles.\n\nAccès complet au stockage : OK")
++                    .setPositiveButton("FERMER", null)
++                    .show();
+             return;
+         }
+-        int count = Math.min(files.size(), 150);
+-        String[] names = new String[count];
+-        boolean[] checked = new boolean[count];
+-        for (int i=0; i<count; i++) {
+-            File f = files.get(i);
+-            String parent = f.getParentFile() == null ? "" : f.getParentFile().getName();
+-            names[i] = f.getName() + "\n" + FileUtils.formatSize(f.length()) + (parent.isEmpty() ? "" : "  •  " + parent);
+-        }
++
++        final int candidateCount = totalCandidates;
++        final long candidateBytes = totalBytes;
++        final AlertDialog[] dialogRef = new AlertDialog[1];
+         AlertDialog dialog = new AlertDialog.Builder(this)
+-                .setTitle(title + "  •  " + count + (files.size() > count ? "+" : ""))
+-                .setMultiChoiceItems(names, checked, (d, which, isChecked) -> checked[which] = isChecked)
+-                .setPositiveButton("SUPPRIMER SÉLECTION", null)
+-                .setNeutralButton("TOUT SÉLECTIONNER", null)
+-                .setNegativeButton("ANNULER", null)
++                .setTitle("Nettoyage rapide")
++                .setMessage("Analyse terminée : " + candidateCount + " élément(s), jusqu’à " + FileUtils.formatSize(candidateBytes) + ".\n\nLes catégories sûres sont cochées par défaut. Archives et anciens téléchargements restent décochés.")
++                .setMultiChoiceItems(items, checked, (d, which, isChecked) -> {
++                    checked[which] = isChecked;
++                    if (dialogRef[0] != null) updateCleanupActionButton(dialogRef[0], groups, checked);
++                })
++                .setPositiveButton("NETTOYER LA SÉLECTION", null)
++                .setNeutralButton("VOIR LES FICHIERS", null)
++                .setNegativeButton("FERMER", null)
+                 .create();
++        dialogRef[0] = dialog;
++
+         dialog.setOnShowListener(v -> {
++            updateCleanupActionButton(dialog, groups, checked);
+             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v2 -> {
+-                ArrayList<File> chosen = new ArrayList<>();
+-                for (int i=0;i<count;i++) if (checked[i]) chosen.add(files.get(i));
++                ArrayList<File> chosen = selectedCleanupFiles(groups, checked);
+                 if (chosen.isEmpty()) {
+-                    Toast.makeText(this, "Aucun fichier sélectionné", Toast.LENGTH_SHORT).show();
++                    Toast.makeText(this, "Aucune catégorie sélectionnée", Toast.LENGTH_SHORT).show();
+                     return;
+                 }
+                 dialog.dismiss();
+                 confirmCleanupDelete(chosen);
+             });
+-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v2 -> {
+-                boolean selectAll = false;
+-                for (int i=0;i<count;i++) if (!checked[i]) { selectAll = true; break; }
+-                for (int i=0;i<count;i++) {
+-                    checked[i] = selectAll;
+-                    dialog.getListView().setItemChecked(i, selectAll);
+-                }
