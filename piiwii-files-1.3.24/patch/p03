@@ -1,0 +1,117 @@
+-                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setText(selectAll ? "TOUT DÉSÉLECTIONNER" : "TOUT SÉLECTIONNER");
+-            });
++            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v2 -> showCleanupCategoryBrowser(groups));
+         });
+         dialog.show();
+     }
+ 
++    private ArrayList<File> selectedCleanupFiles(ArrayList<CleanupGroup> groups, boolean[] checked) {
++        LinkedHashMap<String, File> unique = new LinkedHashMap<>();
++        for (int i = 0; i < groups.size(); i++) {
++            if (!checked[i]) continue;
++            for (File f : groups.get(i).files) {
++                if (f == null || !f.exists()) continue;
++                try { unique.put(f.getCanonicalPath(), f); }
++                catch (Exception e) { unique.put(f.getAbsolutePath(), f); }
++            }
++        }
++        return new ArrayList<>(unique.values());
++    }
++
++    private void updateCleanupActionButton(AlertDialog dialog, ArrayList<CleanupGroup> groups, boolean[] checked) {
++        ArrayList<File> selectedFiles = selectedCleanupFiles(groups, checked);
++        long bytes = totalSize(selectedFiles);
++        Button b = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
++        if (b != null) b.setText(selectedFiles.isEmpty() ? "NETTOYER LA SÉLECTION" : "NETTOYER  •  " + FileUtils.formatSize(bytes));
++    }
++
++    private void showCleanupCategoryBrowser(ArrayList<CleanupGroup> groups) {
++        String[] labels = new String[groups.size()];
++        for (int i = 0; i < groups.size(); i++) {
++            CleanupGroup g = groups.get(i);
++            labels[i] = g.label + "  •  " + g.files.size() + "  •  " + FileUtils.formatSize(g.bytes);
++        }
++        new AlertDialog.Builder(this)
++                .setTitle("Fichiers détectés")
++                .setItems(labels, (d, which) -> showCleanupCandidatePreview(groups.get(which)))
++                .setNegativeButton("FERMER", null)
++                .show();
++    }
++
++    private void showCleanupCandidatePreview(CleanupGroup group) {
++        if (group.files.isEmpty()) {
++            Toast.makeText(this, "Aucun élément dans cette catégorie", Toast.LENGTH_SHORT).show();
++            return;
++        }
++        int count = Math.min(group.files.size(), 180);
++        String[] names = new String[count];
++        for (int i = 0; i < count; i++) {
++            File f = group.files.get(i);
++            String parent = f.getParentFile() == null ? "" : f.getParentFile().getAbsolutePath();
++            names[i] = f.getName() + "\n" + (f.isFile() ? FileUtils.formatSize(f.length()) : "Dossier vide") + (parent.isEmpty() ? "" : "  •  " + parent);
++        }
++        new AlertDialog.Builder(this)
++                .setTitle(group.label + "  •  " + group.files.size())
++                .setItems(names, null)
++                .setMessage(group.files.size() > count ? "Affichage des " + count + " premiers éléments." : null)
++                .setPositiveButton("FERMER", null)
++                .show();
++    }
++
+     private void confirmCleanupDelete(ArrayList<File> files) {
+         long bytes = totalSize(files);
+         new AlertDialog.Builder(this)
+-                .setTitle("Supprimer " + files.size() + " fichier(s) ?")
+-                .setMessage("Espace récupérable : " + FileUtils.formatSize(bytes) + "\nCette action est irréversible.")
+-                .setPositiveButton("SUPPRIMER", (d,w) -> new Thread(() -> {
+-                    int deleted = 0;
+-                    long deletedBytes = 0L;
+-                    for (File f : files) {
+-                        if (f == null || !f.exists()) continue;
+-                        long size = f.isFile() ? Math.max(0L, f.length()) : 0L;
+-                        if (FileUtils.deleteRecursive(f)) { deleted++; deletedBytes += size; }
+-                    }
+-                    int finalDeleted = deleted;
+-                    long finalDeletedBytes = deletedBytes;
+-                    runOnUiThread(() -> {
+-                        Toast.makeText(this, finalDeleted + " fichier(s) supprimé(s)  •  " + FileUtils.formatSize(finalDeletedBytes) + " libérés", Toast.LENGTH_LONG).show();
+-                        showQuickCleanup();
+-                    });
+-                }, "PiiWiiFiles-clean-delete").start())
++                .setTitle("Nettoyer " + files.size() + " élément(s) ?")
++                .setMessage("Espace potentiellement récupérable : " + FileUtils.formatSize(bytes) + "\n\nChaque suppression sera vérifiée. Les fichiers qu’Android refuse seront signalés au lieu d’être comptés comme supprimés.")
++                .setPositiveButton("NETTOYER", (d, w) -> performCleanupDelete(files))
+                 .setNegativeButton("ANNULER", null)
+                 .show();
+     }
+ 
++    private void performCleanupDelete(ArrayList<File> files) {
++        final ProgressDialog pd = new ProgressDialog(this);
++        pd.setTitle("Nettoyage en cours");
++        pd.setMessage("Suppression et vérification…");
++        pd.setIndeterminate(true);
++        pd.setCancelable(false);
++        pd.show();
++
++        new Thread(() -> {
++            CleanupDeleteReport report = new CleanupDeleteReport();
++            for (File f : files) {
++                if (f == null) continue;
++                if (!f.exists()) {
++                    report.alreadyMissing++;
++                    continue;
++                }
++                long size = f.isFile() ? Math.max(0L, f.length()) : Math.max(0L, FileUtils.totalSize(f));
++                boolean ok = false;
++                try { ok = FileUtils.deleteRecursive(f) && !f.exists(); }
++                catch (Exception ignored) { }
++
++                if (!ok && f.isFile()) {
++                    try { ok = deleteCleanupFileViaMediaStore(f) && !f.exists(); }
++                    catch (Exception ignored) { }
++                }
++
++                if (ok) {
++                    report.deleted++;
++                    report.deletedBytes += size;
++                } else {
