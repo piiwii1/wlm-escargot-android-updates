@@ -1,0 +1,382 @@
+--- a/app/src/main/java/ch/piiwii/files/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/files/MainActivity.java
+@@ -720,13 +720,18 @@
+         final ArrayList<File> files;
+         final boolean selectedByDefault;
+         final long bytes;
++        final LinkedHashSet<String> selectedPaths = new LinkedHashSet<>();
+ 
+         CleanupGroup(String label, ArrayList<File> files, boolean selectedByDefault) {
+             this.label = label;
+             this.files = files == null ? new ArrayList<>() : files;
+             this.selectedByDefault = selectedByDefault;
+             long total = 0L;
+-            for (File f : this.files) if (f != null && f.exists()) total += f.isFile() ? Math.max(0L, f.length()) : Math.max(0L, FileUtils.totalSize(f));
++            for (File f : this.files) {
++                if (f == null || !f.exists()) continue;
++                total += f.isFile() ? Math.max(0L, f.length()) : Math.max(0L, FileUtils.totalSize(f));
++                if (selectedByDefault) selectedPaths.add(f.getAbsolutePath());
++            }
+             this.bytes = total;
+         }
+     }
+@@ -996,16 +1001,11 @@
+     }
+ 
+     private void showCleanupGroupsDialog(ArrayList<CleanupGroup> groups) {
+-        String[] items = new String[groups.size()];
+-        boolean[] checked = new boolean[groups.size()];
+         int totalCandidates = 0;
+         long totalBytes = 0L;
+-        for (int i = 0; i < groups.size(); i++) {
+-            CleanupGroup g = groups.get(i);
+-            checked[i] = g.selectedByDefault && !g.files.isEmpty();
++        for (CleanupGroup g : groups) {
+             totalCandidates += g.files.size();
+             totalBytes += g.bytes;
+-            items[i] = g.label + "\n" + g.files.size() + " élément(s)  •  " + FileUtils.formatSize(g.bytes);
+         }
+ 
+         if (totalCandidates == 0) {
+@@ -1017,44 +1017,187 @@
+             return;
+         }
+ 
+-        final int candidateCount = totalCandidates;
+-        final long candidateBytes = totalBytes;
+-        final AlertDialog[] dialogRef = new AlertDialog[1];
+-        AlertDialog dialog = new AlertDialog.Builder(this)
+-                .setTitle("Nettoyage rapide")
+-                .setMessage("Analyse terminée : " + candidateCount + " élément(s), jusqu’à " + FileUtils.formatSize(candidateBytes) + ".\n\nLes catégories sûres sont cochées par défaut. Archives et anciens téléchargements restent décochés.")
+-                .setMultiChoiceItems(items, checked, (d, which, isChecked) -> {
+-                    checked[which] = isChecked;
+-                    if (dialogRef[0] != null) updateCleanupActionButton(dialogRef[0], groups, checked);
+-                })
+-                .setPositiveButton("NETTOYER LA SÉLECTION", null)
+-                .setNeutralButton("VOIR LES FICHIERS", null)
+-                .setNegativeButton("FERMER", null)
+-                .create();
+-        dialogRef[0] = dialog;
+-
+-        dialog.setOnShowListener(v -> {
+-            updateCleanupActionButton(dialog, groups, checked);
+-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v2 -> {
+-                ArrayList<File> chosen = selectedCleanupFiles(groups, checked);
+-                if (chosen.isEmpty()) {
+-                    Toast.makeText(this, "Aucune catégorie sélectionnée", Toast.LENGTH_SHORT).show();
+-                    return;
+-                }
+-                dialog.dismiss();
+-                confirmCleanupDelete(chosen);
+-            });
+-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v2 -> showCleanupCategoryBrowser(groups));
++        final Dialog dialog = new Dialog(this);
++        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
++
++        LinearLayout card = new LinearLayout(this);
++        card.setOrientation(LinearLayout.VERTICAL);
++        card.setPadding(dp(18), dp(18), dp(18), dp(16));
++        card.setBackground(outlined(Color.rgb(18, 24, 33), 22, Color.rgb(53, 64, 80)));
++
++        LinearLayout header = new LinearLayout(this);
++        header.setGravity(Gravity.CENTER_VERTICAL);
++        LinearLayout headerText = new LinearLayout(this);
++        headerText.setOrientation(LinearLayout.VERTICAL);
++        TextView title = text("Nettoyage rapide", 19, Color.WHITE, true);
++        TextView analysis = text("Analyse terminée • " + totalCandidates + " élément(s) • " + FileUtils.formatSize(totalBytes), 11, MUTED, false);
++        headerText.addView(title);
++        headerText.addView(analysis);
++        header.addView(headerText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++        TextView close = text("×", 28, MUTED, false);
++        close.setGravity(Gravity.CENTER);
++        close.setOnClickListener(v -> dialog.dismiss());
++        header.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
++        card.addView(header);
++
++        TextView help = text("Coche une catégorie pour tout inclure, ou touche « Choisir » pour sélectionner précisément les fichiers à supprimer.", 12, MUTED, false);
++        help.setPadding(0, dp(10), 0, dp(10));
++        card.addView(help);
++
++        LinearLayout categoryList = new LinearLayout(this);
++        categoryList.setOrientation(LinearLayout.VERTICAL);
++        ScrollView scroll = new ScrollView(this);
++        scroll.setFillViewport(false);
++        scroll.addView(categoryList, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++        card.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
++
++        TextView selectionSummary = text("", 13, Color.WHITE, true);
++        selectionSummary.setPadding(dp(2), dp(12), dp(2), dp(8));
++        card.addView(selectionSummary);
++
++        LinearLayout actions = new LinearLayout(this);
++        actions.setGravity(Gravity.CENTER_VERTICAL);
++        Button clear = button("Tout désélectionner");
++        Button clean = button("Nettoyer");
++        clean.setBackground(rounded(ACCENT, 13));
++        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(0, dp(50), .9f);
++        clearLp.setMargins(0, 0, dp(8), 0);
++        actions.addView(clear, clearLp);
++        actions.addView(clean, new LinearLayout.LayoutParams(0, dp(50), 1.1f));
++        card.addView(actions);
++
++        final Runnable[] refresh = new Runnable[1];
++        refresh[0] = () -> {
++            categoryList.removeAllViews();
++            for (CleanupGroup group : groups) {
++                categoryList.addView(buildCleanupCategoryRow(group, refresh[0]));
++            }
++            ArrayList<File> selectedFiles = selectedCleanupFiles(groups);
++            long selectedBytes = totalSize(selectedFiles);
++            selectionSummary.setText(selectedFiles.isEmpty()
++                    ? "Aucun fichier sélectionné"
++                    : selectedFiles.size() + " élément(s) sélectionné(s) • " + FileUtils.formatSize(selectedBytes));
++            clean.setText(selectedFiles.isEmpty() ? "Nettoyer" : "Nettoyer • " + FileUtils.formatSize(selectedBytes));
++            clean.setEnabled(!selectedFiles.isEmpty());
++            clean.setAlpha(selectedFiles.isEmpty() ? .45f : 1f);
++        };
++
++        clear.setOnClickListener(v -> {
++            for (CleanupGroup group : groups) group.selectedPaths.clear();
++            refresh[0].run();
+         });
++        clean.setOnClickListener(v -> {
++            ArrayList<File> chosen = selectedCleanupFiles(groups);
++            if (chosen.isEmpty()) {
++                Toast.makeText(this, "Aucun fichier sélectionné", Toast.LENGTH_SHORT).show();
++                return;
++            }
++            dialog.dismiss();
++            confirmCleanupDelete(chosen);
++        });
++
++        dialog.setContentView(card);
++        Window w = dialog.getWindow();
++        if (w != null) {
++            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
++            w.setDimAmount(.72f);
++            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
++            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams();
++            lp.copyFrom(w.getAttributes());
++            lp.width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(18), dp(620));
++            lp.height = Math.min(getResources().getDisplayMetrics().heightPixels - dp(36), dp(720));
++            lp.gravity = Gravity.CENTER;
++            w.setAttributes(lp);
++        }
+         dialog.show();
+-    }
+-
+-    private ArrayList<File> selectedCleanupFiles(ArrayList<CleanupGroup> groups, boolean[] checked) {
++        refresh[0].run();
++    }
++
++    private View buildCleanupCategoryRow(CleanupGroup group, Runnable refresh) {
++        LinearLayout row = new LinearLayout(this);
++        row.setOrientation(LinearLayout.HORIZONTAL);
++        row.setGravity(Gravity.CENTER_VERTICAL);
++        row.setPadding(dp(8), dp(9), dp(8), dp(9));
++        row.setBackground(outlined(SURFACE_2, 14, STROKE));
++
++        CheckBox check = new CheckBox(this);
++        int selectedCount = cleanupSelectedCount(group);
++        check.setChecked(selectedCount > 0);
++        check.setEnabled(!group.files.isEmpty());
++        check.setButtonTintList(android.content.res.ColorStateList.valueOf(ACCENT));
++        row.addView(check, new LinearLayout.LayoutParams(dp(42), dp(46)));
++
++        LinearLayout textBox = new LinearLayout(this);
++        textBox.setOrientation(LinearLayout.VERTICAL);
++        textBox.setPadding(dp(4), 0, dp(8), 0);
++        TextView name = text(group.label, 14, group.files.isEmpty() ? MUTED : Color.WHITE, true);
++        TextView detail;
++        if (group.files.isEmpty()) {
++            detail = text("Aucun fichier à supprimer", 11, MUTED, false);
++        } else {
++            long selectedBytes = cleanupSelectedBytes(group);
++            String selectedInfo = selectedCount + "/" + group.files.size() + " sélectionné(s)";
++            if (selectedCount > 0) selectedInfo += " • " + FileUtils.formatSize(selectedBytes);
++            selectedInfo += " / " + FileUtils.formatSize(group.bytes) + " détectés";
++            detail = text(selectedInfo, 11, MUTED, false);
++        }
++        textBox.addView(name);
++        textBox.addView(detail);
++        row.addView(textBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
++
++        Button choose = button(group.files.isEmpty() ? "Vide" : "Choisir");
++        choose.setTextSize(11);
++        choose.setEnabled(!group.files.isEmpty());
++        choose.setAlpha(group.files.isEmpty() ? .4f : 1f);
++        row.addView(choose, new LinearLayout.LayoutParams(dp(88), dp(44)));
++
++        check.setOnClickListener(v -> {
++            boolean enable = check.isChecked();
++            setCleanupGroupAllSelected(group, enable);
++            refresh.run();
++        });
++        View.OnClickListener openPicker = v -> {
++            if (!group.files.isEmpty()) showCleanupFilePicker(group, refresh);
++        };
++        choose.setOnClickListener(openPicker);
++        textBox.setOnClickListener(openPicker);
++
++        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
++        rowLp.setMargins(0, 0, 0, dp(8));
++        row.setLayoutParams(rowLp);
++        return row;
++    }
++
++    private void setCleanupGroupAllSelected(CleanupGroup group, boolean selected) {
++        group.selectedPaths.clear();
++        if (!selected) return;
++        for (File f : group.files) {
++            if (f != null && f.exists()) group.selectedPaths.add(f.getAbsolutePath());
++        }
++    }
++
++    private int cleanupSelectedCount(CleanupGroup group) {
++        int count = 0;
++        for (File f : group.files) {
++            if (f != null && f.exists() && group.selectedPaths.contains(f.getAbsolutePath())) count++;
++        }
++        return count;
++    }
++
++    private long cleanupSelectedBytes(CleanupGroup group) {
++        long total = 0L;
++        for (File f : group.files) {
++            if (f == null || !f.exists() || !group.selectedPaths.contains(f.getAbsolutePath())) continue;
++            total += f.isFile() ? Math.max(0L, f.length()) : Math.max(0L, FileUtils.totalSize(f));
++        }
++        return total;
++    }
++
++    private ArrayList<File> selectedCleanupFiles(ArrayList<CleanupGroup> groups) {
+         LinkedHashMap<String, File> unique = new LinkedHashMap<>();
+-        for (int i = 0; i < groups.size(); i++) {
+-            if (!checked[i]) continue;
+-            for (File f : groups.get(i).files) {
+-                if (f == null || !f.exists()) continue;
++        for (CleanupGroup group : groups) {
++            for (File f : group.files) {
++                if (f == null || !f.exists() || !group.selectedPaths.contains(f.getAbsolutePath())) continue;
+                 try { unique.put(f.getCanonicalPath(), f); }
+                 catch (Exception e) { unique.put(f.getAbsolutePath(), f); }
+             }
+@@ -1062,44 +1205,64 @@
+         return new ArrayList<>(unique.values());
+     }
+ 
+-    private void updateCleanupActionButton(AlertDialog dialog, ArrayList<CleanupGroup> groups, boolean[] checked) {
+-        ArrayList<File> selectedFiles = selectedCleanupFiles(groups, checked);
+-        long bytes = totalSize(selectedFiles);
+-        Button b = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+-        if (b != null) b.setText(selectedFiles.isEmpty() ? "NETTOYER LA SÉLECTION" : "NETTOYER  •  " + FileUtils.formatSize(bytes));
+-    }
+-
+-    private void showCleanupCategoryBrowser(ArrayList<CleanupGroup> groups) {
+-        String[] labels = new String[groups.size()];
+-        for (int i = 0; i < groups.size(); i++) {
+-            CleanupGroup g = groups.get(i);
+-            labels[i] = g.label + "  •  " + g.files.size() + "  •  " + FileUtils.formatSize(g.bytes);
+-        }
+-        new AlertDialog.Builder(this)
+-                .setTitle("Fichiers détectés")
+-                .setItems(labels, (d, which) -> showCleanupCandidatePreview(groups.get(which)))
+-                .setNegativeButton("FERMER", null)
+-                .show();
+-    }
+-
+-    private void showCleanupCandidatePreview(CleanupGroup group) {
++    private void showCleanupFilePicker(CleanupGroup group, Runnable onChanged) {
+         if (group.files.isEmpty()) {
+             Toast.makeText(this, "Aucun élément dans cette catégorie", Toast.LENGTH_SHORT).show();
+             return;
+         }
+-        int count = Math.min(group.files.size(), 180);
+-        String[] names = new String[count];
+-        for (int i = 0; i < count; i++) {
++
++        String[] labels = new String[group.files.size()];
++        boolean[] checked = new boolean[group.files.size()];
++        for (int i = 0; i < group.files.size(); i++) {
+             File f = group.files.get(i);
++            checked[i] = f != null && f.exists() && group.selectedPaths.contains(f.getAbsolutePath());
++            if (f == null) {
++                labels[i] = "Fichier indisponible";
++                continue;
++            }
+             String parent = f.getParentFile() == null ? "" : f.getParentFile().getAbsolutePath();
+-            names[i] = f.getName() + "\n" + (f.isFile() ? FileUtils.formatSize(f.length()) : "Dossier vide") + (parent.isEmpty() ? "" : "  •  " + parent);
+-        }
+-        new AlertDialog.Builder(this)
+-                .setTitle(group.label + "  •  " + group.files.size())
+-                .setItems(names, null)
+-                .setMessage(group.files.size() > count ? "Affichage des " + count + " premiers éléments." : null)
+-                .setPositiveButton("FERMER", null)
+-                .show();
++            String size = f.isFile() ? FileUtils.formatSize(Math.max(0L, f.length())) : "Dossier vide";
++            labels[i] = f.getName() + "\n" + size + (parent.isEmpty() ? "" : "  •  " + parent);
++        }
++
++        AlertDialog picker = new AlertDialog.Builder(this)
++                .setTitle(group.label + " • choisir les fichiers")
++                .setMultiChoiceItems(labels, checked, (d, which, isChecked) -> {
++                    File f = group.files.get(which);
++                    if (f == null) return;
++                    if (isChecked) group.selectedPaths.add(f.getAbsolutePath());
++                    else group.selectedPaths.remove(f.getAbsolutePath());
++                })
++                .setPositiveButton("TERMINÉ", null)
++                .setNeutralButton("TOUT SÉLECTIONNER", null)
++                .setNegativeButton("TOUT DÉSÉLECTIONNER", null)
++                .create();
++
++        picker.setOnShowListener(v -> {
++            picker.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v2 -> picker.dismiss());
++            picker.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v2 -> {
++                ListView list = picker.getListView();
++                for (int i = 0; i < group.files.size(); i++) {
++                    File f = group.files.get(i);
++                    if (f == null || !f.exists()) continue;
++                    group.selectedPaths.add(f.getAbsolutePath());
++                    checked[i] = true;
++                    list.setItemChecked(i, true);
++                }
++                if (onChanged != null) onChanged.run();
++            });
++            picker.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v2 -> {
++                group.selectedPaths.clear();
++                ListView list = picker.getListView();
++                for (int i = 0; i < group.files.size(); i++) {
++                    checked[i] = false;
++                    list.setItemChecked(i, false);
++                }
++                if (onChanged != null) onChanged.run();
++            });
++        });
++        picker.setOnDismissListener(d -> { if (onChanged != null) onChanged.run(); });
++        picker.show();
+     }
+ 
+     private void confirmCleanupDelete(ArrayList<File> files) {
+@@ -2632,7 +2795,7 @@
+ 
+     private void diagnostics() {
+         StringBuilder s = new StringBuilder();
+-        s.append("PiiWii Files 1.3.24 (versionCode 28)\nPackage : ").append(getPackageName())
++        s.append("PiiWii Files 1.3.25 (versionCode 29)\nPackage : ").append(getPackageName())
+                 .append("\nAndroid : ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")")
+                 .append("\nStockage principal : ").append(Environment.getExternalStorageDirectory().getAbsolutePath())
+                 .append("\nPermissions écriture : ").append(Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)==PackageManager.PERMISSION_GRANTED ? "OK" : "NON");
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.files'
+         minSdk 26
+         targetSdk 29
+-        versionCode 28
+-        versionName '1.3.24'
++        versionCode 29
++        versionName '1.3.25'
+     }
+ 
+     buildTypes {
