@@ -51,7 +51,8 @@ jobs:
           patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.22/compact-share.patch"
           patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.22/version-label.patch"
           patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.23/changes.patch"
-          patch -p1 < "$GITHUB_WORKSPACE/piiwii-files-1.3.24/changes.patch"
+          cat "$GITHUB_WORKSPACE"/piiwii-files-1.3.24/patch/p{00..04} > /tmp/piiwii-files-1.3.24.patch
+          patch -p1 < /tmp/piiwii-files-1.3.24.patch
           grep -E 'applicationId|versionCode|versionName|targetSdk|minSdk' app/build.gradle
           grep -q "versionCode 28" app/build.gradle
           grep -q "versionName '1.3.24'" app/build.gradle
