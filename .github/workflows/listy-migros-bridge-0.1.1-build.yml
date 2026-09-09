@@ -1,0 +1,58 @@
+name: ListY Migros Bridge 0.1.1 Build
+
+on:
+  push:
+    branches: [ listy-migros-bridge-0.1.0-build ]
+    paths:
+      - 'listy-migros-bridge-0.1.1-src/**'
+      - '.github/workflows/listy-migros-bridge-0.1.1-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: listy-migros-bridge-0.1.1-src
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        run: |
+          set -e
+          APK="listy-migros-bridge-0.1.1-src/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          mkdir -p /tmp/delivery
+          cp "$APK" /tmp/delivery/ListY-Migros-Bridge-0.1.1.apk
+          sha256sum /tmp/delivery/ListY-Migros-Bridge-0.1.1.apk | tee /tmp/delivery/ListY-Migros-Bridge-0.1.1-SHA256.txt
+          ls -lh /tmp/delivery/ListY-Migros-Bridge-0.1.1.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ListY-Migros-Bridge-0.1.1-APK
+          path: /tmp/delivery/*
+          retention-days: 7
+          if-no-files-found: error
