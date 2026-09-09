@@ -59,6 +59,12 @@ public final class BridgeConfig {
         SecureStore.put(c, KEY_PAIR_CODE, "");
     }
 
+    public static void clearAll(Context c) {
+        SecureStore.put(c, KEY_ENDPOINT, "");
+        SecureStore.put(c, KEY_TOKEN, "");
+        clearPending(c);
+    }
+
     private static String siblingEndpoint(Context c, String name) {
         String e = endpoint(c);
         return e.endsWith("/bridge-sync") ? e.substring(0, e.length() - "/bridge-sync".length()) + "/" + name : e;
