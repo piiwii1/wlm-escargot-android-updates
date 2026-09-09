@@ -1,0 +1,55 @@
+name: Build ListY Android 1.0.0
+
+on:
+  push:
+    branches:
+      - listy-mobile-1.0.0-build
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release unsigned
+        working-directory: incoming/listy-mobile-1.0.0
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Align and inspect APK
+        working-directory: incoming/listy-mobile-1.0.0
+        run: |
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/zipalign" -f -v 4 app/build/outputs/apk/release/app-release-unsigned.apk ListY-Android-1.0.0-unsigned-aligned.apk
+          "$BT/zipalign" -c -v 4 ListY-Android-1.0.0-unsigned-aligned.apk
+          "$BT/aapt" dump badging ListY-Android-1.0.0-unsigned-aligned.apk > ListY-Android-1.0.0-badging.txt
+          sha256sum ListY-Android-1.0.0-unsigned-aligned.apk > ListY-Android-1.0.0-unsigned.sha256
+          unzip -t ListY-Android-1.0.0-unsigned-aligned.apk
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: listy-android-1.0.0-unsigned
+          path: |
+            incoming/listy-mobile-1.0.0/ListY-Android-1.0.0-unsigned-aligned.apk
+            incoming/listy-mobile-1.0.0/ListY-Android-1.0.0-badging.txt
+            incoming/listy-mobile-1.0.0/ListY-Android-1.0.0-unsigned.sha256
+          if-no-files-found: error
