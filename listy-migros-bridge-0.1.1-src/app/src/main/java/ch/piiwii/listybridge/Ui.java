@@ -17,7 +17,7 @@ public final class Ui {
         GradientDrawable g=new GradientDrawable(); g.setColor(color); g.setCornerRadius(dp(c,(int)radiusDp)); return g;
     }
     public static Button button(Context c,String text,boolean primary){
-        Button b=new Button(c); b.setText(text); b.setTextAllCaps(false); b.setTextSize(16); b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        Button b=new Button(c); b.setText(text); b.setTextSize(16); b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         b.setTextColor(primary?Color.WHITE:NAVY); b.setBackground(rounded(primary?NAVY:Color.WHITE,14,c));
         b.setPadding(dp(c,16),dp(c,12),dp(c,16),dp(c,12)); b.setElevation(dp(c,2)); return b;
     }
