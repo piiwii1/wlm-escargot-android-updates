@@ -18,8 +18,8 @@ public final class BridgeHttp {
     public static JSONObject clientMeta() throws Exception {
         JSONObject c=new JSONObject();
         c.put("app","ListY Migros Bridge");
-        c.put("app_version","0.1.4");
-        c.put("version_code",5);
+        c.put("app_version","0.1.5");
+        c.put("version_code",6);
         c.put("device",Build.MANUFACTURER+" "+Build.MODEL);
         c.put("android",Build.VERSION.RELEASE);
         return c;
