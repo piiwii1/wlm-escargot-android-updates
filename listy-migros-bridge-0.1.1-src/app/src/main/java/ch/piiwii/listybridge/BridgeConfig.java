@@ -27,8 +27,10 @@ public final class BridgeConfig {
     public static String endpoint(Context c) { return SecureStore.get(c, KEY_ENDPOINT); }
     public static String token(Context c) { return SecureStore.get(c, KEY_TOKEN); }
     public static boolean paired(Context c) { return !endpoint(c).isEmpty() && !token(c).isEmpty(); }
-    public static String pingEndpoint(Context c) {
+    private static String siblingEndpoint(Context c, String name) {
         String e = endpoint(c);
-        return e.endsWith("/bridge-sync") ? e.substring(0, e.length() - "/bridge-sync".length()) + "/bridge-ping" : e;
+        return e.endsWith("/bridge-sync") ? e.substring(0, e.length() - "/bridge-sync".length()) + "/" + name : e;
     }
+    public static String pingEndpoint(Context c) { return siblingEndpoint(c, "bridge-ping"); }
+    public static String reportEndpoint(Context c) { return siblingEndpoint(c, "bridge-report"); }
 }
