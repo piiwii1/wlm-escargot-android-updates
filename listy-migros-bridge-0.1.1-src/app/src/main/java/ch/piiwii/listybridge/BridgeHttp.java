@@ -18,11 +18,25 @@ public final class BridgeHttp {
     public static JSONObject clientMeta() throws Exception {
         JSONObject c=new JSONObject();
         c.put("app","ListY Migros Bridge");
-        c.put("app_version","0.1.2");
-        c.put("version_code",3);
+        c.put("app_version","0.1.3");
+        c.put("version_code",4);
         c.put("device",Build.MANUFACTURER+" "+Build.MODEL);
         c.put("android",Build.VERSION.RELEASE);
         return c;
+    }
+
+    public static void redeemPair(Context c) throws Exception {
+        if(!BridgeConfig.hasPending(c)) return;
+        JSONObject b=new JSONObject();
+        b.put("pair_id",BridgeConfig.pairId(c));
+        b.put("code",BridgeConfig.pairCode(c));
+        b.put("client",clientMeta());
+        JSONObject r=postPublic(BridgeConfig.pairEndpoint(c),b);
+        String token=r.optString("token","");
+        String endpoint=r.optString("sync_endpoint","");
+        if(!BridgeConfig.saveFinal(c,endpoint,token)) throw new Exception("ListY n’a pas renvoyé une liaison utilisable.");
+        SecureStore.putPlain(c,"pair_status","ok");
+        SecureStore.putPlain(c,"last_diag","Code temporaire accepté. Liaison ListY créée.");
     }
 
     public static void ping(Context c) throws Exception {
@@ -62,6 +76,15 @@ public final class BridgeHttp {
 
     private static JSONObject post(String endpoint,String token,JSONObject body) throws Exception {
         if(endpoint==null||!endpoint.startsWith("https://")||token==null||!token.startsWith("LYM1.")) throw new Exception("Liaison ListY invalide.");
+        return request(endpoint,body,token);
+    }
+
+    private static JSONObject postPublic(String endpoint,JSONObject body) throws Exception {
+        if(endpoint==null||!endpoint.startsWith("https://")) throw new Exception("Adresse de liaison ListY invalide.");
+        return request(endpoint,body,null);
+    }
+
+    private static JSONObject request(String endpoint,JSONObject body,String token) throws Exception {
         HttpURLConnection h=(HttpURLConnection)new URL(endpoint).openConnection();
         h.setConnectTimeout(15000);
         h.setReadTimeout(20000);
@@ -69,7 +92,7 @@ public final class BridgeHttp {
         h.setDoOutput(true);
         h.setRequestProperty("Accept","application/json");
         h.setRequestProperty("Content-Type","application/json; charset=utf-8");
-        h.setRequestProperty("X-ListY-Bridge-Key",token);
+        if(token!=null&&!token.isEmpty()) h.setRequestProperty("X-ListY-Bridge-Key",token);
         byte[] raw=body.toString().getBytes(StandardCharsets.UTF_8);
         h.setFixedLengthStreamingMode(raw.length);
         try(OutputStream os=h.getOutputStream()){os.write(raw);}
@@ -80,6 +103,8 @@ public final class BridgeHttp {
         if(code<200||code>=300){
             String msg="";
             try{msg=new JSONObject(text).optString("message","");}catch(Exception ignored){}
+            if(code==410) throw new Exception(msg.isEmpty()?"Ce code de liaison a expiré ou a déjà été utilisé. Retourne dans ListY et crée un nouveau code.":msg);
+            if(code==401) throw new Exception(msg.isEmpty()?"Le code de liaison ne correspond plus. Retourne dans ListY et ouvre le dernier code affiché.":msg);
             throw new Exception("ListY a refusé la liaison (HTTP "+code+")"+(msg.isEmpty()?"":" : "+msg));
         }
         return text.isEmpty()?new JSONObject():new JSONObject(text);
