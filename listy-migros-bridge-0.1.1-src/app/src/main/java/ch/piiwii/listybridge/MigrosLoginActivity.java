@@ -35,7 +35,7 @@ public class MigrosLoginActivity extends Activity {
         head.setPadding(Ui.dp(this,14),Ui.dp(this,12),Ui.dp(this,14),Ui.dp(this,10));
         head.setBackgroundColor(Ui.NAVY);
         head.addView(Ui.text(this,"Connexion Migros",20,Color.WHITE,true));
-        status=Ui.text(this,"Connecte-toi normalement chez Migros, puis touche le bouton en bas.",12,Color.WHITE,false);
+        status=Ui.text(this,"Connecte-toi chez Migros si nécessaire. Ensuite touche simplement le bouton en bas.",12,Color.WHITE,false);
         head.addView(status);
         root.addView(head);
 
@@ -64,7 +64,7 @@ public class MigrosLoginActivity extends Activity {
         });
         root.addView(web,new LinearLayout.LayoutParams(-1,0,1));
 
-        android.widget.Button done=Ui.button(this,"J’ai terminé → lire mes coupons",true);
+        android.widget.Button done=Ui.button(this,"Je suis connecté → synchroniser mes coupons",true);
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);
         bp.setMargins(Ui.dp(this,12),Ui.dp(this,8),Ui.dp(this,12),Ui.dp(this,12));
         done.setLayoutParams(bp);
