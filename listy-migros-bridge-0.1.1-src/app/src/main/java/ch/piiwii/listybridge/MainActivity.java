@@ -32,14 +32,14 @@ public class MainActivity extends Activity {
         box.setPadding(Ui.dp(this,20),Ui.dp(this,28),Ui.dp(this,20),Ui.dp(this,32));
 
         box.addView(Ui.text(this,"ListY",30,Ui.NAVY,true));
-        box.addView(Ui.text(this,"Connexion Migros · 0.1.4",17,Color.DKGRAY,true));
+        box.addView(Ui.text(this,"Connexion Migros · 0.1.5",17,Color.DKGRAY,true));
         addSpace(box,18);
 
         status=cardText("",17,Ui.NAVY,true);
         box.addView(status);
 
         addSpace(box,16);
-        TextView help=cardText("Plus de code à copier. Ouvre ListY sur ce téléphone, touche « Migros / Cumulus » puis « Connecter Migros maintenant ». Cette application fait la liaison toute seule.",14,Color.DKGRAY,false);
+        TextView help=cardText("Plus de code à copier. Ouvre ListY sur ce téléphone, touche « Migros / Cumulus » puis « Connecter Migros maintenant ». Une fois chez Migros, la synchronisation part automatiquement après la connexion.",14,Color.DKGRAY,false);
         box.addView(help);
 
         addSpace(box,16);
