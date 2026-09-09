@@ -18,8 +18,8 @@ public final class BridgeHttp {
     public static JSONObject clientMeta() throws Exception {
         JSONObject c=new JSONObject();
         c.put("app","ListY Migros Bridge");
-        c.put("app_version","0.1.3");
-        c.put("version_code",4);
+        c.put("app_version","0.1.4");
+        c.put("version_code",5);
         c.put("device",Build.MANUFACTURER+" "+Build.MODEL);
         c.put("android",Build.VERSION.RELEASE);
         return c;
@@ -36,7 +36,7 @@ public final class BridgeHttp {
         String endpoint=r.optString("sync_endpoint","");
         if(!BridgeConfig.saveFinal(c,endpoint,token)) throw new Exception("ListY n’a pas renvoyé une liaison utilisable.");
         SecureStore.putPlain(c,"pair_status","ok");
-        SecureStore.putPlain(c,"last_diag","Code temporaire accepté. Liaison ListY créée.");
+        SecureStore.putPlain(c,"last_diag","Connexion ListY créée automatiquement.");
     }
 
     public static void ping(Context c) throws Exception {
@@ -103,8 +103,8 @@ public final class BridgeHttp {
         if(code<200||code>=300){
             String msg="";
             try{msg=new JSONObject(text).optString("message","");}catch(Exception ignored){}
-            if(code==410) throw new Exception(msg.isEmpty()?"Ce code de liaison a expiré ou a déjà été utilisé. Retourne dans ListY et crée un nouveau code.":msg);
-            if(code==401) throw new Exception(msg.isEmpty()?"Le code de liaison ne correspond plus. Retourne dans ListY et ouvre le dernier code affiché.":msg);
+            if(code==410) throw new Exception(msg.isEmpty()?"Cette liaison a expiré. Retourne dans ListY et touche de nouveau Connecter Migros.":msg);
+            if(code==401) throw new Exception(msg.isEmpty()?"La connexion ListY n’est plus valable. Retourne dans ListY et touche Connecter Migros.":msg);
             throw new Exception("ListY a refusé la liaison (HTTP "+code+")"+(msg.isEmpty()?"":" : "+msg));
         }
         return text.isEmpty()?new JSONObject():new JSONObject(text);
