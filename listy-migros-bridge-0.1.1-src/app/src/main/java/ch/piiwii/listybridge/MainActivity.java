@@ -33,7 +33,7 @@ public class MainActivity extends Activity {
         box.setPadding(Ui.dp(this,20),Ui.dp(this,24),Ui.dp(this,20),Ui.dp(this,32));
 
         box.addView(Ui.text(this,"ListY",30,Ui.NAVY,true));
-        box.addView(Ui.text(this,"Migros / Cumulus Bridge · 0.1.2",17,Color.DKGRAY,true));
+        box.addView(Ui.text(this,"Migros / Cumulus Bridge · 0.1.3",17,Color.DKGRAY,true));
         addSpace(box,18);
 
         status=cardText("",16,Ui.NAVY,true);
@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
 
         addSpace(box,16);
         box.addView(Ui.text(this,"1 · Relier à ListY",19,Ui.NAVY,true));
-        box.addView(Ui.text(this,"Dans ListY → Migros / Cumulus, touche « Relier mon téléphone », puis ouvre la liaison avec cette application.",14,Color.DKGRAY,false));
+        box.addView(Ui.text(this,"Dans ListY → Migros / Cumulus, touche une fois « Relier mon téléphone », puis ouvre la liaison avec cette application. Le nouveau code temporaire reste valable 10 minutes et n’est plus invalidé si tu recliques par erreur.",14,Color.DKGRAY,false));
         addSpace(box,8);
 
         pairing=new EditText(this);
@@ -54,19 +54,21 @@ public class MainActivity extends Activity {
         pairing.setBackground(Ui.rounded(Color.WHITE,12,this));
         box.addView(pairing);
 
-        android.widget.Button save=Ui.button(this,"Enregistrer la liaison",false);
+        android.widget.Button save=Ui.button(this,"Enregistrer / valider la liaison",false);
         save.setOnClickListener(v->{
             if(BridgeConfig.parseAndSave(this,pairing.getText().toString())){
                 SecureStore.putPlain(this,"pair_status","");
-                toast("Liaison enregistrée");
-                ping();
-                refresh();
-            } else toast("Liaison invalide. Copie la liaison complète depuis ListY.");
+                finishPairing();
+            } else toast("Liaison illisible. Copie le lien complet affiché par ListY.");
         });
         box.addView(spaceParam(save,10));
 
         android.widget.Button test=Ui.button(this,"Tester la liaison ListY",false);
-        test.setOnClickListener(v->{if(!BridgeConfig.paired(this)){toast("Relie d’abord ListY Bridge.");return;}ping();});
+        test.setOnClickListener(v->{
+            if(BridgeConfig.hasPending(this)){finishPairing();return;}
+            if(!BridgeConfig.paired(this)){toast("Relie d’abord ListY Bridge.");return;}
+            ping();
+        });
         box.addView(spaceParam(test,8));
 
         addSpace(box,20);
@@ -76,6 +78,7 @@ public class MainActivity extends Activity {
 
         android.widget.Button login=Ui.button(this,"Ouvrir Migros et synchroniser",true);
         login.setOnClickListener(v->{
+            if(BridgeConfig.hasPending(this)){toast("La liaison ListY est encore en validation. Attends le message de confirmation.");finishPairing();return;}
             if(!BridgeConfig.paired(this)){toast("Relie d’abord ListY Bridge.");return;}
             new Thread(()->BridgeHttp.report(this,"migros_start","info","Ouverture de la connexion Migros sur le téléphone.",0)).start();
             startActivity(new Intent(this,MigrosLoginActivity.class));
@@ -89,7 +92,7 @@ public class MainActivity extends Activity {
         box.addView(spaceParam(diag,12));
 
         addSpace(box,18);
-        box.addView(Ui.text(this,"État : expérimental. Le pont n’est considéré prêt qu’après une première synchronisation Cumulus réussie. Les endpoints personnels Migros ne sont pas une API publique officielle et peuvent changer.",12,Color.GRAY,false));
+        box.addView(Ui.text(this,"État : expérimental. Le pont n’est considéré prêt qu’après une première synchronisation Cumulus réussie.",12,Color.GRAY,false));
 
         scroll.addView(box);
         setContentView(scroll);
@@ -121,9 +124,29 @@ public class MainActivity extends Activity {
             pairing.setText(s);
             if(BridgeConfig.parseAndSave(this,s)){
                 SecureStore.putPlain(this,"pair_status","");
-                toast("ListY Bridge relié");
-                ping();
-            }
+                finishPairing();
+            } else toast("La liaison reçue est illisible. Retourne dans ListY et crée un nouveau code.");
+        }
+    }
+
+    private void finishPairing(){
+        if(BridgeConfig.hasPending(this)){
+            status.setText("… Validation du code temporaire ListY");
+            new Thread(()->{
+                try{
+                    BridgeHttp.redeemPair(this);
+                    BridgeHttp.ping(this);
+                    BridgeHttp.report(this,"listy_pair","ok","Téléphone relié à ListY. Il reste à synchroniser Migros/Cumulus.",0);
+                    runOnUiThread(()->{toast("Liaison ListY créée et vérifiée");refresh();});
+                }catch(Exception e){
+                    SecureStore.putPlain(this,"last_diag",e.getMessage());
+                    runOnUiThread(()->{toast(e.getMessage());refresh();});
+                }
+            }).start();
+        } else if(BridgeConfig.paired(this)) {
+            ping();
+        } else {
+            toast("Aucune liaison ListY exploitable.");
         }
     }
 
@@ -142,13 +165,15 @@ public class MainActivity extends Activity {
     }
 
     private void refresh(){
+        boolean pending=BridgeConfig.hasPending(this);
         boolean paired=BridgeConfig.paired(this);
         String ps=SecureStore.getPlain(this,"pair_status");
         String t=SecureStore.getPlain(this,"last_sync");
         String cnt=SecureStore.getPlain(this,"last_count");
         String d=SecureStore.getPlain(this,"last_diag");
 
-        if(!paired) status.setText("○ Étape 1/3 · ListY n’est pas encore relié");
+        if(pending) status.setText("◐ Étape 1/3 · Code temporaire reçu, validation en cours");
+        else if(!paired) status.setText("○ Étape 1/3 · ListY n’est pas encore relié");
         else if(!"ok".equals(ps)) status.setText("○ Étape 1/3 · Liaison enregistrée, pas encore vérifiée");
         else if(t.isEmpty()) status.setText("◐ Étape 2/3 · ListY relié, Cumulus pas encore synchronisé");
         else status.setText("✓ Étape 3/3 · ListY + Cumulus synchronisés");
@@ -159,9 +184,7 @@ public class MainActivity extends Activity {
             }catch(Exception e){last.setText("");}
         } else last.setText("Aucune synchronisation Cumulus réussie pour le moment.");
 
-        diag.setText(d.isEmpty()
-            ?"Diagnostic : aucun test Migros terminé pour le moment."
-            :"Dernier diagnostic : "+d);
+        diag.setText(d.isEmpty()?"Diagnostic : aucun test terminé pour le moment.":"Dernier diagnostic : "+d);
     }
 
     private void toast(String s){Toast.makeText(this,s==null?"":s,Toast.LENGTH_LONG).show();}
