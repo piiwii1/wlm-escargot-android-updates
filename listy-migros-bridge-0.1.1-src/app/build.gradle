@@ -1,0 +1,22 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ch.piiwii.listybridge'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ch.piiwii.listybridge'
+        minSdk 26
+        targetSdk 35
+        versionCode 2
+        versionName '0.1.1'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
