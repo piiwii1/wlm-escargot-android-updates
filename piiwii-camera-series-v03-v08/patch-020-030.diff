@@ -1,0 +1,253 @@
+diff -ruN --exclude README.md PiiWii-Camera-0.2.0-public/app/build.gradle PiiWii-Camera-0.3.0-public/app/build.gradle
+--- PiiWii-Camera-0.2.0-public/app/build.gradle	2026-09-10 18:54:21.056880374 +0000
++++ PiiWii-Camera-0.3.0-public/app/build.gradle	2026-09-10 19:17:02.721058782 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 2
+-        versionName '0.2.0'
++        versionCode 3
++        versionName '0.3.0'
+     }
+ 
+     buildTypes {
+diff -ruN --exclude README.md PiiWii-Camera-0.2.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-0.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-0.2.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 18:56:03.211648283 +0000
++++ PiiWii-Camera-0.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:17:02.722428843 +0000
+@@ -4,6 +4,7 @@
+ import android.content.ContentResolver;
+ import android.content.ContentValues;
+ import android.content.Context;
++import android.content.SharedPreferences;
+ import android.content.pm.PackageManager;
+ import android.graphics.Bitmap;
+ import android.graphics.BitmapFactory;
+@@ -22,6 +23,8 @@
+ import android.os.Environment;
+ import android.provider.MediaStore;
+ import android.view.GestureDetector;
++import android.view.HapticFeedbackConstants;
++import android.view.KeyEvent;
+ import android.view.MotionEvent;
+ import android.view.ScaleGestureDetector;
+ import android.view.View;
+@@ -85,6 +88,7 @@
+     private static final int REQ_AUDIO = 101;
+     private static final int REQ_LOCATION = 102;
+     private static final int REQ_STORAGE = 103;
++    private static final String PREFS = "piiwii_camera_settings";
+ 
+     private static final int QUALITY_OEM_AUTO = 0;
+     private static final int QUALITY_OEM_HDR = 1;
+@@ -95,6 +99,8 @@
+     private PreviewView previewView;
+     private GridOverlayView gridOverlay;
+     private View focusRing;
++    private View shutterFlash;
++    private SharedPreferences prefs;
+     private TextView zoomLabel;
+     private TextView qualityLabel;
+     private TextView statusLabel;
+@@ -158,6 +164,8 @@
+         previewView = findViewById(R.id.previewView);
+         gridOverlay = findViewById(R.id.gridOverlay);
+         focusRing = findViewById(R.id.focusRing);
++        shutterFlash = findViewById(R.id.shutterFlash);
++        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+         zoomLabel = findViewById(R.id.zoomLabel);
+         qualityLabel = findViewById(R.id.qualityLabel);
+         statusLabel = findViewById(R.id.statusLabel);
+@@ -184,6 +192,7 @@
+         sigLogo = findViewById(R.id.sigLogo);
+ 
+         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
++        loadPreferences();
+         setupInteractions();
+         updateFlashButton();
+         updateTimerButton();
+@@ -214,6 +223,7 @@
+             if (!photoMode) {
+                 stopRecordingIfNeeded();
+                 photoMode = true;
++                savePreferences();
+                 updateModeButtons();
+                 bindUseCases();
+             }
+@@ -221,6 +231,7 @@
+         videoModeButton.setOnClickListener(v -> {
+             if (photoMode) {
+                 photoMode = false;
++                savePreferences();
+                 updateModeButtons();
+                 bindUseCases();
+             }
+@@ -233,14 +244,17 @@
+ 
+         sigNone.setOnClickListener(v -> {
+             signDate = signTime = signLocation = signLogo = false;
++            savePreferences();
+             updateSignatureButtons();
+         });
+         sigDate.setOnClickListener(v -> {
+             signDate = !signDate;
++            savePreferences();
+             updateSignatureButtons();
+         });
+         sigTime.setOnClickListener(v -> {
+             signTime = !signTime;
++            savePreferences();
+             updateSignatureButtons();
+         });
+         sigLocation.setOnClickListener(v -> {
+@@ -249,10 +263,12 @@
+             if (enabling && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQ_LOCATION);
+             }
++            savePreferences();
+             updateSignatureButtons();
+         });
+         sigLogo.setOnClickListener(v -> {
+             signLogo = !signLogo;
++            savePreferences();
+             updateSignatureButtons();
+         });
+ 
+@@ -578,6 +594,7 @@
+ 
+         if (imageCapture != null) imageCapture.setFlashMode(flashMode);
+         applyVideoTorch();
++        savePreferences();
+         updateFlashButton();
+     }
+ 
+@@ -589,6 +606,7 @@
+ 
+     private void cycleTimer() {
+         timerSeconds = timerSeconds == 0 ? 3 : timerSeconds == 3 ? 10 : 0;
++        savePreferences();
+         updateTimerButton();
+     }
+ 
+@@ -600,6 +618,7 @@
+     private void toggleGrid() {
+         gridEnabled = !gridEnabled;
+         gridOverlay.setVisibility(gridEnabled ? View.VISIBLE : View.GONE);
++        savePreferences();
+         updateGridButton();
+     }
+ 
+@@ -610,6 +629,7 @@
+ 
+     private void cycleQualityMode() {
+         qualityMode = (qualityMode + 1) % 4;
++        savePreferences();
+         updateQualityButton();
+         if (photoMode) bindUseCases();
+     }
+@@ -688,6 +708,8 @@
+         }
+ 
+         captureButton.setEnabled(false);
++        prepareOutputRotation();
++        captureFeedback();
+         statusLabel.setText("Capture haute qualité…");
+         Date captureDate = new Date();
+         String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.getDefault()).format(captureDate);
+@@ -956,6 +978,8 @@
+             return;
+         }
+ 
++        prepareOutputRotation();
++        captureFeedback();
+         String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+         ContentValues values = new ContentValues();
+         values.put(MediaStore.Video.Media.DISPLAY_NAME, "PiiWii_" + stamp);
+@@ -1029,6 +1053,60 @@
+         qualityButton.setVisibility(photoMode ? View.VISIBLE : View.INVISIBLE);
+     }
+ 
++    private void loadPreferences() {
++        flashMode = prefs.getInt("flash", ImageCapture.FLASH_MODE_AUTO);
++        timerSeconds = prefs.getInt("timer", 0);
++        gridEnabled = prefs.getBoolean("grid", false);
++        qualityMode = Math.max(QUALITY_OEM_AUTO, Math.min(QUALITY_MAX_MP, prefs.getInt("quality", QUALITY_OEM_AUTO)));
++        photoMode = prefs.getBoolean("photoMode", true);
++        signDate = prefs.getBoolean("signDate", false);
++        signTime = prefs.getBoolean("signTime", false);
++        signLocation = prefs.getBoolean("signLocation", false);
++        signLogo = prefs.getBoolean("signLogo", false);
++        gridOverlay.setVisibility(gridEnabled ? View.VISIBLE : View.GONE);
++    }
++
++    private void savePreferences() {
++        if (prefs == null) return;
++        prefs.edit()
++                .putInt("flash", flashMode)
++                .putInt("timer", timerSeconds)
++                .putBoolean("grid", gridEnabled)
++                .putInt("quality", qualityMode)
++                .putBoolean("photoMode", photoMode)
++                .putBoolean("signDate", signDate)
++                .putBoolean("signTime", signTime)
++                .putBoolean("signLocation", signLocation)
++                .putBoolean("signLogo", signLogo)
++                .apply();
++    }
++
++    private void prepareOutputRotation() {
++        if (previewView.getDisplay() == null) return;
++        int rotation = previewView.getDisplay().getRotation();
++        if (imageCapture != null) imageCapture.setTargetRotation(rotation);
++        if (videoCapture != null) videoCapture.setTargetRotation(rotation);
++    }
++
++    private void captureFeedback() {
++        try { captureButton.performHapticFeedback(HapticFeedbackConstants.CONFIRM); } catch (Exception ignored) { }
++        if (shutterFlash == null) return;
++        shutterFlash.setVisibility(View.VISIBLE);
++        shutterFlash.setAlpha(0.22f);
++        shutterFlash.animate().alpha(0f).setDuration(110).withEndAction(() -> shutterFlash.setVisibility(View.GONE)).start();
++    }
++
++    @Override
++    public boolean onKeyDown(int keyCode, KeyEvent event) {
++        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_CAMERA) {
++            if (event.getRepeatCount() == 0 && captureButton != null && captureButton.isEnabled()) {
++                if (photoMode) triggerPhotoWithTimer(); else toggleVideoRecording();
++            }
++            return true;
++        }
++        return super.onKeyDown(keyCode, event);
++    }
++
+     private void showError(String message) {
+         runOnUiThread(() -> {
+             statusLabel.setText("Erreur caméra");
+diff -ruN --exclude README.md PiiWii-Camera-0.2.0-public/app/src/main/res/layout/activity_main.xml PiiWii-Camera-0.3.0-public/app/src/main/res/layout/activity_main.xml
+--- PiiWii-Camera-0.2.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 18:56:48.458807618 +0000
++++ PiiWii-Camera-0.3.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:17:02.721572969 +0000
+@@ -11,6 +11,14 @@
+         android:layout_height="match_parent"
+         android:keepScreenOn="true" />
+ 
++    <View
++        android:id="@+id/shutterFlash"
++        android:layout_width="match_parent"
++        android:layout_height="match_parent"
++        android:background="#FFFFFF"
++        android:alpha="0"
++        android:visibility="gone" />
++
+     <ch.piiwii.camera.GridOverlayView
+         android:id="@+id/gridOverlay"
+         android:layout_width="match_parent"
+@@ -364,7 +372,7 @@
+                 android:layout_gravity="center_vertical|end"
+                 android:layout_marginEnd="16dp"
+                 android:gravity="end"
+-                android:text="PiiWii Camera\nv0.2.0"
++                android:text="PiiWii Camera\nv0.3.0"
+                 android:textColor="#AFFFFFFF"
+                 android:textSize="10sp" />
+         </FrameLayout>
