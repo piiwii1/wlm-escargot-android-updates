@@ -1,9 +1,9 @@
-name: Build ListY Android 1.0.0
+name: Build ListY Android 1.1.0
 
 on:
   push:
     branches:
-      - listy-mobile-1.0.0-build
+      - listy-mobile-1.1.0-build
   workflow_dispatch:
 
 jobs:
@@ -38,18 +38,18 @@ jobs:
         working-directory: incoming/listy-mobile-1.0.0
         run: |
           BT="$ANDROID_HOME/build-tools/35.0.0"
-          "$BT/zipalign" -f -v 4 app/build/outputs/apk/release/app-release-unsigned.apk ListY-Android-1.0.0-unsigned-aligned.apk
-          "$BT/zipalign" -c -v 4 ListY-Android-1.0.0-unsigned-aligned.apk
-          "$BT/aapt" dump badging ListY-Android-1.0.0-unsigned-aligned.apk > ListY-Android-1.0.0-badging.txt
-          sha256sum ListY-Android-1.0.0-unsigned-aligned.apk > ListY-Android-1.0.0-unsigned.sha256
-          unzip -t ListY-Android-1.0.0-unsigned-aligned.apk
+          "$BT/zipalign" -f -v 4 app/build/outputs/apk/release/app-release-unsigned.apk ListY-Android-1.1.0-unsigned-aligned.apk
+          "$BT/zipalign" -c -v 4 ListY-Android-1.1.0-unsigned-aligned.apk
+          "$BT/aapt" dump badging ListY-Android-1.1.0-unsigned-aligned.apk > ListY-Android-1.1.0-badging.txt
+          sha256sum ListY-Android-1.1.0-unsigned-aligned.apk > ListY-Android-1.1.0-unsigned.sha256
+          unzip -t ListY-Android-1.1.0-unsigned-aligned.apk
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: listy-android-1.0.0-unsigned
+          name: listy-android-1.1.0-unsigned
           path: |
-            incoming/listy-mobile-1.0.0/ListY-Android-1.0.0-unsigned-aligned.apk
-            incoming/listy-mobile-1.0.0/ListY-Android-1.0.0-badging.txt
-            incoming/listy-mobile-1.0.0/ListY-Android-1.0.0-unsigned.sha256
+            incoming/listy-mobile-1.0.0/ListY-Android-1.1.0-unsigned-aligned.apk
+            incoming/listy-mobile-1.0.0/ListY-Android-1.1.0-badging.txt
+            incoming/listy-mobile-1.0.0/ListY-Android-1.1.0-unsigned.sha256
           if-no-files-found: error
