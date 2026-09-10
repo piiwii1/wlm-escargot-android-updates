@@ -1,0 +1,196 @@
+diff -ruN --exclude README.md PiiWii-Camera-0.5.0-public/app/build.gradle PiiWii-Camera-0.6.0-public/app/build.gradle
+--- PiiWii-Camera-0.5.0-public/app/build.gradle	2026-09-10 19:20:01.133052651 +0000
++++ PiiWii-Camera-0.6.0-public/app/build.gradle	2026-09-10 19:20:32.333163609 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 5
+-        versionName '0.5.0'
++        versionCode 6
++        versionName '0.6.0'
+     }
+ 
+     buildTypes {
+diff -ruN --exclude README.md PiiWii-Camera-0.5.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-0.6.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-0.5.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:20:01.134721322 +0000
++++ PiiWii-Camera-0.6.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:20:32.334181711 +0000
+@@ -29,12 +29,14 @@
+ import android.view.ScaleGestureDetector;
+ import android.view.View;
+ import android.widget.Button;
++import android.widget.EditText;
+ import android.widget.FrameLayout;
+ import android.widget.SeekBar;
+ import android.widget.TextView;
+ import android.widget.Toast;
+ 
+ import androidx.annotation.NonNull;
++import androidx.appcompat.app.AlertDialog;
+ import androidx.appcompat.app.AppCompatActivity;
+ import androidx.camera.core.Camera;
+ import androidx.camera.core.CameraInfo;
+@@ -130,6 +132,8 @@
+     private Button sigTime;
+     private Button sigLocation;
+     private Button sigLogo;
++    private Button sigText;
++    private Button sigPosition;
+ 
+     private ProcessCameraProvider cameraProvider;
+     private ExtensionsManager extensionsManager;
+@@ -159,6 +163,9 @@
+     private boolean signTime = false;
+     private boolean signLocation = false;
+     private boolean signLogo = false;
++    private boolean signCustomText = false;
++    private String customSignatureText = "";
++    private int signaturePosition = 0;
+ 
+     private ScaleGestureDetector scaleDetector;
+     private GestureDetector gestureDetector;
+@@ -203,6 +210,8 @@
+         sigTime = findViewById(R.id.sigTime);
+         sigLocation = findViewById(R.id.sigLocation);
+         sigLogo = findViewById(R.id.sigLogo);
++        sigText = findViewById(R.id.sigText);
++        sigPosition = findViewById(R.id.sigPosition);
+ 
+         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
+         loadPreferences();
+@@ -263,7 +272,7 @@
+         zoom10.setOnClickListener(v -> setZoom(10f));
+ 
+         sigNone.setOnClickListener(v -> {
+-            signDate = signTime = signLocation = signLogo = false;
++            signDate = signTime = signLocation = signLogo = signCustomText = false;
+             savePreferences();
+             updateSignatureButtons();
+         });
+@@ -291,6 +300,12 @@
+             savePreferences();
+             updateSignatureButtons();
+         });
++        sigText.setOnClickListener(v -> editCustomSignature());
++        sigPosition.setOnClickListener(v -> {
++            signaturePosition = (signaturePosition + 1) % 3;
++            savePreferences();
++            updateSignatureButtons();
++        });
+ 
+         zoomSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+@@ -922,6 +937,7 @@
+             if (signTime) primary.add(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(captureDate));
+         }
+         if (signLocation) primary.add(locationText == null ? "Lieu indisponible" : locationText);
++        if (signCustomText && customSignatureText != null && !customSignatureText.trim().isEmpty()) primary.add(customSignatureText.trim());
+ 
+         Paint main = new Paint(Paint.ANTI_ALIAS_FLAG);
+         main.setColor(Color.WHITE);
+@@ -949,7 +965,10 @@
+         float rowSub = subSize * 1.45f;
+         float boxHeight = padY * 2f + (signLogo ? rowMain : 0f) + primary.size() * rowSub;
+         float boxWidth = maxWidth + padX * 2f + mainSize * 0.18f;
+-        float left = margin;
++        float left;
++        if (signaturePosition == 2) left = Math.max(margin, w - margin - boxWidth);
++        else if (signaturePosition == 1) left = Math.max(margin, (w - boxWidth) / 2f);
++        else left = margin;
+         float bottom = h - margin;
+         float top = bottom - boxHeight;
+         float right = left + boxWidth;
+@@ -1066,7 +1085,7 @@
+     }
+ 
+     private boolean hasAnySignature() {
+-        return signDate || signTime || signLocation || signLogo;
++        return signDate || signTime || signLocation || signLogo || (signCustomText && customSignatureText != null && !customSignatureText.trim().isEmpty());
+     }
+ 
+     private void updateSignatureButtons() {
+@@ -1076,6 +1095,8 @@
+         styleChip(sigTime, signTime);
+         styleChip(sigLocation, signLocation);
+         styleChip(sigLogo, signLogo);
++        styleChip(sigText, signCustomText);
++        sigPosition.setText(signaturePosition == 2 ? "Pos. droite" : signaturePosition == 1 ? "Pos. centre" : "Pos. gauche");
+         originalHint.setText(hasAnySignature() ? "Original + copie signée" : "Original intact");
+     }
+ 
+@@ -1159,6 +1180,32 @@
+         }
+     }
+ 
++    private void editCustomSignature() {
++        EditText input = new EditText(this);
++        input.setSingleLine(false);
++        input.setMaxLines(2);
++        input.setText(customSignatureText);
++        input.setHint("Ex. Club VW Suisse · 2026");
++        input.setSelection(input.getText().length());
++        int pad = dp(20);
++        FrameLayout holder = new FrameLayout(this);
++        holder.setPadding(pad, dp(8), pad, 0);
++        holder.addView(input, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
++        new AlertDialog.Builder(this)
++                .setTitle("Signature personnalisée")
++                .setMessage("Le texte est ajouté uniquement sur la copie signée. L'original reste intact.")
++                .setView(holder)
++                .setNegativeButton("Annuler", null)
++                .setNeutralButton("Désactiver", (d, w) -> { signCustomText = false; savePreferences(); updateSignatureButtons(); })
++                .setPositiveButton("Utiliser", (d, w) -> {
++                    customSignatureText = input.getText().toString().trim();
++                    signCustomText = !customSignatureText.isEmpty();
++                    savePreferences();
++                    updateSignatureButtons();
++                })
++                .show();
++    }
++
+     private void loadPreferences() {
+         flashMode = prefs.getInt("flash", ImageCapture.FLASH_MODE_AUTO);
+         timerSeconds = prefs.getInt("timer", 0);
+@@ -1173,6 +1220,9 @@
+         signTime = prefs.getBoolean("signTime", false);
+         signLocation = prefs.getBoolean("signLocation", false);
+         signLogo = prefs.getBoolean("signLogo", false);
++        signCustomText = prefs.getBoolean("signCustomText", false);
++        customSignatureText = prefs.getString("customSignatureText", "");
++        signaturePosition = Math.max(0, Math.min(2, prefs.getInt("signaturePosition", 0)));
+         gridOverlay.setVisibility(gridEnabled ? View.VISIBLE : View.GONE);
+     }
+ 
+@@ -1192,6 +1242,9 @@
+                 .putBoolean("signTime", signTime)
+                 .putBoolean("signLocation", signLocation)
+                 .putBoolean("signLogo", signLogo)
++                .putBoolean("signCustomText", signCustomText)
++                .putString("customSignatureText", customSignatureText)
++                .putInt("signaturePosition", signaturePosition)
+                 .apply();
+     }
+ 
+diff -ruN --exclude README.md PiiWii-Camera-0.5.0-public/app/src/main/res/layout/activity_main.xml PiiWii-Camera-0.6.0-public/app/src/main/res/layout/activity_main.xml
+--- PiiWii-Camera-0.5.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:20:01.133935935 +0000
++++ PiiWii-Camera-0.6.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:20:32.333453458 +0000
+@@ -376,6 +376,10 @@
+                 <Button android:id="@+id/sigLocation" android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/chip_bg" android:text="📍 Lieu" android:textAllCaps="false" android:textColor="#FFFFFF" android:minHeight="0dp" android:minWidth="0dp" />
+                 <Space android:layout_width="7dp" android:layout_height="1dp" />
+                 <Button android:id="@+id/sigLogo" android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/chip_bg" android:text="PIIWII" android:textAllCaps="false" android:textColor="#FFFFFF" android:minHeight="0dp" android:minWidth="0dp" />
++                <Space android:layout_width="7dp" android:layout_height="1dp" />
++                <Button android:id="@+id/sigText" android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/chip_bg" android:text="Texte" android:textAllCaps="false" android:textColor="#FFFFFF" android:minHeight="0dp" android:minWidth="0dp" />
++                <Space android:layout_width="7dp" android:layout_height="1dp" />
++                <Button android:id="@+id/sigPosition" android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/chip_bg" android:text="Pos. gauche" android:textAllCaps="false" android:textColor="#FFFFFF" android:minHeight="0dp" android:minWidth="0dp" />
+             </LinearLayout>
+         </HorizontalScrollView>
+ 
+@@ -438,7 +442,7 @@
+                 android:layout_gravity="center_vertical|end"
+                 android:layout_marginEnd="16dp"
+                 android:gravity="end"
+-                android:text="PiiWii Camera\nv0.5.0"
++                android:text="PiiWii Camera\nv0.6.0"
+                 android:textColor="#AFFFFFFF"
+                 android:textSize="10sp" />
+         </FrameLayout>
