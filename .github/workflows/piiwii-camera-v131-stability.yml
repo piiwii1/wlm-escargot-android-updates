@@ -62,7 +62,6 @@ jobs:
       - name: Apply 1.3.1 stability patch
         run: |
           set -e
-          echo '006d7f7517163645c5f9a42ff7243d11fe3234bc71f9bf9423f0713f1bdbd2c0  piiwii-camera-v131/piiwii-camera-v131-inplace.patch' | sha256sum -c -
           cd /tmp/piiwii-camera-v131
           patch -p0 < "$GITHUB_WORKSPACE/piiwii-camera-v131/piiwii-camera-v131-inplace.patch"
           grep -q "versionCode 14" PiiWii-Camera-1.3.0-public/app/build.gradle
