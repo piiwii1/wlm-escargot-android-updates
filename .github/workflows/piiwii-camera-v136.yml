@@ -1,4 +1,4 @@
-# Triggered after workflow registration
+# CI-safe patch: README is documentation-only and excluded from patch application
 name: Build PiiWii Camera 1.3.6 interaction polish
 
 on:
@@ -101,8 +101,8 @@ jobs:
       - name: Apply 1.3.6 interaction polish patch
         run: |
           set -e
-          base64 -d "$GITHUB_WORKSPACE/piiwii-camera-v136/v136-patch.gz.b64" | gzip -d > /tmp/v136-inplace.patch
-          echo '0b96f9d87f21a13c2f452ef6002c1ee1a5bbe311355d2fdd57b6a4e69f714fa2  /tmp/v136-inplace.patch' | sha256sum -c -
+          base64 -d "$GITHUB_WORKSPACE/piiwii-camera-v136/v136-patch-ci.gz.b64" | gzip -d > /tmp/v136-inplace.patch
+          echo 'ec75000524fea239a6f615d8a6de409eb04f2a0574ca104fb22c5afb84966f0e  /tmp/v136-inplace.patch' | sha256sum -c -
           cd /tmp/piiwii-camera-v136
           patch -p0 < /tmp/v136-inplace.patch
           grep -q "versionCode 19" PiiWii-Camera-1.3.0-public/app/build.gradle
