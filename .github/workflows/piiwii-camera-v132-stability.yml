@@ -1,0 +1,89 @@
+name: Build PiiWii Camera 1.3.2 stability
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/piiwii-camera-v132-stability.yml'
+      - 'piiwii-camera-v132/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+      - name: Restore verified 1.3.0 baseline
+        run: |
+          set -e
+          check() { echo "$2  $1" | sha256sum -c -; }
+          check piiwii-camera-v130-fix/p02-00 44ace790880ad44f035bd6543dba79ec307cf14d28a0dcce401a224db5ac2c20
+          check piiwii-camera-v130-fix/p02-01 551f71f53898e79dbed8d300ed81ed977aba069333fefec5bbfead138330a169
+          check piiwii-camera-v130-fix/p02-02 56ae4d574e7c5fa319c2eb614d1ddeed7a6e2f74673c091ecd9d178f0f733113
+          check piiwii-camera-v130-fix/p02-03 7529e4276c713ded8c93e92536addcc03615dabc7aff9bc4f2eca0f78bc48f32
+          check piiwii-camera-v130-fix/p02-04 99510a659b8258dc9637cdb1454034d361f19203244dd2ed3e3826567a68677f
+          check piiwii-camera-v130-fix/p02-05 1b379114901bf047192cc94c6aa0b362aa860cd3f599eebeeb7a0a340a984ab2
+          check piiwii-camera-v130-fix/p02-06 a599cfd7357f991cfa02bef97b6563a240f905a6de2247949f66534c402a36e6
+          check piiwii-camera-v130-fix/p02-07 aad632b3470a12d0f2f79f283b45d58db86fe221317f94ca3abf3d51ced608b6
+          check piiwii-camera-v130-fix/p05-00 66b5778ed59d72b70ad473f02b9191deb17be6f20c7bb9b3323531bec244755e
+          check piiwii-camera-v130-fix/p05-01 970fe67aa68444c346163c185a7828a2815ce3976f8d62d20eae0c6d9106514f
+          check piiwii-camera-v130-fix/p05-02 4129cdc37bd88c899f4028c9c40273c92ca75f54511a2e96ac0879dd64770149
+          check piiwii-camera-v130-fix/p05-03 d086128bd06c69fcb62930c4954b0ce06e5cc350c908dd2620ea4cac39b07764
+          check piiwii-camera-v130-fix/p05-04 e8ddafb8b348936b0c4e7faf2d9c0d73b69a3430370e4b7a861866bc1206b712
+          check piiwii-camera-v130-fix/p05-05 ed03ac6c65d1f8d433d129e0988f38aa5171eac34c72d1cbd2c3670f8d84b106
+          check piiwii-camera-v130-fix/p05-06 1a03f9771ed8009ae3de98c4bb126a1884d36b21af0ef5d85293093e6179da33
+          check piiwii-camera-v130-fix/p05-07 6370561f9677271c904b0fffc91ac050861ca5cba01d530b7d7e1618a11e0d21
+          cat \
+            piiwii-camera-v130-direct/transport/source-part-00 \
+            piiwii-camera-v130-direct/transport/source-part-01 \
+            piiwii-camera-v130-fix/p02-00 piiwii-camera-v130-fix/p02-01 piiwii-camera-v130-fix/p02-02 piiwii-camera-v130-fix/p02-03 \
+            piiwii-camera-v130-fix/p02-04 piiwii-camera-v130-fix/p02-05 piiwii-camera-v130-fix/p02-06 piiwii-camera-v130-fix/p02-07 \
+            piiwii-camera-v130-direct/transport/source-part-03 \
+            piiwii-camera-v130-direct/transport/source-part-04 \
+            piiwii-camera-v130-fix/p05-00 piiwii-camera-v130-fix/p05-01 piiwii-camera-v130-fix/p05-02 piiwii-camera-v130-fix/p05-03 \
+            piiwii-camera-v130-fix/p05-04 piiwii-camera-v130-fix/p05-05 piiwii-camera-v130-fix/p05-06 piiwii-camera-v130-fix/p05-07 \
+            piiwii-camera-v130-direct/transport/source-part-06 \
+            | base64 -d > /tmp/PiiWii-Camera-1.3.0-SRC.zip
+          echo 'a1544367b5880f63b3b8444a7497b5c8259259197eda1bac644fc0c08db5d89b  /tmp/PiiWii-Camera-1.3.0-SRC.zip' | sha256sum -c -
+          mkdir -p /tmp/piiwii-camera-v132
+          cd /tmp/piiwii-camera-v132
+          unzip -q /tmp/PiiWii-Camera-1.3.0-SRC.zip
+      - name: Apply 1.3.1 stability patch
+        run: |
+          set -e
+          cd /tmp/piiwii-camera-v132
+          patch -p0 < "$GITHUB_WORKSPACE/piiwii-camera-v131/piiwii-camera-v131-inplace.patch"
+          grep -q "versionCode 14" PiiWii-Camera-1.3.0-public/app/build.gradle
+      - name: Apply 1.3.2 portrait crash fix
+        run: |
+          set -e
+          cd /tmp/piiwii-camera-v132
+          patch -p0 < "$GITHUB_WORKSPACE/piiwii-camera-v132/v132-inplace.patch"
+          grep -q "versionCode 15" PiiWii-Camera-1.3.0-public/app/build.gradle
+          grep -q "versionName '1.3.2'" PiiWii-Camera-1.3.0-public/app/build.gradle
+          grep -q '@+id/resolutionButton' PiiWii-Camera-1.3.0-public/app/src/main/res/layout/activity_main.xml
+      - name: Build release APK
+        run: gradle -p /tmp/piiwii-camera-v132/PiiWii-Camera-1.3.0-public --no-daemon :app:assembleRelease
+      - name: Collect APK
+        run: |
+          mkdir -p /tmp/piiwii-camera-v132-out
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 /tmp/piiwii-camera-v132/PiiWii-Camera-1.3.0-public/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/piiwii-camera-v132-out/PiiWii-Camera-1.3.2-ALIGNED-UNSIGNED.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/piiwii-camera-v132-out/apksigner.jar
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/piiwii-camera-v132-out/PiiWii-Camera-1.3.2-ALIGNED-UNSIGNED.apk > /tmp/piiwii-camera-v132-out/badging.txt
+          sha256sum /tmp/piiwii-camera-v132-out/PiiWii-Camera-1.3.2-ALIGNED-UNSIGNED.apk > /tmp/piiwii-camera-v132-out/unsigned-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Camera-1.3.2-stability-unsigned
+          retention-days: 7
+          path: /tmp/piiwii-camera-v132-out/
