@@ -1,0 +1,77 @@
+name: Build PiiWii Camera 0.1.0 unsigned
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/piiwii-camera-public-build.yml'
+      - 'piiwii-camera-build/trigger.txt'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Restore source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-camera /tmp/piiwii-camera-out
+          cat piwii-camera-build/source.part-* >/dev/null 2>&1 || true
+          cat piiwii-camera-build/source.part-* | base64 -d > /tmp/PiiWii-Camera-0.1.0-SOURCE.zip
+          echo '377793e76d9e3a1176a6e13e5ea32baafa8a66b4a932b7b15cb7202372dcfa7b  /tmp/PiiWii-Camera-0.1.0-SOURCE.zip' | sha256sum -c -
+          unzip -t /tmp/PiiWii-Camera-0.1.0-SOURCE.zip
+          unzip -q /tmp/PiiWii-Camera-0.1.0-SOURCE.zip -d /tmp/piiwii-camera
+          test -f /tmp/piiwii-camera/app/build.gradle
+
+      - name: Build release APK
+        id: compile
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle -p /tmp/piiwii-camera --no-daemon --stacktrace :app:assembleRelease 2>&1 | tee /tmp/piiwii-camera-out/build.log
+
+      - name: Collect APK and signing tool
+        if: steps.compile.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='/tmp/piiwii-camera/app/build/outputs/apk/release/app-release-unsigned.apk'
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f -p 4 "$APK" /tmp/piiwii-camera-out/PiiWii-Camera-0.1.0-ALIGNED-UNSIGNED.apk
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -v 4 /tmp/piiwii-camera-out/PiiWii-Camera-0.1.0-ALIGNED-UNSIGNED.apk
+          cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" /tmp/piiwii-camera-out/apksigner.jar
+          cp /tmp/PiiWii-Camera-0.1.0-SOURCE.zip /tmp/piiwii-camera-out/PiiWii-Camera-0.1.0-PUBLIC-SOURCE.zip
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging /tmp/piiwii-camera-out/PiiWii-Camera-0.1.0-ALIGNED-UNSIGNED.apk | tee /tmp/piiwii-camera-out/aapt-badging.txt
+          sha256sum /tmp/piiwii-camera-out/PiiWii-Camera-0.1.0-ALIGNED-UNSIGNED.apk > /tmp/piiwii-camera-out/unsigned-sha256.txt
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Camera-0.1.0-unsigned-tools
+          if-no-files-found: error
+          retention-days: 7
+          path: /tmp/piiwii-camera-out/
+
+      - name: Fail if compile failed
+        if: steps.compile.outcome != 'success'
+        run: exit 1
