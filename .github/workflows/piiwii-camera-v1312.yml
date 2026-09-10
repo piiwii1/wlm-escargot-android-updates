@@ -1,0 +1,85 @@
+name: Build PiiWii Camera 1.3.12 zoom polish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/piiwii-camera-v1312.yml'
+      - 'piiwii-camera-v1312/**'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Restore verified 1.3.11 source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/10177358145/zip" \
+            -o /tmp/v1311-artifact.zip
+          mkdir -p /tmp/v1311-artifact /tmp/piiwii-camera-v1312
+          unzip -q /tmp/v1311-artifact.zip -d /tmp/v1311-artifact
+          unzip -q /tmp/v1311-artifact/PiiWii-Camera-1.3.11-SOURCES.zip -d /tmp/piiwii-camera-v1312
+          test -f /tmp/piiwii-camera-v1312/PiiWii-Camera-1.3.11-public/app/build.gradle
+          grep -q "versionCode 24" /tmp/piiwii-camera-v1312/PiiWii-Camera-1.3.11-public/app/build.gradle
+          grep -q "versionName '1.3.11'" /tmp/piiwii-camera-v1312/PiiWii-Camera-1.3.11-public/app/build.gradle
+
+      - name: Apply 1.3.12 zoom polish patch
+        run: |
+          set -e
+          base64 -d "$GITHUB_WORKSPACE/piiwii-camera-v1312/v1312.patch.gz.b64" | gzip -d > /tmp/v1312.patch
+          echo '2727289123db8a5753d395402bbe8422c5e6c578faae9fe00bb6b7a4c13d98e4  /tmp/v1312.patch' | sha256sum -c -
+          cd /tmp/piiwii-camera-v1312/PiiWii-Camera-1.3.11-public
+          patch -p2 < /tmp/v1312.patch
+          grep -q "versionCode 25" app/build.gradle
+          grep -q "versionName '1.3.12'" app/build.gradle
+          grep -q 'zoom100' app/src/main/java/ch/piiwii/camera/MainActivity.java
+          grep -q 'recordingIndicator' app/src/main/res/layout/activity_main.xml
+          grep -q 'recordingIndicator' app/src/main/res/layout-land/activity_main.xml
+
+      - name: Build release APK
+        run: gradle -p /tmp/piiwii-camera-v1312/PiiWii-Camera-1.3.11-public --no-daemon :app:assembleRelease
+
+      - name: Collect APK and sources
+        run: |
+          set -e
+          mkdir -p /tmp/piiwii-camera-v1312-out
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 \
+            /tmp/piiwii-camera-v1312/PiiWii-Camera-1.3.11-public/app/build/outputs/apk/release/app-release-unsigned.apk \
+            /tmp/piiwii-camera-v1312-out/PiiWii-Camera-1.3.12-ALIGNED-UNSIGNED.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/piiwii-camera-v1312-out/apksigner.jar
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/piiwii-camera-v1312-out/PiiWii-Camera-1.3.12-ALIGNED-UNSIGNED.apk > /tmp/piiwii-camera-v1312-out/badging.txt
+          sha256sum /tmp/piiwii-camera-v1312-out/PiiWii-Camera-1.3.12-ALIGNED-UNSIGNED.apk > /tmp/piiwii-camera-v1312-out/unsigned-sha256.txt
+          cd /tmp/piiwii-camera-v1312
+          mv PiiWii-Camera-1.3.11-public PiiWii-Camera-1.3.12-public
+          rm -rf PiiWii-Camera-1.3.12-public/app/build PiiWii-Camera-1.3.12-public/.gradle
+          zip -qr /tmp/piiwii-camera-v1312-out/PiiWii-Camera-1.3.12-SOURCES.zip PiiWii-Camera-1.3.12-public
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Camera-1.3.12-zoom-polish-unsigned
+          retention-days: 7
+          path: /tmp/piiwii-camera-v1312-out/
