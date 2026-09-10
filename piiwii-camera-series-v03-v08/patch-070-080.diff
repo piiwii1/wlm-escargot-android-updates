@@ -1,0 +1,151 @@
+diff -ruN --exclude README.md PiiWii-Camera-0.7.0-public/app/build.gradle PiiWii-Camera-0.8.0-public/app/build.gradle
+--- PiiWii-Camera-0.7.0-public/app/build.gradle	2026-09-10 19:21:11.330469177 +0000
++++ PiiWii-Camera-0.8.0-public/app/build.gradle	2026-09-10 19:21:53.528035602 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 7
+-        versionName '0.7.0'
++        versionCode 8
++        versionName '0.8.0'
+     }
+ 
+     buildTypes {
+diff -ruN --exclude README.md PiiWii-Camera-0.7.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-0.8.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-0.7.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:21:11.331565235 +0000
++++ PiiWii-Camera-0.8.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:21:53.529596441 +0000
+@@ -22,6 +22,7 @@
+ import android.os.Build;
+ import android.os.Bundle;
+ import android.os.Environment;
++import android.os.ParcelFileDescriptor;
+ import android.provider.MediaStore;
+ import android.view.GestureDetector;
+ import android.view.HapticFeedbackConstants;
+@@ -139,6 +140,7 @@
+     private Button sigLogo;
+     private Button sigText;
+     private Button sigPosition;
++    private Button diagButton;
+ 
+     private ProcessCameraProvider cameraProvider;
+     private ExtensionsManager extensionsManager;
+@@ -218,6 +220,7 @@
+         sigLogo = findViewById(R.id.sigLogo);
+         sigText = findViewById(R.id.sigText);
+         sigPosition = findViewById(R.id.sigPosition);
++        diagButton = findViewById(R.id.diagButton);
+ 
+         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
+         loadPreferences();
+@@ -314,6 +317,7 @@
+             savePreferences();
+             updateSignatureButtons();
+         });
++        diagButton.setOnClickListener(v -> showCameraDiagnostics());
+ 
+         zoomSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+@@ -906,10 +910,37 @@
+             android.media.MediaScannerConnection.scanFile(this, new String[]{outFile.getAbsolutePath()}, new String[]{"image/jpeg"}, null);
+             uri = Uri.fromFile(outFile);
+         }
++        try { copyImportantExif(source, uri); } catch (Exception ignored) { }
+         mutable.recycle();
+         return uri;
+     }
+ 
++    private void copyImportantExif(File source, Uri targetUri) throws IOException {
++        ExifInterface sourceExif = new ExifInterface(source);
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && "content".equals(targetUri.getScheme())) {
++            try (ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(targetUri, "rw")) {
++                if (pfd == null) return;
++                ExifInterface targetExif = new ExifInterface(pfd.getFileDescriptor());
++                String[] tags = new String[]{
++                        ExifInterface.TAG_DATETIME, ExifInterface.TAG_DATETIME_ORIGINAL, ExifInterface.TAG_DATETIME_DIGITIZED,
++                        ExifInterface.TAG_MAKE, ExifInterface.TAG_MODEL, ExifInterface.TAG_SOFTWARE,
++                        ExifInterface.TAG_F_NUMBER, ExifInterface.TAG_EXPOSURE_TIME, ExifInterface.TAG_ISO_SPEED_RATINGS,
++                        ExifInterface.TAG_FOCAL_LENGTH, ExifInterface.TAG_WHITE_BALANCE, ExifInterface.TAG_FLASH,
++                        ExifInterface.TAG_GPS_LATITUDE, ExifInterface.TAG_GPS_LATITUDE_REF,
++                        ExifInterface.TAG_GPS_LONGITUDE, ExifInterface.TAG_GPS_LONGITUDE_REF,
++                        ExifInterface.TAG_GPS_ALTITUDE, ExifInterface.TAG_GPS_ALTITUDE_REF,
++                        ExifInterface.TAG_GPS_TIMESTAMP, ExifInterface.TAG_GPS_DATESTAMP
++                };
++                for (String tag : tags) {
++                    String value = sourceExif.getAttribute(tag);
++                    if (value != null) targetExif.setAttribute(tag, value);
++                }
++                targetExif.setAttribute(ExifInterface.TAG_ORIENTATION, String.valueOf(ExifInterface.ORIENTATION_NORMAL));
++                targetExif.saveAttributes();
++            }
++        }
++    }
++
+     private Bitmap decodeOrientedBitmap(File file) throws IOException {
+         Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+         if (bitmap == null) return null;
+@@ -1192,6 +1223,42 @@
+         }
+     }
+ 
++    private void showCameraDiagnostics() {
++        StringBuilder d = new StringBuilder();
++        d.append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n");
++        d.append("Android ").append(Build.VERSION.RELEASE).append(" · API ").append(Build.VERSION.SDK_INT).append("\n\n");
++        d.append("Caméra : ").append(usingFrontCamera ? "avant" : "arrière").append("\n");
++        d.append("Mode : ").append(photoMode ? qualityModeName() : "VIDÉO " + videoQualityName()).append("\n");
++        d.append(String.format(Locale.getDefault(), "Zoom exposé : %.2f× → %.2f×\n", minZoom, maxZoom));
++        if (maxExposure > minExposure) d.append(String.format(Locale.getDefault(), "EV : %+.1f → %+.1f\n", minExposure * exposureStep, maxExposure * exposureStep));
++        if (camera != null) {
++            CameraInfo info = camera.getCameraInfo();
++            d.append("Flash : ").append(info.hasFlashUnit() ? "oui" : "non").append("\n");
++            d.append("Low Light Boost : ").append(info.isLowLightBoostSupported() ? "oui" : "non").append("\n");
++            d.append("Multi-caméra logique : ").append(info.isLogicalMultiCameraSupported() ? "oui" : "non").append("\n");
++            try { d.append("Caméras physiques exposées : ").append(info.getPhysicalCameraInfos().size()).append("\n"); } catch (Exception ignored) { }
++            try {
++                int maxTorch = info.getMaxTorchStrengthLevel();
++                if (maxTorch > 0) d.append("Niveaux torche : ").append(maxTorch).append("\n");
++            } catch (Exception ignored) { }
++        }
++        d.append("Ultra HDR : ").append(supportsUltraHdr(resolvePhotoSelector()) ? "oui" : "non").append("\n");
++        if (extensionsManager != null) {
++            try {
++                CameraSelector base = baseSelector();
++                d.append("OEM Auto : ").append(extensionsManager.isExtensionAvailable(base, ExtensionMode.AUTO) ? "oui" : "non").append("\n");
++                d.append("OEM HDR : ").append(extensionsManager.isExtensionAvailable(base, ExtensionMode.HDR) ? "oui" : "non").append("\n");
++                d.append("OEM Nuit : ").append(extensionsManager.isExtensionAvailable(base, ExtensionMode.NIGHT) ? "oui" : "non").append("\n");
++            } catch (Exception ignored) { }
++        }
++        d.append("\nPiiWii Camera 0.8.0 · CameraX 1.6.2");
++        new AlertDialog.Builder(this)
++                .setTitle("Diagnostic caméra")
++                .setMessage(d.toString())
++                .setPositiveButton("Fermer", null)
++                .show();
++    }
++
+     private void rememberLastMedia(Uri uri, String type) {
+         lastMediaUri = uri;
+         lastMediaType = type;
+diff -ruN --exclude README.md PiiWii-Camera-0.7.0-public/app/src/main/res/layout/activity_main.xml PiiWii-Camera-0.8.0-public/app/src/main/res/layout/activity_main.xml
+--- PiiWii-Camera-0.7.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:21:11.330770213 +0000
++++ PiiWii-Camera-0.8.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:21:53.528709082 +0000
+@@ -380,6 +380,8 @@
+                 <Button android:id="@+id/sigText" android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/chip_bg" android:text="Texte" android:textAllCaps="false" android:textColor="#FFFFFF" android:minHeight="0dp" android:minWidth="0dp" />
+                 <Space android:layout_width="7dp" android:layout_height="1dp" />
+                 <Button android:id="@+id/sigPosition" android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/chip_bg" android:text="Pos. gauche" android:textAllCaps="false" android:textColor="#FFFFFF" android:minHeight="0dp" android:minWidth="0dp" />
++                <Space android:layout_width="7dp" android:layout_height="1dp" />
++                <Button android:id="@+id/diagButton" android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/chip_bg" android:text="ⓘ Diagnostic" android:textAllCaps="false" android:textColor="#FFFFFF" android:minHeight="0dp" android:minWidth="0dp" />
+             </LinearLayout>
+         </HorizontalScrollView>
+ 
+@@ -454,7 +456,7 @@
+                 android:layout_gravity="center_vertical|end"
+                 android:layout_marginEnd="16dp"
+                 android:gravity="end"
+-                android:text="PiiWii Camera\nv0.7.0"
++                android:text="PiiWii Camera\nv0.8.0"
+                 android:textColor="#AFFFFFFF"
+                 android:textSize="10sp" />
+         </FrameLayout>
