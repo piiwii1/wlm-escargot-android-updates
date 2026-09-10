@@ -110,7 +110,7 @@ jobs:
       - name: Apply 1.3.7 landscape polish patch
         run: |
           base64 -d "$GITHUB_WORKSPACE/piiwii-camera-v137/v137-patch.gz.b64" | gzip -d > /tmp/v137.patch
-          echo 'fd945c5aad30d70d838ea8990f2be307ec6e8337e4fd7ebdc7f70c2d7923d3af  /tmp/v137.patch' | sha256sum -c -
+          echo '6c2004b8d6c4a09cc0fdf0e03b70c5e6aca80895858cc821e883be72fe74f3eb  /tmp/v137.patch' | sha256sum -c -
           cd /tmp/piiwii-camera-v137/PiiWii-Camera-1.3.0-public
           patch -p1 < /tmp/v137.patch
           grep -q "versionCode 20" app/build.gradle
