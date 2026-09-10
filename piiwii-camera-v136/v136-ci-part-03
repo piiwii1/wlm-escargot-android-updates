@@ -1,0 +1,68 @@
++        if (zoomBubble == null || zoomBubble.getVisibility() != View.VISIBLE) return;
++        zoomBubble.animate().alpha(0f).scaleX(0.94f).scaleY(0.94f).setDuration(140)
++                .withEndAction(() -> zoomBubble.setVisibility(View.GONE)).start();
++    };
++
+     private void refreshExposureRange() {
+         if (camera == null) return;
+         try {
+@@ -1037,9 +1115,24 @@
+         }
+     }
+ 
++    private void applyExposureProgress(int progress) {
++        if (camera == null || maxExposure <= minExposure) return;
++        int p = Math.max(0, Math.min(1000, progress));
++        int index = minExposure + Math.round((maxExposure - minExposure) * (p / 1000f));
++        try { camera.getCameraControl().setExposureCompensationIndex(index); } catch (Exception ignored) { }
++        updateExposureUi(index);
++    }
++
+     private void updateExposureUi(int index) {
+         float ev = index * exposureStep;
+-        exposureLabel.setText(String.format(Locale.getDefault(), "EV %+.1f", ev));
++        if (exposureLabel != null) exposureLabel.setText(String.format(Locale.getDefault(), "EV %+.1f", ev));
++        if (quickExposureValue != null) quickExposureValue.setText(String.format(Locale.getDefault(), "%+.1f", ev));
++        if (maxExposure > minExposure) {
++            int progress = Math.round(((index - minExposure) / (float) (maxExposure - minExposure)) * 1000f);
++            progress = Math.max(0, Math.min(1000, progress));
++            if (exposureSeek != null && exposureSeek.getProgress() != progress) exposureSeek.setProgress(progress);
++            if (quickExposureSeek != null && quickExposureSeek.getProgress() != progress) quickExposureSeek.setProgress(progress);
++        }
+     }
+ 
+     private void focusAt(float x, float y) {
+@@ -1085,10 +1178,41 @@
+         focusRing.setScaleY(1.25f);
+         focusRing.setVisibility(View.VISIBLE);
+         focusRing.animate().scaleX(1f).scaleY(1f).setDuration(140).start();
++        showFocusExposureBar(x, y);
+         focusRing.removeCallbacks(hideFocusRingRunnable);
+-        focusRing.postDelayed(hideFocusRingRunnable, 1200);
++        focusRing.postDelayed(hideFocusRingRunnable, focusLocked ? 2600 : 1200);
+     }
+ 
++    private void showFocusExposureBar(float x, float y) {
++        if (focusExposureBar == null || quickExposureSeek == null || maxExposure <= minExposure) return;
++        int width = dp(190);
++        int height = dp(42);
++        int viewW = Math.max(width + dp(16), previewView.getWidth());
++        int viewH = Math.max(height + dp(16), previewView.getHeight());
++        int left = Math.round(x - width / 2f);
++        int top = Math.round(y + dp(42));
++        if (top + height > viewH - dp(8)) top = Math.round(y - dp(88));
++        left = Math.max(dp(8), Math.min(viewW - width - dp(8), left));
++        top = Math.max(dp(8), Math.min(viewH - height - dp(8), top));
++        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) focusExposureBar.getLayoutParams();
++        lp.width = width;
++        lp.height = height;
++        lp.leftMargin = left;
++        lp.topMargin = top;
++        focusExposureBar.setLayoutParams(lp);
++        focusExposureBar.removeCallbacks(hideFocusExposureRunnable);
++        focusExposureBar.setAlpha(0f);
++        focusExposureBar.setVisibility(View.VISIBLE);
++        focusExposureBar.animate().alpha(1f).setDuration(110).start();
++        if (!focusLocked) focusExposureBar.postDelayed(hideFocusExposureRunnable, 2600);
++    }
++
