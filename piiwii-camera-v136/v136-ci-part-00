@@ -1,0 +1,76 @@
+diff -ruN PiiWii-Camera-1.3.0-public/app/build.gradle PiiWii-Camera-1.3.0-public/app/build.gradle
+--- PiiWii-Camera-1.3.0-public/app/build.gradle	2026-09-10 21:45:27.621133272 +0000
++++ PiiWii-Camera-1.3.0-public/app/build.gradle	2026-09-10 21:59:44.021928018 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 18
+-        versionName '1.3.5'
++        versionCode 19
++        versionName '1.3.6'
+     }
+ 
+     buildTypes {
+diff -ruN PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 21:45:27.622565976 +0000
++++ PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 21:59:44.020000170 +0000
+@@ -117,7 +117,7 @@
+     private static final int REQ_LOCATION = 102;
+     private static final int REQ_STORAGE = 103;
+     private static final int REQ_AUDIO = 104;
+-    private static final int APP_VERSION_CODE = 18;
++    private static final int APP_VERSION_CODE = 19;
+     private static final long STARTUP_GUARD_TIMEOUT_MS = 15_000L;
+     private static final boolean STABLE_STARTUP_MODE = true;
+ 
+@@ -148,6 +148,9 @@
+     private TextView statusText;
+     private TextView levelText;
+     private TextView countdownLabel;
++    private TextView zoomBubble;
++    private LinearLayout focusExposureBar;
++    private TextView quickExposureValue;
+     private View focusRing;
+     private View shutterFlash;
+     private View captureFrame;
+@@ -164,6 +167,7 @@
+     private SeekBar zoomSeek;
+     private SeekBar exposureSeek;
++    private SeekBar quickExposureSeek;
+     private ImageView lastThumb;
+     private View moreControls;
+     private ScrollView moreScroll;
+@@ -188,6 +192,7 @@
+     private Runnable startupGuardRunnable;
+     private Runnable rebindRunnable;
+     private Runnable countdownRunnable;
++    private Runnable zoomBubbleHideRunnable;
+     private boolean startupGuardArmed = false;
+     private int countdownRemaining = 0;
+     private boolean countdownActive = false;
+@@ -211,6 +216,7 @@
+     private boolean internalUiUpdate = false;
+     private float lastLevelRoll = 0f;
+     private float lastLevelPitch = 0f;
++    private int zoomBucket = -1;
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+@@ -246,6 +252,9 @@
+         statusText = findViewById(R.id.statusText);
+         levelText = findViewById(R.id.levelText);
+         countdownLabel = findViewById(R.id.countdownLabel);
++        zoomBubble = findViewById(R.id.zoomBubble);
++        focusExposureBar = findViewById(R.id.focusExposureBar);
++        quickExposureValue = findViewById(R.id.quickExposureValue);
+         focusRing = findViewById(R.id.focusRing);
+         shutterFlash = findViewById(R.id.shutterFlash);
+         captureFrame = findViewById(R.id.captureFrame);
+@@ -267,6 +276,7 @@
+         zoomSeek = findViewById(R.id.zoomSeek);
+         exposureSeek = findViewById(R.id.exposureSeek);
++        quickExposureSeek = findViewById(R.id.quickExposureSeek);
+         lastThumb = findViewById(R.id.lastThumb);
+         moreControls = findViewById(R.id.moreControls);
+         moreScroll = findViewById(R.id.moreScroll);
