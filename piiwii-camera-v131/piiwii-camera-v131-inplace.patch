@@ -1,0 +1,364 @@
+diff -ruN PiiWii-Camera-1.3.0-public/README.md PiiWii-Camera-1.3.0-public/README.md
+--- PiiWii-Camera-1.3.0-public/README.md	2026-09-10 20:21:17.880499365 +0000
++++ PiiWii-Camera-1.3.0-public/README.md	2026-09-10 20:59:10.075448709 +0000
+@@ -1,4 +1,4 @@
+-# PiiWii Camera 1.3.0
++# PiiWii Camera 1.3.1
+ 
+ Palier 13 : finition terrain, niveau et diagnostic partageable.
+ 
+@@ -7,3 +7,12 @@
+ - Diagnostic caméra copiable en un clic pour envoyer les vraies capacités du Galaxy S23 Ultra lors du prochain cycle.
+ - Protection contre les doubles déclenchements pendant qu'une photo haute résolution est encore en cours de traitement.
+ - Tous les acquis 0.9 → 1.2 sont conservés : safe areas Android, cadrage noir, paysage, objectifs physiques, 12/50/200 MP, Portrait OEM, signatures et vidéo.
++
++
++## 1.3.1 stability hotfix
++- native logical camera is bound first on startup
++- Samsung/OEM extensions are lazy-loaded only when requested
++- direct physical-camera routing is disabled; logical zoom lets Samsung select lenses
++- Ultra HDR is not combined with OEM extension binds
++- interrupted startup recovery resets only risky camera modes
++- GPS current-location lookup no longer runs automatically at startup
+diff -ruN PiiWii-Camera-1.3.0-public/app/build.gradle PiiWii-Camera-1.3.0-public/app/build.gradle
+--- PiiWii-Camera-1.3.0-public/app/build.gradle	2026-09-10 19:55:54.536933017 +0000
++++ PiiWii-Camera-1.3.0-public/app/build.gradle	2026-09-10 20:57:56.017567939 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 13
+-        versionName '1.3.0'
++        versionCode 14
++        versionName '1.3.1'
+     }
+ 
+     buildTypes {
+diff -ruN PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 20:22:21.628890188 +0000
++++ PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 20:58:57.993124110 +0000
+@@ -117,6 +117,9 @@
+     private static final int REQ_LOCATION = 102;
+     private static final int REQ_STORAGE = 103;
+     private static final String PREFS = "piiwii_camera_settings";
++    private static final int APP_VERSION_CODE = 14;
++    private static final String PREF_STARTUP_PENDING = "startupPending";
++    private static final String PREF_LAST_VERSION = "lastVersionCode";
+ 
+     private static final int QUALITY_OEM_AUTO = 0;
+     private static final int QUALITY_OEM_HDR = 1;
+@@ -184,6 +187,9 @@
+     private View topPanel;
+     private View bottomPanel;
+     private boolean advancedUiVisible = false;
++    private boolean safeStartupBind = true;
++    private boolean startupRecoveryMode = false;
++    private boolean extensionsInitStarted = false;
+ 
+     private ProcessCameraProvider cameraProvider;
+     private ExtensionsManager extensionsManager;
+@@ -294,10 +300,19 @@
+ 
+         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
+         applyNavigationInsets();
++
++        boolean previousStartupInterrupted = prefs.getBoolean(PREF_STARTUP_PENDING, false);
++        int previousVersion = prefs.getInt(PREF_LAST_VERSION, 0);
++        startupRecoveryMode = previousStartupInterrupted || previousVersion < APP_VERSION_CODE;
++        prefs.edit()
++                .putBoolean(PREF_STARTUP_PENDING, true)
++                .putInt(PREF_LAST_VERSION, APP_VERSION_CODE)
++                .apply();
++
+         loadPreferences();
++        if (startupRecoveryMode) forceStableStartupState();
+         levelOverlay.setVisibility(levelEnabled ? View.VISIBLE : View.GONE);
+         setupLevelSensor();
+-        if (signLocation) requestFreshLocation();
+         setupInteractions();
+         restoreLastMediaPreview();
+         updateFlashButton();
+@@ -411,6 +426,11 @@
+         gridButton.setOnClickListener(v -> toggleGrid());
+         gridButton.setOnLongClickListener(v -> { levelEnabled = !levelEnabled; levelOverlay.setVisibility(levelEnabled ? View.VISIBLE : View.GONE); savePreferences(); Toast.makeText(this, levelEnabled ? "Niveau activé" : "Niveau désactivé", Toast.LENGTH_SHORT).show(); return true; });
+         qualityButton.setOnClickListener(v -> cycleQualityMode());
++        qualityButton.setOnLongClickListener(v -> {
++            ensureExtensionsReady(true);
++            Toast.makeText(this, "Moteur OEM en cours d’activation…", Toast.LENGTH_SHORT).show();
++            return true;
++        });
+         resolutionButton.setOnClickListener(v -> cycleResolutionMode());
+         switchButton.setOnClickListener(v -> switchCamera());
+         if (quickSwitchButton != null) quickSwitchButton.setOnClickListener(v -> switchCamera());
+@@ -449,7 +469,7 @@
+             savePreferences();
+             updateQualityButton();
+             updateModeButtons();
+-            bindUseCases();
++            ensureExtensionsReady(true);
+         });
+ 
+         zoom06.setOnClickListener(v -> selectZoomPreset(0.6f));
+@@ -581,22 +601,46 @@
+         providerFuture.addListener(() -> {
+             try {
+                 cameraProvider = providerFuture.get();
+-                ListenableFuture<ExtensionsManager> extensionsFuture =
+-                        ExtensionsManager.getInstanceAsync(getApplicationContext(), cameraProvider);
+-                extensionsFuture.addListener(() -> {
+-                    try {
+-                        extensionsManager = extensionsFuture.get();
+-                    } catch (Exception ignored) {
+-                        extensionsManager = null;
+-                    }
+-                    runOnUiThread(this::bindUseCases);
+-                }, ContextCompat.getMainExecutor(this));
++                // Hotfix 1.3.1: always start on the plain logical camera first.
++                // Samsung vendor extensions are initialized only on explicit demand.
++                extensionsManager = null;
++                bindUseCases();
+             } catch (Exception e) {
+-                showError("Impossible d'ouvrir la caméra : " + e.getMessage());
++                showError("Impossible d'ouvrir la caméra : " + safeMessage(e));
+             }
+         }, ContextCompat.getMainExecutor(this));
+     }
+ 
++    private void ensureExtensionsReady(boolean rebindWhenReady) {
++        if (cameraProvider == null) return;
++        if (extensionsManager != null) {
++            if (rebindWhenReady) bindUseCases();
++            return;
++        }
++        if (extensionsInitStarted) return;
++        extensionsInitStarted = true;
++        try {
++            ListenableFuture<ExtensionsManager> future =
++                    ExtensionsManager.getInstanceAsync(getApplicationContext(), cameraProvider);
++            future.addListener(() -> {
++                extensionsInitStarted = false;
++                try {
++                    extensionsManager = future.get();
++                    statusLabel.setText("Moteur OEM prêt");
++                } catch (Exception e) {
++                    extensionsManager = null;
++                    statusLabel.setText("OEM indisponible · mode natif");
++                }
++                if (rebindWhenReady && !isFinishing() && !isDestroyed()) bindUseCases();
++            }, ContextCompat.getMainExecutor(this));
++        } catch (Exception e) {
++            extensionsInitStarted = false;
++            extensionsManager = null;
++            statusLabel.setText("OEM indisponible · mode natif");
++            if (rebindWhenReady) bindUseCases();
++        }
++    }
++
+     private CameraSelector logicalBaseSelector() {
+         return usingFrontCamera ? CameraSelector.DEFAULT_FRONT_CAMERA : CameraSelector.DEFAULT_BACK_CAMERA;
+     }
+@@ -614,6 +658,7 @@
+     }
+ 
+     private CameraSelector resolvePhotoSelector() {
++        if (safeStartupBind) return logicalBaseSelector();
+         CameraSelector base = baseSelector();
+         if (selectedPhysicalCameraId != null || photoResolutionMode == RES_50MP || photoResolutionMode == RES_200MP) return base;
+         if (extensionsManager == null || qualityMode == QUALITY_MAX_MP) return base;
+@@ -731,26 +776,12 @@
+     }
+ 
+     private void selectZoomPreset(float ratio) {
++        // CameraX logical zoom lets Samsung choose the physical lens itself.
++        // Direct physical-camera routing caused instability on some S23 firmware.
+         pendingWorldZoom = ratio;
+-        if (usingFrontCamera || cameraProvider == null) {
+-            selectedPhysicalCameraId = null;
+-            selectedPhysicalBaseZoom = 1f;
+-            setZoom(ratio);
+-            return;
+-        }
+-        detectPhysicalLenses();
+-        String wanted = (ratio < 0.8f || ratio >= 2.5f) ? physicalIdForPreset(ratio) : null;
+-        if (wanted != null && !wanted.equals(selectedPhysicalCameraId)) {
+-            selectedPhysicalCameraId = wanted;
+-            selectedPhysicalBaseZoom = ratio < 0.8f ? 0.6f : ratio >= 8f ? 10f : 3f;
+-            bindUseCases();
+-        } else if (wanted == null && selectedPhysicalCameraId != null) {
+-            selectedPhysicalCameraId = null;
+-            selectedPhysicalBaseZoom = 1f;
+-            bindUseCases();
+-        } else {
+-            setZoom(ratio);
+-        }
++        selectedPhysicalCameraId = null;
++        selectedPhysicalBaseZoom = 1f;
++        setZoom(ratio);
+     }
+ 
+     private void applyPendingWorldZoom() {
+@@ -770,9 +801,10 @@
+ 
+             if (photoMode) {
+                 CameraSelector selector = resolvePhotoSelector();
+-                boolean wantsHighest = qualityMode == QUALITY_MAX_MP;
+-                boolean extensionActive = qualityMode != QUALITY_MAX_MP && isRequestedExtensionAvailable();
+-                boolean ultraHdr = supportsUltraHdr(selector);
++                boolean wantsHighest = !safeStartupBind && qualityMode == QUALITY_MAX_MP;
++                boolean extensionActive = !safeStartupBind && qualityMode != QUALITY_MAX_MP && isRequestedExtensionAvailable();
++                // Do not combine Samsung extensions and Ultra HDR in the same bind.
++                boolean ultraHdr = !safeStartupBind && !extensionActive && supportsUltraHdr(selector);
+ 
+                 imageCapture = buildImageCapture(wantsHighest, ultraHdr, selector);
+                 imageCapture.setFlashMode(flashMode);
+@@ -835,9 +867,10 @@
+             }
+             applyLowLightBoost();
+             refreshCameraControls();
+-            detectPhysicalLenses();
+             applyPendingWorldZoom();
+             physicalFallbackInProgress = false;
++            safeStartupBind = false;
++            markStartupStableSoon();
+         } catch (Exception e) {
+             if (selectedPhysicalCameraId != null && !physicalFallbackInProgress) {
+                 physicalFallbackInProgress = true;
+@@ -855,13 +888,13 @@
+         ImageCapture.Builder builder = new ImageCapture.Builder()
+                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                 .setJpegQuality(100);
+-        Size requestedSize = chooseRequestedPhotoSize(selector);
++        Size requestedSize = safeStartupBind ? null : chooseRequestedPhotoSize(selector);
+         if (requestedSize != null && photoResolutionMode != RES_AUTO && !highestResolution) {
+             ResolutionSelector resolutionSelector = new ResolutionSelector.Builder()
+                     .setResolutionStrategy(new ResolutionStrategy(requestedSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
+                     .build();
+             builder.setResolutionSelector(resolutionSelector);
+-        } else if (highestResolution || photoResolutionMode == RES_AUTO) {
++        } else if (!safeStartupBind && (highestResolution || photoResolutionMode == RES_AUTO)) {
+             ResolutionSelector resolutionSelector = new ResolutionSelector.Builder()
+                     .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                     .build();
+@@ -1072,7 +1105,12 @@
+         qualityMode = (qualityMode + 1) % 6;
+         savePreferences();
+         updateQualityButton();
+-        if (photoMode) bindUseCases();
++        if (!photoMode) return;
++        if (qualityMode == QUALITY_MAX_MP) {
++            bindUseCases();
++        } else {
++            ensureExtensionsReady(true);
++        }
+     }
+ 
+     private void updateQualityButton() {
+@@ -1414,7 +1452,10 @@
+             LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+             if (lm == null) return;
+             if (Build.VERSION.SDK_INT >= 30) {
+-                String provider = lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ? LocationManager.GPS_PROVIDER : LocationManager.NETWORK_PROVIDER;
++                String provider = null;
++                if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) provider = LocationManager.GPS_PROVIDER;
++                else if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) provider = LocationManager.NETWORK_PROVIDER;
++                if (provider == null) return;
+                 lm.getCurrentLocation(provider, new CancellationSignal(), ContextCompat.getMainExecutor(this), loc -> {
+                     if (loc != null) { freshLocation = loc; freshLocationAt = System.currentTimeMillis(); }
+                 });
+@@ -1650,7 +1691,7 @@
+                 d.append("OEM Visage : ").append(extensionsManager.isExtensionAvailable(base, ExtensionMode.FACE_RETOUCH) ? "oui" : "non").append("\n");
+             } catch (Exception ignored) { }
+         }
+-        d.append("\nPiiWii Camera 1.3.0 · CameraX 1.6.2");
++        d.append("\nPiiWii Camera 1.3.1 · CameraX 1.6.2");
+         final String diagnosticText = d.toString();
+         new AlertDialog.Builder(this)
+                 .setTitle("Diagnostic caméra")
+@@ -1746,6 +1787,44 @@
+                 .show();
+     }
+ 
++    private void forceStableStartupState() {
++        // Preserve signatures and UI preferences, but reset camera states that can crash vendor stacks.
++        photoMode = true;
++        qualityMode = QUALITY_OEM_AUTO;
++        photoResolutionMode = RES_12MP;
++        lowLightBoostRequested = false;
++        videoHdrRequested = false;
++        selectedPhysicalCameraId = null;
++        selectedPhysicalBaseZoom = 1f;
++        pendingWorldZoom = 1f;
++        safeStartupBind = true;
++        prefs.edit()
++                .putBoolean("photoMode", true)
++                .putInt("quality", QUALITY_OEM_AUTO)
++                .putInt("photoResolution", RES_12MP)
++                .putBoolean("lowLightBoost", false)
++                .putBoolean("videoHdr", false)
++                .apply();
++    }
++
++    private void markStartupStableSoon() {
++        if (root == null || prefs == null) return;
++        root.removeCallbacks(markStartupStableRunnable);
++        root.postDelayed(markStartupStableRunnable, 1800);
++    }
++
++    private final Runnable markStartupStableRunnable = () -> {
++        if (prefs != null) prefs.edit().putBoolean(PREF_STARTUP_PENDING, false).apply();
++        startupRecoveryMode = false;
++    };
++
++    private String safeMessage(Throwable t) {
++        if (t == null) return "erreur inconnue";
++        String m = t.getMessage();
++        if (m == null || m.trim().isEmpty()) return t.getClass().getSimpleName();
++        return m;
++    }
++
+     private void loadPreferences() {
+         flashMode = prefs.getInt("flash", ImageCapture.FLASH_MODE_AUTO);
+         timerSeconds = prefs.getInt("timer", 0);
+@@ -1827,12 +1906,16 @@
+ 
+     @Override protected void onResume() {
+         super.onResume();
+-        if (sensorManager != null && rotationSensor != null) sensorManager.registerListener(levelSensorListener, rotationSensor, SensorManager.SENSOR_DELAY_UI);
+-        if (signLocation) requestFreshLocation();
++        if (sensorManager != null && rotationSensor != null) {
++            try { sensorManager.registerListener(levelSensorListener, rotationSensor, SensorManager.SENSOR_DELAY_UI); }
++            catch (Exception ignored) { }
++        }
+     }
+ 
+     @Override protected void onPause() {
+-        if (sensorManager != null) sensorManager.unregisterListener(levelSensorListener);
++        if (sensorManager != null) {
++            try { sensorManager.unregisterListener(levelSensorListener); } catch (Exception ignored) { }
++        }
+         super.onPause();
+     }
+ 
+@@ -1849,8 +1932,8 @@
+ 
+     private void showError(String message) {
+         runOnUiThread(() -> {
+-            statusLabel.setText("Erreur caméra");
+-            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
++            if (statusLabel != null) statusLabel.setText("Erreur caméra");
++            if (!isFinishing() && !isDestroyed()) Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+         });
+     }
+ 
+@@ -1883,7 +1966,9 @@
+ 
+     @Override
+     protected void onDestroy() {
+-        stopRecordingIfNeeded();
++        try { stopRecordingIfNeeded(); } catch (Exception ignored) { }
++        if (root != null) root.removeCallbacks(markStartupStableRunnable);
++        if (prefs != null && isFinishing()) prefs.edit().putBoolean(PREF_STARTUP_PENDING, false).apply();
+         ioExecutor.shutdown();
+         super.onDestroy();
+     }
+ }
