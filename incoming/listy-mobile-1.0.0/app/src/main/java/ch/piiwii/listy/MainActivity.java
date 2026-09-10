@@ -91,7 +91,9 @@ public final class MainActivity extends Activity {
             webView.restoreState(state);
             dispatchPendingAction();
         } else {
-            webView.loadUrl(startUrlFor(pendingNativeAction));
+            String startAction = pendingNativeAction;
+            webView.loadUrl(startUrlFor(startAction));
+            if (!startAction.isEmpty()) pendingNativeAction = "";
         }
     }
 
