@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">ListY</string>
+    <string name="widget_quick_description">Ajouter rapidement un pense-bête</string>
+    <string name="widget_upcoming_description">Afficher les prochains pense-bêtes</string>
 </resources>
