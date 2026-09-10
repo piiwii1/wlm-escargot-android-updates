@@ -33,7 +33,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/piiwii-camera-v020 /tmp/piiwii-camera-out
+          # Repair the single Base64 transport typo introduced in part 00.
+          sed -i 's#RO/5AIzaXvoBgg#RO/5itzaXvoBgg#' piiwii-camera-v020/source-part-00
+          sha256sum piiwii-camera-v020/source-part-* | tee /tmp/piiwii-camera-out/part-sha256.txt
+          wc -c piiwii-camera-v020/source-part-* | tee /tmp/piiwii-camera-out/part-sizes.txt
           cat piiwii-camera-v020/source-part-* | base64 -d > /tmp/piiwii-camera-v020.zip
+          sha256sum /tmp/piiwii-camera-v020.zip | tee /tmp/piiwii-camera-out/reconstructed-sha256.txt
           echo '86d2cf4e43bfe344c3f1f3e61b4de89408622a68f9727c5294a8f1cebd6b5fd6  /tmp/piiwii-camera-v020.zip' | sha256sum -c -
           unzip -q /tmp/piiwii-camera-v020.zip -d /tmp/piiwii-camera-v020
           test -f /tmp/piiwii-camera-v020/PiiWii-Camera-0.2.0-public/app/build.gradle
