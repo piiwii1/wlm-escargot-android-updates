@@ -1,0 +1,44 @@
+--- PiiWii-Camera-1.3.1-public/app/build.gradle	2026-09-10 20:57:56.017567939 +0000
++++ PiiWii-Camera-1.3.2-public/app/build.gradle	2026-09-10 21:12:58.192685297 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 14
+-        versionName '1.3.1'
++        versionCode 15
++        versionName '1.3.2'
+     }
+ 
+     buildTypes {
+--- PiiWii-Camera-1.3.1-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 20:58:57.993124110 +0000
++++ PiiWii-Camera-1.3.2-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 21:12:58.192338011 +0000
+@@ -117,7 +117,7 @@
+     private static final int REQ_LOCATION = 102;
+     private static final int REQ_STORAGE = 103;
+     private static final String PREFS = "piiwii_camera_settings";
+-    private static final int APP_VERSION_CODE = 14;
++    private static final int APP_VERSION_CODE = 15;
+     private static final String PREF_STARTUP_PENDING = "startupPending";
+     private static final String PREF_LAST_VERSION = "lastVersionCode";
+ 
+@@ -431,7 +431,7 @@
+             Toast.makeText(this, "Moteur OEM en cours d’activation…", Toast.LENGTH_SHORT).show();
+             return true;
+         });
+-        resolutionButton.setOnClickListener(v -> cycleResolutionMode());
++        if (resolutionButton != null) resolutionButton.setOnClickListener(v -> cycleResolutionMode());
+         switchButton.setOnClickListener(v -> switchCamera());
+         if (quickSwitchButton != null) quickSwitchButton.setOnClickListener(v -> switchCamera());
+         lowLightButton.setOnClickListener(v -> toggleLowLightBoost());
+--- PiiWii-Camera-1.3.1-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:55:54.537623805 +0000
++++ PiiWii-Camera-1.3.2-public/app/src/main/res/layout/activity_main.xml	2026-09-10 21:12:58.192927025 +0000
+@@ -30,6 +30,8 @@
+                 <Button android:id="@+id/gridButton" android:layout_width="45dp" android:layout_height="38dp" android:background="@drawable/top_bg" android:text="▦" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="10sp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"/>
+                 <Space android:layout_width="5dp" android:layout_height="1dp"/>
+                 <Button android:id="@+id/qualityButton" android:layout_width="58dp" android:layout_height="38dp" android:background="@drawable/top_bg" android:text="AUTO+" android:textAllCaps="false" android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="10sp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"/>
++                <Space android:layout_width="5dp" android:layout_height="1dp"/>
++                <Button android:id="@+id/resolutionButton" android:layout_width="48dp" android:layout_height="38dp" android:background="@drawable/top_bg" android:text="12M" android:textAllCaps="false" android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="10sp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"/>
+                 <Button android:id="@+id/signatureMenuButton" android:layout_width="44dp" android:layout_height="38dp" android:background="@drawable/top_bg" android:text="✎" android:textAllCaps="false" android:textColor="#FFFFFF" android:textSize="18sp" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"/>
+                 <Space android:layout_width="5dp" android:layout_height="1dp"/>
+                 <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
