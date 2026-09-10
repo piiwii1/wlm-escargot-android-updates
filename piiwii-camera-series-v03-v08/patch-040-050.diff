@@ -1,0 +1,228 @@
+diff -ruN --exclude README.md PiiWii-Camera-0.4.0-public/app/build.gradle PiiWii-Camera-0.5.0-public/app/build.gradle
+--- PiiWii-Camera-0.4.0-public/app/build.gradle	2026-09-10 19:19:18.151024259 +0000
++++ PiiWii-Camera-0.5.0-public/app/build.gradle	2026-09-10 19:20:01.133052651 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 4
+-        versionName '0.4.0'
++        versionCode 5
++        versionName '0.5.0'
+     }
+ 
+     buildTypes {
+diff -ruN --exclude README.md PiiWii-Camera-0.4.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-0.5.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-0.4.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:19:18.152405458 +0000
++++ PiiWii-Camera-0.5.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:20:01.134721322 +0000
+@@ -39,6 +39,7 @@
+ import androidx.camera.core.Camera;
+ import androidx.camera.core.CameraInfo;
+ import androidx.camera.core.CameraSelector;
++import androidx.camera.core.DynamicRange;
+ import androidx.camera.core.ExposureState;
+ import androidx.camera.core.FocusMeteringAction;
+ import androidx.camera.core.ImageCapture;
+@@ -115,6 +116,8 @@
+     private Button switchButton;
+     private Button lowLightButton;
+     private Button stabilizeButton;
++    private Button videoQualityButton;
++    private Button videoHdrButton;
+     private Button captureButton;
+     private Button photoModeButton;
+     private Button videoModeButton;
+@@ -144,6 +147,8 @@
+     private boolean gridEnabled = false;
+     private boolean lowLightBoostRequested = false;
+     private boolean stabilizationEnabled = true;
++    private int videoQualityMode = 0;
++    private boolean videoHdrRequested = false;
+     private float minZoom = 1f;
+     private float maxZoom = 1f;
+     private int minExposure = 0;
+@@ -184,6 +189,8 @@
+         switchButton = findViewById(R.id.switchButton);
+         lowLightButton = findViewById(R.id.lowLightButton);
+         stabilizeButton = findViewById(R.id.stabilizeButton);
++        videoQualityButton = findViewById(R.id.videoQualityButton);
++        videoHdrButton = findViewById(R.id.videoHdrButton);
+         captureButton = findViewById(R.id.captureButton);
+         photoModeButton = findViewById(R.id.photoMode);
+         videoModeButton = findViewById(R.id.videoMode);
+@@ -206,6 +213,7 @@
+         updateQualityButton();
+         updateLowLightButton();
+         updateStabilizeButton();
++        updateVideoButtons();
+         updateSignatureButtons();
+         updateModeButtons();
+ 
+@@ -224,6 +232,8 @@
+         switchButton.setOnClickListener(v -> switchCamera());
+         lowLightButton.setOnClickListener(v -> toggleLowLightBoost());
+         stabilizeButton.setOnClickListener(v -> { stabilizationEnabled = !stabilizationEnabled; savePreferences(); updateStabilizeButton(); if (!photoMode) bindUseCases(); });
++        videoQualityButton.setOnClickListener(v -> { videoQualityMode = (videoQualityMode + 1) % 4; savePreferences(); updateVideoButtons(); if (!photoMode) bindUseCases(); });
++        videoHdrButton.setOnClickListener(v -> { videoHdrRequested = !videoHdrRequested; savePreferences(); updateVideoButtons(); if (!photoMode) bindUseCases(); });
+         captureButton.setOnClickListener(v -> {
+             if (photoMode) triggerPhotoWithTimer();
+             else toggleVideoRecording();
+@@ -431,9 +441,10 @@
+                 statusLabel.setText("Prêt · touchez pour faire le point");
+                 originalHint.setText(hasAnySignature() ? "Original + copie signée" : "Original intact");
+             } else {
+-                qualityLabel.setText("VIDÉO · QUALITÉ MAX" + (stabilizationEnabled ? " · STAB" : ""));
++                Quality requestedQuality = requestedVideoQuality();
++                qualityLabel.setText("VIDÉO · " + videoQualityName() + (stabilizationEnabled ? " · STAB" : "") + (videoHdrRequested ? " · HDR10" : ""));
+                 recorder = new Recorder.Builder()
+-                        .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
++                        .setQualitySelector(QualitySelector.from(requestedQuality))
+                         .build();
+                 try {
+                     Preview.Builder stabilizedPreviewBuilder = new Preview.Builder();
+@@ -442,12 +453,15 @@
+                     preview.setSurfaceProvider(previewView.getSurfaceProvider());
+                     VideoCapture.Builder<Recorder> videoBuilder = new VideoCapture.Builder<>(recorder);
+                     if (stabilizationEnabled) videoBuilder.setVideoStabilizationEnabled(true);
++                    if (videoHdrRequested) videoBuilder.setDynamicRange(DynamicRange.HDR_UNSPECIFIED_10_BIT);
+                     videoCapture = videoBuilder.build();
+                     camera = cameraProvider.bindToLifecycle(this, baseSelector(), preview, videoCapture);
+                 } catch (Exception stabError) {
+                     cameraProvider.unbindAll();
+                     preview = new Preview.Builder().build();
+                     preview.setSurfaceProvider(previewView.getSurfaceProvider());
++                    if (videoHdrRequested) { videoHdrRequested = false; updateVideoButtons(); }
++                    recorder = new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HIGHEST)).build();
+                     videoCapture = VideoCapture.withOutput(recorder);
+                     camera = cameraProvider.bindToLifecycle(this, baseSelector(), preview, videoCapture);
+                 }
+@@ -1079,6 +1093,8 @@
+         exposureSeek.setVisibility(photoMode ? View.VISIBLE : View.GONE);
+         exposureLabel.setVisibility(photoMode ? View.VISIBLE : View.GONE);
+         qualityButton.setVisibility(photoMode ? View.VISIBLE : View.INVISIBLE);
++        videoQualityButton.setVisibility(photoMode ? View.INVISIBLE : View.VISIBLE);
++        videoHdrButton.setVisibility(photoMode ? View.INVISIBLE : View.VISIBLE);
+     }
+ 
+     private void toggleLowLightBoost() {
+@@ -1118,12 +1134,39 @@
+         styleTopButton(stabilizeButton, stabilizationEnabled);
+     }
+ 
++    private Quality requestedVideoQuality() {
++        if (videoQualityMode == 1) return Quality.UHD;
++        if (videoQualityMode == 2) return Quality.FHD;
++        if (videoQualityMode == 3) return Quality.HD;
++        return Quality.HIGHEST;
++    }
++
++    private String videoQualityName() {
++        if (videoQualityMode == 1) return "4K";
++        if (videoQualityMode == 2) return "1080p";
++        if (videoQualityMode == 3) return "720p";
++        return "MAX";
++    }
++
++    private void updateVideoButtons() {
++        if (videoQualityButton != null) {
++            videoQualityButton.setText(videoQualityMode == 1 ? "4K" : videoQualityMode == 2 ? "1080p" : videoQualityMode == 3 ? "720p" : "Vidéo max");
++            styleTopButton(videoQualityButton, videoQualityMode != 0);
++        }
++        if (videoHdrButton != null) {
++            videoHdrButton.setText(videoHdrRequested ? "HDR10 on" : "HDR10 off");
++            styleTopButton(videoHdrButton, videoHdrRequested);
++        }
++    }
++
+     private void loadPreferences() {
+         flashMode = prefs.getInt("flash", ImageCapture.FLASH_MODE_AUTO);
+         timerSeconds = prefs.getInt("timer", 0);
+         gridEnabled = prefs.getBoolean("grid", false);
+         lowLightBoostRequested = prefs.getBoolean("lowLightBoost", false);
+         stabilizationEnabled = prefs.getBoolean("stabilization", true);
++        videoQualityMode = Math.max(0, Math.min(3, prefs.getInt("videoQuality", 0)));
++        videoHdrRequested = prefs.getBoolean("videoHdr", false);
+         qualityMode = Math.max(QUALITY_OEM_AUTO, Math.min(QUALITY_MAX_MP, prefs.getInt("quality", QUALITY_OEM_AUTO)));
+         photoMode = prefs.getBoolean("photoMode", true);
+         signDate = prefs.getBoolean("signDate", false);
+@@ -1141,6 +1184,8 @@
+                 .putBoolean("grid", gridEnabled)
+                 .putBoolean("lowLightBoost", lowLightBoostRequested)
+                 .putBoolean("stabilization", stabilizationEnabled)
++                .putInt("videoQuality", videoQualityMode)
++                .putBoolean("videoHdr", videoHdrRequested)
+                 .putInt("quality", qualityMode)
+                 .putBoolean("photoMode", photoMode)
+                 .putBoolean("signDate", signDate)
+diff -ruN --exclude README.md PiiWii-Camera-0.4.0-public/app/src/main/res/layout/activity_main.xml PiiWii-Camera-0.5.0-public/app/src/main/res/layout/activity_main.xml
+--- PiiWii-Camera-0.4.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:19:18.151625935 +0000
++++ PiiWii-Camera-0.5.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:20:01.133935935 +0000
+@@ -135,7 +135,7 @@
+ 
+             <Button
+                 android:id="@+id/lowLightButton"
+-                android:layout_width="112dp"
++                android:layout_width="76dp"
+                 android:layout_height="30dp"
+                 android:background="@drawable/top_bg"
+                 android:text="☾ Boost off"
+@@ -146,11 +146,11 @@
+                 android:minHeight="0dp"
+                 android:padding="0dp" />
+ 
+-            <Space android:layout_width="8dp" android:layout_height="1dp" />
++            <Space android:layout_width="5dp" android:layout_height="1dp" />
+ 
+             <Button
+                 android:id="@+id/stabilizeButton"
+-                android:layout_width="112dp"
++                android:layout_width="76dp"
+                 android:layout_height="30dp"
+                 android:background="@drawable/top_active_bg"
+                 android:text="◉ Stab on"
+@@ -160,6 +160,36 @@
+                 android:minWidth="0dp"
+                 android:minHeight="0dp"
+                 android:padding="0dp" />
++
++            <Space android:layout_width="5dp" android:layout_height="1dp" />
++
++            <Button
++                android:id="@+id/videoQualityButton"
++                android:layout_width="76dp"
++                android:layout_height="30dp"
++                android:background="@drawable/top_bg"
++                android:text="Vidéo max"
++                android:textAllCaps="false"
++                android:textColor="#FFFFFF"
++                android:textSize="9sp"
++                android:minWidth="0dp"
++                android:minHeight="0dp"
++                android:padding="0dp" />
++
++            <Space android:layout_width="5dp" android:layout_height="1dp" />
++
++            <Button
++                android:id="@+id/videoHdrButton"
++                android:layout_width="76dp"
++                android:layout_height="30dp"
++                android:background="@drawable/top_bg"
++                android:text="HDR10 off"
++                android:textAllCaps="false"
++                android:textColor="#FFFFFF"
++                android:textSize="9sp"
++                android:minWidth="0dp"
++                android:minHeight="0dp"
++                android:padding="0dp" />
+         </LinearLayout>
+ 
+         <TextView
+@@ -408,7 +438,7 @@
+                 android:layout_gravity="center_vertical|end"
+                 android:layout_marginEnd="16dp"
+                 android:gravity="end"
+-                android:text="PiiWii Camera\nv0.4.0"
++                android:text="PiiWii Camera\nv0.5.0"
+                 android:textColor="#AFFFFFFF"
+                 android:textSize="10sp" />
+         </FrameLayout>
