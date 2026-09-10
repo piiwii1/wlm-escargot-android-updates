@@ -1,0 +1,182 @@
+diff -ruN a/app/build.gradle b/app/build.gradle
+--- a/app/build.gradle	2026-09-10 22:38:32.518361686 +0000
++++ b/app/build.gradle	2026-09-10 22:49:59.286622023 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 21
+-        versionName '1.3.8'
++        versionCode 22
++        versionName '1.3.9'
+     }
+ 
+     buildTypes {
+diff -ruN a/app/src/main/java/ch/piiwii/camera/MainActivity.java b/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- a/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 22:38:32.519091717 +0000
++++ b/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 22:49:59.288131307 +0000
+@@ -117,7 +117,7 @@
+     private static final int REQ_LOCATION = 102;
+     private static final int REQ_STORAGE = 103;
+     private static final String PREFS = "piiwii_camera_settings";
+-    private static final int APP_VERSION_CODE = 20;
++    private static final int APP_VERSION_CODE = 22;
+     private static final String PREF_STARTUP_PENDING = "startupPending";
+     private static final String PREF_LAST_VERSION = "lastVersionCode";
+ 
+@@ -134,6 +134,8 @@
+     private static final int RES_AUTO = 3;
+ 
+     private FrameLayout root;
++    private FrameLayout previewFrame;
++    private View safeContent;
+     private PreviewView previewView;
+     private GridOverlayView gridOverlay;
+     private View focusRing;
+@@ -261,6 +263,8 @@
+         configureSystemBars();
+ 
+         root = findViewById(R.id.root);
++        previewFrame = findViewById(R.id.previewFrame);
++        safeContent = findViewById(R.id.safeContent);
+         previewView = findViewById(R.id.previewView);
+         gridOverlay = findViewById(R.id.gridOverlay);
+         focusRing = findViewById(R.id.focusRing);
+@@ -318,11 +322,12 @@
+         bottomPanel = findViewById(R.id.bottomPanel);
+ 
+         boolean isLandscapeUi = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+-        // v1.3.8: landscape is now an immersive camera surface too. The old FIT_CENTER path
+-        // created a small framed preview with large black bands on the S23 Ultra. FILL_CENTER keeps
+-        // the viewfinder full-height and lets the overlay controls float above it, like Samsung Camera.
+-        previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
++        // v1.3.9: use a true 4:3 landscape viewfinder, matching Samsung Photo mode.
++        // The frame itself is sized to 4:3, so FIT_CENTER preserves the complete image without
++        // the aggressive crop introduced by the temporary v1.3.8 FILL_CENTER experiment.
++        previewView.setScaleType(isLandscapeUi ? PreviewView.ScaleType.FIT_CENTER : PreviewView.ScaleType.FILL_CENTER);
+         applyNavigationInsets();
++        if (isLandscapeUi && safeContent != null) safeContent.post(this::applyLandscapeReferenceGeometry);
+ 
+         boolean previousStartupInterrupted = prefs.getBoolean(PREF_STARTUP_PENDING, false);
+         int previousVersion = prefs.getInt(PREF_LAST_VERSION, 0);
+@@ -373,16 +378,57 @@
+             // extend behind the cut-out; only the floating tool stack is shifted to a safe position.
+             if (landscape) {
+                 v.setPadding(nav.left, 0, nav.right, nav.bottom);
+-                if (topPanel != null) topPanel.setTranslationX(Math.max(0, cutout.left - nav.left));
++                // Keep the left rail itself safe from the camera cut-out, without shifting the 4:3 frame.
++                if (topPanel != null) topPanel.setPadding(Math.max(0, cutout.left - nav.left), topPanel.getPaddingTop(), 0, topPanel.getPaddingBottom());
++                if (safeContent != null) safeContent.post(this::applyLandscapeReferenceGeometry);
+             } else {
+                 v.setPadding(Math.max(nav.left, cutout.left), 0, Math.max(nav.right, cutout.right), nav.bottom);
+-                if (topPanel != null) topPanel.setTranslationX(0f);
++                if (topPanel != null) { topPanel.setTranslationX(0f); topPanel.setPadding(0, topPanel.getPaddingTop(), 0, topPanel.getPaddingBottom()); }
+             }
+             return insets;
+         });
+         ViewCompat.requestApplyInsets(root);
+     }
+ 
++    private void applyLandscapeReferenceGeometry() {
++        if (getResources().getConfiguration().orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE) return;
++        if (safeContent == null || previewFrame == null || topPanel == null || bottomPanel == null) return;
++        int w = safeContent.getWidth();
++        int h = safeContent.getHeight();
++        if (w <= 0 || h <= 0) return;
++
++        // Samsung-style geometry: slim black tools rail + full-height 4:3 photo frame + black capture dock.
++        int leftRail = dp(52);
++        int minimumDock = dp(176);
++        int preferredPreview = Math.round(h * 4f / 3f);
++        int maxPreview = Math.max(dp(240), w - leftRail - minimumDock);
++        int previewWidth = Math.min(preferredPreview, maxPreview);
++        int dockWidth = Math.max(minimumDock, w - leftRail - previewWidth);
++
++        android.widget.FrameLayout.LayoutParams pp = (android.widget.FrameLayout.LayoutParams) previewFrame.getLayoutParams();
++        pp.width = previewWidth;
++        pp.height = android.widget.FrameLayout.LayoutParams.MATCH_PARENT;
++        pp.leftMargin = leftRail;
++        pp.rightMargin = 0;
++        pp.gravity = android.view.Gravity.START | android.view.Gravity.TOP;
++        previewFrame.setLayoutParams(pp);
++
++        android.widget.FrameLayout.LayoutParams tp = (android.widget.FrameLayout.LayoutParams) topPanel.getLayoutParams();
++        tp.width = leftRail;
++        tp.height = android.widget.FrameLayout.LayoutParams.MATCH_PARENT;
++        tp.leftMargin = 0;
++        tp.gravity = android.view.Gravity.START | android.view.Gravity.TOP;
++        topPanel.setLayoutParams(tp);
++
++        android.widget.FrameLayout.LayoutParams bp = (android.widget.FrameLayout.LayoutParams) bottomPanel.getLayoutParams();
++        bp.width = dockWidth;
++        bp.height = android.widget.FrameLayout.LayoutParams.MATCH_PARENT;
++        bp.gravity = android.view.Gravity.END | android.view.Gravity.TOP;
++        bottomPanel.setLayoutParams(bp);
++
++        previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
++    }
++
+     private void toggleAdvancedUi() {
+         advancedUiVisible = !advancedUiVisible;
+         int vis = advancedUiVisible ? View.VISIBLE : View.GONE;
+diff -ruN a/app/src/main/res/layout-land/activity_main.xml b/app/src/main/res/layout-land/activity_main.xml
+--- a/app/src/main/res/layout-land/activity_main.xml	2026-09-10 22:38:32.648736842 +0000
++++ b/app/src/main/res/layout-land/activity_main.xml	2026-09-10 22:50:00.055780452 +0000
+@@ -16,6 +16,7 @@
+             android:id="@+id/previewFrame"
+             android:layout_width="match_parent"
+             android:layout_height="match_parent"
++            android:layout_marginStart="52dp"
+             android:layout_marginEnd="176dp"
+             android:background="#000000">
+ 
+@@ -141,13 +142,13 @@
+                 android:visibility="gone" />
+         </FrameLayout>
+ 
+-        <!-- Floating quick controls: no opaque left rail anymore. -->
++        <!-- v1.3.9: real black left rail, as on Samsung Camera landscape. -->
+         <LinearLayout
+             android:id="@+id/topPanel"
+-            android:layout_width="54dp"
+-            android:layout_height="wrap_content"
+-            android:layout_gravity="center_vertical|start"
+-            android:layout_marginStart="6dp"
++            android:layout_width="52dp"
++            android:layout_height="match_parent"
++            android:layout_gravity="start"
++            android:background="#000000"
+             android:gravity="center"
+             android:orientation="vertical"
+             android:paddingTop="3dp"
+@@ -167,7 +168,7 @@
+             <Button android:id="@+id/switchButton" android:layout_width="1dp" android:layout_height="1dp" android:minWidth="0dp" android:minHeight="0dp" android:visibility="gone" />
+         </LinearLayout>
+ 
+-        <!-- Dedicated capture dock. It is narrow and stable; advanced controls scroll inside only when PLUS is open. -->
++        <!-- Dedicated black capture dock. Its width is computed at runtime after the 4:3 frame. -->
+         <ScrollView
+             android:id="@+id/bottomPanel"
+             android:layout_width="176dp"
+@@ -205,14 +206,15 @@
+                 <Space android:layout_width="1dp" android:layout_height="10dp" />
+ 
+                 <LinearLayout
++                    android:id="@+id/landscapeModeRail"
+                     android:layout_width="match_parent"
+-                    android:layout_height="38dp"
++                    android:layout_height="124dp"
+                     android:gravity="center"
+-                    android:orientation="horizontal">
+-                    <Button android:id="@+id/portraitMode" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="PORTRAIT" android:textColor="#969696" android:textSize="7sp" />
+-                    <Button android:id="@+id/photoMode" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="PHOTO" android:textColor="#FFFFFF" android:textSize="8sp" android:textStyle="bold" />
+-                    <Button android:id="@+id/videoMode" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="VIDÉO" android:textColor="#969696" android:textSize="7sp" />
+-                    <Button android:id="@+id/moreButton" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="PLUS" android:textColor="#969696" android:textSize="7sp" />
++                    android:orientation="vertical">
++                    <Button android:id="@+id/moreButton" android:layout_width="match_parent" android:layout_height="30dp" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="PLUS" android:textColor="#969696" android:textSize="9sp" />
++                    <Button android:id="@+id/videoMode" android:layout_width="match_parent" android:layout_height="30dp" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="VIDÉO" android:textColor="#969696" android:textSize="9sp" />
++                    <Button android:id="@+id/photoMode" android:layout_width="match_parent" android:layout_height="32dp" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="PHOTO" android:textColor="#FFFFFF" android:textSize="11sp" android:textStyle="bold" />
++                    <Button android:id="@+id/portraitMode" android:layout_width="match_parent" android:layout_height="30dp" android:background="@android:color/transparent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:text="PORTRAIT" android:textColor="#969696" android:textSize="9sp" />
+                 </LinearLayout>
+ 
+                 <Space android:layout_width="1dp" android:layout_height="8dp" />
