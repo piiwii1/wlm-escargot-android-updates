@@ -1,0 +1,192 @@
+diff -ruN --exclude README.md PiiWii-Camera-0.6.0-public/app/build.gradle PiiWii-Camera-0.7.0-public/app/build.gradle
+--- PiiWii-Camera-0.6.0-public/app/build.gradle	2026-09-10 19:20:32.333163609 +0000
++++ PiiWii-Camera-0.7.0-public/app/build.gradle	2026-09-10 19:21:11.330469177 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 6
+-        versionName '0.6.0'
++        versionCode 7
++        versionName '0.7.0'
+     }
+ 
+     buildTypes {
+diff -ruN --exclude README.md PiiWii-Camera-0.6.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-0.7.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-0.6.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:20:32.334181711 +0000
++++ PiiWii-Camera-0.7.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:21:11.331565235 +0000
+@@ -3,6 +3,7 @@
+ import android.Manifest;
+ import android.content.ContentResolver;
+ import android.content.ContentValues;
++import android.content.Intent;
+ import android.content.Context;
+ import android.content.SharedPreferences;
+ import android.content.pm.PackageManager;
+@@ -31,6 +32,7 @@
+ import android.widget.Button;
+ import android.widget.EditText;
+ import android.widget.FrameLayout;
++import android.widget.ImageView;
+ import android.widget.SeekBar;
+ import android.widget.TextView;
+ import android.widget.Toast;
+@@ -109,6 +111,9 @@
+     private TextView statusLabel;
+     private TextView originalHint;
+     private TextView exposureLabel;
++    private ImageView lastPhotoThumb;
++    private Uri lastMediaUri;
++    private String lastMediaType = "image/*";
+     private SeekBar zoomSeek;
+     private SeekBar exposureSeek;
+     private Button flashButton;
+@@ -187,6 +192,7 @@
+         statusLabel = findViewById(R.id.statusLabel);
+         originalHint = findViewById(R.id.originalHint);
+         exposureLabel = findViewById(R.id.exposureLabel);
++        lastPhotoThumb = findViewById(R.id.lastPhotoThumb);
+         zoomSeek = findViewById(R.id.zoomSeek);
+         exposureSeek = findViewById(R.id.exposureSeek);
+         flashButton = findViewById(R.id.flashButton);
+@@ -216,6 +222,7 @@
+         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
+         loadPreferences();
+         setupInteractions();
++        restoreLastMediaPreview();
+         updateFlashButton();
+         updateTimerButton();
+         updateGridButton();
+@@ -235,6 +242,7 @@
+ 
+     private void setupInteractions() {
+         flashButton.setOnClickListener(v -> cycleFlash());
++        lastPhotoThumb.setOnClickListener(v -> openLastMedia());
+         timerButton.setOnClickListener(v -> cycleTimer());
+         gridButton.setOnClickListener(v -> toggleGrid());
+         qualityButton.setOnClickListener(v -> cycleQualityMode());
+@@ -807,6 +815,8 @@
+             Uri finalSignedUri = signedUri;
+             runOnUiThread(() -> {
+                 captureButton.setEnabled(true);
++                Uri visibleUri = finalSignedUri != null ? finalSignedUri : finalOriginalUri;
++                if (visibleUri != null) rememberLastMedia(visibleUri, "image/*");
+                 if (finalSignedUri != null) {
+                     statusLabel.setText("Original intact + copie signée");
+                     Toast.makeText(this, "Original + version signée enregistrés", Toast.LENGTH_SHORT).show();
+@@ -1069,6 +1079,8 @@
+                     statusLabel.setText("Erreur vidéo");
+                     Toast.makeText(this, "Erreur vidéo : " + fin.getError(), Toast.LENGTH_LONG).show();
+                 } else {
++                    Uri videoUri = fin.getOutputResults().getOutputUri();
++                    if (videoUri != null && !Uri.EMPTY.equals(videoUri)) rememberLastMedia(videoUri, "video/*");
+                     statusLabel.setText("Vidéo enregistrée");
+                     Toast.makeText(this, "Vidéo enregistrée", Toast.LENGTH_SHORT).show();
+                 }
+@@ -1180,6 +1192,62 @@
+         }
+     }
+ 
++    private void rememberLastMedia(Uri uri, String type) {
++        lastMediaUri = uri;
++        lastMediaType = type;
++        prefs.edit().putString("lastMediaUri", uri.toString()).putString("lastMediaType", type).apply();
++        if (type.startsWith("image")) loadThumb(uri);
++        else {
++            lastPhotoThumb.setImageDrawable(null);
++            lastPhotoThumb.setContentDescription("Dernière vidéo");
++        }
++    }
++
++    private void restoreLastMediaPreview() {
++        if (prefs == null || lastPhotoThumb == null) return;
++        String uriText = prefs.getString("lastMediaUri", null);
++        lastMediaType = prefs.getString("lastMediaType", "image/*");
++        if (uriText == null || uriText.isEmpty()) return;
++        try {
++            lastMediaUri = Uri.parse(uriText);
++            if (lastMediaType.startsWith("image")) loadThumb(lastMediaUri);
++            else lastPhotoThumb.setContentDescription("Dernière vidéo");
++        } catch (Exception ignored) { }
++    }
++
++    private void loadThumb(Uri uri) {
++        ioExecutor.execute(() -> {
++            try {
++                BitmapFactory.Options bounds = new BitmapFactory.Options();
++                bounds.inJustDecodeBounds = true;
++                try (InputStream in = getContentResolver().openInputStream(uri)) { if (in != null) BitmapFactory.decodeStream(in, null, bounds); }
++                int sample = 1;
++                int biggest = Math.max(bounds.outWidth, bounds.outHeight);
++                while (biggest / sample > 320) sample *= 2;
++                BitmapFactory.Options opts = new BitmapFactory.Options();
++                opts.inSampleSize = Math.max(1, sample);
++                final Bitmap thumb;
++                try (InputStream in = getContentResolver().openInputStream(uri)) { thumb = in == null ? null : BitmapFactory.decodeStream(in, null, opts); }
++                if (thumb != null) runOnUiThread(() -> lastPhotoThumb.setImageBitmap(thumb));
++            } catch (Exception ignored) { }
++        });
++    }
++
++    private void openLastMedia() {
++        if (lastMediaUri == null) {
++            Toast.makeText(this, "Aucune capture récente", Toast.LENGTH_SHORT).show();
++            return;
++        }
++        try {
++            Intent intent = new Intent(Intent.ACTION_VIEW);
++            intent.setDataAndType(lastMediaUri, lastMediaType);
++            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
++            startActivity(intent);
++        } catch (Exception e) {
++            Toast.makeText(this, "Impossible d'ouvrir la dernière capture", Toast.LENGTH_SHORT).show();
++        }
++    }
++
+     private void editCustomSignature() {
+         EditText input = new EditText(this);
+         input.setSingleLine(false);
+diff -ruN --exclude README.md PiiWii-Camera-0.6.0-public/app/src/main/res/layout/activity_main.xml PiiWii-Camera-0.7.0-public/app/src/main/res/layout/activity_main.xml
+--- PiiWii-Camera-0.6.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:20:32.333453458 +0000
++++ PiiWii-Camera-0.7.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:21:11.330770213 +0000
+@@ -415,16 +415,28 @@
+             android:layout_width="match_parent"
+             android:layout_height="92dp">
+ 
++            <ImageView
++                android:id="@+id/lastPhotoThumb"
++                android:layout_width="58dp"
++                android:layout_height="58dp"
++                android:layout_gravity="center_vertical|start"
++                android:layout_marginStart="14dp"
++                android:background="@drawable/zoom_bg"
++                android:padding="2dp"
++                android:scaleType="centerCrop"
++                android:contentDescription="Dernière capture" />
++
+             <TextView
+                 android:id="@+id/originalHint"
+                 android:layout_width="128dp"
+                 android:layout_height="wrap_content"
+-                android:layout_gravity="center_vertical|start"
+-                android:layout_marginStart="16dp"
++                android:layout_gravity="bottom|start"
++                android:layout_marginStart="12dp"
++                android:layout_marginBottom="1dp"
+                 android:gravity="start"
+                 android:text="Original intact"
+                 android:textColor="#D8FFFFFF"
+-                android:textSize="10sp" />
++                android:textSize="9sp" />
+ 
+             <Button
+                 android:id="@+id/captureButton"
+@@ -442,7 +454,7 @@
+                 android:layout_gravity="center_vertical|end"
+                 android:layout_marginEnd="16dp"
+                 android:gravity="end"
+-                android:text="PiiWii Camera\nv0.6.0"
++                android:text="PiiWii Camera\nv0.7.0"
+                 android:textColor="#AFFFFFFF"
+                 android:textSize="10sp" />
+         </FrameLayout>
