@@ -1,0 +1,102 @@
+name: Build PiiWii Camera 0.3.0 to 0.8.0 unsigned
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/piiwii-camera-series-v03-v08.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Restore v0.2.0 base and build series
+        id: series
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          mkdir -p /tmp/piiwii-camera-base /tmp/piiwii-camera-out
+          cp -R piiwii-camera-v020 /tmp/v020-transport
+          sed -i 's#RO/5AIzaXvoBgg#RO/5itzaXvoBgg#' /tmp/v020-transport/source-part-00
+          cat /tmp/v020-transport/source-part-* | base64 -d > /tmp/piiwii-camera-v020.zip
+          echo '86d2cf4e43bfe344c3f1f3e61b4de89408622a68f9727c5294a8f1cebd6b5fd6  /tmp/piiwii-camera-v020.zip' | sha256sum -c - || exit 2
+          unzip -q /tmp/piiwii-camera-v020.zip -d /tmp/piiwii-camera-base
+          cp -R /tmp/piiwii-camera-base/PiiWii-Camera-0.2.0-public /tmp/piiwii-camera-work
+          cd /tmp/piiwii-camera-work
+
+          FAIL=0
+          build_one() {
+            VER="$1"
+            PATCH="$2"
+            echo "===== APPLY $VER =====" | tee "/tmp/piiwii-camera-out/build-$VER.log"
+            if ! patch -p1 --batch < "$GITHUB_WORKSPACE/$PATCH" >> "/tmp/piiwii-camera-out/build-$VER.log" 2>&1; then
+              echo "PATCH FAILED $VER" | tee -a "/tmp/piiwii-camera-out/build-$VER.log"
+              FAIL=1
+              return
+            fi
+            set +e
+            gradle -p /tmp/piiwii-camera-work --no-daemon :app:assembleRelease >> "/tmp/piiwii-camera-out/build-$VER.log" 2>&1
+            RC=$?
+            set -e
+            if [ "$RC" -ne 0 ]; then
+              echo "BUILD FAILED $VER rc=$RC" | tee -a "/tmp/piiwii-camera-out/build-$VER.log"
+              FAIL=1
+              set +e
+              return
+            fi
+            APK=/tmp/piiwii-camera-work/app/build/outputs/apk/release/app-release-unsigned.apk
+            if [ ! -s "$APK" ]; then
+              echo "APK MISSING $VER" | tee -a "/tmp/piiwii-camera-out/build-$VER.log"
+              FAIL=1
+              set +e
+              return
+            fi
+            "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$APK" "/tmp/piiwii-camera-out/PiiWii-Camera-$VER-ALIGNED-UNSIGNED.apk"
+            "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "/tmp/piiwii-camera-out/PiiWii-Camera-$VER-ALIGNED-UNSIGNED.apk" > "/tmp/piiwii-camera-out/badging-$VER.txt"
+            sha256sum "/tmp/piiwii-camera-out/PiiWii-Camera-$VER-ALIGNED-UNSIGNED.apk" > "/tmp/piiwii-camera-out/unsigned-sha256-$VER.txt"
+            rm -rf /tmp/piiwii-camera-work/app/build
+            set +e
+          }
+
+          set +e
+          build_one 0.3.0 piiwii-camera-series-v03-v08/patch-020-030.diff
+          build_one 0.4.0 piiwii-camera-series-v03-v08/patch-030-040.diff
+          build_one 0.5.0 piiwii-camera-series-v03-v08/patch-040-050.diff
+          build_one 0.6.0 piiwii-camera-series-v03-v08/patch-050-060.diff
+          build_one 0.7.0 piiwii-camera-series-v03-v08/patch-060-070.diff
+          build_one 0.8.0 piiwii-camera-series-v03-v08/patch-070-080.diff
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/piiwii-camera-out/apksigner.jar
+          echo "$FAIL" > /tmp/piiwii-camera-out/series-fail-code.txt
+          exit "$FAIL"
+
+      - name: Upload series output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Camera-0.3.0-to-0.8.0-unsigned-tools
+          if-no-files-found: error
+          retention-days: 7
+          path: /tmp/piiwii-camera-out/
+
+      - name: Fail if one or more builds failed
+        if: steps.series.outcome != 'success'
+        run: exit 1
