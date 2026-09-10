@@ -1,0 +1,112 @@
+name: Build PiiWii Camera 0.9.0 to 1.3.0 unsigned
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/piiwii-camera-series-v09-v13.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Restore v0.8.0 base and build series
+        id: series
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          mkdir -p /tmp/piiwii-camera-base /tmp/piiwii-camera-out /tmp/piiwii-new-patches
+          cp -R piiwii-camera-v020 /tmp/v020-transport
+          sed -i 's#RO/5AIzaXvoBgg#RO/5itzaXvoBgg#' /tmp/v020-transport/source-part-00
+          cat /tmp/v020-transport/source-part-* | base64 -d > /tmp/piiwii-camera-v020.zip
+          echo '86d2cf4e43bfe344c3f1f3e61b4de89408622a68f9727c5294a8f1cebd6b5fd6  /tmp/piiwii-camera-v020.zip' | sha256sum -c - || exit 2
+          unzip -q /tmp/piiwii-camera-v020.zip -d /tmp/piiwii-camera-base
+          cp -R /tmp/piiwii-camera-base/PiiWii-Camera-0.2.0-public /tmp/piiwii-camera-work
+          cd /tmp/piiwii-camera-work
+
+          for p in \
+            patch-020-030.diff \
+            patch-030-040.diff \
+            patch-040-050.diff \
+            patch-050-060.diff \
+            patch-060-070.diff \
+            patch-070-080.diff; do
+            patch -p1 --batch < "$GITHUB_WORKSPACE/piiwii-camera-series-v03-v08/$p" || exit 3
+          done
+
+          decode_patch() {
+            SRC="$1"; DST="$2"; EXPECTED="$3"
+            base64 -d "$GITHUB_WORKSPACE/piiwii-camera-series-v09-v13/$SRC" | gzip -d > "/tmp/piiwii-new-patches/$DST"
+            echo "$EXPECTED  /tmp/piiwii-new-patches/$DST" | sha256sum -c - || exit 4
+          }
+          decode_patch patch-080-090.diff.gz.b64 patch-080-090.diff b442421a42eb94838849f52a1362c4f09e58370f4b9fd5fc38a5bf99a6089b6e
+          decode_patch patch-090-100.diff.gz.b64 patch-090-100.diff c522eed53344a13772e161cc5597072b03e75a8354bc891a0d12b7660b42f849
+          decode_patch patch-100-110.diff.gz.b64 patch-100-110.diff 861977974c5089c0277a65cb34fbe59955c4a5f9cc657933e87f5790a8eed6b6
+          decode_patch patch-110-120.diff.gz.b64 patch-110-120.diff 7e4242a4a930fb16eb50cab8f3f9734234c68f3b37c061963f830ee53f317ec5
+          decode_patch patch-120-130.diff.gz.b64 patch-120-130.diff 67180f82fb9ebb1addb58828c9185a8c114d783355eb867dc3b0cf0704969e93
+
+          FAIL=0
+          build_one() {
+            VER="$1"; PATCH="$2"
+            echo "===== APPLY $VER =====" | tee "/tmp/piiwii-camera-out/build-$VER.log"
+            if ! patch -p1 --batch < "/tmp/piiwii-new-patches/$PATCH" >> "/tmp/piiwii-camera-out/build-$VER.log" 2>&1; then
+              echo "PATCH FAILED $VER" | tee -a "/tmp/piiwii-camera-out/build-$VER.log"
+              FAIL=1; return
+            fi
+            set +e
+            gradle -p /tmp/piiwii-camera-work --no-daemon :app:assembleRelease >> "/tmp/piiwii-camera-out/build-$VER.log" 2>&1
+            RC=$?
+            set -e
+            if [ "$RC" -ne 0 ]; then
+              echo "BUILD FAILED $VER rc=$RC" | tee -a "/tmp/piiwii-camera-out/build-$VER.log"
+              FAIL=1; set +e; return
+            fi
+            APK=/tmp/piiwii-camera-work/app/build/outputs/apk/release/app-release-unsigned.apk
+            if [ ! -s "$APK" ]; then
+              echo "APK MISSING $VER" | tee -a "/tmp/piiwii-camera-out/build-$VER.log"
+              FAIL=1; set +e; return
+            fi
+            "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$APK" "/tmp/piiwii-camera-out/PiiWii-Camera-$VER-ALIGNED-UNSIGNED.apk"
+            "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "/tmp/piiwii-camera-out/PiiWii-Camera-$VER-ALIGNED-UNSIGNED.apk" > "/tmp/piiwii-camera-out/badging-$VER.txt"
+            sha256sum "/tmp/piiwii-camera-out/PiiWii-Camera-$VER-ALIGNED-UNSIGNED.apk" > "/tmp/piiwii-camera-out/unsigned-sha256-$VER.txt"
+            rm -rf /tmp/piiwii-camera-work/app/build
+            set +e
+          }
+
+          set +e
+          build_one 0.9.0 patch-080-090.diff
+          build_one 1.0.0 patch-090-100.diff
+          build_one 1.1.0 patch-100-110.diff
+          build_one 1.2.0 patch-110-120.diff
+          build_one 1.3.0 patch-120-130.diff
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/piiwii-camera-out/apksigner.jar
+          echo "$FAIL" > /tmp/piiwii-camera-out/series-fail-code.txt
+          exit "$FAIL"
+
+      - name: Upload series output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Camera-0.9.0-to-1.3.0-unsigned-tools
+          if-no-files-found: error
+          retention-days: 7
+          path: /tmp/piiwii-camera-out/
+
+      - name: Fail if one or more builds failed
+        if: steps.series.outcome != 'success'
+        run: exit 1
