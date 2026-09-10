@@ -1,0 +1,222 @@
+diff -ruN --exclude README.md PiiWii-Camera-0.3.0-public/app/build.gradle PiiWii-Camera-0.4.0-public/app/build.gradle
+--- PiiWii-Camera-0.3.0-public/app/build.gradle	2026-09-10 19:17:02.721058782 +0000
++++ PiiWii-Camera-0.4.0-public/app/build.gradle	2026-09-10 19:19:18.151024259 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.camera'
+         minSdk 26
+         targetSdk 36
+-        versionCode 3
+-        versionName '0.3.0'
++        versionCode 4
++        versionName '0.4.0'
+     }
+ 
+     buildTypes {
+diff -ruN --exclude README.md PiiWii-Camera-0.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java PiiWii-Camera-0.4.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java
+--- PiiWii-Camera-0.3.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:17:02.722428843 +0000
++++ PiiWii-Camera-0.4.0-public/app/src/main/java/ch/piiwii/camera/MainActivity.java	2026-09-10 19:19:18.152405458 +0000
+@@ -113,6 +113,8 @@
+     private Button gridButton;
+     private Button qualityButton;
+     private Button switchButton;
++    private Button lowLightButton;
++    private Button stabilizeButton;
+     private Button captureButton;
+     private Button photoModeButton;
+     private Button videoModeButton;
+@@ -140,6 +142,8 @@
+     private int qualityMode = QUALITY_OEM_AUTO;
+     private int timerSeconds = 0;
+     private boolean gridEnabled = false;
++    private boolean lowLightBoostRequested = false;
++    private boolean stabilizationEnabled = true;
+     private float minZoom = 1f;
+     private float maxZoom = 1f;
+     private int minExposure = 0;
+@@ -178,6 +182,8 @@
+         gridButton = findViewById(R.id.gridButton);
+         qualityButton = findViewById(R.id.qualityButton);
+         switchButton = findViewById(R.id.switchButton);
++        lowLightButton = findViewById(R.id.lowLightButton);
++        stabilizeButton = findViewById(R.id.stabilizeButton);
+         captureButton = findViewById(R.id.captureButton);
+         photoModeButton = findViewById(R.id.photoMode);
+         videoModeButton = findViewById(R.id.videoMode);
+@@ -198,6 +204,8 @@
+         updateTimerButton();
+         updateGridButton();
+         updateQualityButton();
++        updateLowLightButton();
++        updateStabilizeButton();
+         updateSignatureButtons();
+         updateModeButtons();
+ 
+@@ -214,6 +222,8 @@
+         gridButton.setOnClickListener(v -> toggleGrid());
+         qualityButton.setOnClickListener(v -> cycleQualityMode());
+         switchButton.setOnClickListener(v -> switchCamera());
++        lowLightButton.setOnClickListener(v -> toggleLowLightBoost());
++        stabilizeButton.setOnClickListener(v -> { stabilizationEnabled = !stabilizationEnabled; savePreferences(); updateStabilizeButton(); if (!photoMode) bindUseCases(); });
+         captureButton.setOnClickListener(v -> {
+             if (photoMode) triggerPhotoWithTimer();
+             else toggleVideoRecording();
+@@ -421,16 +431,32 @@
+                 statusLabel.setText("Prêt · touchez pour faire le point");
+                 originalHint.setText(hasAnySignature() ? "Original + copie signée" : "Original intact");
+             } else {
+-                qualityLabel.setText("VIDÉO · QUALITÉ MAX");
++                qualityLabel.setText("VIDÉO · QUALITÉ MAX" + (stabilizationEnabled ? " · STAB" : ""));
+                 recorder = new Recorder.Builder()
+                         .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
+                         .build();
+-                videoCapture = VideoCapture.withOutput(recorder);
+-                camera = cameraProvider.bindToLifecycle(this, baseSelector(), preview, videoCapture);
++                try {
++                    Preview.Builder stabilizedPreviewBuilder = new Preview.Builder();
++                    if (stabilizationEnabled) stabilizedPreviewBuilder.setPreviewStabilizationEnabled(true);
++                    preview = stabilizedPreviewBuilder.build();
++                    preview.setSurfaceProvider(previewView.getSurfaceProvider());
++                    VideoCapture.Builder<Recorder> videoBuilder = new VideoCapture.Builder<>(recorder);
++                    if (stabilizationEnabled) videoBuilder.setVideoStabilizationEnabled(true);
++                    videoCapture = videoBuilder.build();
++                    camera = cameraProvider.bindToLifecycle(this, baseSelector(), preview, videoCapture);
++                } catch (Exception stabError) {
++                    cameraProvider.unbindAll();
++                    preview = new Preview.Builder().build();
++                    preview.setSurfaceProvider(previewView.getSurfaceProvider());
++                    videoCapture = VideoCapture.withOutput(recorder);
++                    camera = cameraProvider.bindToLifecycle(this, baseSelector(), preview, videoCapture);
++                }
++                applyLowLightBoost();
+                 applyVideoTorch();
+                 statusLabel.setText("Vidéo prête");
+                 originalHint.setText("Audio + vidéo · qualité max");
+             }
++            applyLowLightBoost();
+             refreshCameraControls();
+         } catch (Exception e) {
+             showError("Caméra indisponible : " + e.getMessage());
+@@ -592,7 +618,9 @@
+         else if (flashMode == ImageCapture.FLASH_MODE_ON) flashMode = ImageCapture.FLASH_MODE_OFF;
+         else flashMode = ImageCapture.FLASH_MODE_AUTO;
+ 
++        if (flashMode == ImageCapture.FLASH_MODE_ON && lowLightBoostRequested) { lowLightBoostRequested = false; updateLowLightButton(); }
+         if (imageCapture != null) imageCapture.setFlashMode(flashMode);
++        applyLowLightBoost();
+         applyVideoTorch();
+         savePreferences();
+         updateFlashButton();
+@@ -1053,10 +1081,49 @@
+         qualityButton.setVisibility(photoMode ? View.VISIBLE : View.INVISIBLE);
+     }
+ 
++    private void toggleLowLightBoost() {
++        lowLightBoostRequested = !lowLightBoostRequested;
++        if (lowLightBoostRequested && flashMode == ImageCapture.FLASH_MODE_ON) flashMode = ImageCapture.FLASH_MODE_OFF;
++        savePreferences();
++        updateFlashButton();
++        updateLowLightButton();
++        applyLowLightBoost();
++    }
++
++    private void applyLowLightBoost() {
++        if (camera == null) return;
++        try {
++            if (!camera.getCameraInfo().isLowLightBoostSupported()) {
++                lowLightButton.setEnabled(false);
++                lowLightButton.setAlpha(0.4f);
++                lowLightButton.setText("☾ Indispo");
++                return;
++            }
++            lowLightButton.setEnabled(true);
++            lowLightButton.setAlpha(1f);
++            camera.getCameraControl().enableLowLightBoostAsync(lowLightBoostRequested);
++            updateLowLightButton();
++        } catch (Exception ignored) { }
++    }
++
++    private void updateLowLightButton() {
++        if (lowLightButton == null) return;
++        lowLightButton.setText(lowLightBoostRequested ? "☾ Boost on" : "☾ Boost off");
++        styleTopButton(lowLightButton, lowLightBoostRequested);
++    }
++
++    private void updateStabilizeButton() {
++        if (stabilizeButton == null) return;
++        stabilizeButton.setText(stabilizationEnabled ? "◉ Stab on" : "◉ Stab off");
++        styleTopButton(stabilizeButton, stabilizationEnabled);
++    }
++
+     private void loadPreferences() {
+         flashMode = prefs.getInt("flash", ImageCapture.FLASH_MODE_AUTO);
+         timerSeconds = prefs.getInt("timer", 0);
+         gridEnabled = prefs.getBoolean("grid", false);
++        lowLightBoostRequested = prefs.getBoolean("lowLightBoost", false);
++        stabilizationEnabled = prefs.getBoolean("stabilization", true);
+         qualityMode = Math.max(QUALITY_OEM_AUTO, Math.min(QUALITY_MAX_MP, prefs.getInt("quality", QUALITY_OEM_AUTO)));
+         photoMode = prefs.getBoolean("photoMode", true);
+         signDate = prefs.getBoolean("signDate", false);
+@@ -1072,6 +1139,8 @@
+                 .putInt("flash", flashMode)
+                 .putInt("timer", timerSeconds)
+                 .putBoolean("grid", gridEnabled)
++                .putBoolean("lowLightBoost", lowLightBoostRequested)
++                .putBoolean("stabilization", stabilizationEnabled)
+                 .putInt("quality", qualityMode)
+                 .putBoolean("photoMode", photoMode)
+                 .putBoolean("signDate", signDate)
+diff -ruN --exclude README.md PiiWii-Camera-0.3.0-public/app/src/main/res/layout/activity_main.xml PiiWii-Camera-0.4.0-public/app/src/main/res/layout/activity_main.xml
+--- PiiWii-Camera-0.3.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:17:02.721572969 +0000
++++ PiiWii-Camera-0.4.0-public/app/src/main/res/layout/activity_main.xml	2026-09-10 19:19:18.151625935 +0000
+@@ -126,6 +126,42 @@
+                 android:padding="0dp" />
+         </LinearLayout>
+ 
++
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="34dp"
++            android:gravity="center"
++            android:orientation="horizontal">
++
++            <Button
++                android:id="@+id/lowLightButton"
++                android:layout_width="112dp"
++                android:layout_height="30dp"
++                android:background="@drawable/top_bg"
++                android:text="☾ Boost off"
++                android:textAllCaps="false"
++                android:textColor="#FFFFFF"
++                android:textSize="10sp"
++                android:minWidth="0dp"
++                android:minHeight="0dp"
++                android:padding="0dp" />
++
++            <Space android:layout_width="8dp" android:layout_height="1dp" />
++
++            <Button
++                android:id="@+id/stabilizeButton"
++                android:layout_width="112dp"
++                android:layout_height="30dp"
++                android:background="@drawable/top_active_bg"
++                android:text="◉ Stab on"
++                android:textAllCaps="false"
++                android:textColor="#FFFFFF"
++                android:textSize="10sp"
++                android:minWidth="0dp"
++                android:minHeight="0dp"
++                android:padding="0dp" />
++        </LinearLayout>
++
+         <TextView
+             android:id="@+id/qualityLabel"
+             android:layout_width="match_parent"
+@@ -372,7 +408,7 @@
+                 android:layout_gravity="center_vertical|end"
+                 android:layout_marginEnd="16dp"
+                 android:gravity="end"
+-                android:text="PiiWii Camera\nv0.3.0"
++                android:text="PiiWii Camera\nv0.4.0"
+                 android:textColor="#AFFFFFFF"
+                 android:textSize="10sp" />
+         </FrameLayout>
