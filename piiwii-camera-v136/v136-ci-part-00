@@ -18,59 +18,59 @@ diff -ruN PiiWii-Camera-1.3.0-public/app/src/main/java/ch/piiwii/camera/MainActi
 @@ -117,7 +117,7 @@
      private static final int REQ_LOCATION = 102;
      private static final int REQ_STORAGE = 103;
-     private static final int REQ_AUDIO = 104;
+     private static final String PREFS = "piiwii_camera_settings";
 -    private static final int APP_VERSION_CODE = 18;
 +    private static final int APP_VERSION_CODE = 19;
-     private static final long STARTUP_GUARD_TIMEOUT_MS = 15_000L;
-     private static final boolean STABLE_STARTUP_MODE = true;
+     private static final String PREF_STARTUP_PENDING = "startupPending";
+     private static final String PREF_LAST_VERSION = "lastVersionCode";
  
-@@ -148,6 +148,9 @@
-     private TextView statusText;
-     private TextView levelText;
+@@ -137,6 +137,7 @@
+     private PreviewView previewView;
+     private GridOverlayView gridOverlay;
+     private View focusRing;
++    private View focusExposureBar;
+     private View shutterFlash;
+     private LevelOverlayView levelOverlay;
+     private SharedPreferences prefs;
+@@ -145,12 +146,15 @@
+     private TextView statusLabel;
+     private TextView originalHint;
+     private TextView exposureLabel;
++    private TextView quickExposureValue;
      private TextView countdownLabel;
 +    private TextView zoomBubble;
-+    private LinearLayout focusExposureBar;
-+    private TextView quickExposureValue;
-     private View focusRing;
-     private View shutterFlash;
-     private View captureFrame;
-@@ -164,6 +167,7 @@
+     private ImageView lastPhotoThumb;
+     private Uri lastMediaUri;
+     private String lastMediaType = "image/*";
      private SeekBar zoomSeek;
      private SeekBar exposureSeek;
 +    private SeekBar quickExposureSeek;
-     private ImageView lastThumb;
-     private View moreControls;
-     private ScrollView moreScroll;
-@@ -188,6 +192,7 @@
-     private Runnable startupGuardRunnable;
-     private Runnable rebindRunnable;
-     private Runnable countdownRunnable;
-+    private Runnable zoomBubbleHideRunnable;
-     private boolean startupGuardArmed = false;
-     private int countdownRemaining = 0;
+     private Button flashButton;
+     private Button timerButton;
+     private Button gridButton;
+@@ -195,6 +199,7 @@
+     private boolean cameraUiBusy = false;
      private boolean countdownActive = false;
-@@ -211,6 +216,7 @@
-     private boolean internalUiUpdate = false;
-     private float lastLevelRoll = 0f;
-     private float lastLevelPitch = 0f;
-+    private int zoomBucket = -1;
- 
-     @Override
-     protected void onCreate(Bundle savedInstanceState) {
-@@ -246,6 +252,9 @@
-         statusText = findViewById(R.id.statusText);
-         levelText = findViewById(R.id.levelText);
+     private int countdownRemaining = 0;
++    private int zoomHapticBucket = -1;
+     private final Runnable rebindRunnable = () -> {
+         rebindScheduled = false;
+         bindUseCases();
+@@ -259,6 +264,7 @@
+         previewView = findViewById(R.id.previewView);
+         gridOverlay = findViewById(R.id.gridOverlay);
+         focusRing = findViewById(R.id.focusRing);
++        focusExposureBar = findViewById(R.id.focusExposureBar);
+         shutterFlash = findViewById(R.id.shutterFlash);
+         levelOverlay = findViewById(R.id.levelOverlay);
+         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+@@ -267,10 +273,13 @@
+         statusLabel = findViewById(R.id.statusLabel);
+         originalHint = findViewById(R.id.originalHint);
+         exposureLabel = findViewById(R.id.exposureLabel);
++        quickExposureValue = findViewById(R.id.quickExposureValue);
          countdownLabel = findViewById(R.id.countdownLabel);
 +        zoomBubble = findViewById(R.id.zoomBubble);
-+        focusExposureBar = findViewById(R.id.focusExposureBar);
-+        quickExposureValue = findViewById(R.id.quickExposureValue);
-         focusRing = findViewById(R.id.focusRing);
-         shutterFlash = findViewById(R.id.shutterFlash);
-         captureFrame = findViewById(R.id.captureFrame);
-@@ -267,6 +276,7 @@
+         lastPhotoThumb = findViewById(R.id.lastPhotoThumb);
          zoomSeek = findViewById(R.id.zoomSeek);
          exposureSeek = findViewById(R.id.exposureSeek);
-+        quickExposureSeek = findViewById(R.id.quickExposureSeek);
-         lastThumb = findViewById(R.id.lastThumb);
-         moreControls = findViewById(R.id.moreControls);
-         moreScroll = findViewById(R.id.moreScroll);
