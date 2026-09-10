@@ -1,0 +1,60 @@
++        quickExposureSeek = findViewById(R.id.quickExposureSeek);
+         flashButton = findViewById(R.id.flashButton);
+         timerButton = findViewById(R.id.timerButton);
+         gridButton = findViewById(R.id.gridButton);
+@@ -541,7 +550,10 @@
+                 float linear = progress / 1000f;
+                 camera.getCameraControl().setLinearZoom(linear);
+                 ZoomState state = camera.getCameraInfo().getZoomState().getValue();
+-                if (state != null) updateZoomUi(state.getZoomRatio());
++                if (state != null) {
++                    updateZoomUi(state.getZoomRatio());
++                    showZoomBubble(worldZoom(state.getZoomRatio()), true);
++                }
+             }
+             @Override public void onStartTrackingTouch(SeekBar seekBar) { }
+             @Override public void onStopTrackingTouch(SeekBar seekBar) { }
+@@ -549,15 +561,32 @@
+ 
+         exposureSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+-                if (!fromUser || camera == null || maxExposure <= minExposure) return;
+-                int index = minExposure + Math.round((maxExposure - minExposure) * (progress / 1000f));
+-                camera.getCameraControl().setExposureCompensationIndex(index);
+-                updateExposureUi(index);
++                if (!fromUser) return;
++                applyExposureProgress(progress);
+             }
+             @Override public void onStartTrackingTouch(SeekBar seekBar) { }
+             @Override public void onStopTrackingTouch(SeekBar seekBar) { }
+         });
+ 
++        if (quickExposureSeek != null) {
++            quickExposureSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
++                @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
++                    if (!fromUser) return;
++                    applyExposureProgress(progress);
++                    if (focusExposureBar != null) {
++                        focusExposureBar.removeCallbacks(hideFocusExposureRunnable);
++                        if (!focusLocked) focusExposureBar.postDelayed(hideFocusExposureRunnable, 2200);
++                    }
++                }
++                @Override public void onStartTrackingTouch(SeekBar seekBar) {
++                    if (focusExposureBar != null) focusExposureBar.removeCallbacks(hideFocusExposureRunnable);
++                }
++                @Override public void onStopTrackingTouch(SeekBar seekBar) {
++                    if (focusExposureBar != null && !focusLocked) focusExposureBar.postDelayed(hideFocusExposureRunnable, 2200);
++                }
++            });
++        }
++
+         scaleDetector = new ScaleGestureDetector(this, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+             @Override
+             public boolean onScale(ScaleGestureDetector detector) {
+@@ -596,12 +625,20 @@
+             @Override
+             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                 if (e1 == null || e2 == null || Math.abs(e2.getX() - e1.getX()) < dp(80)) return false;
++                boolean portrait = photoMode && qualityMode == QUALITY_OEM_BOKEH;
++                boolean moved = false;
+                 if (e2.getX() < e1.getX()) {
