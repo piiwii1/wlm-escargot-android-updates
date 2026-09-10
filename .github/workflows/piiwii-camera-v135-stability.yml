@@ -94,7 +94,7 @@ jobs:
         run: |
           set -e
           base64 -d "$GITHUB_WORKSPACE/piiwii-camera-v135/v135-patch.gz.b64" | gzip -d > /tmp/v135-inplace.patch
-          echo '991c5db0341997898ba1bc857550a97321cdeedc528abb5e6571ee34d0245ea6  /tmp/v135-inplace.patch' | sha256sum -c -
+          echo '181a42ba6c50db08a8f9a81a30cbfef9298a26e55b92428a5e4c407ff7b7ece4  /tmp/v135-inplace.patch' | sha256sum -c -
           cd /tmp/piiwii-camera-v135
           patch -p0 < /tmp/v135-inplace.patch
           grep -q "versionCode 18" PiiWii-Camera-1.3.0-public/app/build.gradle
