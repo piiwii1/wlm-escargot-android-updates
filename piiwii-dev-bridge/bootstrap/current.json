@@ -1,0 +1,7 @@
+{
+  "bootstrap_protocol": 1,
+  "bootstrap_id": "pdc-2.8-test-light-20260912",
+  "target_site": "piiwii.ch",
+  "action": "install_bundled_test_light",
+  "bundle_sha256": "e286601ca2706169048ef02335c1a00c70e0ea0706b331d0ed9f4aca487da435"
+}
