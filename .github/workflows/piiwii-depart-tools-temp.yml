@@ -1,0 +1,48 @@
+name: PiiWii Depart Android tools export
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/piiwii-depart-tools-temp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install SDK pieces
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Pack tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/piiwii-depart-tools"
+          mkdir -p "$ROOT/sdk/platforms/android-35" "$ROOT/sdk/build-tools"
+          cp "$ANDROID_HOME/platforms/android-35/android.jar" "$ROOT/sdk/platforms/android-35/"
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" "$ROOT/sdk/build-tools/"
+          tar -C "$ROOT" -czf "$RUNNER_TEMP/piiwii-depart-android-tools-35.tar.gz" sdk
+      - name: Upload tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-depart-android-tools-35
+          path: ${{ runner.temp }}/piiwii-depart-android-tools-35.tar.gz
+          retention-days: 1
+          if-no-files-found: error
