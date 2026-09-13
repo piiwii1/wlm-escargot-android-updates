@@ -1,0 +1,10 @@
+name: PiiWii Events Runner Test
+on:
+  push:
+    branches: [ piiwii-events-build-130 ]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo runner-ok
