@@ -26,11 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl -fsSL \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/issues/46/comments?per_page=100" \
-            -o /tmp/comments.json
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/issues/46/comments?per_page=100" -o /tmp/comments.json
           python3 - <<'PY'
           import base64, hashlib, json, pathlib, shutil, zipfile
           expected_ids = [5688218123, 5688223858, 5688229285, 5688235073, 5688281114]
@@ -41,7 +37,9 @@ jobs:
               header, payload = body.split('\n', 1)
               if header.strip() != f'CHUNK {index}/5':
                   raise SystemExit(f'Bad chunk header: {header}')
-              chunks.append(''.join(payload.split()))
+              clean = ''.join(payload.split())
+              print(f'CHUNK {index}: len={len(clean)} sha256={hashlib.sha256(clean.encode()).hexdigest()}')
+              chunks.append(clean)
           raw = base64.b64decode(''.join(chunks), validate=True)
           digest = hashlib.sha256(raw).hexdigest()
           expected = 'cd5a773cbe083eb69bc4e86a14a056817117c7b169b2a9592c35374c4543a315'
