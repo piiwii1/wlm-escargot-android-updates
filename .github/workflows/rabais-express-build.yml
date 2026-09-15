@@ -5,13 +5,15 @@ on:
     branches: [ rabais-express-build ]
     paths:
       - '.github/workflows/rabais-express-build.yml'
-      - 'build-input/Rabais-Express-1.5.0-SOURCES.zip'
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: read
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       ANDROID_HOME: /usr/local/lib/android/sdk
@@ -20,14 +22,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify and unpack 1.5.0 source
+      - name: Reconstruct verified 1.5.0 files
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          FILE='build-input/Rabais-Express-1.5.0-SOURCES.zip'
-          echo '707c64ff02337435d6c10553608a40529442aaac3ce84b787b5b025c42f17108  '"$FILE" | sha256sum -c -
-          unzip -t "$FILE"
-          rm -rf rabais-express
-          mkdir rabais-express
-          unzip -q "$FILE" -d rabais-express
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/issues/46/comments?per_page=100" -o /tmp/comments.json
+          python3 - <<'PY'
+          import base64, hashlib, json, pathlib, shutil, struct, zlib
+          comments={int(c['id']):c['body'] for c in json.load(open('/tmp/comments.json',encoding='utf-8'))}
+          specs=[
+            (5688863149,'R150 1/7',5600,'309d59937f3c0e07efe5f061b1fb180711984471d9ef9c54b38745654f312acc'),
+            (5688868002,'R150 2/7',5600,'31745f8479c7e62b5a033cb532aadf716ae2f77f3935dcb39353dffaf5b5d07b'),
+            (5688872809,'R150 3/7',5600,'f759272c0ec908d5aca3b3767c2631b88d22e38c188905e8cf05eecf1275d782'),
+            (5688885338,'R150 4/7',5600,'d0dced65edae52076707757213be2b4058b23c754d0bc652e1224d3edff7d573'),
+            (5688889635,'R150 5/7',5600,'268febdfc1b4aac800df1d64c2dc2d1a6d9d103305dcde60ae748460040d6bc9'),
+            (5688906120,'R150 6A',2000,'9c5577ace118945a431b9290717182c6ed9af8cf9ade8c8c09cd19d002fd2415'),
+          ]
+          chunks=[]
+          for cid,header_expected,len_expected,sha_expected in specs:
+            header,payload=comments[cid].split('\n',1)
+            clean=''.join(payload.split())
+            assert header.strip()==header_expected,(cid,header)
+            assert len(clean)==len_expected,(cid,len(clean),len_expected)
+            assert hashlib.sha256(clean.encode()).hexdigest()==sha_expected,(cid,'chunk sha')
+            chunks.append(clean)
+          raw=base64.b64decode(''.join(chunks),validate=True)
+          assert len(raw)==22500,len(raw)
+          root=pathlib.Path('rabais-express')
+          shutil.rmtree(root,ignore_errors=True); root.mkdir()
+          off=0; count=0
+          while raw[off:off+4]==b'PK\x03\x04':
+            sig,ver,flags,method,mtime,mdate,crc,csz,usz,nlen,xlen=struct.unpack_from('<IHHHHHIIIHH',raw,off)
+            assert not (flags & 8), 'Unexpected ZIP data descriptor'
+            name=raw[off+30:off+30+nlen].decode('utf-8')
+            start=off+30+nlen+xlen; end=start+csz
+            assert end<=len(raw),(name,end,len(raw))
+            comp=raw[start:end]
+            if method==0: out=comp
+            elif method==8: out=zlib.decompress(comp,-15)
+            else: raise SystemExit('Unsupported compression '+str(method))
+            assert len(out)==usz,(name,len(out),usz)
+            assert (zlib.crc32(out)&0xffffffff)==crc,(name,'crc')
+            dest=(root/name).resolve(); rr=root.resolve()
+            assert str(dest).startswith(str(rr)),name
+            if name.endswith('/'):
+              dest.mkdir(parents=True,exist_ok=True)
+            else:
+              dest.parent.mkdir(parents=True,exist_ok=True); dest.write_bytes(out)
+            off=end; count+=1
+          print('Extracted entries:',count,'local records end:',off,'next signature:',raw[off:off+4])
+          assert count==37,count
+          assert off==21444,off
+          assert raw[off:off+4]==b'PK\x01\x02',raw[off:off+4]
+          PY
           grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
           grep -q "versionCode 9" rabais-express/app/build.gradle
           grep -q "versionName '1.5.0'" rabais-express/app/build.gradle
@@ -77,5 +124,3 @@ jobs:
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
-
-# explicit trigger after binary source upload
