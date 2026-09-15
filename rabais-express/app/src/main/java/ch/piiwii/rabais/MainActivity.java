@@ -1,18 +1,15 @@
 package ch.piiwii.rabais;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,13 +17,13 @@ import java.text.NumberFormat;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private EditText priceInput;
-    private TextView discountLabel;
-    private TextView currentDiscount;
+    private TextView priceValue;
     private TextView resultValue;
     private TextView savingValue;
-    private Button customButton;
+    private TextView discountValue;
     private SharedPreferences prefs;
+
+    private final StringBuilder priceBuffer = new StringBuilder();
     private int discount;
     private boolean customSelected;
 
@@ -36,35 +33,47 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         setContentView(R.layout.activity_main);
 
         applySystemBarInsets();
 
         prefs = getSharedPreferences("rabais", MODE_PRIVATE);
-        discount = prefs.getInt("last_discount", 30);
-        customSelected = !isPreset(discount);
+        discount = clampDiscount(prefs.getInt("last_discount", 30));
+        customSelected = prefs.getBoolean("custom_selected", false);
 
-        priceInput = findViewById(R.id.priceInput);
-        discountLabel = findViewById(R.id.discountLabel);
-        currentDiscount = findViewById(R.id.currentDiscount);
+        priceValue = findViewById(R.id.priceValue);
         resultValue = findViewById(R.id.resultValue);
         savingValue = findViewById(R.id.savingValue);
-        customButton = findViewById(R.id.customButton);
+        discountValue = findViewById(R.id.discountValue);
 
-        bind(R.id.b10, 10);
-        bind(R.id.b20, 20);
-        bind(R.id.b30, 30);
-        bind(R.id.b40, 40);
-        bind(R.id.b50, 50);
+        bindDiscount(R.id.b10, 10);
+        bindDiscount(R.id.b20, 20);
+        bindDiscount(R.id.b30, 30);
+        bindDiscount(R.id.b40, 40);
+        bindDiscount(R.id.b50, 50);
 
-        customButton.setOnClickListener(v -> customDiscount());
-        findViewById(R.id.clearButton).setOnClickListener(v -> {
-            priceInput.setText("");
-            priceInput.requestFocus();
-        });
+        bindNumber(R.id.key0, "0");
+        bindNumber(R.id.key1, "1");
+        bindNumber(R.id.key2, "2");
+        bindNumber(R.id.key3, "3");
+        bindNumber(R.id.key4, "4");
+        bindNumber(R.id.key5, "5");
+        bindNumber(R.id.key6, "6");
+        bindNumber(R.id.key7, "7");
+        bindNumber(R.id.key8, "8");
+        bindNumber(R.id.key9, "9");
 
-        priceInput.addTextChangedListener(new SimpleTextWatcher(this::update));
-        update();
+        findViewById(R.id.keyComma).setOnClickListener(v -> appendDecimal());
+        findViewById(R.id.keyClear).setOnClickListener(v -> clearPrice());
+        findViewById(R.id.backspaceButton).setOnClickListener(v -> backspace());
+
+        findViewById(R.id.minus5).setOnClickListener(v -> adjustDiscount(-5));
+        findViewById(R.id.minus1).setOnClickListener(v -> adjustDiscount(-1));
+        findViewById(R.id.plus1).setOnClickListener(v -> adjustDiscount(1));
+        findViewById(R.id.plus5).setOnClickListener(v -> adjustDiscount(5));
+
+        updateAll();
     }
 
     private void applySystemBarInsets() {
@@ -73,7 +82,8 @@ public class MainActivity extends Activity {
             int top;
             int bottom;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                android.graphics.Insets bars = insets.getInsets(
+                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
                 top = bars.top;
                 bottom = bars.bottom;
             } else {
@@ -86,101 +96,126 @@ public class MainActivity extends Activity {
         root.requestApplyInsets();
     }
 
-    private void bind(int id, int percent) {
+    private void bindDiscount(int id, int percent) {
         findViewById(id).setOnClickListener(v -> {
             discount = percent;
             customSelected = false;
-            prefs.edit().putInt("last_discount", percent).apply();
-            update();
+            saveDiscount();
+            updateAll();
         });
     }
 
-    private boolean isPreset(int value) {
-        return value == 10 || value == 20 || value == 30 || value == 40 || value == 50;
+    private void bindNumber(int id, String token) {
+        findViewById(id).setOnClickListener(v -> appendDigit(token));
     }
 
-    private void customDiscount() {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER);
-        input.setText(String.valueOf(discount));
-        input.setSelectAllOnFocus(true);
-        int sidePadding = dp(22);
-        input.setPadding(sidePadding, dp(8), sidePadding, dp(8));
+    private void appendDigit(String digit) {
+        int dot = priceBuffer.indexOf(".");
+        if (dot >= 0 && priceBuffer.length() - dot - 1 >= 2) return;
+        if (priceBuffer.length() >= 10) return;
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Rabais personnalisé")
-                .setMessage("Entre un pourcentage entre 0 et 100.")
-                .setView(input)
-                .setNegativeButton("Annuler", null)
-                .setPositiveButton("Utiliser", null)
-                .create();
-
-        dialog.setOnShowListener(x -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            try {
-                int value = Integer.parseInt(input.getText().toString().trim());
-                if (value < 0 || value > 100) throw new NumberFormatException();
-                discount = value;
-                customSelected = !isPreset(value);
-                prefs.edit().putInt("last_discount", discount).apply();
-                update();
-                dialog.dismiss();
-            } catch (Exception e) {
-                Toast.makeText(this, "Entre un pourcentage entre 0 et 100.", Toast.LENGTH_SHORT).show();
+        if (priceBuffer.length() == 1 && priceBuffer.charAt(0) == '0' && dot < 0) {
+            if (!"0".equals(digit)) {
+                priceBuffer.setLength(0);
+                priceBuffer.append(digit);
             }
-        }));
-        dialog.show();
+        } else {
+            priceBuffer.append(digit);
+        }
+        updateAll();
     }
 
-    private void update() {
-        discountLabel.setText("Rabais appliqué : -" + discount + " %");
-        currentDiscount.setText("-" + discount + " % sélectionné");
-        refreshButtons();
+    private void appendDecimal() {
+        if (priceBuffer.indexOf(".") >= 0) return;
+        if (priceBuffer.length() == 0) priceBuffer.append('0');
+        priceBuffer.append('.');
+        updateAll();
+    }
 
-        try {
-            String raw = priceInput.getText().toString().trim()
-                    .replace("'", "")
-                    .replace("’", "")
-                    .replace(" ", "")
-                    .replace(',', '.');
-            if (raw.isEmpty()) throw new NumberFormatException();
-
-            BigDecimal price = new BigDecimal(raw);
-            if (price.signum() < 0) throw new NumberFormatException();
-
-            BigDecimal saving = price
-                    .multiply(BigDecimal.valueOf(discount))
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-            BigDecimal finalPrice = price.subtract(saving).setScale(2, RoundingMode.HALF_UP);
-
-            resultValue.setText(chf(finalPrice));
-            savingValue.setText("Tu économises " + chf(saving));
-        } catch (Exception e) {
-            resultValue.setText("CHF 0.00");
-            savingValue.setText("Tu économises CHF 0.00");
+    private void backspace() {
+        if (priceBuffer.length() > 0) {
+            priceBuffer.deleteCharAt(priceBuffer.length() - 1);
+            updateAll();
         }
     }
 
-    private void refreshButtons() {
+    private void clearPrice() {
+        priceBuffer.setLength(0);
+        updateAll();
+    }
+
+    private void adjustDiscount(int delta) {
+        discount = clampDiscount(discount + delta);
+        customSelected = true;
+        saveDiscount();
+        updateAll();
+    }
+
+    private int clampDiscount(int value) {
+        return Math.max(0, Math.min(100, value));
+    }
+
+    private void saveDiscount() {
+        prefs.edit()
+                .putInt("last_discount", discount)
+                .putBoolean("custom_selected", customSelected)
+                .apply();
+    }
+
+    private void updateAll() {
+        updatePriceDisplay();
+        updateDiscountDisplay();
+        updateResult();
+    }
+
+    private void updatePriceDisplay() {
+        if (priceBuffer.length() == 0) {
+            priceValue.setText("CHF 0.00");
+            return;
+        }
+        String typed = priceBuffer.toString().replace('.', ',');
+        priceValue.setText("CHF " + typed);
+    }
+
+    private void updateDiscountDisplay() {
+        discountValue.setText("-" + discount + " %");
         for (int i = 0; i < discountButtonIds.length; i++) {
             Button button = findViewById(discountButtonIds[i]);
             boolean selected = !customSelected && discount == discountValues[i];
             button.setBackgroundResource(selected ? R.drawable.bg_discount_selected : R.drawable.bg_discount_button);
             button.setTextColor(selected ? Color.WHITE : Color.rgb(22, 25, 30));
         }
-
-        if (customSelected) {
-            customButton.setText("-" + discount + " % · personnalisé");
-            customButton.setBackgroundResource(R.drawable.bg_discount_selected);
-            customButton.setTextColor(Color.WHITE);
-        } else {
-            customButton.setText("Autre rabais…");
-            customButton.setBackgroundResource(R.drawable.bg_custom);
-            customButton.setTextColor(Color.rgb(61, 67, 75));
-        }
     }
 
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+    private void updateResult() {
+        BigDecimal price = parsePrice();
+        if (price == null) {
+            resultValue.setText("CHF 0.00");
+            savingValue.setText("Économie  CHF 0.00");
+            return;
+        }
+
+        BigDecimal saving = price
+                .multiply(BigDecimal.valueOf(discount))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal finalPrice = price.subtract(saving).setScale(2, RoundingMode.HALF_UP);
+
+        resultValue.setText(chf(finalPrice));
+        savingValue.setText("Économie  " + chf(saving));
+    }
+
+    private BigDecimal parsePrice() {
+        try {
+            if (priceBuffer.length() == 0) return null;
+            String raw = priceBuffer.toString();
+            if (raw.endsWith(".")) raw = raw.substring(0, raw.length() - 1);
+            if (raw.isEmpty()) return null;
+            BigDecimal price = new BigDecimal(raw);
+            if (price.signum() < 0) return null;
+            return price;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private String chf(BigDecimal value) {
