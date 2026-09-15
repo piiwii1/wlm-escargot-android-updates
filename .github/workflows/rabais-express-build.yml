@@ -44,14 +44,18 @@ jobs:
 
       - name: Prepare delivery
         run: |
-          mkdir -p delivery
+          mkdir -p delivery/signing-tools/lib
           cp rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk delivery/Rabais-Express-1.2.0-UNSIGNED.apk
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/zipalign" delivery/signing-tools/zipalign
+          chmod +x delivery/signing-tools/apksigner delivery/signing-tools/zipalign
           sha256sum delivery/Rabais-Express-1.2.0-UNSIGNED.apk | tee delivery/SHA256-UNSIGNED.txt
 
-      - name: Upload APK
+      - name: Upload APK and signing tools
         uses: actions/upload-artifact@v4
         with:
-          name: Rabais-Express-1.2.0-UNSIGNED
+          name: Rabais-Express-1.2.0-UNSIGNED-TOOLS
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
