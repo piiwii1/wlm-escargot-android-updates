@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct verified 1.5.1 source
+      - name: Reconstruct verified 1.5.2 source
         run: |
           set -euo pipefail
           echo '20d0bdb82cdc7cf75af9595ef1a0e822c51fb19036e9481756ed5ed443785fd2  build-input/r151-1.txt' | sha256sum -c -
@@ -37,13 +37,21 @@ jobs:
           rm -rf rabais-express
           mkdir -p rabais-express
           unzip -q /tmp/r151.zip -d rabais-express
+
+          cat build-input/r152-{1..6}.txt > /tmp/r152-overlay.b64
+          base64 -d /tmp/r152-overlay.b64 > /tmp/r152-overlay.zip
+          echo '45d7bfa0f2674724c844ef7ab089378a7e1ce7c6cd3f5c43b50955922222b3d4  /tmp/r152-overlay.zip' | sha256sum -c -
+          unzip -qo /tmp/r152-overlay.zip -d rabais-express
+
           grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
-          grep -q "versionCode 10" rabais-express/app/build.gradle
-          grep -q "versionName '1.5.1'" rabais-express/app/build.gradle
-          grep -q 'android:id="@+id/themeDOS"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/dosPrompt"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q '"dos".equals(currentSkin)' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
-          grep -q 'StarburstDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q "versionCode 11" rabais-express/app/build.gradle
+          grep -q "versionName '1.5.2'" rabais-express/app/build.gradle
+          grep -q 'android:id="@+id/topWindowBar"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/windowMinimize"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/windowMaximize"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/windowClose"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'toggleWindowFullscreen' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'styleWindowChrome' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -69,18 +77,18 @@ jobs:
         run: |
           mkdir -p delivery/signing-tools/lib
           APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
-          cp "$APK" delivery/Rabais-Express-1.5.1-UNSIGNED.apk
+          cp "$APK" delivery/Rabais-Express-1.5.2-UNSIGNED.apk
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
           chmod +x delivery/signing-tools/* || true
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt
-          sha256sum delivery/Rabais-Express-1.5.1-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
+          sha256sum delivery/Rabais-Express-1.5.2-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
 
       - name: Upload APK and signing tools
         uses: actions/upload-artifact@v4
         with:
-          name: Rabais-Express-1.5.1-UNSIGNED-TOOLS
+          name: Rabais-Express-1.5.2-UNSIGNED-TOOLS
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
