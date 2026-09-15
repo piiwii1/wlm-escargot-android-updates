@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.math.BigDecimal;
@@ -21,11 +22,18 @@ public class MainActivity extends Activity {
     private TextView resultValue;
     private TextView savingValue;
     private TextView discountValue;
+    private TextView moreToggle;
+    private Button recentButton1;
+    private Button recentButton2;
+    private LinearLayout morePanel;
     private SharedPreferences prefs;
 
     private final StringBuilder priceBuffer = new StringBuilder();
     private int discount;
     private boolean customSelected;
+    private int recent1;
+    private int recent2;
+    private boolean extrasOpen = false;
 
     private final int[] discountButtonIds = {R.id.b10, R.id.b20, R.id.b30, R.id.b40, R.id.b50};
     private final int[] discountValues = {10, 20, 30, 40, 50};
@@ -41,17 +49,27 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("rabais", MODE_PRIVATE);
         discount = clampDiscount(prefs.getInt("last_discount", 30));
         customSelected = prefs.getBoolean("custom_selected", false);
+        loadRecentDiscounts();
 
         priceValue = findViewById(R.id.priceValue);
         resultValue = findViewById(R.id.resultValue);
         savingValue = findViewById(R.id.savingValue);
         discountValue = findViewById(R.id.discountValue);
+        moreToggle = findViewById(R.id.moreToggle);
+        recentButton1 = findViewById(R.id.recentButton1);
+        recentButton2 = findViewById(R.id.recentButton2);
+        morePanel = findViewById(R.id.morePanel);
+
+        recentButton1.setOnClickListener(v -> applyPreset(recent1));
+        recentButton2.setOnClickListener(v -> applyPreset(recent2));
 
         bindDiscount(R.id.b10, 10);
         bindDiscount(R.id.b20, 20);
         bindDiscount(R.id.b30, 30);
         bindDiscount(R.id.b40, 40);
         bindDiscount(R.id.b50, 50);
+
+        moreToggle.setOnClickListener(v -> toggleExtras());
 
         bindNumber(R.id.key0, "0");
         bindNumber(R.id.key1, "1");
@@ -96,13 +114,67 @@ public class MainActivity extends Activity {
         root.requestApplyInsets();
     }
 
+    private void loadRecentDiscounts() {
+        if (!prefs.contains("recent_discount_1")) {
+            if (!customSelected && isPreset(discount)) {
+                recent1 = discount;
+                recent2 = discount == 40 ? 30 : 40;
+            } else {
+                recent1 = 30;
+                recent2 = 40;
+            }
+            persistRecents();
+        } else {
+            recent1 = normalizeRecent(prefs.getInt("recent_discount_1", 30), 30);
+            recent2 = normalizeRecent(prefs.getInt("recent_discount_2", 40), 40);
+            if (recent1 == recent2) recent2 = recent1 == 40 ? 30 : 40;
+        }
+    }
+
+    private int normalizeRecent(int value, int fallback) {
+        return isPreset(value) ? value : fallback;
+    }
+
+    private boolean isPreset(int value) {
+        return value == 10 || value == 20 || value == 30 || value == 40 || value == 50;
+    }
+
     private void bindDiscount(int id, int percent) {
-        findViewById(id).setOnClickListener(v -> {
-            discount = percent;
-            customSelected = false;
-            saveDiscount();
-            updateAll();
-        });
+        findViewById(id).setOnClickListener(v -> applyPreset(percent));
+    }
+
+    private void applyPreset(int percent) {
+        discount = percent;
+        customSelected = false;
+        rememberPreset(percent);
+        saveDiscount();
+        updateAll();
+    }
+
+    private void rememberPreset(int percent) {
+        if (percent == recent1) return;
+        if (percent == recent2) {
+            int previousLatest = recent1;
+            recent1 = percent;
+            recent2 = previousLatest;
+        } else {
+            recent2 = recent1;
+            recent1 = percent;
+        }
+        persistRecents();
+    }
+
+    private void persistRecents() {
+        prefs.edit()
+                .putInt("recent_discount_1", recent1)
+                .putInt("recent_discount_2", recent2)
+                .apply();
+    }
+
+    private void toggleExtras() {
+        extrasOpen = !extrasOpen;
+        morePanel.setVisibility(extrasOpen ? View.VISIBLE : View.GONE);
+        moreToggle.setText(extrasOpen ? "Masquer les autres rabais  ▴" : "Autres rabais  ▾");
     }
 
     private void bindNumber(int id, String token) {
@@ -179,12 +251,27 @@ public class MainActivity extends Activity {
 
     private void updateDiscountDisplay() {
         discountValue.setText("-" + discount + " %");
+
+        recentButton1.setText("-" + recent1 + " %");
+        recentButton2.setText("-" + recent2 + " %");
+        styleRecentButton(recentButton1, recent1);
+        styleRecentButton(recentButton2, recent2);
+
         for (int i = 0; i < discountButtonIds.length; i++) {
             Button button = findViewById(discountButtonIds[i]);
-            boolean selected = !customSelected && discount == discountValues[i];
+            int value = discountValues[i];
+            boolean isRecent = value == recent1 || value == recent2;
+            button.setVisibility(isRecent ? View.GONE : View.VISIBLE);
+            boolean selected = !customSelected && discount == value;
             button.setBackgroundResource(selected ? R.drawable.bg_discount_selected : R.drawable.bg_discount_button);
             button.setTextColor(selected ? Color.WHITE : Color.rgb(22, 25, 30));
         }
+    }
+
+    private void styleRecentButton(Button button, int value) {
+        boolean selected = !customSelected && discount == value;
+        button.setBackgroundResource(selected ? R.drawable.bg_discount_selected : R.drawable.bg_discount_button);
+        button.setTextColor(selected ? Color.WHITE : Color.rgb(22, 25, 30));
     }
 
     private void updateResult() {
