@@ -11,9 +11,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
-      issues: read
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       ANDROID_HOME: /usr/local/lib/android/sdk
@@ -22,68 +19,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct verified 1.5.0 files
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Reconstruct verified 1.5.1 source
         run: |
-          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/issues/46/comments?per_page=100" -o /tmp/comments.json
-          python3 - <<'PY'
-          import base64, hashlib, json, pathlib, shutil, struct, zlib
-          comments={int(c['id']):c['body'] for c in json.load(open('/tmp/comments.json',encoding='utf-8'))}
-          specs=[
-            (5688863149,'R150 1/7',5600,'309d59937f3c0e07efe5f061b1fb180711984471d9ef9c54b38745654f312acc'),
-            (5688868002,'R150 2/7',5600,'31745f8479c7e62b5a033cb532aadf716ae2f77f3935dcb39353dffaf5b5d07b'),
-            (5688872809,'R150 3/7',5600,'f759272c0ec908d5aca3b3767c2631b88d22e38c188905e8cf05eecf1275d782'),
-            (5688885338,'R150 4/7',5600,'d0dced65edae52076707757213be2b4058b23c754d0bc652e1224d3edff7d573'),
-            (5688889635,'R150 5/7',5600,'268febdfc1b4aac800df1d64c2dc2d1a6d9d103305dcde60ae748460040d6bc9'),
-            (5688906120,'R150 6A',2000,'9c5577ace118945a431b9290717182c6ed9af8cf9ade8c8c09cd19d002fd2415'),
-          ]
-          chunks=[]
-          for cid,header_expected,len_expected,sha_expected in specs:
-            header,payload=comments[cid].split('\n',1)
-            clean=''.join(payload.split())
-            assert header.strip()==header_expected,(cid,header)
-            assert len(clean)==len_expected,(cid,len(clean),len_expected)
-            assert hashlib.sha256(clean.encode()).hexdigest()==sha_expected,(cid,'chunk sha')
-            chunks.append(clean)
-          raw=base64.b64decode(''.join(chunks),validate=True)
-          assert len(raw)==22500,len(raw)
-          root=pathlib.Path('rabais-express')
-          shutil.rmtree(root,ignore_errors=True); root.mkdir()
-          off=0; count=0
-          while raw[off:off+4]==b'PK\x03\x04':
-            sig,ver,flags,method,mtime,mdate,crc,csz,usz,nlen,xlen=struct.unpack_from('<IHHHHHIIIHH',raw,off)
-            assert not (flags & 8), 'Unexpected ZIP data descriptor'
-            name=raw[off+30:off+30+nlen].decode('utf-8')
-            start=off+30+nlen+xlen; end=start+csz
-            assert end<=len(raw),(name,end,len(raw))
-            comp=raw[start:end]
-            if method==0: out=comp
-            elif method==8: out=zlib.decompress(comp,-15)
-            else: raise SystemExit('Unsupported compression '+str(method))
-            assert len(out)==usz,(name,len(out),usz)
-            assert (zlib.crc32(out)&0xffffffff)==crc,(name,'crc')
-            dest=(root/name).resolve(); rr=root.resolve()
-            assert str(dest).startswith(str(rr)),name
-            if name.endswith('/'):
-              dest.mkdir(parents=True,exist_ok=True)
-            else:
-              dest.parent.mkdir(parents=True,exist_ok=True); dest.write_bytes(out)
-            off=end; count+=1
-          print('Extracted entries:',count,'local records end:',off,'next signature:',raw[off:off+4])
-          assert count==37,count
-          assert off==21444,off
-          assert raw[off:off+4]==b'PK\x01\x02',raw[off:off+4]
-          PY
+          set -euo pipefail
+          echo '20d0bdb82cdc7cf75af9595ef1a0e822c51fb19036e9481756ed5ed443785fd2  build-input/r151-1.txt' | sha256sum -c -
+          echo 'fa52aed9a9099549c22aed91bc393418d9b130e04e2ed01e0eb52458ff4914ff  build-input/r151-2.txt' | sha256sum -c -
+          echo '1ce497e12c937ed69713bb18029c9868ab8495954ea7a871ea0eaa24c4dd4b2c  build-input/r151-3.txt' | sha256sum -c -
+          echo '51fe87ffb539eb58fb9a342b1b697f24a21ec884efb5d31fca85d58bc6f08fe6  build-input/r151-4.txt' | sha256sum -c -
+          echo '07b675efebc946325e10c3782583b97ed4c892eb1402015778580a0896ac6968  build-input/r151-5.txt' | sha256sum -c -
+          echo 'cca002d0d6f054f42edc066c73eabc1b43346e24b74b6bb476c64a77ee92d3da  build-input/r151-6.txt' | sha256sum -c -
+          echo '2774a71be8f841e69bfdd8f760b76423f064ac67db9724ec702abc51ef596231  build-input/r151-7.txt' | sha256sum -c -
+          cat build-input/r151-{1..7}.txt > /tmp/r151.b64
+          base64 -d /tmp/r151.b64 > /tmp/r151.zip
+          echo 'd15c0ae8250d0271618bf20c7efc9530b55d006293cbfeed5a0f492e258bb496  /tmp/r151.zip' | sha256sum -c -
+          rm -rf rabais-express
+          mkdir -p rabais-express
+          unzip -q /tmp/r151.zip -d rabais-express
           grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
-          grep -q "versionCode 9" rabais-express/app/build.gradle
-          grep -q "versionName '1.5.0'" rabais-express/app/build.gradle
-          grep -q 'android:id="@+id/settingsPage"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/themeClassic"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/themeDark"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/themeXP"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/themeMSN"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'SKIN_MSN' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q "versionCode 10" rabais-express/app/build.gradle
+          grep -q "versionName '1.5.1'" rabais-express/app/build.gradle
+          grep -q 'android:id="@+id/themeDOS"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/dosPrompt"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q '"dos".equals(currentSkin)' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'StarburstDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -109,18 +67,18 @@ jobs:
         run: |
           mkdir -p delivery/signing-tools/lib
           APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
-          cp "$APK" delivery/Rabais-Express-1.5.0-UNSIGNED.apk
+          cp "$APK" delivery/Rabais-Express-1.5.1-UNSIGNED.apk
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
           chmod +x delivery/signing-tools/* || true
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt
-          sha256sum delivery/Rabais-Express-1.5.0-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
+          sha256sum delivery/Rabais-Express-1.5.1-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
 
       - name: Upload APK and signing tools
         uses: actions/upload-artifact@v4
         with:
-          name: Rabais-Express-1.5.0-UNSIGNED-TOOLS
+          name: Rabais-Express-1.5.1-UNSIGNED-TOOLS
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
