@@ -38,6 +38,7 @@ jobs:
           mkdir -p rabais-express
           unzip -q /tmp/r151.zip -d rabais-express
 
+          sha256sum build-input/r152-{1..6}.txt
           cat build-input/r152-{1..6}.txt > /tmp/r152-overlay.b64
           base64 -d /tmp/r152-overlay.b64 > /tmp/r152-overlay.zip
           echo '45d7bfa0f2674724c844ef7ab089378a7e1ce7c6cd3f5c43b50955922222b3d4  /tmp/r152-overlay.zip' | sha256sum -c -
