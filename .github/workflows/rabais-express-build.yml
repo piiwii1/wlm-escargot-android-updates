@@ -45,13 +45,13 @@ jobs:
       - name: Prepare delivery
         run: |
           mkdir -p delivery
-          cp rabais-express/app/build/outputs/apk/debug/app-debug.apk delivery/Rabais-Express-1.0.0.apk
-          sha256sum delivery/Rabais-Express-1.0.0.apk | tee delivery/SHA256.txt
+          cp rabais-express/app/build/outputs/apk/debug/app-debug.apk delivery/Rabais-Express-1.1.0.apk
+          sha256sum delivery/Rabais-Express-1.1.0.apk | tee delivery/SHA256.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Rabais-Express-1.0.0-APK
+          name: Rabais-Express-1.1.0-APK
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
