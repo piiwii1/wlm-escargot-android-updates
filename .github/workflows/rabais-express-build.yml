@@ -29,16 +29,24 @@ jobs:
           curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/issues/46/comments?per_page=100" -o /tmp/comments.json
           python3 - <<'PY'
           import base64, hashlib, json, pathlib, shutil, zipfile
-          expected_ids = [5688218123, 5688223858, 5688229285, 5688235073, 5688281114]
           comments = {int(c['id']): c['body'] for c in json.load(open('/tmp/comments.json', encoding='utf-8'))}
+          specs = [
+              (5688218123, 'CHUNK 1/5', 6000, '5c71ef2a71d602b4ed5703e5fe646ac2c4d545d3cbcd9369e732f4aac88570cd'),
+              (5688223858, 'CHUNK 2/5', 6000, '30acd0ff03ffc45c4fb3622a4a052956f6a3ff7af6f07d58b1746c9a13f8883a'),
+              (5688316966, 'CHUNK 3A', 2000, '91168118112e05c6d28f9e6f07db9e39d8c5220b357097bf590c53f157b7eb5c'),
+              (5688319042, 'CHUNK 3B', 2000, '8db121abe4717028e73559070934ff022e292f4168f2b93f297d701d6fccbc46'),
+              (5688321048, 'CHUNK 3C', 2000, '38254c6c5fe3e30c6e7b076fee953635340fc8c4943202e450a373951edc8333'),
+              (5688235073, 'CHUNK 4/5', 6000, '8b49a537d260cdf10bc457a2ef45f705576a4fb353959696298cfa4d14255b9d'),
+              (5688281114, 'CHUNK 5/5', 4672, '4e1b26745c3105a5fa5c6a8a7bb6a31969f333dcfbf5d57eacf55b1dea9a9b25'),
+          ]
           chunks = []
-          for index, cid in enumerate(expected_ids, 1):
-              body = comments[cid]
-              header, payload = body.split('\n', 1)
-              if header.strip() != f'CHUNK {index}/5':
-                  raise SystemExit(f'Bad chunk header: {header}')
+          for cid, expected_header, expected_len, expected_sha in specs:
+              header, payload = comments[cid].split('\n', 1)
               clean = ''.join(payload.split())
-              print(f'CHUNK {index}: len={len(clean)} sha256={hashlib.sha256(clean.encode()).hexdigest()}')
+              digest = hashlib.sha256(clean.encode()).hexdigest()
+              print(f'{expected_header}: len={len(clean)} sha256={digest}')
+              if header.strip() != expected_header or len(clean) != expected_len or digest != expected_sha:
+                  raise SystemExit(f'Chunk verification failed: {expected_header}')
               chunks.append(clean)
           raw = base64.b64decode(''.join(chunks), validate=True)
           digest = hashlib.sha256(raw).hexdigest()
