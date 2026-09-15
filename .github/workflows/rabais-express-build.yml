@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct verified 1.4.1 source
+      - name: Reconstruct verified 1.4.2 source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -34,69 +34,48 @@ jobs:
           python3 - <<'PY'
           import base64, hashlib, json, pathlib, shutil, zipfile
           comments = {int(c['id']): c['body'] for c in json.load(open('/tmp/comments.json', encoding='utf-8'))}
-
-          def reconstruct(specs, expected_zip_sha, out_path):
-              chunks = []
-              for cid, header_expected, len_expected, sha_expected in specs:
-                  body = comments[cid]
-                  header, payload = body.split('\n', 1)
-                  clean = ''.join(payload.split())
-                  digest = hashlib.sha256(clean.encode()).hexdigest()
-                  if header.strip() != header_expected:
-                      raise SystemExit(f'Bad header for {cid}: {header!r}')
-                  if len(clean) != len_expected:
-                      raise SystemExit(f'Bad length for {header_expected}: {len(clean)} != {len_expected}')
-                  if digest != sha_expected:
-                      raise SystemExit(f'Bad SHA for {header_expected}: {digest}')
-                  chunks.append(clean)
-              raw = base64.b64decode(''.join(chunks), validate=True)
-              digest = hashlib.sha256(raw).hexdigest()
-              print(out_path, 'SHA-256:', digest)
-              if digest != expected_zip_sha:
-                  raise SystemExit(f'ZIP SHA mismatch for {out_path}: {digest}')
-              pathlib.Path(out_path).write_bytes(raw)
-              with zipfile.ZipFile(out_path) as z:
-                  bad = z.testzip()
-                  if bad:
-                      raise SystemExit(f'Corrupt ZIP member: {bad}')
-              return out_path
-
-          base_specs = [
-              (5688218123, 'CHUNK 1/5', 6000, '5c71ef2a71d602b4ed5703e5fe646ac2c4d545d3cbcd9369e732f4aac88570cd'),
-              (5688223858, 'CHUNK 2/5', 6000, '30acd0ff03ffc45c4fb3622a4a052956f6a3ff7af6f07d58b1746c9a13f8883a'),
-              (5688316966, 'CHUNK 3A', 2000, '91168118112e05c6d28f9e6f07db9e39d8c5220b357097bf590c53f157b7eb5c'),
-              (5688319042, 'CHUNK 3B', 2000, '8db121abe4717028e73559070934ff022e292f4168f2b93f297d701d6fccbc46'),
-              (5688321048, 'CHUNK 3C', 2000, '38254c6c5fe3e30c6e7b076fee953635340fc8c4943202e450a373951edc8333'),
-              (5688235073, 'CHUNK 4/5', 6000, '8b49a537d260cdf10bc457a2ef45f705576a4fb353959696298cfa4d14255b9d'),
-              (5688281114, 'CHUNK 5/5', 4672, '4e1b26745c3105a5fa5c6a8a7bb6a31969f333dcfbf5d57eacf55b1dea9a9b25'),
+          specs = [
+              (5688721674, 'V142 1/6', 5000, '71f8de737f54181bcea802af85407828320ba45fa55fe85541dd119a9034be9e'),
+              (5688726559, 'V142 2/6', 5000, 'bb82e87af8c1c5da6af8b8952c8244a0812e0c007f8ed1b649355365d0f3562b'),
+              (5688732001, 'V142 3/6', 5000, 'ca7f4777224c053dbce634994308698788892ffe8eacdca4b741f89246080899'),
+              (5688737933, 'V142 4/6', 5000, '4b6f60b92f9bb9c38c3af7de9d7e9cc1f4e61904eec579516bca202afeee6431'),
+              (5688743699, 'V142 5/6', 5000, 'd3b027a8f309d75d9537bb8756b395f36baf309fd099db79a97f00c6ce68bb3a'),
+              (5688748603, 'V142 6/6', 4888, '4dedd4d71fb228f69043192fc8c374774cdea18d2ef23c85185055becccb4273'),
           ]
-          overlay_specs = [
-              (5688559177, 'V141 1/9', 1800, '6a0e8c932228792d2c30ce21ee892f5f7d12a93027be81a80412ddd4332146fa'),
-              (5688561568, 'V141 2/9', 1800, 'a45c13aecdeaa27ed5c321d9190453c7bd79726c4d2363cbac1f4a2275ff4f59'),
-              (5688563390, 'V141 3/9', 1800, '7192dddd95fe8ac68a3c8da3ca9d84a7d1cda49c889094f8ab93b4dd72b9a7a2'),
-              (5688565502, 'V141 4/9', 1800, '84682a1a63c01134e85a2644d045289b05b3a6203b2dac8549f448f911f05100'),
-              (5688574648, 'V141 5/9', 1800, 'af7cf9d9399d23918885227d821f7e4fc9f9c8a1803802054ebd4a149971731b'),
-              (5688581962, 'V141 6/9', 1800, '98c18164e8d5ee42b2d2d620925eb133f90474bc532083975af91e655f2aba17'),
-              (5688583985, 'V141 7/9', 1800, '674686b0f5ada5ce76f376dd2739161de16094656cd0f6d2ecfa6a41a77bd445'),
-              (5688594734, 'V141 8/9', 1800, '21bbe5ec15a57c7aa4a2e25ba28f38befecdfa88b92a66cc0ce8675378b481e5'),
-              (5688596347, 'V141 9/9', 1272, '4d5b70939e1452b0741594156c4a568918025f78c1e254dc4ec509d6002c7154'),
-          ]
-
-          reconstruct(base_specs, 'cd5a773cbe083eb69bc4e86a14a056817117c7b169b2a9592c35374c4543a315', '/tmp/base.zip')
-          reconstruct(overlay_specs, 'c816f5587fd0ce4b27b2f4fcaf98c16591c656a05eb4bde8419fe7e0fbb9fd76', '/tmp/overlay.zip')
-
+          chunks=[]
+          for cid, header_expected, len_expected, sha_expected in specs:
+              body = comments[cid]
+              header, payload = body.split('\n', 1)
+              clean = ''.join(payload.split())
+              digest = hashlib.sha256(clean.encode()).hexdigest()
+              if header.strip() != header_expected:
+                  raise SystemExit(f'Bad header {header!r} for {cid}')
+              if len(clean) != len_expected:
+                  raise SystemExit(f'Bad length {len(clean)} for {header_expected}')
+              if digest != sha_expected:
+                  raise SystemExit(f'Bad chunk SHA for {header_expected}: {digest}')
+              chunks.append(clean)
+          raw = base64.b64decode(''.join(chunks), validate=True)
+          digest = hashlib.sha256(raw).hexdigest()
+          print('Source ZIP SHA-256:', digest)
+          if digest != '6784e089f6478260800f486b865255667ba73ea4fbcd8fcdd28bec59ae60539d':
+              raise SystemExit('Source ZIP SHA mismatch')
+          pathlib.Path('/tmp/source.zip').write_bytes(raw)
+          with zipfile.ZipFile('/tmp/source.zip') as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit('Corrupt ZIP member: '+bad)
           shutil.rmtree('rabais-express', ignore_errors=True)
           pathlib.Path('rabais-express').mkdir()
-          with zipfile.ZipFile('/tmp/base.zip') as z:
-              z.extractall('rabais-express')
-          with zipfile.ZipFile('/tmp/overlay.zip') as z:
+          with zipfile.ZipFile('/tmp/source.zip') as z:
               z.extractall('rabais-express')
           PY
           grep -n "applicationId\|versionCode\|versionName" rabais-express/app/build.gradle
           grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
-          grep -q "versionCode 7" rabais-express/app/build.gradle
-          grep -q "versionName '1.4.1'" rabais-express/app/build.gradle
-          ! grep -q '<ScrollView' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q "versionCode 8" rabais-express/app/build.gradle
+          grep -q "versionName '1.4.2'" rabais-express/app/build.gradle
+          grep -q 'android:id="@+id/calcPercent"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'findViewById(R.id.calcPercent)' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -122,19 +101,19 @@ jobs:
         run: |
           mkdir -p delivery/signing-tools/lib
           APK="rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk"
-          cp "$APK" delivery/Rabais-Express-1.4.1-UNSIGNED.apk
+          cp "$APK" delivery/Rabais-Express-1.4.2-UNSIGNED.apk
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/zipalign" delivery/signing-tools/zipalign
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
           chmod +x delivery/signing-tools/* || true
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt || true
-          sha256sum delivery/Rabais-Express-1.4.1-UNSIGNED.apk | tee delivery/SHA256-UNSIGNED.txt
+          sha256sum delivery/Rabais-Express-1.4.2-UNSIGNED.apk | tee delivery/SHA256-UNSIGNED.txt
 
       - name: Upload APK and signing tools
         uses: actions/upload-artifact@v4
         with:
-          name: Rabais-Express-1.4.1-UNSIGNED-TOOLS
+          name: Rabais-Express-1.4.2-UNSIGNED-TOOLS
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
