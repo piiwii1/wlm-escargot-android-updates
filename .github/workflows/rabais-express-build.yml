@@ -26,10 +26,12 @@ jobs:
           echo 'fa52aed9a9099549c22aed91bc393418d9b130e04e2ed01e0eb52458ff4914ff  build-input/r151-2.txt' | sha256sum -c -
           echo '1ce497e12c937ed69713bb18029c9868ab8495954ea7a871ea0eaa24c4dd4b2c  build-input/r151-3.txt' | sha256sum -c -
           echo '51fe87ffb539eb58fb9a342b1b697f24a21ec884efb5d31fca85d58bc6f08fe6  build-input/r151-4.txt' | sha256sum -c -
-          echo '07b675efebc946325e10c3782583b97ed4c892eb1402015778580a0896ac6968  build-input/r151-5.txt' | sha256sum -c -
+          echo 'de6096dc09c5fa8d47c489e396132de2d4c8c2faa58feb16199a79efe016bef3  build-input/r151-51.txt' | sha256sum -c -
+          echo 'fe5f381efb8ca9d37ba05022f54ef8160cc9dcc16544589973f199c5fafa3ea8  build-input/r151-52.txt' | sha256sum -c -
+          echo 'd70e1623bd2896cd6a78593d67aebdb423fc5a5a9d28aea69df16a76de7cd21e  build-input/r151-53.txt' | sha256sum -c -
           echo 'cca002d0d6f054f42edc066c73eabc1b43346e24b74b6bb476c64a77ee92d3da  build-input/r151-6.txt' | sha256sum -c -
           echo '2774a71be8f841e69bfdd8f760b76423f064ac67db9724ec702abc51ef596231  build-input/r151-7.txt' | sha256sum -c -
-          cat build-input/r151-{1..7}.txt > /tmp/r151.b64
+          cat build-input/r151-{1..4}.txt build-input/r151-51.txt build-input/r151-52.txt build-input/r151-53.txt build-input/r151-6.txt build-input/r151-7.txt > /tmp/r151.b64
           base64 -d /tmp/r151.b64 > /tmp/r151.zip
           echo 'd15c0ae8250d0271618bf20c7efc9530b55d006293cbfeed5a0f492e258bb496  /tmp/r151.zip' | sha256sum -c -
           rm -rf rabais-express
