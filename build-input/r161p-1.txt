@@ -1,0 +1,51 @@
+diff -ruN '--exclude=README.md' '--exclude=BUILD-INFO.txt' a/app/build.gradle b/app/build.gradle
+--- a/app/build.gradle	2026-09-15 23:55:06.036519940 +0000
++++ b/app/build.gradle	2026-09-16 00:30:37.371195005 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.rabaisexpress'
+         minSdk 24
+         targetSdk 35
+-        versionCode 12
+-        versionName '1.6.0'
++        versionCode 13
++        versionName '1.6.1'
+     }
+ 
+     buildTypes {
+diff -ruN '--exclude=README.md' '--exclude=BUILD-INFO.txt' a/app/src/main/java/ch/piiwii/rabais/MainActivity.java b/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+--- a/app/src/main/java/ch/piiwii/rabais/MainActivity.java	2026-09-15 23:57:08.244256937 +0000
++++ b/app/src/main/java/ch/piiwii/rabais/MainActivity.java	2026-09-16 00:30:36.636945163 +0000
+@@ -12,6 +12,9 @@
+ import android.graphics.drawable.Drawable;
+ import android.os.Build;
+ import android.os.Bundle;
++import android.text.SpannableString;
++import android.text.Spanned;
++import android.text.style.ForegroundColorSpan;
+ import android.view.View;
+ import android.view.ViewGroup;
+ import android.view.WindowInsets;
+@@ -239,6 +242,11 @@
+         if ("dos".equals(currentSkin)) item.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+         else if ("msn".equals(currentSkin) || "mario".equals(currentSkin) || "minion".equals(currentSkin)) item.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+         else item.setTypeface(Typeface.DEFAULT_BOLD);
++        if ("mario".equals(currentSkin)) {
++            item.setTextColor(selected ? Color.rgb(255,239,93) : Color.WHITE);
++        } else if ("minion".equals(currentSkin)) {
++            item.setTextColor(selected ? Color.rgb(255,224,52) : Color.rgb(224,235,246));
++        }
+     }
+ 
+     // -------------------------------------------------------------------------
+@@ -987,8 +995,8 @@
+         if ("xp".equals(currentSkin)) return gradientStroke(Color.rgb(249,248,241), Color.rgb(238,236,222), 8, Color.rgb(111,159,211), 1);
+         if ("msn".equals(currentSkin)) return gradientStroke(Color.rgb(255,255,255), Color.rgb(220,244,255), 22, Color.rgb(136,204,247), 1);
+         if ("dos".equals(currentSkin)) return rounded(Color.BLACK, 0, Color.rgb(53,255,92), 1);
+-        if ("mario".equals(currentSkin)) return gradientStroke(Color.rgb(255,252,235), Color.rgb(255,237,196), 16, Color.rgb(126,67,15), 2);
+-        if ("minion".equals(currentSkin)) return gradientStroke(Color.rgb(255,255,250), Color.rgb(255,244,199), 22, Color.rgb(106,117,132), 2);
++        if ("mario".equals(currentSkin)) return new RivetedPanelDrawable(Color.rgb(255,252,235), Color.rgb(255,237,196), Color.rgb(126,67,15), Color.rgb(225,165,73), 16, 2);
++        if ("minion".equals(currentSkin)) return new RivetedPanelDrawable(Color.rgb(255,255,250), Color.rgb(255,244,199), Color.rgb(89,102,119), Color.rgb(152,161,171), 22, 2);
+         SkinPalette p=palette();
+         return rounded(p.card,18,p.border,1);
+     }
+@@ -997,8 +1005
