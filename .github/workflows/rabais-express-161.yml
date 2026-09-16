@@ -1,0 +1,120 @@
+name: Rabais Express 1.6.1 Build
+
+on:
+  push:
+    branches: [ rabais-express-build ]
+    paths:
+      - '.github/workflows/rabais-express-161.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      SDKMANAGER: /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct verified 1.6.1 source
+        run: |
+          set -euo pipefail
+          echo '20d0bdb82cdc7cf75af9595ef1a0e822c51fb19036e9481756ed5ed443785fd2  build-input/r151-1.txt' | sha256sum -c -
+          echo 'fa52aed9a9099549c22aed91bc393418d9b130e04e2ed01e0eb52458ff4914ff  build-input/r151-2.txt' | sha256sum -c -
+          echo '1ce497e12c937ed69713bb18029c9868ab8495954ea7a871ea0eaa24c4dd4b2c  build-input/r151-3.txt' | sha256sum -c -
+          echo '51fe87ffb539eb58fb9a342b1b697f24a21ec884efb5d31fca85d58bc6f08fe6  build-input/r151-4.txt' | sha256sum -c -
+          echo 'de6096dc09c5fa8d47c489e396132de2d4c8c2faa58feb16199a79efe016bef3  build-input/r151-51.txt' | sha256sum -c -
+          echo 'fe5f381efb8ca9d37ba05022f54ef8160cc9dcc16544589973f199c5fafa3ea8  build-input/r151-52.txt' | sha256sum -c -
+          echo 'd70e1623bd2896cd6a78593d67aebdb423fc5a5a9d28aea69df16a76de7cd21e  build-input/r151-53.txt' | sha256sum -c -
+          echo 'cca002d0d6f054f42edc066c73eabc1b43346e24b74b6bb476c64a77ee92d3da  build-input/r151-6.txt' | sha256sum -c -
+          echo '2774a71be8f841e69bfdd8f760b76423f064ac67db9724ec702abc51ef596231  build-input/r151-7.txt' | sha256sum -c -
+          cat build-input/r151-{1..4}.txt build-input/r151-51.txt build-input/r151-52.txt build-input/r151-53.txt build-input/r151-6.txt build-input/r151-7.txt > /tmp/r151.b64
+          base64 -d /tmp/r151.b64 > /tmp/r151.zip
+          echo 'd15c0ae8250d0271618bf20c7efc9530b55d006293cbfeed5a0f492e258bb496  /tmp/r151.zip' | sha256sum -c -
+          rm -rf rabais-express
+          mkdir -p rabais-express
+          unzip -q /tmp/r151.zip -d rabais-express
+
+          echo '1c9843dfd48adb765c15dd0ab23da0ce382b1267560bb3c5daab36ab31cbcc11  build-input/r152-1.txt' | sha256sum -c -
+          echo '406ae15486a4ec4daa5702e74010747b5937d89a516a3e3ca78062ef368b7e7e  build-input/r152-2.txt' | sha256sum -c -
+          echo 'b4f786f40ea2cfedfd169fa4c6306f5e08ec6de1060ba04de10d3c41134fdc45  build-input/r152-3.txt' | sha256sum -c -
+          echo '487bd633ebb5583d9a2daa0fef6fb3623c0dc4c278834a761f522b8b8b69a17a  build-input/r152-4.txt' | sha256sum -c -
+          echo 'e000d67b3f7bbd12d610d26a63e6c27066088cfc5bcec6e59c797080a5dd4c99  build-input/r152-5.txt' | sha256sum -c -
+          echo '654153526474fcb45167d90914d4460b4671c3c1cfbf93f69bed338e248ff9d5  build-input/r152-61.txt' | sha256sum -c -
+          echo '0651454140f78f42a5766479cb5836c8feb632a890d92fe7726ceef3e6062368  build-input/r152-62.txt' | sha256sum -c -
+          echo 'cd6a30cf78027e4f374cb46e062ae2be8a254fae7f774dd46e6a3cf38965e3a9  build-input/r152-63.txt' | sha256sum -c -
+          cat build-input/r152-{1..5}.txt build-input/r152-61.txt build-input/r152-62.txt build-input/r152-63.txt > /tmp/r152-overlay.b64
+          base64 -d /tmp/r152-overlay.b64 > /tmp/r152-overlay.zip
+          echo '45d7bfa0f2674724c844ef7ab089378a7e1ce7c6cd3f5c43b50955922222b3d4  /tmp/r152-overlay.zip' | sha256sum -c -
+          unzip -qo /tmp/r152-overlay.zip -d rabais-express
+
+          echo '85cc8c391bc5a62228bdb1b3886e75627c5aebd0a1938fcac7f899e91fb75ed7  build-input/r160p-0.txt' | sha256sum -c -
+          echo 'd6368e476d91f695f97ca6c946147791cf2280f039d2abeb19b9d8924b0f175b  build-input/r160p-1.txt' | sha256sum -c -
+          echo 'e7d342e2a0a636373349d75473ba9c031c39539383ccbe308ad7b6f68d5afa62  build-input/r160p-2.txt' | sha256sum -c -
+          echo '3e963ef46cc066b9f698af17f02ec72056f2813cfccfc40bede535eb46b5434e  build-input/r160p-3.txt' | sha256sum -c -
+          echo 'acca79bd71a965c5c86de4092ac8eb9656e8d56280dbd9b65d8da32750cabc3c  build-input/r160p-4.txt' | sha256sum -c -
+          cat build-input/r160p-{0..4}.txt > /tmp/r160.patch
+          echo '4f1dcb1d2de1ce22c619cbc89a07c4058b2c23e0b31fc889b7409361a787d00b  /tmp/r160.patch' | sha256sum -c -
+          (cd rabais-express && patch -p1 < /tmp/r160.patch)
+
+          echo '5f0d8f0c3fb2270737a7c735164d71ad667866137d41fb6b4e401d17e58a9e44  build-input/r161p-1.txt' | sha256sum -c -
+          echo 'e2acee01762ff86fef6bcc35114c81777e3840aff83f8a7a226c628fb71defd7  build-input/r161p-2.txt' | sha256sum -c -
+          echo 'e9020443d7c32326d74708ccd1ad93f3e64f0c3ee0f0d722d5438f7cf3d16cdc  build-input/r161p-3.txt' | sha256sum -c -
+          echo '231f2d31c8b378e6da0b2fbe2c203ddc2febe2ec266171adad21825fcd67c227  build-input/r161p-4.txt' | sha256sum -c -
+          echo 'd54c8e6b47c948e23fcb1d7688be997f405496f85a530d6d151c014fb13c7dee  build-input/r161p-5.txt' | sha256sum -c -
+          echo '57209ec6542ea9cae2b569d7ce29f58a6862e99ba2061a3e272b14aadfaeae7d  build-input/r161p-6.txt' | sha256sum -c -
+          echo 'cb43a77857957a21f5bcddb4d20dc21805cfae8356c99a54ce992ac3aeead85b  build-input/r161p-7.txt' | sha256sum -c -
+          cat build-input/r161p-{1..7}.txt > /tmp/r161.patch
+          echo '1aee9b3f323362bb7c9f5fc0bb654e44a5c1b5cedba66f3a211558075082f6a9  /tmp/r161.patch' | sha256sum -c -
+          (cd rabais-express && patch -p1 < /tmp/r161.patch)
+
+          grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
+          grep -q "versionCode 13" rabais-express/app/build.gradle
+          grep -q "versionName '1.6.1'" rabais-express/app/build.gradle
+          grep -q 'RivetedPanelDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'MinionNavDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'drawCoin' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          ! grep -q 'ScrollView' rabais-express/app/src/main/res/layout/activity_main.xml
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build unsigned release APK
+        working-directory: rabais-express
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Prepare delivery
+        run: |
+          mkdir -p delivery/signing-tools/lib
+          APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
+          cp "$APK" delivery/Rabais-Express-1.6.1-UNSIGNED.apk
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
+          chmod +x delivery/signing-tools/* || true
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt
+          sha256sum delivery/Rabais-Express-1.6.1-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
+
+      - name: Upload APK and signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rabais-Express-1.6.1-UNSIGNED-TOOLS
+          path: delivery/*
+          retention-days: 7
+          if-no-files-found: error
