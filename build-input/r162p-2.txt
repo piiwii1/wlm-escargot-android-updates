@@ -1,0 +1,64 @@
+graphics.Rect b=getBounds();
++            float w=b.width(), h=b.height(), s=Math.min(w,h), stroke=sw(b);
++            float cx=b.exactCenterX(), cy=b.exactCenterY();
++            p.setStrokeWidth(stroke); p.setColor(color); p.setStyle(Paint.Style.STROKE);
++            p.setShader(null);
++            path.reset();
++            if(type==TYPE_TAG) drawTag(c,b,cx,cy,s,stroke);
++            else if(type==TYPE_GLOBE) drawGlobe(c,b,cx,cy,s,stroke);
++            else if(type==TYPE_CALCULATOR) drawCalculator(c,b,cx,cy,s,stroke);
++            else drawSettings(c,b,cx,cy,s,stroke);
++        }
++
++        private void drawTag(Canvas c, android.graphics.Rect b,float cx,float cy,float s,float stroke){
++            float l=cx-s*.38f,t=cy-s*.27f,r=cx+s*.34f,bo=cy+s*.30f;
++            path.moveTo(l,t); path.lineTo(cx+s*.10f,t); path.lineTo(r,cy); path.lineTo(cx+s*.10f,bo); path.lineTo(l,bo); path.close();
++            if(selected){ p.setStyle(Paint.Style.FILL); p.setColor(fill()); c.drawPath(path,p); }
++            p.setStyle(Paint.Style.STROKE); p.setColor(color); p.setStrokeWidth(stroke); c.drawPath(path,p);
++            p.setStyle(Paint.Style.FILL); p.setColor(accent()); c.drawCircle(l+s*.14f,cy,s*.06f,p);
++            p.setStyle(Paint.Style.STROKE); p.setColor(color); p.setStrokeWidth(Math.max(1.2f,stroke*.72f));
++            c.drawLine(cx-s*.04f,cy-s*.10f,cx+s*.14f,cy+s*.10f,p);
++            p.setStyle(Paint.Style.FILL); c.drawCircle(cx-s*.08f,cy-s*.12f,s*.035f,p); c.drawCircle(cx+s*.18f,cy+s*.12f,s*.035f,p);
++        }
++
++        private void drawGlobe(Canvas c, android.graphics.Rect b,float cx,float cy,float s,float stroke){
++            float rad=s*.32f;
++            if(selected){ p.setStyle(Paint.Style.FILL); p.setColor(fill()); c.drawCircle(cx,cy,rad,p); }
++            p.setStyle(Paint.Style.STROKE); p.setColor(color); p.setStrokeWidth(stroke); c.drawCircle(cx,cy,rad,p);
++            p.setStrokeWidth(Math.max(1.1f,stroke*.70f));
++            c.drawOval(cx-rad*.48f,cy-rad,cx+rad*.48f,cy+rad,p);
++            c.drawLine(cx-rad,cy,cx+rad,cy,p);
++            c.drawArc(cx-rad,cy-rad*.52f,cx+rad,cy+rad*.52f,200,140,false,p);
++            c.drawArc(cx-rad,cy-rad*.52f,cx+rad,cy+rad*.52f,20,140,false,p);
++            p.setColor(accent()); p.setStrokeWidth(stroke); c.drawArc(cx-rad,cy-rad,cx+rad,cy+rad,-42,62,false,p);
++        }
++
++        private void drawCalculator(Canvas c, android.graphics.Rect b,float cx,float cy,float s,float stroke){
++            float l=cx-s*.29f,t=cy-s*.36f,r=cx+s*.29f,bo=cy+s*.36f,rr=s*.08f;
++            if(selected){ p.setStyle(Paint.Style.FILL); p.setColor(fill()); c.drawRoundRect(l,t,r,bo,rr,rr,p); }
++            p.setStyle(Paint.Style.STROKE); p.setColor(color); p.setStrokeWidth(stroke); c.drawRoundRect(l,t,r,bo,rr,rr,p);
++            p.setStrokeWidth(Math.max(1.1f,stroke*.70f)); c.drawRoundRect(l+s*.07f,t+s*.07f,r-s*.07f,t+s*.20f,s*.03f,s*.03f,p);
++            float sx=l+s*.11f, sy=t+s*.30f, gap=s*.16f, rrk=s*.035f;
++            p.setStyle(Paint.Style.FILL);
++            for(int row=0;row<2;row++) for(int col=0;col<3;col++){
++                p.setColor((selected && row==1 && col==2)?accent():color);
++                c.drawRoundRect(sx+col*gap,sy+row*gap,sx+col*gap+s*.075f,sy+row*gap+s*.075f,rrk,rrk,p);
++            }
++        }
++
++        private void drawSettings(Canvas c, android.graphics.Rect b,float cx,float cy,float s,float stroke){
++            float outer=s*.32f, inner=s*.14f;
++            p.setStyle(Paint.Style.STROKE); p.setColor(color); p.setStrokeWidth(stroke);
++            for(int i=0;i<8;i++){
++                double a=Math.PI*2*i/8.0; float x1=cx+(float)Math.cos(a)*outer*.78f, y1=cy+(float)Math.sin(a)*outer*.78f;
++                float x2=cx+(float)Math.cos(a)*outer*1.08f, y2=cy+(float)Math.sin(a)*outer*1.08f;
++                c.drawLine(x1,y1,x2,y2,p);
++            }
++            if(selected){ p.setStyle(Paint.Style.FILL); p.setColor(fill()); c.drawCircle(cx,cy,outer*.82f,p); }
++            p.setStyle(Paint.Style.STROKE); p.setColor(color); p.setStrokeWidth(stroke); c.drawCircle(cx,cy,outer*.82f,p); c.drawCircle(cx,cy,inner,p);
++            p.setColor(accent()); p.setStrokeWidth(Math.max(1.2f,stroke*.72f)); c.drawArc(cx-inner,cy-inner,cx+inner,cy+inner,-70,145,false,p);
++        }
++
++        @Override public void setAlpha(int alpha){ p.setAlpha(alpha); }
++        @Override public void setColorFilter(android.graphics.ColorFilter cf){ p.setColorFilter(cf); }
++        @Override public int g
