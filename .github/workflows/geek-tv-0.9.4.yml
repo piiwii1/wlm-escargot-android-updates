@@ -1,0 +1,135 @@
+name: Geek TV 0.9.4 Android TV Settings Build
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'piiwii-tv-0.2.0-ci/**'
+      - '.github/workflows/geek-tv-0.9.4.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+          echo "/usr/local/lib/android/sdk/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore Geek TV 0.8.0
+        run: |
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-080-*.part | base64 -d > /tmp/geektv-080.tar.gz
+          gzip -t /tmp/geektv-080.tar.gz
+          tar -xzf /tmp/geektv-080.tar.gz
+          test -f geek-tv-0.8.0-ci-public/app/build.gradle
+
+      - name: Apply 0.8.1 DVR audio fix
+        run: |
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-081-*.part | base64 -d > /tmp/geektv-081.tar.gz
+          echo '0d7e375070593f3ca2619620eed606c8accd3db9b2085c24633f53caf5c07092  /tmp/geektv-081.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-081.tar.gz -C geek-tv-0.8.0-ci-public
+
+      - name: Apply 0.9.0 TV base
+        run: |
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-090-*.part | base64 -d > /tmp/geektv-090.tar.gz
+          echo '50328ea9015f349a7e78fc4a9f711aa138ab11a6caae82b0ff5923e4c22f18b8  /tmp/geektv-090.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-090.tar.gz -C geek-tv-0.8.0-ci-public
+          sed -i 's/protected void onWindowFocusChanged(boolean hasFocus)/public void onWindowFocusChanged(boolean hasFocus)/' geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
+
+      - name: Apply 0.9.1 Guide
+        run: |
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-091-*.part | base64 -d > /tmp/geektv-091.tar.gz
+          echo '18d29d7a4789071afac21e733713249a7c825cd1e71cfe711f6c4ecd29b05ac7  /tmp/geektv-091.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-091.tar.gz -C geek-tv-0.8.0-ci-public
+
+      - name: Apply 0.9.2 TV DVR scheduling
+        run: |
+          set -e
+          base64 -d piiwii-tv-0.2.0-ci/geektv-092-overlay.b64 > /tmp/geektv-092.tar.gz
+          echo '9be9c120416e1f6be8f47594c9fe7b1e1470b4cd8422ae0df925381e4678eb76  /tmp/geektv-092.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-092.tar.gz -C geek-tv-0.8.0-ci-public
+
+      - name: Apply 0.9.3 TV recordings
+        run: |
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-093-*.part | base64 -d > /tmp/geektv-093.tar.gz
+          echo '1d1b7b48f3fdef689fb0206e252dac249a4b31b3e6eb4d9e586da4f7994d930c  /tmp/geektv-093.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-093.tar.gz -C geek-tv-0.8.0-ci-public
+          sed -i "s/versionCode 12/versionCode 13/" geek-tv-0.8.0-ci-public/app/build.gradle
+          sed -i "s/versionName '0.9.2'/versionName '0.9.3'/" geek-tv-0.8.0-ci-public/app/build.gradle
+
+      - name: Apply 0.9.4 TV settings
+        run: |
+          set -e
+          base64 -d piiwii-tv-0.2.0-ci/geektv-094-overlay.b64 > /tmp/geektv-094.tar.gz
+          echo '6a2151184dbadece65860066802b5156f4b03e7ae69304a8d82cf6ef868e0405  /tmp/geektv-094.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-094.tar.gz -C geek-tv-0.8.0-ci-public
+          grep -q "versionCode 14" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "versionName '0.9.4'" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "buildSettingsPanel" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
+          grep -q "KEYCODE_SETTINGS" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
+          grep -q "togglePlayPause" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
+          grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
+
+      - name: Disable signing for public CI build
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('geek-tv-0.8.0-ci-public/app/build.gradle')
+          s = p.read_text()
+          marker = '    signingConfigs {'
+          if marker in s:
+              start = s.index(marker)
+              end = s.index('    buildTypes {', start)
+              s = s[:start] + s[end:]
+          s = s.replace('            signingConfig signingConfigs.release\n', '')
+          p.write_text(s)
+          PY
+          ! grep -q "signingConfig signingConfigs.release" geek-tv-0.8.0-ci-public/app/build.gradle
+
+      - name: Build unsigned release APK
+        working-directory: geek-tv-0.8.0-ci-public
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Prepare output
+        run: |
+          set -e
+          APK="geek-tv-0.8.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -f "$APK"
+          mkdir -p out
+          cp "$APK" out/Geek-TV-0.9.4-unsigned.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Geek-TV-0.9.4-unsigned
+          path: out/*
+          retention-days: 14
+          if-no-files-found: error
