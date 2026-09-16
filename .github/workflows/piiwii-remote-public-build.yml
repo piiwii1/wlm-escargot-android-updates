@@ -28,15 +28,15 @@ jobs:
           gradle-version: '8.9'
       - name: Build Phone APK
         working-directory: piiwii-remote
-        run: gradle --no-daemon --stacktrace :remote:assembleDebug
+        run: gradle --no-daemon --stacktrace :remote:assembleRelease
       - name: Package Android
         run: |
           mkdir -p out
-          cp piiwii-remote/remote/build/outputs/apk/debug/remote-debug.apk out/PiiWii-Remote-Phone-1.1.0.apk
+          cp piiwii-remote/remote/build/outputs/apk/release/remote-release-unsigned.apk out/PiiWii-Remote-Phone-1.1.0-unsigned.apk
           sha256sum out/*.apk > out/SHA256-Android.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-Phone-1.1.0
+          name: PiiWii-Remote-Phone-1.1.0-ReleaseUnsigned
           path: out/
           retention-days: 14
 
