@@ -1,4 +1,4 @@
-name: PiiWii TV 0.2.0 Unsigned Build
+name: Geek TV 0.8.0 Unsigned Build
 
 on:
   pull_request:
@@ -39,31 +39,35 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore source tree
+      - name: Restore Geek TV 0.8.0 source tree
         run: |
-          base64 -d piiwii-tv-0.2.0-ci/piiwii-tv-src.tar.gz.b64 > /tmp/piiwii-tv-src.tar.gz
-          tar -xzf /tmp/piiwii-tv-src.tar.gz
-          test -f piiwii-tv-0.2.0-ci-public/app/build.gradle
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-080-*.part | base64 -d > /tmp/geektv-080.tar.gz
+          gzip -t /tmp/geektv-080.tar.gz
+          tar -xzf /tmp/geektv-080.tar.gz
+          test -f geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "versionCode 8" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "versionName '0.8.0'" geek-tv-0.8.0-ci-public/app/build.gradle
+          test -f geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/RecordingAlarmReceiver.java
+          test -f geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/ScheduleManager.java
 
       - name: Build unsigned release APK
-        working-directory: piiwii-tv-0.2.0-ci-public
+        working-directory: geek-tv-0.8.0-ci-public
         run: gradle --no-daemon --stacktrace assembleRelease
 
       - name: Prepare output
         run: |
           set -e
-          APK="piiwii-tv-0.2.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
+          APK="geek-tv-0.8.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
           mkdir -p out
-          cp "$APK" out/PiiWii-TV-0.2.0-unsigned.apk
+          cp "$APK" out/Geek-TV-0.8.0-unsigned.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-0.2.0-unsigned
+          name: Geek-TV-0.8.0-unsigned
           path: out/*
           retention-days: 14
           if-no-files-found: error
-
-# trigger public PR
