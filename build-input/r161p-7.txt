@@ -1,0 +1,14 @@
+ private final int strokeDp;
++        RivetedPanelDrawable(int top,int bottom,int stroke,int rivet,int radiusDp,int strokeDp){this.top=top;this.bottom=bottom;this.stroke=stroke;this.rivet=rivet;this.radius=radiusDp;this.strokeDp=strokeDp;}
++        @Override public void draw(Canvas c){
++            android.graphics.Rect b=getBounds(); float d=c.getDensity(); if(d<=0)d=1f; float r=radius*d;
++            android.graphics.LinearGradient g=new android.graphics.LinearGradient(0,b.top,0,b.bottom,top,bottom,android.graphics.Shader.TileMode.CLAMP);
++            p.setShader(g); p.setStyle(Paint.Style.FILL); c.drawRoundRect(b.left,b.top,b.right,b.bottom,r,r,p); p.setShader(null);
++            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(Math.max(1f,strokeDp*d)); p.setColor(stroke); c.drawRoundRect(b.left+1,b.top+1,b.right-1,b.bottom-1,r,r,p); p.setStyle(Paint.Style.FILL);
++            float rr=Math.max(3f,4.2f*d), off=Math.max(8f,10f*d); p.setColor(rivet);
++            c.drawCircle(b.left+off,b.top+off,rr,p); c.drawCircle(b.right-off,b.top+off,rr,p); c.drawCircle(b.left+off,b.bottom-off,rr,p); c.drawCircle(b.right-off,b.bottom-off,rr,p);
++            p.setColor(Color.argb(115,255,255,255)); c.drawCircle(b.left+off-rr*0.25f,b.top+off-rr*0.25f,rr*0.34f,p); c.drawCircle(b.right-off-rr*0.25f,b.top+off-rr*0.25f,rr*0.34f,p);
+         }
+         @Override public void setAlpha(int alpha){p.setAlpha(alpha);}
+         @Override public void setColorFilter(android.graphics.ColorFilter cf){p.setColorFilter(cf);}
+ 
