@@ -1,0 +1,61 @@
+-r*0.10f,cy-r*0.55f,cx+r*0.10f,cy+r*0.55f,r*0.08f,r*0.08f,p);
++        }
+         @Override public void setAlpha(int alpha){p.setAlpha(alpha);}
+         @Override public void setColorFilter(android.graphics.ColorFilter cf){p.setColorFilter(cf);}
+         @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
+@@ -1365,22 +1421,101 @@
+         private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+         @Override public void draw(Canvas canvas){
+             android.graphics.Rect b=getBounds();
++            float w=b.width(), h=b.height();
+             p.setStyle(Paint.Style.FILL);
+             p.setColor(Color.rgb(255,219,38));
+             canvas.drawRect(b,p);
+-            float w=b.width(), h=b.height();
+-            // soft denim-blue band and abstract goggle circles
+-            p.setColor(Color.argb(42,24,61,104));
+-            canvas.drawRect(b.left,h*0.76f,b.right,h,p);
+-            p.setStyle(Paint.Style.STROKE);
+-            p.setStrokeWidth(Math.max(3f,w/120f));
+-            p.setColor(Color.argb(70,67,78,92));
+-            canvas.drawCircle(w*0.14f,h*0.12f,w*0.055f,p);
+-            canvas.drawCircle(w*0.86f,h*0.12f,w*0.055f,p);
+-            p.setStyle(Paint.Style.FILL);
+-            p.setColor(Color.argb(32,255,255,255));
+-            canvas.drawCircle(w*0.14f,h*0.12f,w*0.035f,p);
+-            canvas.drawCircle(w*0.86f,h*0.12f,w*0.035f,p);
++
++            // brighter upper panel
++            p.setColor(Color.argb(55,255,255,255));
++            canvas.drawRect(b.left,b.top,b.right,h*0.36f,p);
++
++            // abstract goggle strap
++            p.setColor(Color.rgb(38,54,79));
++            canvas.drawRect(b.left,h*0.095f,b.right,h*0.125f,p);
++            drawGoggle(canvas,w*0.14f,h*0.11f,w*0.058f);
++            drawGoggle(canvas,w*0.86f,h*0.11f,w*0.058f);
++
++            // denim lower zone
++            p.setColor(Color.rgb(31,65,111));
++            canvas.drawRect(b.left,h*0.78f,b.right,h,p);
++            p.setColor(Color.argb(28,255,255,255));
++            for(float y=h*0.79f;y<h;y+=24) canvas.drawRect(b.left,y,b.right,y+2,p);
++
++            // little industrial pipes
++            p.setColor(Color.rgb(128,138,150));
++            canvas.drawRoundRect(w*0.015f,h*0.48f,w*0.045f,h*0.72f,7,7,p);
++            canvas.drawRoundRect(w*0.955f,h*0.42f,w*0.985f,h*0.68f,7,7,p);
++
++            // hazard stripes near denim transition
++            float stripeW=w/14f;
++            for(int i=0;i<14;i++){
++                p.setColor(i%2==0?Color.rgb(255,211,31):Color.rgb(32,47,69));
++                float x=i*stripeW;
++                Path path=new Path();
++                path.moveTo(x,h*0.755f); path.lineTo(x+stripeW,h*0.755f);
++                path.lineTo(x+stripeW*0.72f,h*0.775f); path.lineTo(x-stripeW*0.28f,h*0.775f); path.close();
++                canvas.drawPath(path,p);
++            }
++        }
++        private void drawGoggle(Canvas c,float cx,float cy,float r){
++            p.setColor(Color.rgb(136,145,155)); c.drawCircle(cx,cy
