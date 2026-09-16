@@ -1,10 +1,11 @@
-name: Geek TV 0.6.0 Unsigned Build
+name: Geek TV 0.7.0 Unsigned Build
 
 on:
   pull_request:
     branches: [ main ]
     paths:
       - 'piiwii-tv-0.2.0-ci/**'
+      - 'geek-tv-0.7.0-overlay.tar.gz'
       - '.github/workflows/piiwii-tv-0.2.0-unsigned.yml'
   workflow_dispatch:
 
@@ -39,13 +40,23 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore Geek TV source tree
+      - name: Restore Geek TV 0.6.0 base
         run: |
           set -e
           cat piiwii-tv-0.2.0-ci/geektv-060-*.part | base64 -d > /tmp/geektv-060.tar.gz
           gzip -t /tmp/geektv-060.tar.gz
           tar -xzf /tmp/geektv-060.tar.gz
           test -f geek-tv-0.6.0-ci-public/app/build.gradle
+
+      - name: Apply Geek TV 0.7.0 DVR overlay
+        run: |
+          set -e
+          gzip -t geek-tv-0.7.0-overlay.tar.gz
+          tar -xzf geek-tv-0.7.0-overlay.tar.gz -C geek-tv-0.6.0-ci-public
+          grep -q "versionCode 7" geek-tv-0.6.0-ci-public/app/build.gradle
+          grep -q "versionName '0.7.0'" geek-tv-0.6.0-ci-public/app/build.gradle
+          test -f geek-tv-0.6.0-ci-public/app/src/main/java/ch/piiwii/tv/RecordingService.java
+          test -f geek-tv-0.6.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
       - name: Build unsigned release APK
         working-directory: geek-tv-0.6.0-ci-public
@@ -57,13 +68,13 @@ jobs:
           APK="geek-tv-0.6.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
           mkdir -p out
-          cp "$APK" out/Geek-TV-0.6.0-unsigned.apk
+          cp "$APK" out/Geek-TV-0.7.0-unsigned.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Geek-TV-0.6.0-unsigned
+          name: Geek-TV-0.7.0-unsigned
           path: out/*
           retention-days: 14
           if-no-files-found: error
