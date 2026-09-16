@@ -50,7 +50,7 @@ jobs:
       - name: Apply Geek TV 0.7.0 DVR overlay
         run: |
           set -e
-          cat piiwii-tv-0.2.0-ci/geektv-070-overlay-*.part | base64 -d > /tmp/geektv-070-overlay.tar.gz
+          cat piiwii-tv-0.2.0-ci/geektv-070-overlay-*.part | base64 --decode --ignore-garbage > /tmp/geektv-070-overlay.tar.gz
           gzip -t /tmp/geektv-070-overlay.tar.gz
           tar -xzf /tmp/geektv-070-overlay.tar.gz -C geek-tv-0.6.0-ci-public
           grep -q "versionCode 7" geek-tv-0.6.0-ci-public/app/build.gradle
