@@ -1,4 +1,4 @@
-import ctypes,socket,threading,platform,sys,time
+import ctypes,socket,threading,platform,sys,time,subprocess
 DISCOVERY_PORT=45454;COMMAND_PORT=45455;NAME=platform.node() or 'PC Windows';VK={'MUTE':0xAD,'VOL_DOWN':0xAE,'VOL_UP':0xAF,'NEXT':0xB0,'PREV':0xB1,'PLAY_PAUSE':0xB3};KEYEVENTF_KEYUP=2
 def press(v):ctypes.windll.user32.keybd_event(v,0,0,0);time.sleep(.02);ctypes.windll.user32.keybd_event(v,0,KEYEVENTF_KEYUP,0)
 def discover():
@@ -13,7 +13,8 @@ def commands():
   if m.startswith('PIIWII_CMD|'):
    c=m.split('|',1)[1]
    if c in VK:press(VK[c])
+   elif c=='POWER':subprocess.Popen(['shutdown','/s','/t','0'])
 def main():
  if sys.platform!='win32':return
- threading.Thread(target=discover,daemon=True).start();threading.Thread(target=commands,daemon=True).start();import tkinter as tk;r=tk.Tk();r.title('PiiWii Remote Agent 1.0.0');r.geometry('370x190');r.resizable(False,False);tk.Label(r,text='PiiWii Remote Agent',font=('Segoe UI',18,'bold')).pack(pady=(24,6));tk.Label(r,text='PC détectable sur le réseau local').pack();tk.Label(r,text=NAME,font=('Segoe UI',11,'bold')).pack(pady=8);tk.Label(r,text='Volume • Muet • Play/Pause • Suivant • Précédent').pack();r.mainloop()
+ threading.Thread(target=discover,daemon=True).start();threading.Thread(target=commands,daemon=True).start();import tkinter as tk;r=tk.Tk();r.title('PiiWii Remote Agent 1.1.0');r.geometry('370x190');r.resizable(False,False);tk.Label(r,text='PiiWii Remote Agent',font=('Segoe UI',18,'bold')).pack(pady=(24,6));tk.Label(r,text='PC détectable sur le réseau local').pack();tk.Label(r,text=NAME,font=('Segoe UI',11,'bold')).pack(pady=8);tk.Label(r,text='Volume • Muet • Play/Pause • Suivant • Précédent • Éteindre').pack();r.mainloop()
 if __name__=='__main__':main()
