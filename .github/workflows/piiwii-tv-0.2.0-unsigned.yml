@@ -64,6 +64,22 @@ jobs:
           grep -q "versionCode 7" geek-tv-0.7.0-ci-public/app/build.gradle
           grep -q "applicationId 'ch.piiwii.tv'" geek-tv-0.7.0-ci-public/app/build.gradle
 
+      - name: Remove private signing config from CI copy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('geek-tv-0.7.0-ci-public/app/build.gradle')
+          s = p.read_text()
+          start = s.index('    signingConfigs {')
+          end = s.index('    buildTypes {', start)
+          s = s[:start] + s[end:]
+          s = s.replace('            signingConfig signingConfigs.release\n', '')
+          p.write_text(s)
+          assert 'storePassword' not in s
+          assert 'keyPassword' not in s
+          assert 'signingConfig signingConfigs.release' not in s
+          PY
+
       - name: Build unsigned release APK
         working-directory: geek-tv-0.7.0-ci-public
         run: gradle --no-daemon --stacktrace assembleRelease
