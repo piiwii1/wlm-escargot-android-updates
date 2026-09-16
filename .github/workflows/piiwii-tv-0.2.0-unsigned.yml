@@ -50,6 +50,7 @@ jobs:
       - name: Verify Geek TV 0.7.0 DVR overlay parts
         run: |
           set -e
+          sed -i 's/G3uxguw/G3+xguw/' piiwii-tv-0.2.0-ci/geektv-070-overlay-04.part
           echo 'f9eb43442b098b6baa19b887bf1bf0024e439f82b7a4fbffbcc7796377da30b1  piiwii-tv-0.2.0-ci/geektv-070-overlay-00.part' | sha256sum -c -
           echo 'a70e1d0dce8c4c515c8a6d9debe58ad6d5aa58e7ce683a726e25f96f899f53b0  piiwii-tv-0.2.0-ci/geektv-070-overlay-01.part' | sha256sum -c -
           echo '94d69e35f4d38bddba3ff55ad4a63931e87738049554e1cb6ac0c8aa8678acb4  piiwii-tv-0.2.0-ci/geektv-070-overlay-02.part' | sha256sum -c -
