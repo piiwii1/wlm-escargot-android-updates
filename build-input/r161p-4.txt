@@ -1,0 +1,64 @@
+dth(), h=b.height();
+             p.setStyle(Paint.Style.FILL);
+             p.setColor(Color.rgb(45,164,255));
+             canvas.drawRect(b, p);
+ 
+-            float w=b.width(), h=b.height();
+-            // Clouds
+-            p.setColor(Color.argb(215,255,255,255));
+-            drawCloud(canvas, w*0.16f, h*0.12f, w*0.07f);
+-            drawCloud(canvas, w*0.78f, h*0.18f, w*0.06f);
+-            // Rounded green hills
+-            p.setColor(Color.rgb(68,190,88));
+-            canvas.drawCircle(w*0.18f,h*0.92f,w*0.26f,p);
+-            p.setColor(Color.rgb(46,168,75));
+-            canvas.drawCircle(w*0.77f,h*0.94f,w*0.31f,p);
+-            p.setColor(Color.rgb(112,211,99));
+-            canvas.drawCircle(w*0.52f,h*0.98f,w*0.20f,p);
++            // soft sky shine
++            p.setColor(Color.argb(35,255,255,255));
++            canvas.drawRect(b.left,b.top,b.right,b.top+h*0.22f,p);
++
++            // clouds
++            p.setColor(Color.argb(230,255,255,255));
++            drawCloud(canvas, w*0.15f, h*0.11f, w*0.065f);
++            drawCloud(canvas, w*0.79f, h*0.16f, w*0.055f);
++
++            // distant rounded hills
++            p.setColor(Color.rgb(92,201,102));
++            canvas.drawCircle(w*0.18f,h*0.84f,w*0.25f,p);
++            p.setColor(Color.rgb(48,170,78));
++            canvas.drawCircle(w*0.80f,h*0.86f,w*0.31f,p);
++            p.setColor(Color.rgb(118,214,102));
++            canvas.drawCircle(w*0.51f,h*0.91f,w*0.23f,p);
++
++            // grassy platform strip
++            p.setColor(Color.rgb(105,205,72));
++            canvas.drawRect(b.left,h*0.91f,b.right,h,p);
++            p.setColor(Color.rgb(75,169,49));
++            for(float x=-12;x<w+20;x+=30) canvas.drawCircle(x,h*0.91f,19,p);
++
++            // pipe silhouette on the left
++            p.setColor(Color.rgb(28,153,62));
++            canvas.drawRoundRect(w*0.015f,h*0.66f,w*0.10f,h*0.91f,10,10,p);
++            p.setColor(Color.rgb(61,196,82));
++            canvas.drawRoundRect(w*0.005f,h*0.64f,w*0.115f,h*0.69f,8,8,p);
++
++            // floating coins on the right
++            for(int i=0;i<3;i++) drawCoin(canvas,w*(0.86f+0.035f*(i%2)),h*(0.27f+0.075f*i),w*0.025f);
++
++            // subtle brick ledges
++            p.setColor(Color.rgb(176,75,29));
++            canvas.drawRoundRect(w*0.02f,h*0.47f,w*0.14f,h*0.51f,5,5,p);
++            canvas.drawRoundRect(w*0.86f,h*0.56f,w*0.98f,h*0.60f,5,5,p);
+         }
+         private void drawCloud(Canvas c,float cx,float cy,float r){
+             c.drawCircle(cx-r*0.55f,cy,r*0.55f,p);
+@@ -1328,6 +1379,11 @@
+             c.drawCircle(cx+r*0.62f,cy,r*0.50f,p);
+             c.drawRoundRect(cx-r*1.15f,cy-r*0.15f,cx+r*1.15f,cy+r*0.55f,r*0.35f,r*0.35f,p);
+         }
++        private void drawCoin(Canvas c,float cx,float cy,float r){
++            p.setColor(Color.rgb(255,193,24)); c.drawCircle(cx,cy,r,p);
++            p.setColor(Color.rgb(255,232,82)); c.drawCircle(cx,cy,r*0.72f,p);
++            p.setColor(Color.rgb(194,125,9)); c.drawRoundRect(cx
