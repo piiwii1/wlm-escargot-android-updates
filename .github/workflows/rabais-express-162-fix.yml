@@ -1,0 +1,86 @@
+name: Rabais Express 1.6.2 Fixed Build
+
+on:
+  push:
+    branches: [ rabais-express-build ]
+    paths:
+      - '.github/workflows/rabais-express-162-fix.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      SDKMANAGER: /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and fix verified 1.6.2 source
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          p=Path('.github/workflows/rabais-express-162.yml')
+          s=p.read_text()
+          marker='      - name: Reconstruct verified 1.6.2 source\n        run: |\n'
+          start=s.index(marker)+len(marker)
+          end=s.index('\n      - name: Setup Java 17', start)
+          block=textwrap.dedent(s[start:end])
+          Path('/tmp/reconstruct162.sh').write_text('set -euo pipefail\n'+block+'\n')
+          PY
+          bash /tmp/reconstruct162.sh
+
+          echo '07c4aceab71cca62438c8b42c2cb37810a02ec0418b74e44ba2da4676fd4650a  build-input/r162fix.txt' | sha256sum -c -
+          (cd rabais-express && patch -p0 < ../build-input/r162fix.txt)
+
+          grep -q "versionCode 14" rabais-express/app/build.gradle
+          grep -q "versionName '1.6.2'" rabais-express/app/build.gradle
+          grep -q 'Math.round(dp(25))' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          test "$(grep -c 'private .* dp(int value)' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java)" -eq 1
+          grep -q 'NavIconDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          ! grep -q 'ScrollView' rabais-express/app/src/main/res/layout/activity_main.xml
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build unsigned release APK
+        working-directory: rabais-express
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Prepare delivery
+        run: |
+          mkdir -p delivery/signing-tools/lib
+          APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
+          cp "$APK" delivery/Rabais-Express-1.6.2-UNSIGNED.apk
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
+          chmod +x delivery/signing-tools/* || true
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt
+          sha256sum delivery/Rabais-Express-1.6.2-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
+
+      - name: Upload APK and signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rabais-Express-1.6.2-UNSIGNED-TOOLS
+          path: delivery/*
+          retention-days: 7
+          if-no-files-found: error
