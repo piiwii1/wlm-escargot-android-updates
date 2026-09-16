@@ -1,4 +1,4 @@
-name: Geek TV 0.8.1 DVR Audio Fix Build
+name: Geek TV 0.9.0 Android TV Base Build
 
 on:
   pull_request:
@@ -60,23 +60,30 @@ jobs:
           gzip -t /tmp/geektv-080.tar.gz
           tar -xzf /tmp/geektv-080.tar.gz
           test -f geek-tv-0.8.0-ci-public/app/build.gradle
-          grep -q "versionCode 8" geek-tv-0.8.0-ci-public/app/build.gradle
 
-      - name: Verify Geek TV 0.8.1 audio fix overlay
+      - name: Apply Geek TV 0.8.1 DVR audio fix
         run: |
           set -e
           echo '575dfea11487e02d001aed9e7d771eaf406986f5b66d5ee021da19b67ba836fd  piiwii-tv-0.2.0-ci/geektv-081-00.part' | sha256sum -c -
           echo '1794cf92fe3d008ca726accc87283ee7acbc90ac4f0ff6c002ee17cf0dcf52d4  piiwii-tv-0.2.0-ci/geektv-081-01.part' | sha256sum -c -
           cat piiwii-tv-0.2.0-ci/geektv-081-*.part | base64 -d > /tmp/geektv-081-overlay.tar.gz
           echo '0d7e375070593f3ca2619620eed606c8accd3db9b2085c24633f53caf5c07092  /tmp/geektv-081-overlay.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-081-overlay.tar.gz -C geek-tv-0.8.0-ci-public
+          grep -q "versionName '0.8.1'" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
-      - name: Apply Geek TV 0.8.1 DVR audio fix
+      - name: Apply Geek TV 0.9.0 Android TV overlay
         run: |
           set -e
-          tar -xzf /tmp/geektv-081-overlay.tar.gz -C geek-tv-0.8.0-ci-public
-          grep -q "versionCode 9" geek-tv-0.8.0-ci-public/app/build.gradle
-          grep -q "versionName '0.8.1'" geek-tv-0.8.0-ci-public/app/build.gradle
-          grep -q "TYPE=AUDIO" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
+          echo '82d12dcc265bb81bd6306724a616dcf5f18f0f696765fe44c0aa870ecef136f3  piiwii-tv-0.2.0-ci/geektv-090-00.part' | sha256sum -c -
+          echo '2d9e250a5b6fbc57ab3fb43996360734ce52339a9354fa2f175e11ae7c2a32b6  piiwii-tv-0.2.0-ci/geektv-090-01.part' | sha256sum -c -
+          cat piiwii-tv-0.2.0-ci/geektv-090-*.part | base64 -d > /tmp/geektv-090-overlay.tar.gz
+          echo '50328ea9015f349a7e78fc4a9f711aa138ab11a6caae82b0ff5923e4c22f18b8  /tmp/geektv-090-overlay.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-090-overlay.tar.gz -C geek-tv-0.8.0-ci-public
+          grep -q "versionCode 10" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "versionName '0.9.0'" geek-tv-0.8.0-ci-public/app/build.gradle
+          test -f geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
+          grep -q "LEANBACK_LAUNCHER" geek-tv-0.8.0-ci-public/app/src/main/AndroidManifest.xml
           grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
       - name: Disable signing for public CI build
@@ -105,13 +112,13 @@ jobs:
           APK="geek-tv-0.8.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
           mkdir -p out
-          cp "$APK" out/Geek-TV-0.8.1-unsigned.apk
+          cp "$APK" out/Geek-TV-0.9.0-unsigned.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Geek-TV-0.8.1-unsigned
+          name: Geek-TV-0.9.0-unsigned
           path: out/*
           retention-days: 14
           if-no-files-found: error
