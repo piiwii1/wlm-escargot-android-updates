@@ -80,9 +80,11 @@ jobs:
           cat piiwii-tv-0.2.0-ci/geektv-090-*.part | base64 -d > /tmp/geektv-090-overlay.tar.gz
           echo '50328ea9015f349a7e78fc4a9f711aa138ab11a6caae82b0ff5923e4c22f18b8  /tmp/geektv-090-overlay.tar.gz' | sha256sum -c -
           tar -xzf /tmp/geektv-090-overlay.tar.gz -C geek-tv-0.8.0-ci-public
+          sed -i 's/protected void onWindowFocusChanged(boolean hasFocus)/public void onWindowFocusChanged(boolean hasFocus)/' geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
           grep -q "versionCode 10" geek-tv-0.8.0-ci-public/app/build.gradle
           grep -q "versionName '0.9.0'" geek-tv-0.8.0-ci-public/app/build.gradle
           test -f geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
+          grep -q "public void onWindowFocusChanged" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
           grep -q "LEANBACK_LAUNCHER" geek-tv-0.8.0-ci-public/app/src/main/AndroidManifest.xml
           grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
