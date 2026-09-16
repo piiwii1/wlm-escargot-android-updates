@@ -1,4 +1,4 @@
-name: Geek TV 0.8.0 Unsigned Build
+name: Geek TV 0.8.1 DVR Audio Fix Build
 
 on:
   pull_request:
@@ -61,9 +61,23 @@ jobs:
           tar -xzf /tmp/geektv-080.tar.gz
           test -f geek-tv-0.8.0-ci-public/app/build.gradle
           grep -q "versionCode 8" geek-tv-0.8.0-ci-public/app/build.gradle
-          grep -q "versionName '0.8.0'" geek-tv-0.8.0-ci-public/app/build.gradle
-          test -f geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/RecordingAlarmReceiver.java
-          test -f geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/ScheduleManager.java
+
+      - name: Verify Geek TV 0.8.1 audio fix overlay
+        run: |
+          set -e
+          echo '575dfea11487e02d001aed9e7d771eaf406986f5b66d5ee021da19b67ba836fd  piiwii-tv-0.2.0-ci/geektv-081-00.part' | sha256sum -c -
+          echo '1794cf92fe3d008ca726accc87283ee7acbc90ac4f0ff6c002ee17cf0dcf52d4  piiwii-tv-0.2.0-ci/geektv-081-01.part' | sha256sum -c -
+          cat piiwii-tv-0.2.0-ci/geektv-081-*.part | base64 -d > /tmp/geektv-081-overlay.tar.gz
+          echo '0d7e375070593f3ca2619620eed606c8accd3db9b2085c24633f53caf5c07092  /tmp/geektv-081-overlay.tar.gz' | sha256sum -c -
+
+      - name: Apply Geek TV 0.8.1 DVR audio fix
+        run: |
+          set -e
+          tar -xzf /tmp/geektv-081-overlay.tar.gz -C geek-tv-0.8.0-ci-public
+          grep -q "versionCode 9" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "versionName '0.8.1'" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "TYPE=AUDIO" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
+          grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
       - name: Build unsigned release APK
         working-directory: geek-tv-0.8.0-ci-public
@@ -75,13 +89,13 @@ jobs:
           APK="geek-tv-0.8.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
           mkdir -p out
-          cp "$APK" out/Geek-TV-0.8.0-unsigned.apk
+          cp "$APK" out/Geek-TV-0.8.1-unsigned.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Geek-TV-0.8.0-unsigned
+          name: Geek-TV-0.8.1-unsigned
           path: out/*
           retention-days: 14
           if-no-files-found: error
