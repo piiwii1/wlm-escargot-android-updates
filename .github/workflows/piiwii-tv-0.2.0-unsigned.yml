@@ -1,4 +1,4 @@
-name: PiiWii TV 0.2.0 Unsigned Build
+name: PiiWii TV 0.4.0 Unsigned Build
 
 on:
   pull_request:
@@ -41,7 +41,8 @@ jobs:
 
       - name: Restore source tree
         run: |
-          base64 -d piiwii-tv-0.2.0-ci/piiwii-tv-src.tar.gz.b64 > /tmp/piiwii-tv-src.tar.gz
+          cat piiwii-tv-0.2.0-ci/chunks/*.txt | base64 -d > /tmp/piiwii-tv-src.tar.gz
+          gzip -t /tmp/piiwii-tv-src.tar.gz
           tar -xzf /tmp/piiwii-tv-src.tar.gz
           test -f piiwii-tv-0.2.0-ci-public/app/build.gradle
 
@@ -55,15 +56,13 @@ jobs:
           APK="piiwii-tv-0.2.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
           mkdir -p out
-          cp "$APK" out/PiiWii-TV-0.2.0-unsigned.apk
+          cp "$APK" out/PiiWii-TV-0.4.0-unsigned.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-0.2.0-unsigned
+          name: PiiWii-TV-0.4.0-unsigned
           path: out/*
           retention-days: 14
           if-no-files-found: error
-
-# trigger public PR
