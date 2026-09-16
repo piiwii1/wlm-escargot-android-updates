@@ -1,0 +1,1 @@
+Geek TV 0.9.4 Phase 7E: Android TV settings, startup screen, DVR margins, exact-alarm access, remote play/pause, recording back-to-library.
