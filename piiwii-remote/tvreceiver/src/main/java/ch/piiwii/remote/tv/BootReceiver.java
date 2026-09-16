@@ -1,0 +1,1 @@
+package ch.piiwii.remote.tv;import android.content.*;import android.os.*;public class BootReceiver extends BroadcastReceiver{@Override public void onReceive(Context c,Intent i){Intent s=new Intent(c,RemoteService.class);if(Build.VERSION.SDK_INT>=26)c.startForegroundService(s);else c.startService(s);}}

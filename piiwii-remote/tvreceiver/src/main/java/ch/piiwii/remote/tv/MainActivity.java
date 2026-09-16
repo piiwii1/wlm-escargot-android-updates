@@ -1,0 +1,1 @@
+package ch.piiwii.remote.tv;import android.app.*;import android.content.*;import android.os.*;public class MainActivity extends Activity{@Override public void onCreate(Bundle b){super.onCreate(b);setContentView(R.layout.activity_main);Intent i=new Intent(this,RemoteService.class);if(Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);}}
