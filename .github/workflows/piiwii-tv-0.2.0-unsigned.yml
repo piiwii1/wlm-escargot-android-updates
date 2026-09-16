@@ -1,0 +1,67 @@
+name: PiiWii TV 0.2.0 Unsigned Build
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'piiwii-tv-0.2.0-ci/**'
+      - '.github/workflows/piiwii-tv-0.2.0-unsigned.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+          echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+          echo "/usr/local/lib/android/sdk/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore source tree
+        run: |
+          base64 -d piiwii-tv-0.2.0-ci/piiwii-tv-src.tar.gz.b64 > /tmp/piiwii-tv-src.tar.gz
+          tar -xzf /tmp/piiwii-tv-src.tar.gz
+          test -f piiwii-tv-0.2.0-ci-public/app/build.gradle
+
+      - name: Build unsigned release APK
+        working-directory: piiwii-tv-0.2.0-ci-public
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Prepare output
+        run: |
+          set -e
+          APK="piiwii-tv-0.2.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -f "$APK"
+          mkdir -p out
+          cp "$APK" out/PiiWii-TV-0.2.0-unsigned.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-TV-0.2.0-unsigned
+          path: out/*
+          retention-days: 14
+          if-no-files-found: error
