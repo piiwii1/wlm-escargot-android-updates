@@ -79,6 +79,22 @@ jobs:
           grep -q "TYPE=AUDIO" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
           grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
+      - name: Disable signing for public CI build
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('geek-tv-0.8.0-ci-public/app/build.gradle')
+          s = p.read_text()
+          marker = '    signingConfigs {'
+          if marker in s:
+              start = s.index(marker)
+              end = s.index('    buildTypes {', start)
+              s = s[:start] + s[end:]
+          s = s.replace('            signingConfig signingConfigs.release\n', '')
+          p.write_text(s)
+          PY
+          ! grep -q "signingConfig signingConfigs.release" geek-tv-0.8.0-ci-public/app/build.gradle
+
       - name: Build unsigned release APK
         working-directory: geek-tv-0.8.0-ci-public
         run: gradle --no-daemon --stacktrace assembleRelease
