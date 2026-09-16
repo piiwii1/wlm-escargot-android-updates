@@ -50,7 +50,8 @@ jobs:
           echo 'b4fbf8c668cca1bfdfb6209c8d074a02d6fd22f609ec7f09cc6b0d59b305ed40  piiwii-tv-0.2.0-ci/geektv-080-05a.part' | sha256sum -c -
           echo '1b7eccccb6366c19658f3472639b4d89ae4d498ef5dead7b7b17a02a03e1da63  piiwii-tv-0.2.0-ci/geektv-080-05b.part' | sha256sum -c -
           echo '4b956185c5941b4e75405693897258114273e0635536de7faa6c4eceaf835f22  piiwii-tv-0.2.0-ci/geektv-080-06.part' | sha256sum -c -
-          echo '11c6a61de697f9f13409328a4ea03655d8a53605e97201ae353debcb213d3acb  piiwii-tv-0.2.0-ci/geektv-080-07.part' | sha256sum -c -
+          echo 'bfc7db70be3947f3ee793e9e6a1f8d73917077960ab5774089286cda4b2fbf6b  piiwii-tv-0.2.0-ci/geektv-080-07a.part' | sha256sum -c -
+          echo 'e06170aa6c9beef02f4fc8da674ce5b61eb6adaf3c3809fab3da170ead1539cb  piiwii-tv-0.2.0-ci/geektv-080-07b.part' | sha256sum -c -
 
       - name: Restore Geek TV 0.8.0 source tree
         run: |
