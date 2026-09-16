@@ -1,0 +1,127 @@
+name: Calculette Plus 1.6.6 Build
+
+on:
+  push:
+    branches: [ rabais-express-build ]
+    paths:
+      - '.github/workflows/calculette-plus-166.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      SDKMANAGER: /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct verified 1.6.5 and apply 1.6.6 source changes
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          p=Path('.github/workflows/calculette-plus-165.yml')
+          s=p.read_text()
+          marker='      - name: Reconstruct verified 1.6.4 and apply 1.6.5\n        run: |\n'
+          start=s.index(marker)+len(marker)
+          end=s.index('\n      - name: Setup Java 17', start)
+          block=textwrap.dedent(s[start:end])
+          Path('/tmp/reconstruct165.sh').write_text('set -euo pipefail\n'+block+'\n')
+          PY
+          bash /tmp/reconstruct165.sh
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle=Path('rabais-express/app/build.gradle')
+          g=gradle.read_text()
+          if 'versionCode 17' not in g or "versionName '1.6.5'" not in g:
+              raise SystemExit('Unexpected 1.6.5 metadata')
+          g=g.replace('versionCode 17','versionCode 18',1)
+          g=g.replace("versionName '1.6.5'","versionName '1.6.6'",1)
+          gradle.write_text(g)
+
+          layout=Path('rabais-express/app/src/main/res/layout/activity_main.xml')
+          x=layout.read_text()
+          m=re.search(r'(<ImageButton\s+android:id="@\+id/settingsButton".*?android:contentDescription="Paramètres".*?/>)',x,re.S)
+          if not m:
+              raise SystemExit('settingsButton block not found')
+          block=m.group(1)
+          block=block.replace('android:layout_marginTop="8dp"','android:layout_marginTop="4dp"')
+          block=block.replace('android:background="@drawable/bg_custom"','android:background="@android:color/transparent"')
+          block=block.replace('android:padding="10dp"','android:padding="6dp"')
+          x=x[:m.start(1)]+block+x[m.end(1):]
+          layout.write_text(x)
+          PY
+
+          # Enlarge the existing approved Calculette+ launcher artwork itself,
+          # without changing the design, so it occupies more of the launcher icon.
+          ICON='rabais-express/app/src/main/res/drawable-nodpi/ic_calculette_plus.webp'
+          if command -v magick >/dev/null 2>&1; then
+            magick "$ICON" -trim +repage -resize 500x500 -gravity center -background none -extent 512x512 /tmp/icon166.webp
+            cp /tmp/icon166.webp "$ICON"
+          elif command -v convert >/dev/null 2>&1; then
+            convert "$ICON" -trim +repage -resize 500x500 -gravity center -background none -extent 512x512 /tmp/icon166.webp
+            cp /tmp/icon166.webp "$ICON"
+          fi
+
+          grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
+          grep -q 'versionCode 18' rabais-express/app/build.gradle
+          grep -q "versionName '1.6.6'" rabais-express/app/build.gradle
+          grep -Fq 'android:label="Calculette+"' rabais-express/app/src/main/AndroidManifest.xml
+          grep -Fq 'android:background="@android:color/transparent"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -Fq 'android:layout_marginTop="4dp"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'settingsButton' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'ratesInternetButton' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'ratesManualSave' rabais-express/app/src/main/res/layout/activity_main.xml
+          ! grep -q 'requestRatesIfNeeded' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          ! grep -q 'navPlus' rabais-express/app/src/main/res/layout/activity_main.xml
+          ! grep -q 'ScrollView' rabais-express/app/src/main/res/layout/activity_main.xml
+          file rabais-express/app/src/main/res/drawable-nodpi/ic_calculette_plus.webp | grep -qi 'Web/P image'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build unsigned release APK
+        working-directory: rabais-express
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Prepare delivery
+        run: |
+          mkdir -p delivery/signing-tools/lib
+          APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
+          cp "$APK" delivery/Calculette-Plus-1.6.6-UNSIGNED.apk
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
+          chmod +x delivery/signing-tools/* || true
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt
+          (cd rabais-express && zip -qr ../delivery/Calculette-Plus-1.6.6-SOURCES.zip . -x 'app/build/*' '.gradle/*')
+          sha256sum delivery/Calculette-Plus-1.6.6-UNSIGNED.apk delivery/Calculette-Plus-1.6.6-SOURCES.zip > delivery/SHA256-UNSIGNED.txt
+
+      - name: Upload APK source and signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calculette-Plus-1.6.6-CLEAN-UNSIGNED-TOOLS
+          path: delivery/*
+          retention-days: 7
+          if-no-files-found: error
