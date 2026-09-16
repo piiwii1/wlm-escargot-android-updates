@@ -1,0 +1,102 @@
+diff -ruN a/app/build.gradle b/app/build.gradle
+--- a/app/build.gradle	2026-09-16 00:30:37.000000000 +0000
++++ b/app/build.gradle	2026-09-16 08:17:47.460040741 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.rabaisexpress'
+         minSdk 24
+         targetSdk 35
+-        versionCode 13
+-        versionName '1.6.1'
++        versionCode 14
++        versionName '1.6.2'
+     }
+ 
+     buildTypes {
+diff -ruN a/app/src/main/java/ch/piiwii/rabais/MainActivity.java b/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+--- a/app/src/main/java/ch/piiwii/rabais/MainActivity.java	2026-09-16 00:30:36.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/rabais/MainActivity.java	2026-09-16 08:17:48.019332582 +0000
+@@ -231,9 +231,11 @@
+     }
+ 
+     private void styleNav(TextView item, boolean selected) {
++        int iconType = navIconType(item);
+         if ("base".equals(currentSkin)) {
+             item.setTextColor(selected ? Color.rgb(228, 0, 43) : Color.rgb(112, 118, 128));
+             item.setBackgroundResource(selected ? R.drawable.bg_nav_selected : 0);
++            styleNavIcon(item, iconType, selected);
+             return;
+         }
+         SkinPalette p = palette();
+@@ -247,6 +249,23 @@
+         } else if ("minion".equals(currentSkin)) {
+             item.setTextColor(selected ? Color.rgb(255,224,52) : Color.rgb(224,235,246));
+         }
++        styleNavIcon(item, iconType, selected);
++    }
++
++    private int navIconType(TextView item) {
++        if (item == navDiscount) return NavIconDrawable.TYPE_TAG;
++        if (item == navCurrency) return NavIconDrawable.TYPE_GLOBE;
++        if (item == navCalculator) return NavIconDrawable.TYPE_CALCULATOR;
++        return NavIconDrawable.TYPE_SETTINGS;
++    }
++
++    private void styleNavIcon(TextView item, int type, boolean selected) {
++        int color = item.getCurrentTextColor();
++        NavIconDrawable icon = new NavIconDrawable(type, color, selected, currentSkin);
++        int size = dp(25);
++        icon.setBounds(0, 0, size, size);
++        item.setCompoundDrawables(null, icon, null, null);
++        item.setCompoundDrawablePadding(dp(2));
+     }
+ 
+     // -------------------------------------------------------------------------
+@@ -918,6 +937,10 @@
+         return d;
+     }
+ 
++    private int dp(int value) {
++        return Math.round(value * getResources().getDisplayMetrics().density);
++    }
++
+     private GradientDrawable gradient(int top, int bottom, int radiusDp, int stroke) {
+         GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{top,bottom});
+         d.setCornerRadius(dp(radiusDp));
+@@ -1504,6 +1527,105 @@
+         @Override public int getOpacity(){return PixelFormat.OPAQUE;}
+     }
+ 
++    private static class NavIconDrawable extends Drawable {
++        static final int TYPE_TAG=0, TYPE_GLOBE=1, TYPE_CALCULATOR=2, TYPE_SETTINGS=3;
++        private final int type, color;
++        private final boolean selected;
++        private final String skin;
++        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
++        private final Path path = new Path();
++
++        NavIconDrawable(int type, int color, boolean selected, String skin) {
++            this.type=type; this.color=color; this.selected=selected; this.skin=skin;
++            p.setStrokeCap(Paint.Cap.ROUND); p.setStrokeJoin(Paint.Join.ROUND);
++        }
++
++        private float sw(android.graphics.Rect b){ return Math.max(1.8f, Math.min(b.width(),b.height())*0.075f); }
++        private int accent(){
++            if("xp".equals(skin)) return Color.rgb(255,194,14);
++            if("msn".equals(skin)) return Color.rgb(64,184,103);
++            if("mario".equals(skin)) return Color.rgb(255,215,38);
++            if("minion".equals(skin)) return Color.rgb(255,222,36);
++            if("dos".equals(skin)) return Color.rgb(53,255,92);
++            return color;
++        }
++        private int fill(){
++            if(!selected) return Color.TRANSPARENT;
++            if("xp".equals(skin)) return Color.rgb(62,137,239);
++            if("msn".equals(skin)) return Color.rgb(198,239,255);
++            if("mario".equals(skin)) return Color.rgb(231,62,48);
++            if("minion".equals(skin)) return Color.rgb(31,126,214);
++            if("dos".equals(skin)) return Color.argb(38,53,255,92);
++            return Color.argb(30, Color.red(color), Color.green(color), Color.blue(color));
++        }
++
++        @Override public void draw(Canvas c) {
++            android.
