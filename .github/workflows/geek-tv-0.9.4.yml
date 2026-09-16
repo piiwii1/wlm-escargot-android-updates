@@ -88,7 +88,7 @@ jobs:
         run: |
           set -e
           base64 -d piiwii-tv-0.2.0-ci/geektv-094-overlay.b64 > /tmp/geektv-094.tar.gz
-          echo '6a2151184dbadece65860066802b5156f4b03e7ae69304a8d82cf6ef868e0405  /tmp/geektv-094.tar.gz' | sha256sum -c -
+          echo '8e6d135f014c22599484fb0968e77dbbbe088ba9319061f0db5ff8c58b933df2  /tmp/geektv-094.tar.gz' | sha256sum -c -
           tar -xzf /tmp/geektv-094.tar.gz -C geek-tv-0.8.0-ci-public
           grep -q "versionCode 14" geek-tv-0.8.0-ci-public/app/build.gradle
           grep -q "versionName '0.9.4'" geek-tv-0.8.0-ci-public/app/build.gradle
