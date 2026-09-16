@@ -11,4 +11,3 @@
          }
          @Override public void setAlpha(int alpha){p.setAlpha(alpha);}
          @Override public void setColorFilter(android.graphics.ColorFilter cf){p.setColorFilter(cf);}
- 
