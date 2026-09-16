@@ -39,11 +39,14 @@ jobs:
           from pathlib import Path
           p=Path('rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java')
           s=p.read_text()
-          old='        int size = dp(25);'
-          new='        int size = Math.round(dp(25));'
-          if old not in s:
-              raise SystemExit('Expected nav icon size line missing')
-          s=s.replace(old,new,1)
+          replacements={
+              '        int size = dp(25);':'        int size = Math.round(dp(25));',
+              '        item.setCompoundDrawablePadding(dp(2));':'        item.setCompoundDrawablePadding(Math.round(dp(2)));',
+          }
+          for old,new in replacements.items():
+              if old not in s:
+                  raise SystemExit('Expected line missing: '+old.strip())
+              s=s.replace(old,new,1)
           duplicate='    private int dp(int value) {\n        return Math.round(value * getResources().getDisplayMetrics().density);\n    }\n\n'
           if duplicate not in s:
               raise SystemExit('Expected duplicate dp helper missing')
@@ -54,6 +57,7 @@ jobs:
           grep -q "versionCode 14" rabais-express/app/build.gradle
           grep -q "versionName '1.6.2'" rabais-express/app/build.gradle
           grep -q 'Math.round(dp(25))' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'setCompoundDrawablePadding(Math.round(dp(2)))' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
           test "$(grep -c 'private .* dp(int value)' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java)" -eq 1
           grep -q 'NavIconDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
           ! grep -q 'ScrollView' rabais-express/app/src/main/res/layout/activity_main.xml
