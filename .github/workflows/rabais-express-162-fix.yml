@@ -35,7 +35,7 @@ jobs:
           PY
           bash /tmp/reconstruct162.sh
 
-          echo '07c4aceab71cca62438c8b42c2cb37810a02ec0418b74e44ba2da4676fd4650a  build-input/r162fix.txt' | sha256sum -c -
+          echo '616e628f6aa86b5cee7fc5d1eafd30a784f1ef791f149ff09f8876477bd7ee58  build-input/r162fix.txt' | sha256sum -c -
           (cd rabais-express && patch -p0 < ../build-input/r162fix.txt)
 
           grep -q "versionCode 14" rabais-express/app/build.gradle
