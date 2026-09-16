@@ -42,7 +42,21 @@ jobs:
       - name: Restore Geek TV source tree
         run: |
           set -euo pipefail
-          cat geek-tv-0.7.0-ci/geektv-070-*.part > /tmp/geektv-070.b64
+          cd geek-tv-0.7.0-ci
+          echo '8a9cdbefc2691b0335c5081c769ebf9266bbe5dfebb6a707238645e6af4f206a  geektv-070-00.part' | sha256sum -c -
+          echo 'c3533a592178da0455af1cbd95c4df8cf1d5d7f92173a6389e00eeeb57b74f3e  geektv-070-01.part' | sha256sum -c -
+          echo '8eccbed16c354911eeebe61d184d48a54aa07d071992b1c7e80e85422c58f8a6  geektv-070-02.part' | sha256sum -c -
+          echo 'a169b2baf1bee98005728412493648dc85647659d0b5716534470bb7f7cc2e8f  geektv-070-03.part' | sha256sum -c -
+          echo 'b8a96b307d2bfcb6b3d02ee15d692fd8ec8d78880a955273eb6509d6380c2990  geektv-070-04.part' | sha256sum -c -
+          echo '269a50435509d3549d0b2bf82da33ed51322f20aa84f1a62cab9731b744d1831  geektv-070-050.part' | sha256sum -c -
+          echo '6f564e5439ce3a042d365a03390a1cdfad18b572258b74c02da346449afe0a01  geektv-070-051.part' | sha256sum -c -
+          echo '1a2024acbaf161c3f8457487aeeb83f8daafc4d8d7c7f3011ea7e37ae4670df2  geektv-070-052.part' | sha256sum -c -
+          echo '51d3dcdeece804804c64b1c7ce365d541f52779df98daa731b6e4a11777a6e12  geektv-070-053.part' | sha256sum -c -
+          echo '9624c7e691ce6f482f0e8b317fdb700b14e71c23d3c1568df6837583d8b317d6  geektv-070-06.part' | sha256sum -c -
+          echo 'ff975a62ee566dc8841d5c10a71d2fc6170e927ac213eb90da1f0537c673a8be  geektv-070-07.part' | sha256sum -c -
+          echo '943c4b748ac10ba001aafd4dc83470934cd19db7f1def0efa9cc5f7bb4baafcf  geektv-070-08.part' | sha256sum -c -
+          cat geektv-070-00.part geektv-070-01.part geektv-070-02.part geektv-070-03.part geektv-070-04.part geektv-070-050.part geektv-070-051.part geektv-070-052.part geektv-070-053.part geektv-070-06.part geektv-070-07.part geektv-070-08.part > /tmp/geektv-070.b64
+          cd ..
           base64 -d /tmp/geektv-070.b64 > /tmp/geek-tv-0.7.0-public-src.tar.gz
           gzip -t /tmp/geek-tv-0.7.0-public-src.tar.gz
           tar -xzf /tmp/geek-tv-0.7.0-public-src.tar.gz
