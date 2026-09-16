@@ -1,11 +1,11 @@
-name: Geek TV 0.9.0 Android TV Base Build
+name: Geek TV 0.9.1 Android TV Guide Build
 
 on:
   pull_request:
     branches: [ main ]
     paths:
       - 'piiwii-tv-0.2.0-ci/**'
-      - '.github/workflows/piiwii-tv-0.2.0-unsigned.yml'
+      - '.github/workflows/geek-tv-0.9.1.yml'
   workflow_dispatch:
 
 jobs:
@@ -31,27 +31,12 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
-          echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
           echo "/usr/local/lib/android/sdk/build-tools/35.0.0" >> "$GITHUB_PATH"
 
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
-      - name: Verify Geek TV 0.8.0 source parts
-        run: |
-          set -e
-          echo 'd19a0319c0b5799b56dfee2bb917abb7c989b4d4305ae1ddeb32c6466495f234  piiwii-tv-0.2.0-ci/geektv-080-00.part' | sha256sum -c -
-          echo 'c05915e2af80d1116f3f215015bc61fd9246b0e0c3ec7d443841385da8f39a9d  piiwii-tv-0.2.0-ci/geektv-080-01.part' | sha256sum -c -
-          echo '0e95972a4350498796651ae88b96d5dbaca7fac5172db5645e2c2de0d5009446  piiwii-tv-0.2.0-ci/geektv-080-02.part' | sha256sum -c -
-          echo '1f1397a032122f66a6ab57744b9c51c43f959ac3e1d99090094d23afd7cb4831  piiwii-tv-0.2.0-ci/geektv-080-03.part' | sha256sum -c -
-          echo '9447eb3896048c2e9214e5a040db803065dccaeb7b2028be24cf9b356c77cf4d  piiwii-tv-0.2.0-ci/geektv-080-04.part' | sha256sum -c -
-          echo 'b4fbf8c668cca1bfdfb6209c8d074a02d6fd22f609ec7f09cc6b0d59b305ed40  piiwii-tv-0.2.0-ci/geektv-080-05a.part' | sha256sum -c -
-          echo '1b7eccccb6366c19658f3472639b4d89ae4d498ef5dead7b7b17a02a03e1da63  piiwii-tv-0.2.0-ci/geektv-080-05b.part' | sha256sum -c -
-          echo '4b956185c5941b4e75405693897258114273e0635536de7faa6c4eceaf835f22  piiwii-tv-0.2.0-ci/geektv-080-06.part' | sha256sum -c -
-          echo 'bfc7db70be3947f3ee793e9e6a1f8d73917077960ab5774089286cda4b2fbf6b  piiwii-tv-0.2.0-ci/geektv-080-07a.part' | sha256sum -c -
-          echo 'e06170aa6c9beef02f4fc8da674ce5b61eb6adaf3c3809fab3da170ead1539cb  piiwii-tv-0.2.0-ci/geektv-080-07b.part' | sha256sum -c -
 
       - name: Restore Geek TV 0.8.0 source tree
         run: |
@@ -64,28 +49,33 @@ jobs:
       - name: Apply Geek TV 0.8.1 DVR audio fix
         run: |
           set -e
-          echo '575dfea11487e02d001aed9e7d771eaf406986f5b66d5ee021da19b67ba836fd  piiwii-tv-0.2.0-ci/geektv-081-00.part' | sha256sum -c -
-          echo '1794cf92fe3d008ca726accc87283ee7acbc90ac4f0ff6c002ee17cf0dcf52d4  piiwii-tv-0.2.0-ci/geektv-081-01.part' | sha256sum -c -
           cat piiwii-tv-0.2.0-ci/geektv-081-*.part | base64 -d > /tmp/geektv-081-overlay.tar.gz
           echo '0d7e375070593f3ca2619620eed606c8accd3db9b2085c24633f53caf5c07092  /tmp/geektv-081-overlay.tar.gz' | sha256sum -c -
           tar -xzf /tmp/geektv-081-overlay.tar.gz -C geek-tv-0.8.0-ci-public
-          grep -q "versionName '0.8.1'" geek-tv-0.8.0-ci-public/app/build.gradle
           grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
-      - name: Apply Geek TV 0.9.0 Android TV overlay
+      - name: Apply Geek TV 0.9.0 Android TV base
         run: |
           set -e
-          echo '82d12dcc265bb81bd6306724a616dcf5f18f0f696765fe44c0aa870ecef136f3  piiwii-tv-0.2.0-ci/geektv-090-00.part' | sha256sum -c -
-          echo '2d9e250a5b6fbc57ab3fb43996360734ce52339a9354fa2f175e11ae7c2a32b6  piiwii-tv-0.2.0-ci/geektv-090-01.part' | sha256sum -c -
           cat piiwii-tv-0.2.0-ci/geektv-090-*.part | base64 -d > /tmp/geektv-090-overlay.tar.gz
           echo '50328ea9015f349a7e78fc4a9f711aa138ab11a6caae82b0ff5923e4c22f18b8  /tmp/geektv-090-overlay.tar.gz' | sha256sum -c -
           tar -xzf /tmp/geektv-090-overlay.tar.gz -C geek-tv-0.8.0-ci-public
           sed -i 's/protected void onWindowFocusChanged(boolean hasFocus)/public void onWindowFocusChanged(boolean hasFocus)/' geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
-          grep -q "versionCode 10" geek-tv-0.8.0-ci-public/app/build.gradle
           grep -q "versionName '0.9.0'" geek-tv-0.8.0-ci-public/app/build.gradle
-          test -f geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
-          grep -q "public void onWindowFocusChanged" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
-          grep -q "LEANBACK_LAUNCHER" geek-tv-0.8.0-ci-public/app/src/main/AndroidManifest.xml
+
+      - name: Apply Geek TV 0.9.1 TV Guide overlay
+        run: |
+          set -e
+          echo 'ad40a0812ddda91f5ba82d012c6382cf0e85cfad2cdd133e882091b2b032fbe8  piiwii-tv-0.2.0-ci/geektv-091-00.part' | sha256sum -c -
+          echo '6e3387491ae7ddfbe238fd0bb7f8f2a66ec5e76702f3149e682533196106ae80  piiwii-tv-0.2.0-ci/geektv-091-01.part' | sha256sum -c -
+          echo 'b350c265dda528718e128479b0882427b09a8af157abe077b8102fcd02b19a70  piiwii-tv-0.2.0-ci/geektv-091-02.part' | sha256sum -c -
+          cat piiwii-tv-0.2.0-ci/geektv-091-*.part | base64 -d > /tmp/geektv-091-overlay.tar.gz
+          echo '18d29d7a4789071afac21e733713249a7c825cd1e71cfe711f6c4ecd29b05ac7  /tmp/geektv-091-overlay.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/geektv-091-overlay.tar.gz -C geek-tv-0.8.0-ci-public
+          grep -q "versionCode 11" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "versionName '0.9.1'" geek-tv-0.8.0-ci-public/app/build.gradle
+          grep -q "KEYCODE_GUIDE" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
+          grep -q "Guide TV" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/TvActivity.java
           grep -q "audio.m3u8" geek-tv-0.8.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
 
       - name: Disable signing for public CI build
@@ -114,13 +104,13 @@ jobs:
           APK="geek-tv-0.8.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
           mkdir -p out
-          cp "$APK" out/Geek-TV-0.9.0-unsigned.apk
+          cp "$APK" out/Geek-TV-0.9.1-unsigned.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Geek-TV-0.9.0-unsigned
+          name: Geek-TV-0.9.1-unsigned
           path: out/*
           retention-days: 14
           if-no-files-found: error
