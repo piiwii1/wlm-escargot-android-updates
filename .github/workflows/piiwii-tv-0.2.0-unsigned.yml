@@ -70,6 +70,7 @@ jobs:
           grep -q "versionName '0.7.0'" geek-tv-0.6.0-ci-public/app/build.gradle
           test -f geek-tv-0.6.0-ci-public/app/src/main/java/ch/piiwii/tv/RecordingService.java
           test -f geek-tv-0.6.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
+          sed -i '/signingConfig signingConfigs.release/d' geek-tv-0.6.0-ci-public/app/build.gradle
 
       - name: Build unsigned release APK
         working-directory: geek-tv-0.6.0-ci-public
