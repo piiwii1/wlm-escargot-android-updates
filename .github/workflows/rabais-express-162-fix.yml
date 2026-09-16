@@ -35,8 +35,21 @@ jobs:
           PY
           bash /tmp/reconstruct162.sh
 
-          echo '616e628f6aa86b5cee7fc5d1eafd30a784f1ef791f149ff09f8876477bd7ee58  build-input/r162fix.txt' | sha256sum -c -
-          (cd rabais-express && patch -p0 < ../build-input/r162fix.txt)
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java')
+          s=p.read_text()
+          old='        int size = dp(25);'
+          new='        int size = Math.round(dp(25));'
+          if old not in s:
+              raise SystemExit('Expected nav icon size line missing')
+          s=s.replace(old,new,1)
+          duplicate='    private int dp(int value) {\n        return Math.round(value * getResources().getDisplayMetrics().density);\n    }\n\n'
+          if duplicate not in s:
+              raise SystemExit('Expected duplicate dp helper missing')
+          s=s.replace(duplicate,'',1)
+          p.write_text(s)
+          PY
 
           grep -q "versionCode 14" rabais-express/app/build.gradle
           grep -q "versionName '1.6.2'" rabais-express/app/build.gradle
