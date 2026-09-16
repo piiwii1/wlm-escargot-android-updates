@@ -1,0 +1,89 @@
+         else if ("dos".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(rounded(Color.BLACK,0,Color.rgb(53,255,92),1));
++        else if ("mario".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(new MarioBrickDrawable());
++        else if ("minion".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(gradientStroke(Color.rgb(43,74,112),Color.rgb(20,42,76),18,Color.rgb(105,116,131),2));
+         else findViewById(R.id.bottomBar).setBackground(rounded(p.nav,0,p.border,1));
+ 
+         recolorTextTree((ViewGroup)findViewById(R.id.pageHost), p);
+@@ -1099,6 +1160,14 @@
+                 t.setTextColor(Color.rgb(53,255,92));
+                 t.setBackground(rounded(Color.BLACK,0,Color.rgb(53,255,92),1));
+                 t.setText("[ " + t.getText().toString().toUpperCase(Locale.ROOT) + " ]");
++            }else if("mario".equals(currentSkin)){
++                t.setTextColor(Color.rgb(255,244,112));
++                t.setBackground(new MarioBrickDrawable());
++                t.setPadding((int)dp(16),0,(int)dp(12),0);
++            }else if("minion".equals(currentSkin)){
++                t.setTextColor(Color.rgb(21,38,70));
++                t.setBackground(gradientStroke(Color.rgb(255,238,91),Color.rgb(255,205,24),20,Color.rgb(105,116,131),2));
++                t.setPadding((int)dp(16),0,(int)dp(12),0);
+             }else{
+                 t.setTextColor(palette().primary);
+             }
+@@ -1109,7 +1178,7 @@
+         ViewGroup root=(ViewGroup)findViewById(R.id.rootContainer);
+         Typeface face;
+         if("dos".equals(currentSkin)) face=Typeface.MONOSPACE;
+-        else if("msn".equals(currentSkin)) face=Typeface.create("sans-serif-rounded",Typeface.NORMAL);
++        else if("msn".equals(currentSkin) || "mario".equals(currentSkin) || "minion".equals(currentSkin)) face=Typeface.create("sans-serif-rounded",Typeface.NORMAL);
+         else face=Typeface.create("sans-serif",Typeface.NORMAL);
+         setTypefaceRecursive(root,face);
+         if("dos".equals(currentSkin)) ((TextView)findViewById(R.id.dosPrompt)).setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
+@@ -1144,6 +1213,16 @@
+             badge.setBackground(rounded(Color.rgb(53,255,92),0,Color.rgb(53,255,92),1));
+             badge.setTextColor(Color.BLACK);
+             savingValue.setVisibility(View.GONE);
++        }else if("mario".equals(currentSkin)){
++            badge.setBackground(gradientStroke(Color.rgb(255,92,85),Color.rgb(216,31,39),16,Color.rgb(255,216,52),3));
++            badge.setTextColor(Color.WHITE);
++            savingValue.setVisibility(View.VISIBLE);
++            savingValue.setTextColor(Color.rgb(19,132,57));
++        }else if("minion".equals(currentSkin)){
++            badge.setBackground(gradientStroke(Color.rgb(52,165,255),Color.rgb(0,94,205),22,Color.rgb(255,231,69),3));
++            badge.setTextColor(Color.WHITE);
++            savingValue.setVisibility(View.VISIBLE);
++            savingValue.setTextColor(Color.rgb(13,101,193));
+         }else{
+             savingValue.setVisibility(View.VISIBLE);
+         }
+@@ -1155,6 +1234,8 @@
+             if("dark".equals(currentSkin)) b.setTextColor(p.accent);
+             else if("dos".equals(currentSkin)) b.setTextColor(p.primary);
+             else if("xp".equals(currentSkin)||"msn".equals(currentSkin)) b.setTextColor(p.primary);
++            else if("mario".equals(currentSkin)) b.setTextColor(Color.rgb(171,23,28));
++            else if("minion".equals(currentSkin)) b.setTextColor(Color.rgb(13,83,165));
+         }
+         Button equals=findViewById(R.id.calcEquals);
+         if(equals!=null){
+@@ -1167,6 +1248,12 @@
+             }else if("dos".equals(currentSkin)){
+                 equals.setBackground(rounded(Color.BLACK,0,Color.rgb(53,255,92),1));
+                 equals.setTextColor(Color.rgb(53,255,92));
++            }else if("mario".equals(currentSkin)){
++                equals.setBackground(gradientStroke(Color.rgb(72,205,91),Color.rgb(18,146,53),16,Color.rgb(255,216,52),3));
++                equals.setTextColor(Color.WHITE);
++            }else if("minion".equals(currentSkin)){
++                equals.setBackground(gradientStroke(Color.rgb(52,165,255),Color.rgb(0,94,205),22,Color.rgb(255,231,69),3));
++                equals.setTextColor(Color.WHITE);
+             }else equals.setTextColor(p.accent);
+         }
+     }
+@@ -1197,8 +1284,8 @@
+     }
+ 
+     private void styleThemeChoices() {
+-        Button[] buttons={findViewById(R.id.themeBase),findViewById(R.id.themeDark),findViewById(R.id.themeXP),findViewById(R.id.themeMSN),findViewById(R.id.themeDOS)};
+-        String[] skins={"base","dark","xp","msn","dos"};
++        Button[] buttons={findViewById(R.id.themeBase),findViewById(R.id.themeDark),findViewById(R.id.themeXP),findViewById(R.id.themeMSN),findViewById(R.id.themeDOS),findViewById(R.id.themeMario),findViewById(R.id.themeMinion)};
++        String[] skins={"base","dark","xp","msn","dos","mario","minion"};
+         if ("base".equals(currentSkin)) {
+             for(int i=0;i<buttons.length;i++){
+                 buttons[i].setBackgroundResource(i==0?R.drawable.bg_discount_selected:R.drawable.bg_key);
+@@ -1214,6 +1301,92 @@
+         }
+     }
+ 
++    private static class MarioWorldDrawable extends Drawable {
++        private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
++        @Override public void draw(Canvas canvas) {
++            android.graphics.Rect b = getBounds();
++            p.setStyle(Paint.Style.FILL);

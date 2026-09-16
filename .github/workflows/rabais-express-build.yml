@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct verified 1.5.2 source
+      - name: Reconstruct verified 1.6.0 source
         run: |
           set -euo pipefail
           echo '20d0bdb82cdc7cf75af9595ef1a0e822c51fb19036e9481756ed5ed443785fd2  build-input/r151-1.txt' | sha256sum -c -
@@ -51,15 +51,23 @@ jobs:
           echo '45d7bfa0f2674724c844ef7ab089378a7e1ce7c6cd3f5c43b50955922222b3d4  /tmp/r152-overlay.zip' | sha256sum -c -
           unzip -qo /tmp/r152-overlay.zip -d rabais-express
 
+          echo '85cc8c391bc5a62228bdb1b3886e75627c5aebd0a1938fcac7f899e91fb75ed7  build-input/r160p-0.txt' | sha256sum -c -
+          echo 'd6368e476d91f695f97ca6c946147791cf2280f039d2abeb19b9d8924b0f175b  build-input/r160p-1.txt' | sha256sum -c -
+          echo 'e7d342e2a0a636373349d75473ba9c031c39539383ccbe308ad7b6f68d5afa62  build-input/r160p-2.txt' | sha256sum -c -
+          echo '3e963ef46cc066b9f698af17f02ec72056f2813cfccfc40bede535eb46b5434e  build-input/r160p-3.txt' | sha256sum -c -
+          echo 'acca79bd71a965c5c86de4092ac8eb9656e8d56280dbd9b65d8da32750cabc3c  build-input/r160p-4.txt' | sha256sum -c -
+          cat build-input/r160p-{0..4}.txt > /tmp/r160.patch
+          echo '4f1dcb1d2de1ce22c619cbc89a07c4058b2c23e0b31fc889b7409361a787d00b  /tmp/r160.patch' | sha256sum -c -
+          (cd rabais-express && patch -p1 < /tmp/r160.patch)
+
           grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
-          grep -q "versionCode 11" rabais-express/app/build.gradle
-          grep -q "versionName '1.5.2'" rabais-express/app/build.gradle
-          grep -q 'android:id="@+id/topWindowBar"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/windowMinimize"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/windowMaximize"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/windowClose"' rabais-express/app/src/main/res/layout/activity_main.xml
-          grep -q 'toggleWindowFullscreen' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
-          grep -q 'styleWindowChrome' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q "versionCode 12" rabais-express/app/build.gradle
+          grep -q "versionName '1.6.0'" rabais-express/app/build.gradle
+          grep -q 'android:id="@+id/themeMario"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/themeMinion"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'MarioWorldDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'MinionBackgroundDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          ! grep -q 'ScrollView' rabais-express/app/src/main/res/layout/activity_main.xml
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -85,18 +93,18 @@ jobs:
         run: |
           mkdir -p delivery/signing-tools/lib
           APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
-          cp "$APK" delivery/Rabais-Express-1.5.2-UNSIGNED.apk
+          cp "$APK" delivery/Rabais-Express-1.6.0-UNSIGNED.apk
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
           chmod +x delivery/signing-tools/* || true
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt
-          sha256sum delivery/Rabais-Express-1.5.2-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
+          sha256sum delivery/Rabais-Express-1.6.0-UNSIGNED.apk > delivery/SHA256-UNSIGNED.txt
 
       - name: Upload APK and signing tools
         uses: actions/upload-artifact@v4
         with:
-          name: Rabais-Express-1.5.2-UNSIGNED-TOOLS
+          name: Rabais-Express-1.6.0-UNSIGNED-TOOLS
           path: delivery/*
           retention-days: 7
           if-no-files-found: error

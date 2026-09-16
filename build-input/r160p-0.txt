@@ -1,0 +1,95 @@
+diff -ruN '--exclude=README.md' '--exclude=BUILD-INFO.txt' base152/app/build.gradle rabais160/app/build.gradle
+--- base152/app/build.gradle	2026-09-15 23:18:58.000000000 +0000
++++ rabais160/app/build.gradle	2026-09-15 23:55:06.036519940 +0000
+@@ -10,8 +10,8 @@
+         applicationId 'ch.piiwii.rabaisexpress'
+         minSdk 24
+         targetSdk 35
+-        versionCode 11
+-        versionName '1.5.2'
++        versionCode 12
++        versionName '1.6.0'
+     }
+ 
+     buildTypes {
+diff -ruN '--exclude=README.md' '--exclude=BUILD-INFO.txt' base152/app/src/main/java/ch/piiwii/rabais/MainActivity.java rabais160/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+--- base152/app/src/main/java/ch/piiwii/rabais/MainActivity.java	2026-09-15 23:19:40.000000000 +0000
++++ rabais160/app/src/main/java/ch/piiwii/rabais/MainActivity.java	2026-09-15 23:57:08.244256937 +0000
+@@ -207,6 +207,8 @@
+         if ("base".equals(currentSkin) || "msn".equals(currentSkin)) {
+             getWindow().getDecorView().setSystemUiVisibility(
+                     View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
++        } else if ("minion".equals(currentSkin)) {
++            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+         } else {
+             getWindow().getDecorView().setSystemUiVisibility(0);
+         }
+@@ -235,7 +237,7 @@
+         item.setTextColor(selected ? selectedTextColor() : p.secondary);
+         item.setBackground(selected ? buttonSurface(true, navRadius()) : null);
+         if ("dos".equals(currentSkin)) item.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+-        else if ("msn".equals(currentSkin)) item.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
++        else if ("msn".equals(currentSkin) || "mario".equals(currentSkin) || "minion".equals(currentSkin)) item.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+         else item.setTypeface(Typeface.DEFAULT_BOLD);
+     }
+ 
+@@ -412,6 +414,19 @@
+             button.setTextColor(selected ? Color.WHITE : Color.rgb(22, 25, 30));
+             return;
+         }
++        if ("mario".equals(currentSkin)) {
++            boolean right = button.getId() == R.id.favoriteButton2;
++            if (selected) button.setBackground(gradientStroke(Color.rgb(255,92,85), Color.rgb(218,31,39), 16, Color.rgb(255,216,52), 3));
++            else if (right) button.setBackground(gradientStroke(Color.rgb(69,169,255), Color.rgb(0,91,210), 16, Color.rgb(30,60,105), 2));
++            else button.setBackground(gradientStroke(Color.rgb(255,92,85), Color.rgb(223,36,39), 16, Color.rgb(255,216,52), 2));
++            button.setTextColor(Color.WHITE);
++            return;
++        }
++        if ("minion".equals(currentSkin)) {
++            button.setBackground(gradientStroke(selected ? Color.rgb(58,170,255) : Color.rgb(45,154,245), selected ? Color.rgb(0,91,210) : Color.rgb(8,111,219), 22, Color.rgb(255,226,54), selected ? 3 : 2));
++            button.setTextColor(Color.WHITE);
++            return;
++        }
+         button.setBackground(buttonSurface(selected, controlRadius()));
+         button.setTextColor(selected ? selectedTextColor() : palette().primary);
+     }
+@@ -834,6 +849,8 @@
+         findViewById(R.id.themeXP).setOnClickListener(v -> chooseSkin("xp"));
+         findViewById(R.id.themeMSN).setOnClickListener(v -> chooseSkin("msn"));
+         findViewById(R.id.themeDOS).setOnClickListener(v -> chooseSkin("dos"));
++        findViewById(R.id.themeMario).setOnClickListener(v -> chooseSkin("mario"));
++        findViewById(R.id.themeMinion).setOnClickListener(v -> chooseSkin("minion"));
+     }
+ 
+     private void chooseSkin(String skin) {
+@@ -872,6 +889,16 @@
+                 Color.BLACK, Color.BLACK, Color.BLACK, Color.BLACK, Color.BLACK,
+                 Color.rgb(53,255,92), Color.rgb(53,255,92), Color.rgb(53,255,92),
+                 Color.rgb(53,255,92), Color.rgb(53,255,92), Color.BLACK);
++        if ("mario".equals(currentSkin)) return new SkinPalette(
++                Color.rgb(45,164,255), Color.rgb(255,247,222), Color.rgb(255,211,49),
++                Color.rgb(255,251,235), Color.rgb(216,247,201), Color.rgb(62,34,10),
++                Color.rgb(28,80,139), Color.rgb(233,45,48), Color.rgb(132,67,13),
++                Color.rgb(255,224,87), Color.rgb(155,67,27));
++        if ("minion".equals(currentSkin)) return new SkinPalette(
++                Color.rgb(255,219,38), Color.rgb(255,249,226), Color.rgb(255,252,240),
++                Color.rgb(255,253,244), Color.rgb(255,242,154), Color.rgb(21,38,70),
++                Color.rgb(75,91,115), Color.rgb(21,126,232), Color.rgb(105,116,131),
++                Color.rgb(255,230,77), Color.rgb(27,54,93));
+         return new SkinPalette(Color.WHITE,Color.WHITE,Color.WHITE,Color.BLACK,Color.BLACK,Color.BLACK,Color.GRAY,Color.RED,Color.GRAY,Color.LTGRAY,Color.WHITE);
+     }
+ 
+@@ -903,6 +930,8 @@
+         if ("dos".equals(currentSkin)) return 0;
+         if ("xp".equals(currentSkin)) return 6;
+         if ("msn".equals(currentSkin)) return 20;
++        if ("mario".equals(currentSkin)) return 16;
++        if ("minion".equals(currentSkin)) return 22;
+         return 14;
+     }
+ 
+@@ -910,6 +939,8 @@
+         if ("dos".equals(currentSkin)) return 0;
+         if ("xp".equals(currentSkin)) return 4;
+         if ("msn".equals(currentSkin)) return 16;
++        if ("mario".equals(currentSkin)) return 14;
