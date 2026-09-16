@@ -1,0 +1,48 @@
+,r*1.18f,p);
++            p.setColor(Color.rgb(232,234,225)); c.drawCircle(cx,cy,r,p);
++            p.setColor(Color.rgb(27,54,93)); c.drawCircle(cx,cy,r*0.42f,p);
++            p.setColor(Color.WHITE); c.drawCircle(cx-r*0.12f,cy-r*0.12f,r*0.12f,p);
++        }
++        @Override public void setAlpha(int alpha){p.setAlpha(alpha);}
++        @Override public void setColorFilter(android.graphics.ColorFilter cf){p.setColorFilter(cf);}
++        @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
++    }
++
++    private static class MinionHeaderDrawable extends Drawable {
++        private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
++        @Override public void draw(Canvas c){
++            android.graphics.Rect b=getBounds(); float w=b.width(),h=b.height();
++            p.setColor(Color.rgb(255,225,57)); c.drawRoundRect(b.left,b.top,b.right,b.bottom,h*0.42f,h*0.42f,p);
++            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(Math.max(2f,h/18f)); p.setColor(Color.rgb(95,107,121));
++            c.drawRoundRect(b.left+2,b.top+2,b.right-2,b.bottom-2,h*0.38f,h*0.38f,p); p.setStyle(Paint.Style.FILL);
++            p.setColor(Color.rgb(134,144,154));
++            c.drawCircle(b.left+h*0.20f,b.exactCenterY(),h*0.075f,p); c.drawCircle(b.right-h*0.20f,b.exactCenterY(),h*0.075f,p);
++        }
++        @Override public void setAlpha(int alpha){p.setAlpha(alpha);}
++        @Override public void setColorFilter(android.graphics.ColorFilter cf){p.setColorFilter(cf);}
++        @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
++    }
++
++    private static class MinionNavDrawable extends Drawable {
++        private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
++        @Override public void draw(Canvas c){
++            android.graphics.Rect b=getBounds(); float w=b.width(),h=b.height();
++            p.setColor(Color.rgb(27,54,93)); c.drawRect(b,p);
++            p.setColor(Color.rgb(57,82,116)); c.drawRect(b.left,b.top,b.right,b.top+h*0.08f,p);
++            float sw=w/12f;
++            for(int i=0;i<12;i++){
++                p.setColor(i%2==0?Color.rgb(255,214,34):Color.rgb(22,38,59));
++                float x=i*sw; Path path=new Path();
++                path.moveTo(x,b.top); path.lineTo(x+sw,b.top); path.lineTo(x+sw*0.72f,b.top+h*0.08f); path.lineTo(x-sw*0.28f,b.top+h*0.08f); path.close(); c.drawPath(path,p);
++            }
++            p.setColor(Color.rgb(128,139,151));
++            c.drawCircle(w*0.03f,h*0.50f,h*0.055f,p); c.drawCircle(w*0.97f,h*0.50f,h*0.055f,p);
++        }
++        @Override public void setAlpha(int alpha){p.setAlpha(alpha);}
++        @Override public void setColorFilter(android.graphics.ColorFilter cf){p.setColorFilter(cf);}
++        @Override public int getOpacity(){return PixelFormat.OPAQUE;}
++    }
++
++    private static class RivetedPanelDrawable extends Drawable {
++        private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
++        private final int top,bottom,stroke,rivet; private final float radius;
