@@ -39,6 +39,18 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Verify Geek TV 0.8.0 source parts
+        run: |
+          set -e
+          echo 'd19a0319c0b5799b56dfee2bb917abb7c989b4d4305ae1ddeb32c6466495f234  piiwii-tv-0.2.0-ci/geektv-080-00.part' | sha256sum -c -
+          echo 'c05915e2af80d1116f3f215015bc61fd9246b0e0c3ec7d443841385da8f39a9d  piiwii-tv-0.2.0-ci/geektv-080-01.part' | sha256sum -c -
+          echo '0e95972a4350498796651ae88b96d5dbaca7fac5172db5645e2c2de0d5009446  piiwii-tv-0.2.0-ci/geektv-080-02.part' | sha256sum -c -
+          echo '1f1397a032122f66a6ab57744b9c51c43f959ac3e1d99090094d23afd7cb4831  piiwii-tv-0.2.0-ci/geektv-080-03.part' | sha256sum -c -
+          echo '9447eb3896048c2e9214e5a040db803065dccaeb7b2028be24cf9b356c77cf4d  piiwii-tv-0.2.0-ci/geektv-080-04.part' | sha256sum -c -
+          echo '668cfc2efe6032abd9b71eedda22d3a9fd3f1faa659ac0d57b27da35a75bd51d  piiwii-tv-0.2.0-ci/geektv-080-05.part' | sha256sum -c -
+          echo '4b956185c5941b4e75405693897258114273e0635536de7faa6c4eceaf835f22  piiwii-tv-0.2.0-ci/geektv-080-06.part' | sha256sum -c -
+          echo '11c6a61de697f9f13409328a4ea03655d8a53605e97201ae353debcb213d3acb  piiwii-tv-0.2.0-ci/geektv-080-07.part' | sha256sum -c -
+
       - name: Restore Geek TV 0.8.0 source tree
         run: |
           set -e
