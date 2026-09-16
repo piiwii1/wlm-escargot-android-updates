@@ -1,0 +1,29 @@
+,8 @@
+         if ("xp".equals(currentSkin)) return gradientStroke(Color.rgb(245,250,255), Color.rgb(194,222,255), 8, Color.rgb(70,143,227), 1);
+         if ("msn".equals(currentSkin)) return gradientStroke(Color.rgb(245,253,255), Color.rgb(147,215,255), 24, Color.rgb(112,193,243), 1);
+         if ("dos".equals(currentSkin)) return rounded(Color.BLACK, 0, Color.rgb(53,255,92), 2);
+-        if ("mario".equals(currentSkin)) return gradientStroke(Color.rgb(255,251,228), Color.rgb(207,247,193), 16, Color.rgb(126,67,15), 2);
+-        if ("minion".equals(currentSkin)) return gradientStroke(Color.rgb(255,255,246), Color.rgb(255,236,141), 22, Color.rgb(97,109,125), 2);
++        if ("mario".equals(currentSkin)) return new RivetedPanelDrawable(Color.rgb(255,251,228), Color.rgb(210,247,195), Color.rgb(126,67,15), Color.rgb(225,165,73), 16, 2);
++        if ("minion".equals(currentSkin)) return new RivetedPanelDrawable(Color.rgb(255,255,246), Color.rgb(255,239,156), Color.rgb(89,102,119), Color.rgb(152,161,171), 22, 2);
+         SkinPalette p=palette();
+         return rounded(p.card,18,p.border,1);
+     }
+@@ -1007,8 +1015,8 @@
+         if ("xp".equals(currentSkin)) return gradientStroke(Color.rgb(255,255,255), Color.rgb(198,218,242), 7, Color.rgb(92,140,196), 1);
+         if ("msn".equals(currentSkin)) return gradientStroke(Color.rgb(255,255,255), Color.rgb(203,238,255), 20, Color.rgb(125,193,238), 1);
+         if ("dos".equals(currentSkin)) return rounded(Color.BLACK, 0, Color.rgb(53,255,92), 1);
+-        if ("mario".equals(currentSkin)) return gradientStroke(Color.rgb(255,255,245), Color.rgb(255,232,176), 16, Color.rgb(126,67,15), 2);
+-        if ("minion".equals(currentSkin)) return gradientStroke(Color.rgb(255,255,250), Color.rgb(255,243,182), 22, Color.rgb(106,117,132), 2);
++        if ("mario".equals(currentSkin)) return new RivetedPanelDrawable(Color.rgb(255,255,245), Color.rgb(255,232,176), Color.rgb(126,67,15), Color.rgb(225,165,73), 16, 2);
++        if ("minion".equals(currentSkin)) return new RivetedPanelDrawable(Color.rgb(255,255,250), Color.rgb(255,244,192), Color.rgb(89,102,119), Color.rgb(152,161,171), 22, 2);
+         SkinPalette p=palette();
+         return gradient(p.displayTop,p.displayBottom,18,p.border);
+     }
+@@ -1075,7 +1083,7 @@
+         else if ("msn".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(gradientStroke(Color.WHITE,Color.rgb(218,241,255),18,Color.rgb(119,192,238),1));
+         else if ("dos".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(rounded(Color.BLACK,0,Color.rgb(53,255,92),1));
+         else if ("mario".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(new MarioBrickDrawable());
+-        else if ("minion".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(gradientStroke(Color.rgb(43,74,112),Color.rgb(20,42,76),18,Color.rgb(105,116,131),2));
++        else if ("minion".equals(currentSkin)) findViewById(R.id.bottomBar).setBackground(new MinionNavDrawable());
+ 
