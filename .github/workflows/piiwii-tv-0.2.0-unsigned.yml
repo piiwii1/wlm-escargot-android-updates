@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'piiwii-tv-0.2.0-ci/**'
-      - 'geek-tv-0.7.0-overlay.tar.gz'
       - '.github/workflows/piiwii-tv-0.2.0-unsigned.yml'
   workflow_dispatch:
 
@@ -51,8 +50,9 @@ jobs:
       - name: Apply Geek TV 0.7.0 DVR overlay
         run: |
           set -e
-          gzip -t geek-tv-0.7.0-overlay.tar.gz
-          tar -xzf geek-tv-0.7.0-overlay.tar.gz -C geek-tv-0.6.0-ci-public
+          cat piiwii-tv-0.2.0-ci/geektv-070-overlay-*.part | base64 -d > /tmp/geektv-070-overlay.tar.gz
+          gzip -t /tmp/geektv-070-overlay.tar.gz
+          tar -xzf /tmp/geektv-070-overlay.tar.gz -C geek-tv-0.6.0-ci-public
           grep -q "versionCode 7" geek-tv-0.6.0-ci-public/app/build.gradle
           grep -q "versionName '0.7.0'" geek-tv-0.6.0-ci-public/app/build.gradle
           test -f geek-tv-0.6.0-ci-public/app/src/main/java/ch/piiwii/tv/RecordingService.java
