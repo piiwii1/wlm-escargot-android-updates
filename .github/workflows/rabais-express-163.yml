@@ -22,12 +22,25 @@ jobs:
       - name: Reconstruct verified 1.6.2 and integrate real vector icons
         run: |
           set -euo pipefail
+
           python3 - <<'PY'
           from pathlib import Path
           import textwrap
-          p=Path('.github/workflows/rabais-express-162-fix.yml')
+          p=Path('.github/workflows/rabais-express-161.yml')
           s=p.read_text()
-          marker='      - name: Reconstruct and fix verified 1.6.2 source\n        run: |\n'
+          marker='      - name: Reconstruct verified 1.6.1 source\n        run: |\n'
+          start=s.index(marker)+len(marker)
+          end=s.index('\n      - name: Setup Java 17', start)
+          block=textwrap.dedent(s[start:end])
+          Path('/tmp/reconstruct161.sh').write_text('set -euo pipefail\n'+block+'\n')
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          p=Path('.github/workflows/rabais-express-162.yml')
+          s=p.read_text()
+          marker='      - name: Reconstruct verified 1.6.2 source\n        run: |\n'
           start=s.index(marker)+len(marker)
           end=s.index('\n      - name: Setup Java 17', start)
           block=textwrap.dedent(s[start:end])
@@ -40,10 +53,24 @@ jobs:
 
           java=Path('rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java')
           s=java.read_text()
+
+          fixes={
+              '        int size = dp(25);':'        int size = Math.round(dp(25));',
+              '        item.setCompoundDrawablePadding(dp(2));':'        item.setCompoundDrawablePadding(Math.round(dp(2)));',
+          }
+          for old,new in fixes.items():
+              if old not in s:
+                  raise SystemExit('Expected 1.6.2 compile-fix line missing: '+old.strip())
+              s=s.replace(old,new,1)
+          duplicate='    private int dp(int value) {\n        return Math.round(value * getResources().getDisplayMetrics().density);\n    }\n\n'
+          if duplicate not in s:
+              raise SystemExit('Expected duplicate dp helper missing')
+          s=s.replace(duplicate,'',1)
+
           old='''    private void styleNavIcon(TextView item, int type, boolean selected) {\n        int color = item.getCurrentTextColor();\n        NavIconDrawable icon = new NavIconDrawable(type, color, selected, currentSkin);\n        int size = Math.round(dp(25));\n        icon.setBounds(0, 0, size, size);\n        item.setCompoundDrawables(null, icon, null, null);\n        item.setCompoundDrawablePadding(Math.round(dp(2)));\n    }\n'''
           new='''    private void styleNavIcon(TextView item, int type, boolean selected) {\n        int color = item.getCurrentTextColor();\n        Drawable icon = getDrawable(navIconRes(type)).mutate();\n        icon.setTint(color);\n        int size = Math.round(dp(selected ? 27 : 25));\n        icon.setBounds(0, 0, size, size);\n        item.setCompoundDrawables(null, icon, null, null);\n        item.setCompoundDrawablePadding(Math.round(dp(2)));\n    }\n\n    private int navIconRes(int type) {\n        if (type == NavIconDrawable.TYPE_GLOBE) return R.drawable.nav_devises;\n        if (type == NavIconDrawable.TYPE_CALCULATOR) return R.drawable.nav_calculatrice;\n        if (type == NavIconDrawable.TYPE_SETTINGS) return R.drawable.nav_parametres;\n        return R.drawable.nav_rabais;\n    }\n'''
           if old not in s:
-              raise SystemExit('Expected old procedural navigation icon block not found')
+              raise SystemExit('Expected procedural navigation icon block not found')
           s=s.replace(old,new,1)
           start=s.index('    private static class NavIconDrawable extends Drawable {')
           end=s.index('\n    private static class RivetedPanelDrawable extends Drawable {', start)
@@ -72,6 +99,7 @@ jobs:
           grep -q "versionName '1.6.3'" rabais-express/app/build.gradle
           grep -q 'getDrawable(navIconRes(type))' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
           ! grep -q 'new NavIconDrawable' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          test "$(grep -c 'private .* dp(int value)' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java)" -eq 1
           test -f rabais-express/app/src/main/res/drawable/nav_rabais.xml
           test -f rabais-express/app/src/main/res/drawable/nav_devises.xml
           test -f rabais-express/app/src/main/res/drawable/nav_calculatrice.xml
@@ -100,7 +128,7 @@ jobs:
 
       - name: Prepare delivery
         run: |
-          mkdir -p delivery/signing-tools/lib delivery/source
+          mkdir -p delivery/signing-tools/lib
           APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
           cp "$APK" delivery/Rabais-Express-1.6.3-UNSIGNED.apk
           cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
