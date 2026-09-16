@@ -1,0 +1,144 @@
+name: Calculette Plus 1.6.7 Build
+
+on:
+  push:
+    branches: [ rabais-express-build ]
+    paths:
+      - '.github/workflows/calculette-plus-167.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      SDKMANAGER: /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct verified 1.6.5 and apply 1.6.7 fixes
+        run: |
+          set -euo pipefail
+
+          # Reuse the exact reconstruction chain that produced the installable 1.6.5.
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          p=Path('.github/workflows/calculette-plus-165.yml')
+          s=p.read_text()
+          marker='      - name: Reconstruct verified 1.6.4 and apply 1.6.5\n        run: |\n'
+          start=s.index(marker)+len(marker)
+          end=s.index('\n      - name: Setup Java 17', start)
+          block=textwrap.dedent(s[start:end])
+          Path('/tmp/reconstruct165.sh').write_text('set -euo pipefail\n'+block+'\n')
+          PY
+          bash /tmp/reconstruct165.sh
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Version bump.
+          gradle=Path('rabais-express/app/build.gradle')
+          g=gradle.read_text()
+          assert 'versionCode 17' in g and "versionName '1.6.5'" in g
+          g=g.replace('versionCode 17','versionCode 19',1)
+          g=g.replace("versionName '1.6.5'","versionName '1.6.7'",1)
+          gradle.write_text(g)
+
+          # Settings gear: keep it at the top-right, slightly higher, with no surrounding plate.
+          layout=Path('rabais-express/app/src/main/res/layout/activity_main.xml')
+          x=layout.read_text()
+          old='''            android:layout_marginTop="8dp"\n            android:layout_marginEnd="12dp"\n            android:background="@drawable/bg_custom"\n            android:contentDescription="Paramètres"\n            android:elevation="12dp"\n            android:padding="10dp"'''
+          new='''            android:layout_marginTop="4dp"\n            android:layout_marginEnd="12dp"\n            android:background="@android:color/transparent"\n            android:contentDescription="Paramètres"\n            android:elevation="0dp"\n            android:padding="6dp"'''
+          if old not in x:
+              raise SystemExit('Expected 1.6.5 settings button block missing')
+          x=x.replace(old,new,1)
+          layout.write_text(x)
+
+          # IMPORTANT: themes were recreating a rounded background around the gear.
+          java=Path('rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java')
+          j=java.read_text()
+          old='''        settingsButton.setColorFilter(color);\n        settingsButton.setBackground(selected ? buttonSurface(true, controlRadius()) : buttonSurface(false, controlRadius()));'''
+          new='''        settingsButton.setColorFilter(color);\n        settingsButton.setBackgroundColor(Color.TRANSPARENT);'''
+          if old not in j:
+              raise SystemExit('Expected styleSettingsButton background code missing')
+          j=j.replace(old,new,1)
+          java.write_text(j)
+          PY
+
+          # Restore the last valid launcher icon used by 1.6.4, then enlarge its artwork a little.
+          test -f build-input/calculette-plus-icon.webp
+          echo '446c937dc9c426c9076e180cc975d5c5677a8eac987cfcfdd961a7acd6c0422c  build-input/calculette-plus-icon.webp' | sha256sum -c -
+          rm -f rabais-express/app/src/main/res/drawable-nodpi/ic_calculette_plus.webp
+          mkdir -p rabais-express/app/src/main/res/drawable-nodpi
+          if command -v magick >/dev/null 2>&1; then
+            magick build-input/calculette-plus-icon.webp -trim +repage -resize 470x470 -gravity center -background none -extent 512x512 rabais-express/app/src/main/res/drawable-nodpi/ic_calculette_plus.png
+          else
+            convert build-input/calculette-plus-icon.webp -trim +repage -resize 470x470 -gravity center -background none -extent 512x512 rabais-express/app/src/main/res/drawable-nodpi/ic_calculette_plus.png
+          fi
+
+          # Fail loudly if the restored icon is not a real readable PNG.
+          file rabais-express/app/src/main/res/drawable-nodpi/ic_calculette_plus.png | grep -q 'PNG image data'
+          identify rabais-express/app/src/main/res/drawable-nodpi/ic_calculette_plus.png | grep -q '512x512'
+
+          # Regression checks.
+          grep -q "applicationId 'ch.piiwii.rabaisexpress'" rabais-express/app/build.gradle
+          grep -q 'versionCode 19' rabais-express/app/build.gradle
+          grep -q "versionName '1.6.7'" rabais-express/app/build.gradle
+          grep -Fq 'android:label="Calculette+"' rabais-express/app/src/main/AndroidManifest.xml
+          grep -q 'settingsButton' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:layout_marginTop="4dp"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:background="@android:color/transparent"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'android:elevation="0dp"' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'settingsButton.setBackgroundColor(Color.TRANSPARENT)' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'ratesInternetButton' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'ratesManualSave' rabais-express/app/src/main/res/layout/activity_main.xml
+          grep -q 'saveManualRates' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          grep -q 'refreshRatesFromInternet' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          ! grep -q 'requestRatesIfNeeded' rabais-express/app/src/main/java/ch/piiwii/rabais/MainActivity.java
+          ! grep -q 'navPlus' rabais-express/app/src/main/res/layout/activity_main.xml
+          ! grep -q 'ScrollView' rabais-express/app/src/main/res/layout/activity_main.xml
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build unsigned release APK
+        working-directory: rabais-express
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Prepare delivery
+        run: |
+          mkdir -p delivery/signing-tools/lib
+          APK='rabais-express/app/build/outputs/apk/release/app-release-unsigned.apk'
+          cp "$APK" delivery/Calculette-Plus-1.6.7-UNSIGNED.apk
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" delivery/signing-tools/apksigner
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/lib/apksigner.jar" delivery/signing-tools/lib/apksigner.jar
+          cp "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" delivery/signing-tools/aapt2
+          chmod +x delivery/signing-tools/* || true
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt2" dump badging "$APK" > delivery/BADGING.txt
+          (cd rabais-express && zip -qr ../delivery/Calculette-Plus-1.6.7-SOURCES.zip . -x 'app/build/*' '.gradle/*')
+          sha256sum delivery/Calculette-Plus-1.6.7-UNSIGNED.apk delivery/Calculette-Plus-1.6.7-SOURCES.zip > delivery/SHA256-UNSIGNED.txt
+
+      - name: Upload APK source and signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calculette-Plus-1.6.7-UNSIGNED-TOOLS
+          path: delivery/*
+          retention-days: 7
+          if-no-files-found: error
