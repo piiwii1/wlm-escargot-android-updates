@@ -1,52 +1,19 @@
-name: Temporary Android toolchain export for ListY
+name: CA113 temporary build (retired)
 
 on:
-  push:
-    paths:
-      - '.github/workflows/ca113-temp-build.yml'
   workflow_dispatch:
+    inputs:
+      note:
+        description: "Workflow retired after successful CA113 1.0.0 delivery"
+        required: false
+        default: "No build is performed."
 
 permissions:
   contents: read
 
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-
 jobs:
-  export:
+  retired:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
-      - name: Java 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Install Android 35 tools from preinstalled sdkmanager
-        shell: bash
-        run: |
-          set -euxo pipefail
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Pack minimal toolchain
-        shell: bash
-        run: |
-          set -euxo pipefail
-          BT="$ANDROID_HOME/build-tools/35.0.0"
-          mkdir -p /tmp/listy-toolchain/platform /tmp/listy-toolchain/build-tools/lib /tmp/listy-toolchain/build-tools/lib64
-          cp "$ANDROID_HOME/platforms/android-35/android.jar" /tmp/listy-toolchain/platform/
-          cp "$BT/lib/d8.jar" /tmp/listy-toolchain/build-tools/lib/
-          cp "$BT/lib/apksigner.jar" /tmp/listy-toolchain/build-tools/lib/
-          cp "$BT/zipalign" "$BT/aapt2" "$BT/aapt" /tmp/listy-toolchain/build-tools/
-          cp -a "$BT/lib64/." /tmp/listy-toolchain/build-tools/lib64/
-          tar -C /tmp -czf /tmp/listy-android35-toolchain.tar.gz listy-toolchain
-          sha256sum /tmp/listy-android35-toolchain.tar.gz
-      - name: Upload toolchain
-        uses: actions/upload-artifact@v4
-        with:
-          name: listy-android35-toolchain-full
-          path: /tmp/listy-android35-toolchain.tar.gz
-          retention-days: 1
+      - run: echo "This temporary CA113 build workflow is retired."
