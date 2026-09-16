@@ -1,0 +1,64 @@
+name: PiiWii TV APK Build
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'piiwii-tv-ci/**'
+      - '.github/workflows/piiwii-tv-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore source tree
+        run: |
+          rm -rf piiwii-tv
+          base64 -d piiwii-tv-ci/piiwii-tv-src.tar.gz.b64 > /tmp/piiwii-tv-src.tar.gz
+          tar -xzf /tmp/piiwii-tv-src.tar.gz
+          test -f piiwii-tv/app/build.gradle
+
+      - name: Build signed release APK
+        working-directory: piiwii-tv
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Prepare output
+        run: |
+          set -e
+          APK="piiwii-tv/app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK"
+          mkdir -p out
+          cp "$APK" out/PiiWii-TV-0.1.0.apk
+          sha256sum out/PiiWii-TV-0.1.0.apk > out/PiiWii-TV-0.1.0.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-TV-0.1.0
+          path: out/*
+          retention-days: 14
+          if-no-files-found: error
