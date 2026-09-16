@@ -1,0 +1,45 @@
+        else findViewById(R.id.bottomBar).setBackground(rounded(p.nav,0,p.border,1));
+ 
+         recolorTextTree((ViewGroup)findViewById(R.id.pageHost), p);
+@@ -1164,9 +1172,17 @@
+                 t.setTextColor(Color.rgb(255,244,112));
+                 t.setBackground(new MarioBrickDrawable());
+                 t.setPadding((int)dp(16),0,(int)dp(12),0);
++                if (id==R.id.discountTitle) {
++                    SpannableString title=new SpannableString("Rabais Express");
++                    int[] colors={Color.rgb(255,214,47),Color.rgb(244,51,48),Color.rgb(44,142,245),Color.rgb(75,190,83)};
++                    for(int i=0;i<title.length();i++){
++                        if(Character.isLetter(title.charAt(i))) title.setSpan(new ForegroundColorSpan(colors[i%colors.length]),i,i+1,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
++                    }
++                    t.setText(title);
++                }
+             }else if("minion".equals(currentSkin)){
+-                t.setTextColor(Color.rgb(21,38,70));
+-                t.setBackground(gradientStroke(Color.rgb(255,238,91),Color.rgb(255,205,24),20,Color.rgb(105,116,131),2));
++                t.setTextColor(Color.rgb(18,45,91));
++                t.setBackground(new MinionHeaderDrawable());
+                 t.setPadding((int)dp(16),0,(int)dp(12),0);
+             }else{
+                 t.setTextColor(palette().primary);
+@@ -1237,6 +1253,16 @@
+             else if("mario".equals(currentSkin)) b.setTextColor(Color.rgb(171,23,28));
+             else if("minion".equals(currentSkin)) b.setTextColor(Color.rgb(13,83,165));
+         }
++        if("mario".equals(currentSkin)) {
++            int[] redKeys={R.id.keyClear,R.id.curKeyClear,R.id.calcClear};
++            int[] blueKeys={R.id.backspaceButton,R.id.currencyBackspace,R.id.calcBack};
++            for(int id:redKeys){ Button b=findViewById(id); if(b!=null){ b.setBackground(gradientStroke(Color.rgb(255,92,85),Color.rgb(215,31,39),16,Color.rgb(255,216,52),2)); b.setTextColor(Color.WHITE); } }
++            for(int id:blueKeys){ Button b=findViewById(id); if(b!=null){ b.setBackground(gradientStroke(Color.rgb(72,174,255),Color.rgb(0,92,211),16,Color.rgb(25,63,109),2)); b.setTextColor(Color.WHITE); } }
++        } else if("minion".equals(currentSkin)) {
++            int[] clearKeys={R.id.keyClear,R.id.backspaceButton,R.id.curKeyClear,R.id.currencyBackspace,R.id.calcClear,R.id.calcBack};
++            for(int id:clearKeys){ Button b=findViewById(id); if(b!=null){ b.setBackground(gradientStroke(Color.rgb(255,237,81),Color.rgb(255,202,21),22,Color.rgb(89,102,119),2)); b.setTextColor(Color.rgb(18,45,91)); } }
++        }
++
+         Button equals=findViewById(R.id.calcEquals);
+         if(equals!=null){
+             if("msn".equals(currentSkin)){
+@@ -1305,22 +1331,47 @@
+         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+         @Override public void draw(Canvas canvas) {
+             android.graphics.Rect b = getBounds();
++            float w=b.wi
