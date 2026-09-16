@@ -1,0 +1,38 @@
+etOpacity(){ return PixelFormat.TRANSLUCENT; }
++    }
++
+     private static class RivetedPanelDrawable extends Drawable {
+         private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+         private final int top,bottom,stroke,rivet; private final float radius; private final int strokeDp;
+diff -ruN a/app/src/main/res/layout/activity_main.xml b/app/src/main/res/layout/activity_main.xml
+--- a/app/src/main/res/layout/activity_main.xml	2026-09-15 23:55:06.000000000 +0000
++++ b/app/src/main/res/layout/activity_main.xml	2026-09-16 08:17:47.460382475 +0000
+@@ -480,9 +480,9 @@
+         android:paddingTop="7dp"
+         android:paddingEnd="8dp"
+         android:paddingBottom="7dp">
+-        <TextView android:id="@+id/navDiscount" style="@style/NavItem" android:text="％\nRabais" />
+-        <TextView android:id="@+id/navCurrency" style="@style/NavItem" android:text="€\nDevises" />
+-        <TextView android:id="@+id/navCalculator" style="@style/NavItem" android:text="＋\nCalculatrice" />
+-        <TextView android:id="@+id/navPlus" style="@style/NavItem" android:text="⚙\nParamètres" />
++        <TextView android:id="@+id/navDiscount" style="@style/NavItem" android:text="Rabais" />
++        <TextView android:id="@+id/navCurrency" style="@style/NavItem" android:text="Devises" />
++        <TextView android:id="@+id/navCalculator" style="@style/NavItem" android:text="Calculatrice" />
++        <TextView android:id="@+id/navPlus" style="@style/NavItem" android:text="Paramètres" />
+     </LinearLayout>
+ </LinearLayout>
+diff -ruN a/app/src/main/res/values/styles.xml b/app/src/main/res/values/styles.xml
+--- a/app/src/main/res/values/styles.xml	2026-09-15 23:55:06.000000000 +0000
++++ b/app/src/main/res/values/styles.xml	2026-09-16 08:17:47.460507890 +0000
+@@ -89,8 +89,9 @@
+         <item name="android:layout_height">match_parent</item>
+         <item name="android:layout_weight">1</item>
+         <item name="android:gravity">center</item>
+-        <item name="android:paddingTop">4dp</item>
+-        <item name="android:paddingBottom">4dp</item>
++        <item name="android:paddingTop">3dp</item>
++        <item name="android:paddingBottom">2dp</item>
++        <item name="android:drawablePadding">2dp</item>
+         <item name="android:textColor">#707680</item>
+         <item name="android:textSize">12sp</item>
+         <item name="android:textStyle">bold</item>
