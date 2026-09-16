@@ -45,6 +45,13 @@ jobs:
           base64 -d piiwii-tv-ci/piiwii-tv-src.tar.gz.b64 > /tmp/piiwii-tv-src.tar.gz
           tar -xzf /tmp/piiwii-tv-src.tar.gz
           test -f piiwii-tv/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('piiwii-tv/app/src/main/java/ch/piiwii/tv/MainActivity.java')
+          s = p.read_text()
+          s = s.replace('updateDiagnostics("Erreur " + error.errorCodeName + " · " + safe(error.getMessage()));', 'updateDiagnostics("Erreur code " + error.errorCode + " · " + safe(error.getMessage()));')
+          p.write_text(s)
+          PY
 
       - name: Build signed release APK
         working-directory: piiwii-tv
