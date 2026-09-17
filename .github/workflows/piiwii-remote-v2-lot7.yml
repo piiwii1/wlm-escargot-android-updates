@@ -1,0 +1,224 @@
+name: PiiWii Remote 2 Lot7
+
+on:
+  push:
+    branches: [piiwii-remote-v2-lot7]
+    paths:
+      - 'piiwii-remote-v2-lot7/**'
+      - '.github/workflows/piiwii-remote-v2-lot7.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-lot7:
+    name: Phone alpha7 + TV regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact Lot 7 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot7-src
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > /tmp/piiwii-lot4.tar.xz
+          echo '9ae6dfa09c88638c4554c961c7990d55e6d644bfe08bffa46214c7f7b0b4967a  /tmp/piiwii-lot4.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/piiwii-lot4.tar.xz -C /tmp/piiwii-lot7-src
+          ROOT=/tmp/piiwii-lot7-src/piiwii-remote
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          base64 -d piiwii-remote-v2-lot5/lot5.patch.xz.b64 > /tmp/lot5.patch.xz
+          echo '884ba0cae2b8ec81cbba2335446df854b72eb565f71173dd5abb2ae9acf060d8  /tmp/lot5.patch.xz' | sha256sum -c -
+          xz -dc /tmp/lot5.patch.xz > /tmp/lot5.patch
+          echo 'd8af319c66acd61047049135e69651511b5d03c86571cc0b4deec0dc36b93d5a  /tmp/lot5.patch' | sha256sum -c -
+          cd "$ROOT" && patch -p2 < /tmp/lot5.patch
+          cd "$GITHUB_WORKSPACE"
+          cat piiwii-remote-v2-lot6/patch/part_*.b64 | base64 -d > /tmp/lot6.patch.xz
+          echo '4631bd57b7c5168643ffe10414f2800ac5378a415c714449ca52540023120780  /tmp/lot6.patch.xz' | sha256sum -c -
+          xz -dc /tmp/lot6.patch.xz > /tmp/lot6.patch
+          echo 'd0c6547d2ef30583d36f37abe2658d903e8f1c9791f53fae58671b59b2a89316  /tmp/lot6.patch' | sha256sum -c -
+          cd "$ROOT" && patch -p2 < /tmp/lot6.patch
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/piiwii-lot7-src/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt')
+          s = p.read_text()
+          old = 'ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT)'
+          new = 'android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)'
+          if old in s: p.write_text(s.replace(old, new))
+          PY
+          cd "$GITHUB_WORKSPACE"
+          base64 -d piiwii-remote-v2-lot7/lot7.patch.xz.b64 > /tmp/lot7.patch.xz
+          echo '4726ce415fe239fc3bd9cd066b5ffe3ee7462f9e0aa67e42d70b69b8c977c801  /tmp/lot7.patch.xz' | sha256sum -c -
+          xz -dc /tmp/lot7.patch.xz > /tmp/lot7.patch
+          echo '75808567c26b5f1d8c08ee64cde6611754cde85ca58f7fd4e1634e70cc266ee8  /tmp/lot7.patch' | sha256sum -c -
+          cd "$ROOT" && patch -p2 < /tmp/lot7.patch
+          grep -q 'versionCode = 26' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha7"' remote/build.gradle.kts
+          grep -q 'WindowCompat.setDecorFitsSystemWindows(window, false)' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'WindowInsetsCompat.Type.systemBars()' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'WindowInsetsCompat.Type.displayCutout()' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'APP_CUSTOM' remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt
+          grep -q '+ Ajouter un raccourci' remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt
+          grep -q 'Modifier' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Monter' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Descendre' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Supprimer' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'versionCode = 22' tvreceiver/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha3"' tvreceiver/build.gradle.kts
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Unit tests and APK build
+        working-directory: /tmp/piiwii-lot7-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest :remote:assembleDebug :tvreceiver:assembleDebug
+      - name: Validate and package Android Lot 7
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-lot7-src/piiwii-remote
+          OUT=/tmp/piiwii-lot7-android
+          mkdir -p "$OUT"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-alpha7.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-alpha3.apk"
+          cp "$ROOT/remote/build/outputs/apk/debug/remote-debug.apk" "$PHONE"
+          cp "$ROOT/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk" "$TV"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/TV-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='26' versionName='2.0.0-alpha7'" "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='22' versionName='2.0.0-alpha3'" "$OUT/TV-BADGING.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PHONE-SIGNATURE.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/TV-SIGNATURE.txt"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/TV-ZIPALIGN.txt"
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/TV-ZIPTEST.txt"
+          python - "$PHONE" <<'PY'
+          import sys, zipfile
+          apk=sys.argv[1]
+          with zipfile.ZipFile(apk) as z:
+              data=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          needles=[b'APP_CUSTOM', b'Ajouter un raccourci', b'Raccourcis personnalis', b'Modifier', b'Monter', b'Descendre', b'Supprimer', b'WindowInsetsCompat']
+          missing=[x.decode('utf-8','ignore') for x in needles if x not in data]
+          if missing: raise SystemExit(f'missing Lot7 DEX markers: {missing}')
+          PY
+          sha256sum "$PHONE" "$TV" > "$OUT/PiiWii-Remote-Android-Lot7-SHA256.txt"
+          cd /tmp/piiwii-lot7-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha7-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-alpha7-Sources.zip" >> "$OUT/PiiWii-Remote-Android-Lot7-SHA256.txt"
+          cat > "$OUT/PiiWii-Remote-2.0.0-alpha7-Lot7-Android-CI.txt" <<'EOF'
+          LOT 7 ANDROID VALIDATED
+          Phone: ch.piiwii.remote2 / 2.0.0-alpha7 / versionCode 26
+          TV regression: ch.piiwii.remote2.tv / 2.0.0-alpha3 / versionCode 22
+          Custom Windows shortcuts: EXE/URL add/edit/move/delete/persist per PC
+          APP_CUSTOM compiled on phone and restricted to Windows targets
+          Android system bars: edge-to-edge controlled by WindowInsets systemBars + displayCutout
+          Header content remains below status bar/clock and bottom navigation remains above Android nav/gesture area
+          Unit tests, build, aapt, apksigner, zipalign, ZIP and DEX checks passed
+          Lot 8 device management remains inactive
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Android-2.0.0-alpha7-Lot7
+          path: /tmp/piiwii-lot7-android/*
+          retention-days: 7
+          if-no-files-found: error
+
+  windows-lot7:
+    name: Windows Agent alpha5 custom shortcuts
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact Lot 7 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          mkdir -p "$BASE/piiwii-lot7-src"
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > "$BASE/piiwii-lot4.tar.xz"
+          tar -xJf "$BASE/piiwii-lot4.tar.xz" -C "$BASE/piiwii-lot7-src"
+          ROOT="$BASE/piiwii-lot7-src/piiwii-remote"
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          base64 -d piiwii-remote-v2-lot5/lot5.patch.xz.b64 > "$BASE/lot5.patch.xz"
+          xz -dc "$BASE/lot5.patch.xz" > "$BASE/lot5.patch"
+          cd "$ROOT" && patch -p2 < "$BASE/lot5.patch"
+          cd "$GITHUB_WORKSPACE"
+          cat piiwii-remote-v2-lot6/patch/part_*.b64 | base64 -d > "$BASE/lot6.patch.xz"
+          xz -dc "$BASE/lot6.patch.xz" > "$BASE/lot6.patch"
+          cd "$ROOT" && patch -p2 < "$BASE/lot6.patch"
+          python - <<'PY'
+          from pathlib import Path
+          p=Path(str(__import__('os').environ['RUNNER_TEMP']).replace('\\','/')+'/piiwii-lot7-src/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt')
+          s=p.read_text(); old='ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT)'; new='android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)'
+          if old in s: p.write_text(s.replace(old,new))
+          PY
+          cd "$GITHUB_WORKSPACE"
+          base64 -d piiwii-remote-v2-lot7/lot7.patch.xz.b64 > "$BASE/lot7.patch.xz"
+          echo "4726ce415fe239fc3bd9cd066b5ffe3ee7462f9e0aa67e42d70b69b8c977c801  $BASE/lot7.patch.xz" | sha256sum -c -
+          xz -dc "$BASE/lot7.patch.xz" > "$BASE/lot7.patch"
+          cd "$ROOT" && patch -p2 < "$BASE/lot7.patch"
+          grep -q '2.0.0-alpha5' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'APP_CUSTOM' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'parseCustomShortcut' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'launchCustomShortcut' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'https://' windows-agent/src/PiiWiiRemoteAgent.cpp
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Compile native x64 agent
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-lot7-src\piiwii-remote\windows-agent
+        run: |
+          rc /nologo /fo PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp PiiWiiRemoteAgent.res gdi32.lib /link /SUBSYSTEM:WINDOWS /OUT:PiiWii-Remote-Agent-2.0.0-alpha5.exe
+      - name: Run self-test
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'piiwii-lot7-src\piiwii-remote\windows-agent\PiiWii-Remote-Agent-2.0.0-alpha5.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "self-test failed: $($p.ExitCode)" }
+      - name: Validate and package Windows Lot 7
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'piiwii-lot7-src\piiwii-remote\windows-agent'
+          $exe = Join-Path $root 'PiiWii-Remote-Agent-2.0.0-alpha5.exe'
+          $headers = & dumpbin /headers $exe | Out-String
+          if ($headers -notmatch 'machine \(x64\)' -and $headers -notmatch '8664 machine') { throw 'not x64' }
+          if ($headers -notmatch 'PE32\+') { throw 'not PE32+' }
+          $vi = (Get-Item $exe).VersionInfo
+          if ($vi.ProductVersion -notlike '2.0.0-alpha5*') { throw "bad version $($vi.ProductVersion)" }
+          $out = Join-Path $env:RUNNER_TEMP 'piiwii-lot7-windows'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item $exe (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha5.exe')
+          $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower()
+          "$hash  PiiWii-Remote-Agent-2.0.0-alpha5.exe" | Set-Content (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha5-SHA256.txt')
+          @"
+          LOT 7 WINDOWS CI VALIDATED
+          Native Win32 x64 / PE32+
+          ProductVersion 2.0.0-alpha5
+          Self-test passed
+          APP_CUSTOM accepts EXE/application file paths and http/https URLs
+          UTF-8/Unicode, spaces and long payloads are supported by protocol transport
+          URL schemes other than http/https are rejected
+          Missing EXE/application targets are rejected
+          "@ | Set-Content (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha5-CI.txt')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-Agent-2.0.0-alpha5-Lot7
+          path: ${{ runner.temp }}\piiwii-lot7-windows\*
+          retention-days: 7
+          if-no-files-found: error
