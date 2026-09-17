@@ -1,0 +1,134 @@
+name: PiiWii Remote Phone beta2 IP Keypad
+
+on:
+  push:
+    branches: [piiwii-remote-v2-phone-beta2-ip-keypad]
+    paths:
+      - '.github/workflows/piiwii-remote-phone-beta2-ip-keypad.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Build Phone beta2 numeric IP keypad
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta1 and apply beta2 IP keypad patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/piiwii-phone-beta2-src
+          ROOT=/tmp/piiwii-phone-beta2-src/piiwii-remote
+          python - "$ROOT" <<'PY'
+          from pathlib import Path
+          import sys
+          root = Path(sys.argv[1])
+          main = root/'remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt'
+          gradle = root/'remote/build.gradle.kts'
+          s = main.read_text(encoding='utf-8')
+          if 'import android.text.method.DigitsKeyListener' not in s:
+              s = s.replace('import android.text.InputType\n', 'import android.text.InputType\nimport android.text.method.DigitsKeyListener\n')
+          old = 'val host = field("Adresse IP (ex. 192.168.1.50)").apply { setText(existing?.host.orEmpty()) }'
+          new = '''val host = field("Adresse IP (ex. 192.168.1.50)").apply {
+            keyListener = DigitsKeyListener.getInstance("0123456789.,")
+            setRawInputType(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+            setText(existing?.host.orEmpty())
+        }'''
+          if old not in s:
+              raise SystemExit('IP field anchor not found')
+          s = s.replace(old, new)
+          old_values = 'val n = name.text.toString().trim(); val h = host.text.toString().trim(); val p = port.text.toString().toIntOrNull()'
+          new_values = 'val n = name.text.toString().trim(); val h = host.text.toString().trim().replace(\',\', \'.\'); val p = port.text.toString().toIntOrNull()'
+          if old_values not in s:
+              raise SystemExit('values anchor not found')
+          s = s.replace(old_values, new_values)
+          main.write_text(s, encoding='utf-8')
+
+          g = gradle.read_text(encoding='utf-8')
+          g = g.replace('versionCode = 31', 'versionCode = 32')
+          g = g.replace('versionName = "2.0.0-beta1"', 'versionName = "2.0.0-beta2"')
+          gradle.write_text(g, encoding='utf-8')
+          PY
+
+          grep -q 'versionCode = 32' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta2"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'DigitsKeyListener.getInstance("0123456789.,")' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q 'setRawInputType(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q "trim().replace(',', '.')" "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q 'Code d.appairage à 6 chiffres' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q 'inputType = InputType.TYPE_CLASS_NUMBER' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q 'WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q 'PairingCodec.authenticated' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and unsigned release APK build
+        working-directory: /tmp/piiwii-phone-beta2-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate, align and package Phone beta2
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta2-src/piiwii-remote
+          OUT=/tmp/piiwii-phone-beta2-out
+          mkdir -p "$OUT"
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          ALIGNED="$OUT/PiiWii-Remote-Phone-2.0.0-beta2-aligned-unsigned.apk"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          test -f "$RAW"
+          "$ZIPALIGN" -f 4 "$RAW" "$ALIGNED"
+          "$ZIPALIGN" -c -v 4 "$ALIGNED" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$AAPT" dump badging "$ALIGNED" > "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='32' versionName='2.0.0-beta2'" "$OUT/PHONE-BADGING.txt"
+          unzip -t "$ALIGNED" > "$OUT/PHONE-ZIPTEST.txt"
+          python - "$ALIGNED" <<'PY'
+          import sys, zipfile
+          apk=sys.argv[1]
+          with zipfile.ZipFile(apk) as z:
+              data=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          for needle in [b'2.0.0-beta2', b'Adresse IP', b'0123456789.,', b'PAIR_REQUEST', b'AUTH1']:
+              assert needle in data, needle
+          print('DEX beta2 keypad audit OK')
+          PY
+          cd /tmp/piiwii-phone-beta2-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-beta2-Phone-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*' '*.jks' '*.keystore' '*Signing.properties'
+          unzip -l "$OUT/PiiWii-Remote-2.0.0-beta2-Phone-Sources.zip" > "$OUT/SOURCE-ZIP-LIST.txt"
+          ! grep -Ei '\.(jks|keystore)$|Signing\.properties' "$OUT/SOURCE-ZIP-LIST.txt"
+          sha256sum "$ALIGNED" "$OUT/PiiWii-Remote-2.0.0-beta2-Phone-Sources.zip" > "$OUT/CI-SHA256.txt"
+          printf '%s\n' \
+            'PIIWII REMOTE PHONE BETA2 IP KEYPAD AUDIT PASSED' \
+            'Package ch.piiwii.remote2' \
+            'Version 2.0.0-beta2 code32' \
+            'IP field requests numeric decimal keypad' \
+            'Digits limited to 0-9 plus dot/comma; comma normalized to dot' \
+            'Pairing code remains numeric' \
+            'Pairing/auth unchanged' \
+            'WindowInsets retained' > "$OUT/AUDIT.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta2-IP-Keypad
+          path: /tmp/piiwii-phone-beta2-out/*
+          retention-days: 7
+          if-no-files-found: error
