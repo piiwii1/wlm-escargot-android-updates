@@ -52,9 +52,9 @@ jobs:
           cd "$ROOT" && patch -p2 < /tmp/lot8.patch
           cd "$GITHUB_WORKSPACE"
           base64 -d piiwii-remote-v2-lot9/lot9.patch.xz.b64 > /tmp/lot9.patch.xz
-          echo 'bd38d99697cc2b8d5cf9b65c49c7eb76344ed67bd5b5550a2e2f3cc7c96c2685  /tmp/lot9.patch.xz' | sha256sum -c -
+          echo 'd72efcd546529de454ab0912915105ac44ffdce76b838eaf5f7956245e87b063  /tmp/lot9.patch.xz' | sha256sum -c -
           xz -dc /tmp/lot9.patch.xz > /tmp/lot9.patch
-          echo 'aff7462c85d01cc9ddb4490031946d27773d1aa86fb71a9d1a11419f8d878b2c  /tmp/lot9.patch' | sha256sum -c -
+          echo '4c8c3ea2ad20b4f30ff29794a0eb41d9ceaac08fbf1e5087eaacc8ae8dd12e36  /tmp/lot9.patch' | sha256sum -c -
           cd "$ROOT" && patch -p1 < /tmp/lot9.patch
           grep -q 'versionCode = 28' remote/build.gradle.kts
           grep -q 'versionName = "2.0.0-alpha9"' remote/build.gradle.kts
