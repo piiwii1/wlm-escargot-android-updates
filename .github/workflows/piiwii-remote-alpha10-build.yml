@@ -1,0 +1,80 @@
+name: PiiWii Remote Alpha10 APK Build
+
+on:
+  push:
+    branches: [ piiwii-remote-alpha10-build ]
+    paths:
+      - 'piiwii-remote-ci/**'
+      - '.github/workflows/piiwii-remote-alpha10-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat piiwii-remote-ci/parts/part-*.b64 | base64 -d > /tmp/piiwii-remote-alpha10.tar.xz
+          echo 'a5fee44c458449b95be6e67acadcd186ca1d6117f7ce95e810529af00f59a1bf  /tmp/piiwii-remote-alpha10.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/src
+          tar -xJf /tmp/piiwii-remote-alpha10.tar.xz -C /tmp/src
+          test -f /tmp/src/piiwii-remote/settings.gradle
+          test -f /tmp/src/piiwii-remote/remote/src/main/java/ch/piiwii/remote/MainActivity.java
+          test -f /tmp/src/piiwii-remote/tvreceiver/src/main/java/ch/piiwii/remote/tv/RemoteService.java
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build phone and TV APKs
+        working-directory: /tmp/src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:assembleDebug :tvreceiver:assembleDebug
+
+      - name: Prepare and verify delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/out
+          PHONE=/tmp/src/piiwii-remote/remote/build/outputs/apk/debug/remote-debug.apk
+          TV=/tmp/src/piiwii-remote/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk
+          test -s "$PHONE"
+          test -s "$TV"
+          cp "$PHONE" /tmp/out/PiiWii-Remote-Phone-1.2.0-alpha10.apk
+          cp "$TV" /tmp/out/PiiWii-Remote-TV-1.1.0-alpha7.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs /tmp/out/PiiWii-Remote-Phone-1.2.0-alpha10.apk > /tmp/out/phone-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs /tmp/out/PiiWii-Remote-TV-1.1.0-alpha7.apk > /tmp/out/tv-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/out/PiiWii-Remote-Phone-1.2.0-alpha10.apk > /tmp/out/phone-badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/out/PiiWii-Remote-TV-1.1.0-alpha7.apk > /tmp/out/tv-badging.txt
+          sha256sum /tmp/out/*.apk | tee /tmp/out/SHA256.txt
+          unzip -t /tmp/out/PiiWii-Remote-Phone-1.2.0-alpha10.apk
+          unzip -t /tmp/out/PiiWii-Remote-TV-1.1.0-alpha7.apk
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Alpha10-APKs
+          path: /tmp/out/*
+          retention-days: 7
+          if-no-files-found: error
