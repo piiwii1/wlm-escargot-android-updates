@@ -1,0 +1,166 @@
+name: PiiWii Remote 2 Lot2
+
+on:
+  push:
+    branches:
+      - piiwii-remote-v2-lot2
+    paths:
+      - 'piiwii-remote-v2-lot2/source/**'
+      - '.github/workflows/piiwii-remote-v2-lot2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-phone:
+    name: Android phone alpha2
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct Lot 2 clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot2-src
+          cat piiwii-remote-v2-lot2/source/chunk_*.b64 | base64 -d > /tmp/piiwii-lot2.tar.xz
+          echo 'd1f98dd5c1d04e95462742796f49020cb7ec08c73a05ca91aa1bcad2e929509d  /tmp/piiwii-lot2.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/piiwii-lot2.tar.xz -C /tmp/piiwii-lot2-src
+          test -f /tmp/piiwii-lot2-src/piiwii-remote/settings.gradle.kts
+          grep -q 'applicationId = "ch.piiwii.remote2"' /tmp/piiwii-lot2-src/piiwii-remote/remote/build.gradle.kts
+          grep -q 'versionCode = 21' /tmp/piiwii-lot2-src/piiwii-remote/remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha2"' /tmp/piiwii-lot2-src/piiwii-remote/remote/build.gradle.kts
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          set -e
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Run Android unit tests
+        working-directory: /tmp/piiwii-lot2-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest
+
+      - name: Build Android APK
+        working-directory: /tmp/piiwii-lot2-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:assembleDebug
+
+      - name: Validate Android delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/piiwii-android-out
+          mkdir -p "$OUT"
+          APK=/tmp/piiwii-lot2-src/piiwii-remote/remote/build/outputs/apk/debug/remote-debug.apk
+          cp "$APK" "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2.apk"
+          /usr/local/lib/android/sdk/build-tools/35.0.0/aapt dump badging "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2.apk" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2-BADGING.txt"
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose --print-certs "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2.apk" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2-SIGNATURE.txt"
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2.apk" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2-ZIPALIGN.txt"
+          unzip -t "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2.apk" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2-ZIPTEST.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='21' versionName='2.0.0-alpha2'" "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2-BADGING.txt"
+          sha256sum "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2.apk" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha2-SHA256.txt"
+          cd /tmp/piiwii-lot2-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha2-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-alpha2-Sources.zip" > "$OUT/PiiWii-Remote-2.0.0-alpha2-Sources-SHA256.txt"
+
+      - name: Upload Android Lot 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Android-2.0.0-alpha2-Lot2
+          path: /tmp/piiwii-android-out/*
+          retention-days: 7
+          if-no-files-found: error
+
+  windows-agent:
+    name: Windows Agent x64 alpha1
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct Lot 2 clean source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $chunks = Get-ChildItem 'piiwii-remote-v2-lot2/source/chunk_*.b64' | Sort-Object Name
+          $b64 = ($chunks | ForEach-Object { (Get-Content $_.FullName -Raw).Trim() }) -join ''
+          $archive = Join-Path $env:RUNNER_TEMP 'piiwii-lot2.tar.xz'
+          [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($b64))
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($hash -ne 'd1f98dd5c1d04e95462742796f49020cb7ec08c73a05ca91aa1bcad2e929509d') { throw "Source SHA-256 mismatch: $hash" }
+          $src = Join-Path $env:RUNNER_TEMP 'piiwii-lot2-src'
+          New-Item -ItemType Directory -Force $src | Out-Null
+          tar -xJf $archive -C $src
+          if (-not (Test-Path (Join-Path $src 'piiwii-remote/windows-agent/src/PiiWiiRemoteAgent.cpp'))) { throw 'Windows Agent source missing' }
+
+      - name: Setup MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile native Windows x64 EXE
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-lot2-src\piiwii-remote
+        run: |
+          if not exist "%RUNNER_TEMP%\piiwii-windows-out" mkdir "%RUNNER_TEMP%\piiwii-windows-out"
+          rc.exe /nologo /fo "%RUNNER_TEMP%\piiwii-windows-out\PiiWiiRemoteAgent.res" windows-agent\src\PiiWiiRemoteAgent.rc
+          cl.exe /nologo /EHsc /std:c++17 /O2 /utf-8 /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /D_CRT_SECURE_NO_WARNINGS windows-agent\src\PiiWiiRemoteAgent.cpp "%RUNNER_TEMP%\piiwii-windows-out\PiiWiiRemoteAgent.res" ws2_32.lib user32.lib shell32.lib advapi32.lib iphlpapi.lib gdi32.lib /Fe:"%RUNNER_TEMP%\piiwii-windows-out\PiiWii-Remote-Agent-2.0.0-alpha1.exe" /link /SUBSYSTEM:WINDOWS /MACHINE:X64
+
+      - name: Run Windows Agent self-test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:RUNNER_TEMP 'piiwii-windows-out/PiiWii-Remote-Agent-2.0.0-alpha1.exe'
+          & $exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "Agent self-test failed with exit code $LASTEXITCODE" }
+          'SELF TEST OK - protocol UTF-8/Base64, command mapping, local UDP PING/PONG' | Set-Content -Encoding utf8 (Join-Path $env:RUNNER_TEMP 'piiwii-windows-out/PiiWii-Remote-Agent-2.0.0-alpha1-SELFTEST.txt')
+
+      - name: Validate Windows x64 delivery
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\piiwii-lot2-src\piiwii-remote
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'piiwii-windows-out'
+          $exe = Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1.exe'
+          dumpbin /headers $exe | Out-File -Encoding utf8 (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-HEADERS.txt')
+          dumpbin /imports $exe | Out-File -Encoding utf8 (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-IMPORTS.txt')
+          $headers = Get-Content (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-HEADERS.txt') -Raw
+          if ($headers -notmatch '8664 machine \(x64\)') { throw 'Compiled EXE is not x64' }
+          $version = (Get-Item $exe).VersionInfo
+          if ($version.ProductVersion -ne '2.0.0-alpha1') { throw "Wrong ProductVersion: $($version.ProductVersion)" }
+          @(
+            "FileDescription=$($version.FileDescription)",
+            "FileVersion=$($version.FileVersion)",
+            "ProductName=$($version.ProductName)",
+            "ProductVersion=$($version.ProductVersion)"
+          ) | Set-Content -Encoding utf8 (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-VERSION.txt')
+          (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant() | Set-Content -Encoding ascii (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-SHA256.txt')
+          Copy-Item 'windows-agent/README.md' (Join-Path $out 'README-Windows-Agent.md')
+          Compress-Archive -Force -Path $exe,(Join-Path $out 'README-Windows-Agent.md'),(Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-SELFTEST.txt') -DestinationPath (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-Windows.zip')
+          (Get-FileHash -Algorithm SHA256 (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-Windows.zip')).Hash.ToLowerInvariant() | Set-Content -Encoding ascii (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha1-Windows-SHA256.txt')
+
+      - name: Upload Windows Agent Lot 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-Agent-2.0.0-alpha1-Lot2
+          path: ${{ runner.temp }}\piiwii-windows-out\*
+          retention-days: 7
+          if-no-files-found: error
