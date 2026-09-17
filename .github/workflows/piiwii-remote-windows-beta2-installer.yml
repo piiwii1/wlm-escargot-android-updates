@@ -81,7 +81,7 @@ jobs:
           $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta2.exe'
           if(-not (Test-Path $setup)){throw 'Setup executable missing'}
           $v=(Get-Item $setup).VersionInfo
-          if($v.ProductVersion -notlike '2.0.0-beta2*'){throw "Bad setup ProductVersion: $($v.ProductVersion)"}
+          if($v.ProductVersion -notlike '2.0.0.9*'){throw "Bad setup ProductVersion: $($v.ProductVersion)"}
 
       - name: Real install shortcut and uninstall test
         shell: pwsh
