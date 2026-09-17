@@ -26,38 +26,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build Phone APK
+      - name: Build installable Phone APK
         working-directory: piiwii-remote
-        run: gradle --no-daemon --stacktrace :remote:assembleRelease
-      - name: Package Android
+        run: gradle --no-daemon --stacktrace :remote:assembleDebug
+      - name: Verify and package Android
         run: |
           mkdir -p out
-          cp piiwii-remote/remote/build/outputs/apk/release/remote-release-unsigned.apk out/PiiWii-Remote-Phone-1.1.0-unsigned.apk
-          sha256sum out/*.apk > out/SHA256-Android.txt
+          cp piiwii-remote/remote/build/outputs/apk/debug/remote-debug.apk out/PiiWii-Remote-Phone-1.2.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose out/PiiWii-Remote-Phone-1.2.0.apk
+          sha256sum out/PiiWii-Remote-Phone-1.2.0.apk > out/SHA256-Android.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-Phone-1.1.0-ReleaseUnsigned
-          path: out/
-          retention-days: 14
-
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install pyinstaller
-      - name: Build Windows agent
-        shell: pwsh
-        run: |
-          pyinstaller --onefile --windowed --name PiiWii-Remote-Agent-1.1.0 piiwii-remote/windows/PiiWiiRemoteAgent.py
-          New-Item -ItemType Directory -Force -Path out | Out-Null
-          Copy-Item dist/PiiWii-Remote-Agent-1.1.0.exe out/
-          (Get-FileHash out/PiiWii-Remote-Agent-1.1.0.exe -Algorithm SHA256).Hash.ToLower() | Set-Content out/SHA256-Windows.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PiiWii-Remote-Windows-1.1.0
+          name: PiiWii-Remote-Phone-1.2.0
           path: out/
           retention-days: 14
 
@@ -67,12 +47,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Package sources
         run: |
-          zip -r PiiWii-Remote-Sources-1.1.0.zip piiwii-remote -x '*/build/*' '*/.gradle/*'
-          sha256sum PiiWii-Remote-Sources-1.1.0.zip > SHA256-Sources.txt
+          zip -r PiiWii-Remote-Sources-1.2.0.zip piiwii-remote -x '*/build/*' '*/.gradle/*'
+          sha256sum PiiWii-Remote-Sources-1.2.0.zip > SHA256-Sources.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-Sources-1.1.0
+          name: PiiWii-Remote-Sources-1.2.0
           path: |
-            PiiWii-Remote-Sources-1.1.0.zip
+            PiiWii-Remote-Sources-1.2.0.zip
             SHA256-Sources.txt
           retention-days: 14
