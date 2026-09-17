@@ -27,7 +27,6 @@ jobs:
           set -euo pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$SDKMANAGER"
-          echo "SDK manager: $SDKMANAGER"
           "$SDKMANAGER" --version
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
@@ -80,7 +79,7 @@ jobs:
           EOF
           gradle -p "$ROOT" --no-daemon assembleDebug
 
-      - name: Package offline toolchain
+      - name: Package and split offline toolchain
         shell: bash
         run: |
           set -euo pipefail
@@ -89,7 +88,6 @@ jobs:
           mkdir -p "$OUT/gradle" "$OUT/android-sdk/platforms" "$OUT/android-sdk/build-tools" "$OUT/android-sdk/platform-tools" "$OUT/android-sdk/licenses" "$OUT/gradle-user-home"
           GRADLE_BIN=$(command -v gradle)
           GRADLE_HOME=$(dirname "$(dirname "$(readlink -f "$GRADLE_BIN")")")
-          echo "Gradle home: $GRADLE_HOME"
           cp -a "$GRADLE_HOME"/. "$OUT/gradle/"
           cp -a "$ANDROID_HOME/platforms/android-35" "$OUT/android-sdk/platforms/"
           cp -a "$ANDROID_HOME/build-tools/35.0.0" "$OUT/android-sdk/build-tools/"
@@ -97,17 +95,45 @@ jobs:
           cp -a "$ANDROID_HOME/licenses"/. "$OUT/android-sdk/licenses/" || true
           cp -a "$HOME/.gradle/caches" "$OUT/gradle-user-home/"
           if [ -d "$HOME/.gradle/native" ]; then cp -a "$HOME/.gradle/native" "$OUT/gradle-user-home/"; fi
-          du -sh "$OUT" "$OUT/gradle" "$OUT/android-sdk" "$OUT/gradle-user-home" || true
           tar -C /tmp -czf /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz piiwii-toolchain
-          ls -lh /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz
           sha256sum /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz > /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
+          split -b 200M -d -a 2 /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz /tmp/toolchain.part.
+          ls -lh /tmp/toolchain.part.* /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
+          test -f /tmp/toolchain.part.00
+          test -f /tmp/toolchain.part.01
+          test -f /tmp/toolchain.part.02
+          test -f /tmp/toolchain.part.03
 
-      - name: Upload offline toolchain
+      - name: Upload part 00
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Android-Toolchain-Gradle8.9-SDK35
-          path: |
-            /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz
-            /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
+          name: PiiWii-Toolchain-Part-00
+          path: /tmp/toolchain.part.00
+          compression-level: 0
           retention-days: 1
-          if-no-files-found: error
+
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Toolchain-Part-01
+          path: /tmp/toolchain.part.01
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Toolchain-Part-02
+          path: /tmp/toolchain.part.02
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload part 03 and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Toolchain-Part-03
+          path: |
+            /tmp/toolchain.part.03
+            /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
+          compression-level: 0
+          retention-days: 1
