@@ -129,8 +129,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = Join-Path $env:RUNNER_TEMP 'piiwii-windows-out/PiiWii-Remote-Agent-2.0.0-alpha1.exe'
-          & $exe --self-test
-          if ($LASTEXITCODE -ne 0) { throw "Agent self-test failed with exit code $LASTEXITCODE" }
+          $process = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Agent self-test failed with exit code $($process.ExitCode)" }
           'SELF TEST OK - protocol UTF-8/Base64, command mapping, local UDP PING/PONG' | Set-Content -Encoding utf8 (Join-Path $env:RUNNER_TEMP 'piiwii-windows-out/PiiWii-Remote-Agent-2.0.0-alpha1-SELFTEST.txt')
 
       - name: Validate Windows x64 delivery
