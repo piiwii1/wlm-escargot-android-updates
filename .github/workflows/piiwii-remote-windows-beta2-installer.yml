@@ -1,0 +1,136 @@
+name: PiiWii Remote Windows beta2 Installer
+
+on:
+  push:
+    branches: [piiwii-remote-v2-windows-beta2-installer]
+    paths:
+      - 'piiwii-remote-v2-windows-beta2/PiiWiiRemoteAgent.iss'
+      - '.github/workflows/piiwii-remote-windows-beta2-installer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build and test Windows beta2 installer
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta1 source and prepare beta2
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh "$BASE/piiwii-beta2-src"
+          ROOT="$BASE/piiwii-beta2-src/piiwii-remote"
+          python - "$ROOT" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1])
+          cpp=root/'windows-agent/src/PiiWiiRemoteAgent.cpp'
+          rc=root/'windows-agent/src/PiiWiiRemoteAgent.rc'
+          s=cpp.read_text(encoding='utf-8-sig').replace('2.0.0-beta1','2.0.0-beta2')
+          cpp.write_text(s,encoding='utf-8')
+          s=rc.read_text(encoding='utf-8-sig')
+          s=s.replace('FILEVERSION 2,0,0,8','FILEVERSION 2,0,0,9').replace('PRODUCTVERSION 2,0,0,8','PRODUCTVERSION 2,0,0,9').replace('2.0.0-beta1','2.0.0-beta2')
+          rc.write_text(s,encoding='utf-8')
+          PY
+          mkdir -p "$ROOT/windows-agent/installer"
+          cp piiwii-remote-v2-windows-beta2/PiiWiiRemoteAgent.iss "$ROOT/windows-agent/installer/"
+          grep -q '2.0.0-beta2' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'FILEVERSION 2,0,0,9' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc"
+          grep -q '{userdesktop}\\PiiWii Remote Agent' "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss"
+          grep -q '{userprograms}\\PiiWii Remote Agent' "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss"
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile Agent beta2 x64
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-beta2-src\piiwii-remote\windows-agent
+        run: |
+          if not exist build mkdir build
+          rc /nologo /fo build\PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp build\PiiWiiRemoteAgent.res gdi32.lib user32.lib advapi32.lib PowrProf.lib bcrypt.lib /link /SUBSYSTEM:WINDOWS /OUT:build\PiiWii-Remote-Agent-2.0.0-beta2.exe
+
+      - name: Validate Agent beta2
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta2-src\piiwii-remote\windows-agent'
+          $exe=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta2.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Agent self-test failed: $($p.ExitCode)"}
+          $h=& dumpbin /headers $exe | Out-String
+          if($h -notmatch 'PE32\+' -or ($h -notmatch 'machine \(x64\)' -and $h -notmatch '8664 machine')){throw 'Agent is not PE32+ x64'}
+          $v=(Get-Item $exe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta2*'){throw "Bad ProductVersion: $($v.ProductVersion)"}
+
+      - name: Build Inno Setup installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta2-src\piiwii-remote\windows-agent'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not (Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          if(-not (Test-Path $iscc)){throw 'ISCC.exe not found'}
+          & $iscc (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          if($LASTEXITCODE -ne 0){throw "Inno Setup failed: $LASTEXITCODE"}
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta2.exe'
+          if(-not (Test-Path $setup)){throw 'Setup executable missing'}
+          $v=(Get-Item $setup).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta2*'){throw "Bad setup ProductVersion: $($v.ProductVersion)"}
+
+      - name: Real install shortcut and uninstall test
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta2-src\piiwii-remote\windows-agent'
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta2.exe'
+          $installDir=Join-Path $env:LOCALAPPDATA 'Programs\PiiWii Remote Agent'
+          $installedExe=Join-Path $installDir 'PiiWii-Remote-Agent.exe'
+          $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'PiiWii Remote Agent.lnk'
+          $startMenu=Join-Path ([Environment]::GetFolderPath('Programs')) 'PiiWii Remote Agent.lnk'
+          $log=Join-Path $env:RUNNER_TEMP 'piiwii-beta2-install.log'
+          $p=Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$log") -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Installer exit code $($p.ExitCode)"}
+          foreach($f in @($installedExe,$desktop,$startMenu,(Join-Path $installDir 'unins000.exe'))){if(-not(Test-Path $f)){throw "Missing after install: $f"}}
+          $t=Start-Process -FilePath $installedExe -ArgumentList '--self-test' -Wait -PassThru
+          if($t.ExitCode -ne 0){throw "Installed Agent self-test failed: $($t.ExitCode)"}
+          $un=Join-Path $installDir 'unins000.exe'
+          $u=Start-Process -FilePath $un -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if($u.ExitCode -ne 0){throw "Uninstaller exit code $($u.ExitCode)"}
+          Start-Sleep -Seconds 2
+          if(Test-Path $installedExe){throw 'Agent still present after uninstall'}
+          if(Test-Path $desktop){throw 'Desktop shortcut still present after uninstall'}
+          if(Test-Path $startMenu){throw 'Start Menu shortcut still present after uninstall'}
+          'INSTALL / DESKTOP SHORTCUT / START MENU / SELF-TEST / UNINSTALL : OK'
+
+      - name: Package output
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta2-src\piiwii-remote\windows-agent'
+          $out=Join-Path $env:RUNNER_TEMP 'piiwii-beta2-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta2.exe') $out
+          Copy-Item (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta2.exe') $out
+          Copy-Item (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') $out
+          $files=Get-ChildItem $out -File
+          $lines=@(); foreach($f in $files){$h=(Get-FileHash -Algorithm SHA256 $f.FullName).Hash.ToLower(); $lines += "$h  $($f.Name)"}
+          $lines|Set-Content (Join-Path $out 'SHA256.txt')
+          @(
+            'PIIWII REMOTE WINDOWS BETA2 INSTALLER AUDIT PASSED',
+            'Agent: PE32+ x64, self-test OK',
+            'Installer: Inno Setup, per-user install',
+            'Desktop shortcut: verified after real install',
+            'Start Menu shortcut: verified after real install',
+            'Installed Agent self-test: OK',
+            'Uninstall cleanup: verified'
+          )|Set-Content (Join-Path $out 'AUDIT.txt')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-2.0.0-beta2-Installer
+          path: ${{ runner.temp }}\piiwii-beta2-out\*
+          retention-days: 7
+          if-no-files-found: error
