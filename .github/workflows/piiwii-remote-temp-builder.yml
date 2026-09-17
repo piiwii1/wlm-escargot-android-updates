@@ -1,0 +1,66 @@
+name: PiiWii Remote Temp Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: Base64 tar.xz source payload
+        required: true
+        type: string
+      sha256:
+        description: Expected SHA-256 of tar.xz
+        required: true
+        type: string
+
+jobs:
+  build-phone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Reconstruct source payload
+        shell: bash
+        env:
+          PAYLOAD: ${{ inputs.payload }}
+          EXPECTED_SHA: ${{ inputs.sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/src
+          printf '%s' "$PAYLOAD" | base64 -d > /tmp/piiwii-src.tar.xz
+          echo "$EXPECTED_SHA  /tmp/piiwii-src.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/piiwii-src.tar.xz -C /tmp/src
+          test -f /tmp/src/piiwii-remote/settings.gradle
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build phone APK
+        working-directory: /tmp/src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:assembleDebug
+      - name: Prepare delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/out
+          cp /tmp/src/piiwii-remote/remote/build/outputs/apk/debug/remote-debug.apk /tmp/out/PiiWii-Remote-Phone-1.2.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs /tmp/out/PiiWii-Remote-Phone-1.2.0.apk > /tmp/out/signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/out/PiiWii-Remote-Phone-1.2.0.apk > /tmp/out/badging.txt
+          sha256sum /tmp/out/PiiWii-Remote-Phone-1.2.0.apk > /tmp/out/SHA256.txt
+          unzip -t /tmp/out/PiiWii-Remote-Phone-1.2.0.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-1.2.0
+          path: /tmp/out/*
+          retention-days: 1
+          if-no-files-found: error
