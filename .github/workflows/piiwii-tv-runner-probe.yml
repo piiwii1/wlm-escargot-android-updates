@@ -102,7 +102,7 @@ jobs:
           test -f /tmp/toolchain.part.00
           test -f /tmp/toolchain.part.01
           test -f /tmp/toolchain.part.02
-          test -f /tmp/toolchain.part.03
+          test ! -e /tmp/toolchain.part.03
 
       - name: Upload part 00
         uses: actions/upload-artifact@v4
@@ -120,20 +120,12 @@ jobs:
           compression-level: 0
           retention-days: 1
 
-      - name: Upload part 02
+      - name: Upload part 02 and checksum
         uses: actions/upload-artifact@v4
         with:
           name: PiiWii-Toolchain-Part-02
-          path: /tmp/toolchain.part.02
-          compression-level: 0
-          retention-days: 1
-
-      - name: Upload part 03 and checksum
-        uses: actions/upload-artifact@v4
-        with:
-          name: PiiWii-Toolchain-Part-03
           path: |
-            /tmp/toolchain.part.03
+            /tmp/toolchain.part.02
             /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
           compression-level: 0
           retention-days: 1
