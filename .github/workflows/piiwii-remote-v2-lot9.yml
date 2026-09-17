@@ -1,0 +1,140 @@
+name: PiiWii Remote 2 Lot9
+
+on:
+  push:
+    branches: [piiwii-remote-v2-lot9]
+    paths:
+      - 'piiwii-remote-v2-lot9/**'
+      - '.github/workflows/piiwii-remote-v2-lot9.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-lot9:
+    name: Phone alpha9 + TV regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact Lot 9 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot9-src
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > /tmp/piiwii-lot4.tar.xz
+          tar -xJf /tmp/piiwii-lot4.tar.xz -C /tmp/piiwii-lot9-src
+          ROOT=/tmp/piiwii-lot9-src/piiwii-remote
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          base64 -d piiwii-remote-v2-lot5/lot5.patch.xz.b64 > /tmp/lot5.patch.xz
+          xz -dc /tmp/lot5.patch.xz > /tmp/lot5.patch
+          cd "$ROOT" && patch -p2 < /tmp/lot5.patch
+          cd "$GITHUB_WORKSPACE"
+          cat piiwii-remote-v2-lot6/patch/part_*.b64 | base64 -d > /tmp/lot6.patch.xz
+          xz -dc /tmp/lot6.patch.xz > /tmp/lot6.patch
+          cd "$ROOT" && patch -p2 < /tmp/lot6.patch
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/piiwii-lot9-src/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt')
+          s=p.read_text(encoding='utf-8')
+          old='ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT)'
+          new='android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)'
+          if old in s: p.write_text(s.replace(old,new), encoding='utf-8')
+          PY
+          cd "$GITHUB_WORKSPACE"
+          base64 -d piiwii-remote-v2-lot7/lot7.patch.xz.b64 > /tmp/lot7.patch.xz
+          xz -dc /tmp/lot7.patch.xz > /tmp/lot7.patch
+          cd "$ROOT" && patch -p2 < /tmp/lot7.patch
+          cd "$GITHUB_WORKSPACE"
+          base64 -d piiwii-remote-v2-lot8/lot8.patch.xz.b64 > /tmp/lot8.patch.xz
+          xz -dc /tmp/lot8.patch.xz > /tmp/lot8.patch
+          cd "$ROOT" && patch -p2 < /tmp/lot8.patch
+          cd "$GITHUB_WORKSPACE"
+          base64 -d piiwii-remote-v2-lot9/lot9.patch.xz.b64 > /tmp/lot9.patch.xz
+          echo 'bd38d99697cc2b8d5cf9b65c49c7eb76344ed67bd5b5550a2e2f3cc7c96c2685  /tmp/lot9.patch.xz' | sha256sum -c -
+          xz -dc /tmp/lot9.patch.xz > /tmp/lot9.patch
+          echo 'aff7462c85d01cc9ddb4490031946d27773d1aa86fb71a9d1a11419f8d878b2c  /tmp/lot9.patch' | sha256sum -c -
+          cd "$ROOT" && patch -p1 < /tmp/lot9.patch
+          grep -q 'versionCode = 28' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha9"' remote/build.gradle.kts
+          grep -q 'versionCode = 23' tvreceiver/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha4"' tvreceiver/build.gradle.kts
+          grep -q 'WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Vitesse du curseur' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Sensibilité' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Vitesse du scroll' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Clic droit par appui long' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'Réinitialiser les commandes' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'MediaButtonAction.PREVIOUS' remote/src/main/java/ch/piiwii/remote2/ui/CommandSettings.kt
+          grep -q 'MediaButtonAction.NEXT' remote/src/main/java/ch/piiwii/remote2/ui/CommandSettings.kt
+          grep -q 'settings.cursorSpeed \* settings.sensitivity' remote/src/main/java/ch/piiwii/remote2/ui/TouchpadView.kt
+          grep -q 'settings.scrollSpeed' remote/src/main/java/ch/piiwii/remote2/ui/TouchpadView.kt
+          grep -q 'settings.vibration' remote/src/main/java/ch/piiwii/remote2/ui/TouchpadView.kt
+          grep -q 'settings.longPressRightClick' remote/src/main/java/ch/piiwii/remote2/ui/TouchpadView.kt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Unit tests and APK build
+        working-directory: /tmp/piiwii-lot9-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest :remote:assembleDebug :tvreceiver:assembleDebug
+      - name: Validate and package Lot 9
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-lot9-src/piiwii-remote
+          OUT=/tmp/piiwii-lot9-android
+          mkdir -p "$OUT"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-alpha9-CI.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-alpha4-CI.apk"
+          cp "$ROOT/remote/build/outputs/apk/debug/remote-debug.apk" "$PHONE"
+          cp "$ROOT/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk" "$TV"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/TV-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='28' versionName='2.0.0-alpha9'" "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='23' versionName='2.0.0-alpha4'" "$OUT/TV-BADGING.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PHONE-CI-SIGNATURE.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/TV-CI-SIGNATURE.txt"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/TV-ZIPALIGN.txt"
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/TV-ZIPTEST.txt"
+          python - "$PHONE" <<'PY'
+          import sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              data=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          for needle in [b'Vitesse du curseur', b'Sensibilit', b'Vitesse du scroll', b'Clic droit par appui long', b'MediaButtonAction', b'CommandSettings']:
+              if needle not in data: raise SystemExit(f'missing DEX marker {needle!r}')
+          PY
+          sha256sum "$PHONE" "$TV" > "$OUT/CI-SHA256.txt"
+          cd /tmp/piiwii-lot9-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha9-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-alpha9-Sources.zip" >> "$OUT/CI-SHA256.txt"
+          cat > "$OUT/PiiWii-Remote-2.0.0-alpha9-Lot9-CI.txt" <<'TXT'
+          LOT 9 CI VALIDATED
+          Phone alpha9 versionCode 28
+          TV alpha4 regression
+          Advanced touchpad settings active
+          Custom media left/right commands active
+          Android WindowInsets retained
+          Lot 10 power remains outside this lot
+          TXT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Android-2.0.0-alpha9-Lot9-CI
+          path: /tmp/piiwii-lot9-android/*
+          retention-days: 7
+          if-no-files-found: error
