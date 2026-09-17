@@ -1,0 +1,226 @@
+name: PiiWii Remote Windows beta5 UTF-8
+
+on:
+  push:
+    branches: [piiwii-remote-v2-windows-beta5-utf8]
+    paths:
+      - 'piiwii-remote-v2-windows-beta5/**'
+      - '.github/workflows/piiwii-remote-windows-beta5-utf8.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build and test Windows beta5 UTF-8
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta4 baseline and apply beta5 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh "$BASE/piiwii-beta5-src"
+          ROOT="$BASE/piiwii-beta5-src/piiwii-remote"
+          base64 -d piiwii-remote-v2-windows-beta4/beta4.patch.xz.b64 | xz -d > "$BASE/beta4.patch"
+          (cd "$ROOT" && patch -p1 < "$BASE/beta4.patch")
+          mkdir -p "$ROOT/windows-agent/installer"
+          cp piiwii-remote-v2-windows-beta4/PiiWiiRemoteAgent.iss "$ROOT/windows-agent/installer/"
+          base64 -d piiwii-remote-v2-windows-beta5/beta5.patch.xz.b64 | xz -d > "$BASE/beta5.patch"
+          (cd "$ROOT" && patch --binary -p2 < "$BASE/beta5.patch")
+          grep -q '2.0.0-beta5' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'selfTestEncoding' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'FILEVERSION 2,0,0,12' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc"
+          grep -q 'PiiWii-Remote-Agent-2.0.0-beta4.exe' "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss"
+          grep -q 'RegDeleteValue' "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss"
+
+      - name: Audit source encoding and UI strings
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta5-src\piiwii-remote\windows-agent'
+          $files=@(
+            (Join-Path $root 'src\PiiWiiRemoteAgent.cpp'),
+            (Join-Path $root 'src\PiiWiiRemoteAgent.rc'),
+            (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          )
+          $utf8Strict = New-Object System.Text.UTF8Encoding($false,$true)
+          foreach($f in $files){
+            $bytes=[IO.File]::ReadAllBytes($f)
+            try { $text=$utf8Strict.GetString($bytes) } catch { throw "Not valid UTF-8: $f" }
+            foreach($bad in @('PrÃ','rÃ©','dâ€™','DÃ©','TÃ©','â€”','â€¦','Â·')){
+              if($text.Contains($bad)){ throw "Mojibake pattern [$bad] found in $f" }
+            }
+          }
+          $cpp=[IO.File]::ReadAllText((Join-Path $root 'src\PiiWiiRemoteAgent.cpp'),$utf8Strict)
+          foreach($good in @('Prêt','réseau','d’appairage','Démarrer','Téléphone','—','·','…')){
+            if(-not $cpp.Contains($good)){ throw "Expected UTF-8 UI text missing: $good" }
+          }
+          'SOURCE UTF-8 + UI STRING AUDIT: OK'
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile Agent beta5 x64 with explicit UTF-8
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-beta5-src\piiwii-remote\windows-agent
+        run: |
+          if not exist build mkdir build
+          rc /nologo /fo build\PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /utf-8 /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp build\PiiWiiRemoteAgent.res gdi32.lib user32.lib advapi32.lib PowrProf.lib bcrypt.lib shell32.lib /link /SUBSYSTEM:WINDOWS /OUT:build\PiiWii-Remote-Agent-2.0.0-beta5.exe
+
+      - name: Validate Agent beta5 and compiled Unicode literals
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta5-src\piiwii-remote\windows-agent'
+          $exe=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta5.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Agent self-test failed: $($p.ExitCode)"}
+          $r=Start-Process -FilePath $exe -ArgumentList '--reopen-self-test' -Wait -PassThru
+          if($r.ExitCode -ne 0){throw "Reopen self-test failed: $($r.ExitCode)"}
+          $h=& dumpbin /headers $exe | Out-String
+          if($h -notmatch 'PE32\+' -or ($h -notmatch 'machine \(x64\)' -and $h -notmatch '8664 machine')){throw 'Agent is not PE32+ x64'}
+          $v=(Get-Item $exe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta5*'){throw "Bad ProductVersion: $($v.ProductVersion)"}
+
+          function Contains-Bytes([byte[]]$haystack,[byte[]]$needle){
+            if($needle.Length -eq 0 -or $haystack.Length -lt $needle.Length){return $false}
+            for($i=0;$i -le $haystack.Length-$needle.Length;$i++){
+              $ok=$true
+              for($j=0;$j -lt $needle.Length;$j++){if($haystack[$i+$j] -ne $needle[$j]){$ok=$false;break}}
+              if($ok){return $true}
+            }
+            return $false
+          }
+          $bin=[IO.File]::ReadAllBytes($exe)
+          foreach($good in @('● Prêt — réseau local','Code d’appairage : ','Dernier téléphone : —','Démarrer automatiquement avec Windows','Autoriser dans le pare-feu','Cliquez sur l’icône près de l’horloge')){
+            $bytes=[Text.Encoding]::Unicode.GetBytes($good)
+            if(-not (Contains-Bytes $bin $bytes)){throw "Correct UTF-16 UI literal missing from EXE: $good"}
+          }
+          foreach($bad in @('PrÃªt','rÃ©seau','dâ€™appairage','DÃ©marrer','TÃ©lÃ©phone')){
+            $bytes=[Text.Encoding]::Unicode.GetBytes($bad)
+            if(Contains-Bytes $bin $bytes){throw "Mojibake UTF-16 literal found in EXE: $bad"}
+          }
+          'COMPILED UTF-16 UI AUDIT: OK'
+
+      - name: Build beta5 installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta5-src\piiwii-remote\windows-agent'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not(Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          & $iscc (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          if($LASTEXITCODE -ne 0){throw "Inno Setup failed: $LASTEXITCODE"}
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta5.exe'
+          if(-not(Test-Path $setup)){throw 'Setup missing'}
+          if((Get-Item $setup).VersionInfo.ProductVersion -notlike '2.0.0.12*'){throw 'Bad setup version'}
+
+      - name: Simulate alpha4 startup and verify beta5 migration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta5-src\piiwii-remote\windows-agent'
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta5.exe'
+          $installDir=Join-Path $env:LOCALAPPDATA 'Programs\PiiWii Remote Agent'
+          $installedExe=Join-Path $installDir 'PiiWii-Remote-Agent.exe'
+          $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'PiiWii Remote Agent.lnk'
+          $startMenu=Join-Path ([Environment]::GetFolderPath('Programs')) 'PiiWii Remote Agent.lnk'
+          $runKey='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+
+          New-Item -Path $runKey -Force | Out-Null
+          $legacyPath=Join-Path $env:RUNNER_TEMP 'PiiWii-Remote-Agent-2.0.0-alpha4.exe'
+          Copy-Item "$env:WINDIR\System32\cmd.exe" $legacyPath -Force
+          New-ItemProperty -Path $runKey -Name 'PiiWii Remote Agent' -Value ('"'+$legacyPath+'" --background') -PropertyType String -Force | Out-Null
+          $legacy=Start-Process -FilePath $legacyPath -ArgumentList '/c','ping -t 127.0.0.1' -PassThru
+          Start-Sleep -Milliseconds 800
+          if($legacy.HasExited){throw 'Legacy alpha4 simulation did not start'}
+
+          $p=Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS="autostart"') -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Install failed: $($p.ExitCode)"}
+          Start-Sleep -Milliseconds 800
+          $legacy.Refresh()
+          if(-not $legacy.HasExited){Stop-Process -Id $legacy.Id -Force -ErrorAction SilentlyContinue; throw 'Legacy alpha4 process was not terminated'}
+
+          foreach($f in @($installedExe,$desktop,$startMenu)){if(-not(Test-Path $f)){throw "Missing $f"}}
+          $runValue=(Get-ItemProperty -Path $runKey -Name 'PiiWii Remote Agent').'PiiWii Remote Agent'
+          $expected='"'+$installedExe+'" --background'
+          if($runValue -ne $expected){throw "Run migration failed. Expected [$expected], got [$runValue]"}
+          if($runValue -match 'alpha4|beta4'){throw 'Legacy startup reference remained'}
+
+          $ws=New-Object -ComObject WScript.Shell
+          foreach($lnk in @($desktop,$startMenu)){
+            $sc=$ws.CreateShortcut($lnk)
+            if([IO.Path]::GetFullPath($sc.TargetPath) -ne [IO.Path]::GetFullPath($installedExe)){throw "Wrong shortcut target: $($sc.TargetPath)"}
+          }
+          $v=(Get-Item $installedExe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta5*'){throw "Installed version is not beta5: $($v.ProductVersion)"}
+          $t=Start-Process $installedExe -ArgumentList '--self-test' -Wait -PassThru
+          if($t.ExitCode -ne 0){throw 'Installed beta5 self-test failed'}
+          $r=Start-Process $installedExe -ArgumentList '--reopen-self-test' -Wait -PassThru
+          if($r.ExitCode -ne 0){throw 'Installed beta5 reopen self-test failed'}
+
+          $un=Join-Path $installDir 'unins000.exe'
+          $u=Start-Process $un -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if($u.ExitCode -ne 0){throw 'Uninstall failed'}
+          Start-Sleep -Seconds 1
+          if(Test-Path $desktop){throw 'Desktop shortcut remained'}
+          if(Test-Path $startMenu){throw 'Start Menu shortcut remained'}
+          $remaining=(Get-ItemProperty -Path $runKey -Name 'PiiWii Remote Agent' -ErrorAction SilentlyContinue).'PiiWii Remote Agent'
+          if($remaining){throw "Run value remained after uninstall: $remaining"}
+          'LEGACY ALPHA4 -> BETA5 MIGRATION: OK'
+
+      - name: Windows Defender scan when available
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta5-src\piiwii-remote\windows-agent'
+          $agent=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta5.exe'
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta5.exe'
+          if(Get-Command Start-MpScan -ErrorAction SilentlyContinue){
+            Start-MpScan -ScanType CustomScan -ScanPath $agent
+            Start-MpScan -ScanType CustomScan -ScanPath $setup
+            $detections=Get-MpThreatDetection -ErrorAction SilentlyContinue | Where-Object { $_.Resources -match 'PiiWii-Remote' }
+            if($detections){ $detections | Format-List | Out-String | Write-Host; throw 'Windows Defender reported a PiiWii Remote detection' }
+            'WINDOWS DEFENDER SCAN: no PiiWii Remote detection reported'
+          } else {
+            'WINDOWS DEFENDER SCAN: Start-MpScan unavailable on runner'
+          }
+
+      - name: Package beta5
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta5-src\piiwii-remote\windows-agent'
+          $out=Join-Path $env:RUNNER_TEMP 'piiwii-beta5-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta5.exe') $out
+          Copy-Item (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta5.exe') $out
+          Copy-Item (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') $out
+          @(
+            'PIIWII REMOTE WINDOWS 2.0.0-beta5 UTF-8 AUDIT PASSED',
+            'Baseline: beta4 migration sources preserved',
+            'MSVC explicit /utf-8 source + execution charset: OK',
+            'Source UTF-8 strict decode + mojibake scan: OK',
+            'Compiled UTF-16 UI literals checked in EXE: OK',
+            'Encoding self-test UTF-8 <-> UTF-16: OK',
+            'Legacy alpha4 Run registry value replaced: OK',
+            'Legacy alpha4 process termination: OK',
+            'Canonical install path unchanged: OK',
+            'Desktop + Start Menu shortcuts: OK',
+            'Autostart points to canonical beta5: OK',
+            'Pairing code UI retained: OK',
+            'Single-instance reopen retained: OK',
+            'Agent PE32+ x64 self-test + reopen self-test: OK',
+            'Uninstall removes shortcuts + autostart: OK'
+          ) | Set-Content -Encoding UTF8 (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta5-AUDIT.txt')
+          Compress-Archive -Path (Join-Path $root 'src'),(Join-Path $root 'installer') -DestinationPath (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta5-Sources.zip') -Force
+          Get-ChildItem $out -File | Where-Object {$_.Name -ne 'PiiWii-Remote-Windows-2.0.0-beta5-SHA256.txt'} | ForEach-Object {"$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"} | Set-Content -Encoding ascii (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta5-SHA256.txt')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-2.0.0-beta5-UTF8
+          path: ${{ runner.temp }}\piiwii-beta5-out\*
+          retention-days: 7
+          if-no-files-found: error
