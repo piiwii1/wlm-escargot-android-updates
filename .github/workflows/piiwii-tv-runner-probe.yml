@@ -1,0 +1,18 @@
+name: PiiWii TV runner probe
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/piiwii-tv-runner-probe.yml'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Runner check
+        run: |
+          echo "PiiWii TV public runner probe OK"
+          java -version
