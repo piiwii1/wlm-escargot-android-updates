@@ -1,0 +1,130 @@
+name: PiiWii Remote 2 Lot10 Android Final
+
+on:
+  push:
+    branches: [piiwii-remote-v2-lot10]
+    paths:
+      - '.github/workflows/piiwii-remote-v2-lot10-android-final.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-lot10-final:
+    name: Phone alpha10 + TV alpha5 final
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact Lot 10 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot10-final-src
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > /tmp/lot4.tar.xz
+          tar -xJf /tmp/lot4.tar.xz -C /tmp/piiwii-lot10-final-src
+          ROOT=/tmp/piiwii-lot10-final-src/piiwii-remote
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          base64 -d piiwii-remote-v2-lot5/lot5.patch.xz.b64 | xz -dc > /tmp/lot5.patch
+          (cd "$ROOT" && patch -p2 < /tmp/lot5.patch)
+          cat piiwii-remote-v2-lot6/patch/part_*.b64 | base64 -d | xz -dc > /tmp/lot6.patch
+          (cd "$ROOT" && patch -p2 < /tmp/lot6.patch)
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/piiwii-lot10-final-src/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt')
+          s=p.read_text(encoding='utf-8')
+          old='ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT)'
+          new='android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)'
+          if old in s: p.write_text(s.replace(old,new), encoding='utf-8')
+          PY
+          base64 -d piiwii-remote-v2-lot7/lot7.patch.xz.b64 | xz -dc > /tmp/lot7.patch
+          (cd "$ROOT" && patch -p2 < /tmp/lot7.patch)
+          base64 -d piiwii-remote-v2-lot8/lot8.patch.xz.b64 | xz -dc > /tmp/lot8.patch
+          (cd "$ROOT" && patch -p2 < /tmp/lot8.patch)
+          base64 -d piiwii-remote-v2-lot9/lot9.patch.xz.b64 | xz -dc > /tmp/lot9.patch
+          (cd "$ROOT" && patch -p1 < /tmp/lot9.patch)
+          base64 -d piiwii-remote-v2-lot10/lot10.patch.xz.b64 | xz -dc > /tmp/lot10.patch
+          (cd "$ROOT" && patch -p2 < /tmp/lot10.patch)
+          grep -q 'versionCode = 29' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-alpha10"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 24' "$ROOT/tvreceiver/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-alpha5"' "$ROOT/tvreceiver/build.gradle.kts"
+          grep -q 'GLOBAL_ACTION_POWER_DIALOG' "$ROOT/tvreceiver/src/main/java/ch/piiwii/remote2/tv/accessibility/RemoteAccessibilityService.kt"
+          grep -q 'Menu alimentation non disponible' "$ROOT/tvreceiver/src/main/java/ch/piiwii/remote2/tv/accessibility/RemoteAccessibilityService.kt"
+          grep -q 'Redémarrer le PC ?' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
+          grep -q 'Éteindre le PC ?' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
+          grep -q 'Cette fonction dépend du modèle de télévision' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
+          grep -q 'WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Unit tests and APK build
+        working-directory: /tmp/piiwii-lot10-final-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest :remote:assembleDebug :tvreceiver:assembleDebug
+      - name: Validate and package Android Lot 10 final
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-lot10-final-src/piiwii-remote
+          OUT=/tmp/piiwii-lot10-final-android
+          mkdir -p "$OUT"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-alpha10-CI.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-alpha5-CI.apk"
+          cp "$ROOT/remote/build/outputs/apk/debug/remote-debug.apk" "$PHONE"
+          cp "$ROOT/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk" "$TV"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/TV-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='29' versionName='2.0.0-alpha10'" "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='24' versionName='2.0.0-alpha5'" "$OUT/TV-BADGING.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PHONE-CI-SIGNATURE.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/TV-CI-SIGNATURE.txt"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/TV-ZIPALIGN.txt"
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/TV-ZIPTEST.txt"
+          python - "$PHONE" "$TV" <<'PY'
+          import sys, zipfile
+          checks={
+              sys.argv[1]:[b'POWER_SLEEP',b'POWER_LOCK',b'POWER_RESTART',b'POWER_SHUTDOWN',b'ALIMENTATION'],
+              sys.argv[2]:[b'POWER_SLEEP',b'Menu alimentation non disponible']
+          }
+          for apk, needles in checks.items():
+              with zipfile.ZipFile(apk) as z:
+                  data=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+              missing=[n.decode(errors='ignore') for n in needles if n not in data]
+              if missing: raise SystemExit(f'{apk}: missing DEX markers {missing}')
+          PY
+          cd /tmp/piiwii-lot10-final-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha10-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$PHONE" "$TV" "$OUT/PiiWii-Remote-2.0.0-alpha10-Sources.zip" > "$OUT/CI-SHA256.txt"
+          cat > "$OUT/PiiWii-Remote-2.0.0-alpha10-Lot10-Android-CI.txt" <<'TXT'
+LOT 10 ANDROID FINAL VALIDATED
+Phone ch.piiwii.remote2 2.0.0-alpha10 code 29
+TV ch.piiwii.remote2.tv 2.0.0-alpha5 code 24
+Phone power menu: sleep, lock, restart, shutdown
+Restart/shutdown confirmations compiled
+TV POWER_SLEEP maps in source to GLOBAL_ACTION_POWER_DIALOG
+TV fallback message compiled for unsupported model/permissions
+System bars + display cutout handling retained
+Unit tests, build, aapt, APK signature, zipalign, ZIP and DEX checks passed
+TXT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Android-2.0.0-alpha10-Lot10-Final
+          path: /tmp/piiwii-lot10-final-android/*
+          retention-days: 7
+          if-no-files-found: error
