@@ -35,50 +35,50 @@ jobs:
           s=cpp.read_text(encoding='utf-8-sig').replace('2.0.0-beta1','2.0.0-beta3')
           anchor='''int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR cmdLine, int showCmd) {'''
           helper='''static bool revealExistingAgentWindow() {
-    HWND existing = nullptr;
-    for (int attempt = 0; attempt < 20 && !existing; ++attempt) {
-        existing = FindWindowW(L"PiiWiiRemoteAgentWindow2", nullptr);
-        if (!existing) Sleep(50);
-    }
-    if (!existing) return false;
-    ShowWindow(existing, SW_SHOW);
-    if (IsIconic(existing)) ShowWindow(existing, SW_RESTORE);
-    SetForegroundWindow(existing);
-    FlashWindow(existing, TRUE);
-    return IsWindowVisible(existing) != FALSE;
-}
-
-static LRESULT CALLBACK ReopenTestProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
-}
-
-static bool runReopenSelfTest(HINSTANCE instance) {
-    WNDCLASSW wc{};
-    wc.lpfnWndProc = ReopenTestProc;
-    wc.hInstance = instance;
-    wc.lpszClassName = L"PiiWiiRemoteAgentWindow2";
-    if (!RegisterClassW(&wc)) return false;
-    HWND hwnd = CreateWindowW(wc.lpszClassName, L"PiiWii Remote Agent test", WS_OVERLAPPEDWINDOW, 0, 0, 320, 180, nullptr, nullptr, instance, nullptr);
-    if (!hwnd) { UnregisterClassW(wc.lpszClassName, instance); return false; }
-    ShowWindow(hwnd, SW_HIDE);
-    const bool ok = revealExistingAgentWindow() && IsWindowVisible(hwnd);
-    DestroyWindow(hwnd);
-    UnregisterClassW(wc.lpszClassName, instance);
-    return ok;
-}
-
-'''
+              HWND existing = nullptr;
+              for (int attempt = 0; attempt < 20 && !existing; ++attempt) {
+                  existing = FindWindowW(L"PiiWiiRemoteAgentWindow2", nullptr);
+                  if (!existing) Sleep(50);
+              }
+              if (!existing) return false;
+              ShowWindow(existing, SW_SHOW);
+              if (IsIconic(existing)) ShowWindow(existing, SW_RESTORE);
+              SetForegroundWindow(existing);
+              FlashWindow(existing, TRUE);
+              return IsWindowVisible(existing) != FALSE;
+          }
+          
+          static LRESULT CALLBACK ReopenTestProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+              return DefWindowProcW(hwnd, msg, wParam, lParam);
+          }
+          
+          static bool runReopenSelfTest(HINSTANCE instance) {
+              WNDCLASSW wc{};
+              wc.lpfnWndProc = ReopenTestProc;
+              wc.hInstance = instance;
+              wc.lpszClassName = L"PiiWiiRemoteAgentWindow2";
+              if (!RegisterClassW(&wc)) return false;
+              HWND hwnd = CreateWindowW(wc.lpszClassName, L"PiiWii Remote Agent test", WS_OVERLAPPEDWINDOW, 0, 0, 320, 180, nullptr, nullptr, instance, nullptr);
+              if (!hwnd) { UnregisterClassW(wc.lpszClassName, instance); return false; }
+              ShowWindow(hwnd, SW_HIDE);
+              const bool ok = revealExistingAgentWindow() && IsWindowVisible(hwnd);
+              DestroyWindow(hwnd);
+              UnregisterClassW(wc.lpszClassName, instance);
+              return ok;
+          }
+          
+          '''
           if anchor not in s: raise SystemExit('wWinMain anchor not found')
           s=s.replace(anchor, helper + anchor)
           old='''    gMutex = CreateMutexW(nullptr, TRUE, L"Local\\PiiWiiRemoteAgent2");
-    if (GetLastError() == ERROR_ALREADY_EXISTS && wcsstr(cmdLine, L"--self-test") == nullptr) return 0;'''
+              if (GetLastError() == ERROR_ALREADY_EXISTS && wcsstr(cmdLine, L"--self-test") == nullptr) return 0;'''
           new='''    if (wcsstr(cmdLine, L"--reopen-self-test") != nullptr) return runReopenSelfTest(hInstance) ? 0 : 11;
-    gMutex = CreateMutexW(nullptr, TRUE, L"Local\\PiiWiiRemoteAgent2");
-    if (GetLastError() == ERROR_ALREADY_EXISTS && wcsstr(cmdLine, L"--self-test") == nullptr) {
-        const bool reopened = revealExistingAgentWindow();
-        if (gMutex) CloseHandle(gMutex);
-        return reopened ? 0 : 12;
-    }'''
+              gMutex = CreateMutexW(nullptr, TRUE, L"Local\\PiiWiiRemoteAgent2");
+              if (GetLastError() == ERROR_ALREADY_EXISTS && wcsstr(cmdLine, L"--self-test") == nullptr) {
+                  const bool reopened = revealExistingAgentWindow();
+                  if (gMutex) CloseHandle(gMutex);
+                  return reopened ? 0 : 12;
+              }'''
           if old not in s: raise SystemExit('single-instance block not found')
           s=s.replace(old,new)
           s=s.replace('''            if (lParam == WM_LBUTTONDBLCLK) {\n                ShowWindow(hwnd, SW_RESTORE);''','''            if (lParam == WM_LBUTTONUP || lParam == WM_LBUTTONDBLCLK) {\n                ShowWindow(hwnd, SW_RESTORE);''')
@@ -140,8 +140,8 @@ static bool runReopenSelfTest(HINSTANCE instance) {
           $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta3.exe'
           $installDir=Join-Path $env:LOCALAPPDATA 'Programs\PiiWii Remote Agent'
           $installedExe=Join-Path $installDir 'PiiWii-Remote-Agent.exe'
-          $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'PiiWii Remote Agent.lnk'
-          $startMenu=Join-Path ([Environment]::GetFolderPath('Programs')) 'PiiWii Remote Agent.lnk'
+          $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'PiWii Remote Agent.lnk'
+          $startMenu=Join-Path ([Environment]::GetFolderPath('Programs')) 'PiWii Remote Agent.lnk'
           $p=Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
           if($p.ExitCode -ne 0){throw 'Install failed'}
           foreach($f in @($installedExe,$desktop,$startMenu)){if(-not(Test-Path $f)){throw "Missing $f"}}
@@ -160,7 +160,7 @@ static bool runReopenSelfTest(HINSTANCE instance) {
           Start-Sleep -Seconds 1
           if(Test-Path $desktop){throw 'Desktop shortcut remained'}
           if(Test-Path $startMenu){throw 'Start Menu shortcut remained'}
-          'SHORTCUT TARGET + REOPEN SELF-TEST + UNINSTALL: OK'
+          'SHORTCUT TARGET + REOPEN SELF-TEST + UNINSTALLO OK'
 
       - name: Package output
         shell: pwsh
@@ -177,6 +177,6 @@ static bool runReopenSelfTest(HINSTANCE instance) {
       - uses: actions/upload-artifact@v4
         with:
           name: PiiWii-Remote-Windows-2.0.0-beta3-Reopen
-          path: ${{ runner.temp }}\piiwii-beta3-out\*
+          path: ${{ runner.temp }}\piiwii-beta3-out\\iwi
           retention-days: 7
           if-no-files-found: error
