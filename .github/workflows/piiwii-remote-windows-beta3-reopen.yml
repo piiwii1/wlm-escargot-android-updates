@@ -70,10 +70,10 @@ jobs:
           '''
           if anchor not in s: raise SystemExit('wWinMain anchor not found')
           s=s.replace(anchor, helper + anchor)
-          old='''    gMutex = CreateMutexW(nullptr, TRUE, L"Local\\PiiWiiRemoteAgent2");
+          old='''    gMutex = CreateMutexW(nullptr, TRUE, L"Local\\\\PiiWiiRemoteAgent2");
               if (GetLastError() == ERROR_ALREADY_EXISTS && wcsstr(cmdLine, L"--self-test") == nullptr) return 0;'''
           new='''    if (wcsstr(cmdLine, L"--reopen-self-test") != nullptr) return runReopenSelfTest(hInstance) ? 0 : 11;
-              gMutex = CreateMutexW(nullptr, TRUE, L"Local\\PiiWiiRemoteAgent2");
+              gMutex = CreateMutexW(nullptr, TRUE, L"Local\\\\PiiWiiRemoteAgent2");
               if (GetLastError() == ERROR_ALREADY_EXISTS && wcsstr(cmdLine, L"--self-test") == nullptr) {
                   const bool reopened = revealExistingAgentWindow();
                   if (gMutex) CloseHandle(gMutex);
@@ -140,8 +140,8 @@ jobs:
           $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta3.exe'
           $installDir=Join-Path $env:LOCALAPPDATA 'Programs\PiiWii Remote Agent'
           $installedExe=Join-Path $installDir 'PiiWii-Remote-Agent.exe'
-          $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'PiWii Remote Agent.lnk'
-          $startMenu=Join-Path ([Environment]::GetFolderPath('Programs')) 'PiWii Remote Agent.lnk'
+          $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'PiiWii Remote Agent.lnk'
+          $startMenu=Join-Path ([Environment]::GetFolderPath('Programs')) 'PiiWii Remote Agent.lnk'
           $p=Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
           if($p.ExitCode -ne 0){throw 'Install failed'}
           foreach($f in @($installedExe,$desktop,$startMenu)){if(-not(Test-Path $f)){throw "Missing $f"}}
@@ -160,7 +160,7 @@ jobs:
           Start-Sleep -Seconds 1
           if(Test-Path $desktop){throw 'Desktop shortcut remained'}
           if(Test-Path $startMenu){throw 'Start Menu shortcut remained'}
-          'SHORTCUT TARGET + REOPEN SELF-TEST + UNINSTALLO OK'
+          'SHORTCUT TARGET + REOPEN SELF-TEST + UNINSTALL: OK'
 
       - name: Package output
         shell: pwsh
@@ -177,6 +177,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: PiiWii-Remote-Windows-2.0.0-beta3-Reopen
-          path: ${{ runner.temp }}\piiwii-beta3-out\\iwi
+          path: ${{ runner.temp }}\piiwii-beta3-out\*
           retention-days: 7
           if-no-files-found: error
