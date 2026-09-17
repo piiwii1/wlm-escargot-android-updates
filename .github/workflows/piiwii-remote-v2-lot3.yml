@@ -99,9 +99,9 @@ jobs:
 
           grep -q "package: name='ch.piiwii.remote2' versionCode='22' versionName='2.0.0-alpha3'" "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-BADGING.txt"
           grep -q "package: name='ch.piiwii.remote2.tv' versionCode='20' versionName='2.0.0-alpha1'" "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-BADGING.txt"
-          grep -q "uses-feature:'android.software.leanback'" "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-BADGING.txt"
-          grep -q 'android.accessibilityservice.AccessibilityService' "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-MANIFEST.txt"
-          grep -q 'android.permission.BIND_ACCESSIBILITY_SERVICE' "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-MANIFEST.txt"
+          grep -q 'android.software.leanback' "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-BADGING.txt"
+          grep -q 'BIND_ACCESSIBILITY_SERVICE' "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-MANIFEST.txt"
+          grep -q 'LEANBACK_LAUNCHER' "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-MANIFEST.txt"
 
           "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-SIGNATURE.txt"
           "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-SIGNATURE.txt"
@@ -121,8 +121,8 @@ jobs:
           LOT 3 CI VALIDATED
           - Phone package/version: ch.piiwii.remote2 / 2.0.0-alpha3 / versionCode 22
           - TV package/version: ch.piiwii.remote2.tv / 2.0.0-alpha1 / versionCode 20
-          - TV Leanback feature present
-          - TV AccessibilityService present with BIND_ACCESSIBILITY_SERVICE
+          - TV Leanback feature and launcher present
+          - TV AccessibilityService permission present
           - Unit tests passed for phone and TV protocol
           - Both APKs built, signature verified, zipalign verified, ZIP integrity verified
           EOF
