@@ -1,0 +1,111 @@
+name: PiiWii Remote 2 Lot4 Clean Android
+
+on:
+  push:
+    branches:
+      - piiwii-remote-v2-lot4-clean
+    paths:
+      - 'piiwii-remote-v2-lot4/overlay/**'
+      - '.github/workflows/piiwii-remote-v2-lot4-clean-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-lot4-clean:
+    name: Phone alpha4 clean + TV regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct Lot 4 source and apply clean UI overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot4-src
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > /tmp/piiwii-lot4.tar.xz
+          echo '9ae6dfa09c88638c4554c961c7990d55e6d644bfe08bffa46214c7f7b0b4967a  /tmp/piiwii-lot4.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/piiwii-lot4.tar.xz -C /tmp/piiwii-lot4-src
+          ROOT=/tmp/piiwii-lot4-src/piiwii-remote
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q 'versionCode = 23' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-alpha4"' "$ROOT/remote/build.gradle.kts"
+          grep -R -q 'POINTER_MOVE' "$ROOT/remote/src/main/java"
+          grep -R -q 'POINTER_SCROLL' "$ROOT/remote/src/main/java"
+          grep -R -q 'POINTER_DOUBLE_CLICK' "$ROOT/remote/src/main/java"
+          grep -R -q 'POINTER_RIGHT_CLICK' "$ROOT/remote/src/main/java"
+          ! grep -q 'showTouchpadSettings' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          grep -q 'réservés au Lot 9' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Test and build
+        working-directory: /tmp/piiwii-lot4-src/piiwii-remote
+        run: |
+          gradle --no-daemon :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest
+          gradle --no-daemon :remote:assembleDebug :tvreceiver:assembleDebug
+
+      - name: Validate and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-lot4-src/piiwii-remote
+          OUT=/tmp/piiwii-lot4-clean
+          mkdir -p "$OUT"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-alpha4.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-alpha1.apk"
+          cp "$ROOT/remote/build/outputs/apk/debug/remote-debug.apk" "$PHONE"
+          cp "$ROOT/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk" "$TV"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/TV-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='23' versionName='2.0.0-alpha4'" "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='20' versionName='2.0.0-alpha1'" "$OUT/TV-BADGING.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PHONE-SIGNATURE.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/TV-SIGNATURE.txt"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/TV-ZIPALIGN.txt"
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/TV-ZIPTEST.txt"
+          cd /tmp/piiwii-lot4-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha4-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$PHONE" "$TV" "$OUT/PiiWii-Remote-2.0.0-alpha4-Sources.zip" > "$OUT/PiiWii-Remote-Android-Lot4-Clean-SHA256.txt"
+          cat > "$OUT/PiiWii-Remote-2.0.0-alpha4-Lot4-Clean-CI.txt" <<'EOF'
+          LOT 4 CLEAN ANDROID CI VALIDATED
+          - Phone 2.0.0-alpha4 / versionCode 23 / ch.piiwii.remote2
+          - TV regression 2.0.0-alpha1 / versionCode 20 / ch.piiwii.remote2.tv
+          - PC touchpad commands: move, left click, double click, long-press right click, two-finger vertical scroll
+          - Advanced user-facing touchpad settings are NOT exposed; reserved for Lot 9
+          - Keyboard remains reserved for Lot 5
+          - Unit tests, APK builds, signatures, zipalign and ZIP integrity passed
+          EOF
+
+      - name: Upload clean Lot 4 Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Android-2.0.0-alpha4-Lot4-Clean
+          path: /tmp/piiwii-lot4-clean/*
+          retention-days: 7
+          if-no-files-found: error
