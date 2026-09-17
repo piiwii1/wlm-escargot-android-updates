@@ -1,4 +1,4 @@
-name: PiiWii TV runner probe
+name: PiiWii TV Android toolchain export
 
 on:
   push:
@@ -8,11 +8,95 @@ on:
   workflow_dispatch:
 
 jobs:
-  probe:
+  export-toolchain:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 20
     steps:
-      - name: Runner check
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Prime exact Android dependencies
+        shell: bash
         run: |
-          echo "PiiWii TV public runner probe OK"
-          java -version
+          set -euo pipefail
+          ROOT=/tmp/piiwii-prime
+          mkdir -p "$ROOT/app/src/main/java/probe" "$ROOT/app/src/main"
+          cat > "$ROOT/settings.gradle" <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name='PiiWiiToolchainProbe'
+          include ':app'
+          EOF
+          cat > "$ROOT/build.gradle" <<'EOF'
+          plugins { id 'com.android.application' version '8.7.3' apply false }
+          EOF
+          cat > "$ROOT/gradle.properties" <<'EOF'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          EOF
+          cat > "$ROOT/app/build.gradle" <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+            namespace 'probe.toolchain'
+            compileSdk 35
+            defaultConfig { applicationId 'probe.toolchain'; minSdk 21; targetSdk 35; versionCode 1; versionName '1' }
+            compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+          }
+          dependencies {
+            implementation 'androidx.media3:media3-exoplayer:1.7.1'
+            implementation 'androidx.media3:media3-exoplayer-hls:1.7.1'
+            implementation 'androidx.media3:media3-ui:1.7.1'
+          }
+          EOF
+          cat > "$ROOT/app/src/main/AndroidManifest.xml" <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@android:style/Theme.Material.Light.NoActionBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
+          EOF
+          cat > "$ROOT/app/src/main/java/probe/MainActivity.java" <<'EOF'
+          package probe; public class MainActivity extends android.app.Activity { @Override public void onCreate(android.os.Bundle b){ super.onCreate(b); } }
+          EOF
+          gradle -p "$ROOT" --no-daemon assembleDebug
+
+      - name: Package offline toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/piiwii-toolchain
+          rm -rf "$OUT"
+          mkdir -p "$OUT/gradle" "$OUT/android-sdk/platforms" "$OUT/android-sdk/build-tools" "$OUT/android-sdk/platform-tools" "$OUT/android-sdk/licenses" "$OUT/gradle-user-home"
+          GRADLE_BIN=$(command -v gradle)
+          GRADLE_HOME=$(dirname "$(dirname "$(readlink -f "$GRADLE_BIN")")")
+          cp -a "$GRADLE_HOME"/. "$OUT/gradle/"
+          cp -a "$ANDROID_HOME/platforms/android-35" "$OUT/android-sdk/platforms/"
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" "$OUT/android-sdk/build-tools/"
+          cp -a "$ANDROID_HOME/platform-tools"/. "$OUT/android-sdk/platform-tools/"
+          cp -a "$ANDROID_HOME/licenses"/. "$OUT/android-sdk/licenses/"
+          cp -a "$HOME/.gradle/caches" "$OUT/gradle-user-home/"
+          if [ -d "$HOME/.gradle/native" ]; then cp -a "$HOME/.gradle/native" "$OUT/gradle-user-home/"; fi
+          du -sh "$OUT" "$OUT/gradle" "$OUT/android-sdk" "$OUT/gradle-user-home" || true
+          tar -C /tmp -I 'zstd -10 -T0' -cf /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst piiwii-toolchain
+          ls -lh /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst
+          sha256sum /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst > /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
+
+      - name: Upload offline toolchain
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Android-Toolchain-Gradle8.9-SDK35
+          path: |
+            /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst
+            /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
+          retention-days: 1
+          if-no-files-found: error
