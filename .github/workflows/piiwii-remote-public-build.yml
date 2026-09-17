@@ -15,6 +15,9 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
+      - name: Apply 1.2.0 compile fix
+        run: |
+          sed -i 's/private TextView label(String s)/private TextView caption(String s)/g; s/addView(label(/addView(caption(/g' piiwii-remote/remote/src/main/java/ch/piiwii/remote/MainActivity.java
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -45,6 +48,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Apply 1.2.0 compile fix
+        run: |
+          sed -i 's/private TextView label(String s)/private TextView caption(String s)/g; s/addView(label(/addView(caption(/g' piiwii-remote/remote/src/main/java/ch/piiwii/remote/MainActivity.java
       - name: Package sources
         run: |
           zip -r PiiWii-Remote-Sources-1.2.0.zip piiwii-remote -x '*/build/*' '*/.gradle/*'
