@@ -1,0 +1,135 @@
+name: PiiWii Remote 2 Lot6 Android Final
+
+on:
+  push:
+    branches: [piiwii-remote-v2-lot6]
+    paths:
+      - '.github/workflows/piiwii-remote-v2-lot6-android-final.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-lot6-final:
+    name: Phone alpha6 + TV alpha3 final
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and fix exact Lot 6 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot6-src
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > /tmp/piiwii-lot4.tar.xz
+          echo '9ae6dfa09c88638c4554c961c7990d55e6d644bfe08bffa46214c7f7b0b4967a  /tmp/piiwii-lot4.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/piiwii-lot4.tar.xz -C /tmp/piiwii-lot6-src
+          ROOT=/tmp/piiwii-lot6-src/piiwii-remote
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          base64 -d piiwii-remote-v2-lot5/lot5.patch.xz.b64 > /tmp/lot5.patch.xz
+          echo '884ba0cae2b8ec81cbba2335446df854b72eb565f71173dd5abb2ae9acf060d8  /tmp/lot5.patch.xz' | sha256sum -c -
+          xz -dc /tmp/lot5.patch.xz > /tmp/lot5.patch
+          echo 'd8af319c66acd61047049135e69651511b5d03c86571cc0b4deec0dc36b93d5a  /tmp/lot5.patch' | sha256sum -c -
+          cd "$ROOT" && patch -p2 < /tmp/lot5.patch
+          cd "$GITHUB_WORKSPACE"
+          cat piiwii-remote-v2-lot6/patch/part_*.b64 | base64 -d > /tmp/lot6.patch.xz
+          echo '4631bd57b7c5168643ffe10414f2800ac5378a415c714449ca52540023120780  /tmp/lot6.patch.xz' | sha256sum -c -
+          xz -dc /tmp/lot6.patch.xz > /tmp/lot6.patch
+          echo 'd0c6547d2ef30583d36f37abe2658d903e8f1c9791f53fae58671b59b2a89316  /tmp/lot6.patch' | sha256sum -c -
+          cd "$ROOT" && patch -p2 < /tmp/lot6.patch
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/piiwii-lot6-src/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt')
+          s = p.read_text()
+          old = 'ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT)'
+          new = 'android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)'
+          if old not in s:
+              raise SystemExit('expected LayoutParams expression not found')
+          p.write_text(s.replace(old, new))
+          PY
+          grep -q 'versionCode = 25' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha6"' remote/build.gradle.kts
+          grep -q 'versionCode = 22' tvreceiver/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha3"' tvreceiver/build.gradle.kts
+          grep -R -q 'APP_LIST_REQUEST' remote/src/main/java tvreceiver/src/main/java
+          grep -R -q 'APP_LIST_RESPONSE' remote/src/main/java tvreceiver/src/main/java
+          grep -R -q 'APP_LAUNCH' remote/src/main/java tvreceiver/src/main/java
+          grep -q 'ch.piiwii.tv' tvreceiver/src/main/AndroidManifest.xml
+          grep -q 'getLeanbackLaunchIntentForPackage' tvreceiver/src/main/java/ch/piiwii/remote2/tv/apps/TvAppCatalog.kt
+          ! grep -R -q 'RemoteCommand.APP_CUSTOM ->' remote/src/main/java tvreceiver/src/main/java
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Unit tests and APK build
+        working-directory: /tmp/piiwii-lot6-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest :remote:assembleDebug :tvreceiver:assembleDebug
+      - name: Validate and package Android Lot 6
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-lot6-src/piiwii-remote
+          OUT=/tmp/piiwii-lot6-android
+          mkdir -p "$OUT"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-alpha6.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-alpha3.apk"
+          cp "$ROOT/remote/build/outputs/apk/debug/remote-debug.apk" "$PHONE"
+          cp "$ROOT/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk" "$TV"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/TV-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='25' versionName='2.0.0-alpha6'" "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='22' versionName='2.0.0-alpha3'" "$OUT/TV-BADGING.txt"
+          "$AAPT" dump xmltree "$TV" AndroidManifest.xml > "$OUT/TV-MANIFEST.txt"
+          grep -q 'ch.piiwii.tv' "$OUT/TV-MANIFEST.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PHONE-SIGNATURE.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/TV-SIGNATURE.txt"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/TV-ZIPALIGN.txt"
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/TV-ZIPTEST.txt"
+          python - "$PHONE" "$TV" <<'PY'
+          import sys, zipfile
+          checks = {
+              sys.argv[1]: [b'APP_LIST_REQUEST', b'APP_LIST_RESPONSE', b'APP_LAUNCH', b'Actualiser'],
+              sys.argv[2]: [b'APP_LIST_REQUEST', b'APP_LIST_RESPONSE', b'APP_LAUNCH', b'ch.piiwii.tv', b'com.netflix.ninja', b'org.xbmc.kodi'],
+          }
+          for apk, needles in checks.items():
+              with zipfile.ZipFile(apk) as z:
+                  data = b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+              missing = [x.decode() for x in needles if x not in data]
+              if missing: raise SystemExit(f'{apk}: missing DEX markers: {missing}')
+          PY
+          sha256sum "$PHONE" "$TV" > "$OUT/PiiWii-Remote-Android-Lot6-SHA256.txt"
+          cd /tmp/piiwii-lot6-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha6-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-alpha6-Sources.zip" >> "$OUT/PiiWii-Remote-Android-Lot6-SHA256.txt"
+          cat > "$OUT/PiiWii-Remote-2.0.0-alpha6-Lot6-Android-CI.txt" <<'EOF'
+          LOT 6 ANDROID FINAL VALIDATED
+          Phone: ch.piiwii.remote2 / 2.0.0-alpha6 / versionCode 25
+          TV: ch.piiwii.remote2.tv / 2.0.0-alpha3 / versionCode 22
+          APP_LIST_REQUEST / APP_LIST_RESPONSE / APP_LAUNCH compiled
+          Phone grid displays only list returned by target
+          Android TV PackageManager catalog includes PiiWii TV and supported apps
+          Launch uses real Leanback/standard launchIntent; browser uses ACTION_VIEW
+          Unit tests, build, aapt, apksigner, zipalign, ZIP and DEX checks passed
+          Lot 7 APP_CUSTOM remains inactive
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Android-2.0.0-alpha6-Lot6-Final
+          path: /tmp/piiwii-lot6-android/*
+          retention-days: 7
+          if-no-files-found: error
