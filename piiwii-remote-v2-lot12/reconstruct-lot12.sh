@@ -34,7 +34,7 @@ base64 -d piiwii-remote-v2-lot10/lot10.patch.xz.b64 | xz -dc > "$TMP/lot10.patch
 base64 -d piiwii-remote-v2-lot11/lot11.patch.xz.b64 | xz -dc > "$TMP/lot11.patch"
 (cd "$ROOT" && patch -p2 < "$TMP/lot11.patch")
 
-cat piiwii-remote-v2-lot12/patch/part_*.b64 | base64 -d > "$TMP/lot12.patch.xz"
+cat piiwii-remote-v2-lot12/patch/part_*.b64 | tr -d '\r\n' | base64 -d > "$TMP/lot12.patch.xz"
 echo "e4581fc1311caafba80e4a2d48f50c2aab5a7979039049d050a9b756b11b2b50  $TMP/lot12.patch.xz" | sha256sum -c -
 xz -dc "$TMP/lot12.patch.xz" > "$TMP/lot12.patch"
 echo "86668589bbd0de476f94afc1e02a526ab5e2be2b3a0bfb089a7ab683bdf35f93  $TMP/lot12.patch" | sha256sum -c -
