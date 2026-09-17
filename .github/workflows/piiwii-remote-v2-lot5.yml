@@ -1,0 +1,203 @@
+name: PiiWii Remote 2 Lot5
+
+on:
+  push:
+    branches: [piiwii-remote-v2-lot5]
+    paths:
+      - 'piiwii-remote-v2-lot5/**'
+      - '.github/workflows/piiwii-remote-v2-lot5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-lot5:
+    name: Phone alpha5 + TV alpha2 keyboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct clean Lot 4 and apply Lot 5 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot5-src
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > /tmp/piiwii-lot4.tar.xz
+          echo '9ae6dfa09c88638c4554c961c7990d55e6d644bfe08bffa46214c7f7b0b4967a  /tmp/piiwii-lot4.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/piiwii-lot4.tar.xz -C /tmp/piiwii-lot5-src
+          ROOT=/tmp/piiwii-lot5-src/piiwii-remote
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          base64 -d piiwii-remote-v2-lot5/lot5.patch.xz.b64 > /tmp/lot5.patch.xz
+          echo '884ba0cae2b8ec81cbba2335446df854b72eb565f71173dd5abb2ae9acf060d8  /tmp/lot5.patch.xz' | sha256sum -c -
+          xz -dc /tmp/lot5.patch.xz > /tmp/lot5.patch
+          echo 'd8af319c66acd61047049135e69651511b5d03c86571cc0b4deec0dc36b93d5a  /tmp/lot5.patch' | sha256sum -c -
+          cd "$ROOT"
+          patch -p2 < /tmp/lot5.patch
+          grep -q 'versionCode = 24' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha5"' remote/build.gradle.kts
+          grep -q 'versionCode = 21' tvreceiver/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha2"' tvreceiver/build.gradle.kts
+          grep -R -q 'KEYBOARD_ESCAPE' remote/src/main/java tvreceiver/src/main/java
+          grep -R -q 'KEYBOARD_TAB' remote/src/main/java tvreceiver/src/main/java
+          grep -q 'SendInput' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'sendUnicodeText' windows-agent/src/PiiWiiRemoteAgent.cpp
+          ! grep -R -q 'APP_LAUNCH.*perform\|APP_CUSTOM.*perform' remote/src/main/java tvreceiver/src/main/java || exit 1
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          set -e
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests
+        working-directory: /tmp/piiwii-lot5-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest
+
+      - name: Build phone and TV APKs
+        working-directory: /tmp/piiwii-lot5-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:assembleDebug :tvreceiver:assembleDebug
+
+      - name: Validate and package Android Lot 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-lot5-src/piiwii-remote
+          OUT=/tmp/piiwii-lot5-android
+          mkdir -p "$OUT"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-alpha5.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-alpha2.apk"
+          cp "$ROOT/remote/build/outputs/apk/debug/remote-debug.apk" "$PHONE"
+          cp "$ROOT/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk" "$TV"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/TV-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='24' versionName='2.0.0-alpha5'" "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='21' versionName='2.0.0-alpha2'" "$OUT/TV-BADGING.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PHONE-SIGNATURE.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/TV-SIGNATURE.txt"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/TV-ZIPALIGN.txt"
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/TV-ZIPTEST.txt"
+          unzip -p "$PHONE" classes.dex | strings | grep -q 'KEYBOARD_TEXT'
+          unzip -p "$PHONE" classes.dex | strings | grep -q 'KEYBOARD_ESCAPE'
+          unzip -p "$TV" classes.dex | strings | grep -q 'KEYBOARD_TEXT'
+          grep -R -q 'ACTION_IME_ENTER' "$ROOT/tvreceiver/src/main/java"
+          sha256sum "$PHONE" "$TV" > "$OUT/PiiWii-Remote-Android-Lot5-SHA256.txt"
+          cd /tmp/piiwii-lot5-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha5-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-alpha5-Sources.zip" >> "$OUT/PiiWii-Remote-Android-Lot5-SHA256.txt"
+          cat > "$OUT/PiiWii-Remote-2.0.0-alpha5-Lot5-Android-CI.txt" <<'EOF'
+          LOT 5 ANDROID CI VALIDATED
+          Phone: ch.piiwii.remote2 / 2.0.0-alpha5 / versionCode 24
+          TV: ch.piiwii.remote2.tv / 2.0.0-alpha2 / versionCode 21
+          Keyboard UI: open keyboard, text field, send, Enter, Backspace, Escape, Tab
+          UTF-8/Base64 round-trip tests include accents, pipe and emoji
+          TV accessibility: ACTION_SET_TEXT, Unicode-safe Backspace, ACTION_IME_ENTER when exposed
+          Unit tests, build, aapt, apksigner, zipalign and ZIP integrity passed
+          Lot 6 application launching remains inactive
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Android-2.0.0-alpha5-Lot5
+          path: /tmp/piiwii-lot5-android/*
+          retention-days: 7
+          if-no-files-found: error
+
+  windows-lot5:
+    name: Windows Agent alpha3 keyboard
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct clean Lot 4 and apply Lot 5 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          mkdir -p "$BASE/piiwii-lot5-src"
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > "$BASE/piiwii-lot4.tar.xz"
+          echo "9ae6dfa09c88638c4554c961c7990d55e6d644bfe08bffa46214c7f7b0b4967a  $BASE/piiwii-lot4.tar.xz" | sha256sum -c -
+          tar -xJf "$BASE/piiwii-lot4.tar.xz" -C "$BASE/piiwii-lot5-src"
+          ROOT="$BASE/piiwii-lot5-src/piiwii-remote"
+          cp piiwii-remote-v2-lot4/overlay/MainActivity.kt "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          base64 -d piiwii-remote-v2-lot5/lot5.patch.xz.b64 > "$BASE/lot5.patch.xz"
+          echo "884ba0cae2b8ec81cbba2335446df854b72eb565f71173dd5abb2ae9acf060d8  $BASE/lot5.patch.xz" | sha256sum -c -
+          xz -dc "$BASE/lot5.patch.xz" > "$BASE/lot5.patch"
+          cd "$ROOT"
+          patch -p2 < "$BASE/lot5.patch"
+          grep -q '2.0.0-alpha3' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'KEYBOARD_TEXT' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'KEYBOARD_ENTER' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'KEYBOARD_BACKSPACE' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'KEYBOARD_ESCAPE' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'KEYBOARD_TAB' windows-agent/src/PiiWiiRemoteAgent.cpp
+          grep -q 'KEYEVENTF_UNICODE' windows-agent/src/PiiWiiRemoteAgent.cpp
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile native x64 agent
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-lot5-src\piiwii-remote\windows-agent
+        run: |
+          rc /nologo /fo PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp PiiWiiRemoteAgent.res gdi32.lib /link /SUBSYSTEM:WINDOWS /OUT:PiiWii-Remote-Agent-2.0.0-alpha3.exe
+
+      - name: Run self-test
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'piiwii-lot5-src\piiwii-remote\windows-agent\PiiWii-Remote-Agent-2.0.0-alpha3.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "self-test failed: $($p.ExitCode)" }
+
+      - name: Validate and package Windows Lot 5
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'piiwii-lot5-src\piiwii-remote\windows-agent'
+          $exe = Join-Path $root 'PiiWii-Remote-Agent-2.0.0-alpha3.exe'
+          $headers = & dumpbin /headers $exe | Out-String
+          if ($headers -notmatch 'machine \(x64\)' -and $headers -notmatch '8664 machine') { throw 'not x64' }
+          if ($headers -notmatch 'PE32\+') { throw 'not PE32+' }
+          $vi = (Get-Item $exe).VersionInfo
+          if ($vi.ProductVersion -notlike '2.0.0-alpha3*') { throw "bad version $($vi.ProductVersion)" }
+          $out = Join-Path $env:RUNNER_TEMP 'piiwii-lot5-windows'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item $exe (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha3.exe')
+          $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower()
+          "$hash  PiiWii-Remote-Agent-2.0.0-alpha3.exe" | Set-Content (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha3-SHA256.txt')
+          @"
+          LOT 5 WINDOWS CI VALIDATED
+          Native Win32 x64 / PE32+
+          ProductVersion 2.0.0-alpha3
+          Self-test passed
+          KEYBOARD_TEXT uses SendInput + KEYEVENTF_UNICODE
+          Enter / Backspace / Escape / Tab mappings validated
+          UTF-8/Base64 self-test includes accents, pipe and emoji
+          "@ | Set-Content (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha3-CI.txt')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-Agent-2.0.0-alpha3-Lot5
+          path: ${{ runner.temp }}\piiwii-lot5-windows\*
+          retention-days: 7
+          if-no-files-found: error
