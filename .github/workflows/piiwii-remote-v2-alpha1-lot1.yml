@@ -1,0 +1,110 @@
+name: PiiWii Remote 2.0.0 alpha1 Lot1
+
+on:
+  push:
+    branches:
+      - piiwii-remote-v2-alpha1-lot1
+    paths:
+      - 'piiwii-remote-v2-lot1/source.tar.xz'
+      - '.github/workflows/piiwii-remote-v2-alpha1-lot1.yml'
+  workflow_dispatch:
+
+jobs:
+  build-phone-lot1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct fresh source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/src
+          tar -xJf piiwii-remote-v2-lot1/source.tar.xz -C /tmp/src
+          test -f /tmp/src/piiwii-remote/settings.gradle.kts
+          test -f /tmp/src/piiwii-remote/remote/build.gradle.kts
+          grep -q 'applicationId = "ch.piiwii.remote2"' /tmp/src/piiwii-remote/remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-alpha1"' /tmp/src/piiwii-remote/remote/build.gradle.kts
+          grep -q 'versionCode = 20' /tmp/src/piiwii-remote/remote/build.gradle.kts
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Run protocol tests
+        working-directory: /tmp/src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest
+
+      - name: Build signed debug APK
+        working-directory: /tmp/src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:assembleDebug
+
+      - name: Validate and prepare delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/out
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-alpha1.apk"
+          mkdir -p "$OUT"
+          cp /tmp/src/piiwii-remote/remote/build/outputs/apk/debug/remote-debug.apk "$APK"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='20' versionName='2.0.0-alpha1'" "$OUT/BADGING.txt"
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" > "$OUT/SIGNATURE.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          unzip -t "$APK" > "$OUT/ZIP-TEST.txt"
+
+          cd /tmp/src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha1-Sources.zip" piiwii-remote \
+            -x '*/build/*' '*/.gradle/*'
+
+          cat > "$OUT/README-Lot1.txt" <<'EOF'
+          PiiWii Remote 2.0.0-alpha1 — Lot 1
+          Package: ch.piiwii.remote2
+          versionCode: 20
+          Protocol: PIIWII_REMOTE/1
+
+          Nouvelle base créée indépendamment de PiiWii Remote 1.x.
+          Lot 1 livré: architecture, interface téléphone, 4 onglets, barre supérieure,
+          gestion persistante des appareils, protocole centralisé et transport UDP de base.
+          Agent Windows et Android TV Receiver non développés dans ce lot.
+          EOF
+
+          cd "$OUT"
+          sha256sum PiiWii-Remote-Phone-2.0.0-alpha1.apk PiiWii-Remote-2.0.0-alpha1-Sources.zip > SHA256.txt
+
+          mkdir -p /tmp/pack
+          cp PiiWii-Remote-Phone-2.0.0-alpha1.apk \
+             PiiWii-Remote-2.0.0-alpha1-Sources.zip \
+             README-Lot1.txt SHA256.txt BADGING.txt SIGNATURE.txt ZIPALIGN.txt ZIP-TEST.txt /tmp/pack/
+          cd /tmp/pack
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha1-Lot1-Pack.zip" .
+          cd "$OUT"
+          sha256sum PiiWii-Remote-2.0.0-alpha1-Lot1-Pack.zip >> SHA256.txt
+          cat SHA256.txt
+
+      - name: Upload Lot 1 delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-2.0.0-alpha1-Lot1
+          path: /tmp/out/*
+          retention-days: 7
+          if-no-files-found: error
