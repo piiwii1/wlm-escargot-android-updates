@@ -31,7 +31,7 @@ jobs:
           mkdir -p "$ROOT/windows-agent/installer"
           cp piiwii-remote-v2-windows-beta4/PiiWiiRemoteAgent.iss "$ROOT/windows-agent/installer/"
           grep -q '2.0.0-beta4' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
-          grep -q 'Code d.appairage' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'pairingCode()' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
           grep -q 'revealExistingAgentWindow' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
           grep -q 'FILEVERSION 2,0,0,11' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc"
           grep -q 'RegDeleteValue' "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss"
