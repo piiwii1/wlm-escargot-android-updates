@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct Lot 2 clean source
+      - name: Reconstruct and patch Lot 2 source
         shell: bash
         run: |
           set -euo pipefail
@@ -30,9 +30,14 @@ jobs:
           echo 'd1f98dd5c1d04e95462742796f49020cb7ec08c73a05ca91aa1bcad2e929509d  /tmp/piiwii-lot2.tar.xz' | sha256sum -c -
           tar -xJf /tmp/piiwii-lot2.tar.xz -C /tmp/piiwii-lot2-src
           test -f /tmp/piiwii-lot2-src/piiwii-remote/settings.gradle.kts
-          grep -q 'applicationId = "ch.piiwii.remote2"' /tmp/piiwii-lot2-src/piiwii-remote/remote/build.gradle.kts
-          grep -q 'versionCode = 21' /tmp/piiwii-lot2-src/piiwii-remote/remote/build.gradle.kts
-          grep -q 'versionName = "2.0.0-alpha2"' /tmp/piiwii-lot2-src/piiwii-remote/remote/build.gradle.kts
+          BUILD_FILE=/tmp/piiwii-lot2-src/piiwii-remote/remote/build.gradle.kts
+          grep -q 'applicationId = "ch.piiwii.remote2"' "$BUILD_FILE"
+          grep -q 'versionCode = 21' "$BUILD_FILE"
+          grep -q 'versionName = "2.0.0-alpha2"' "$BUILD_FILE"
+          if ! grep -q 'buildConfig = true' "$BUILD_FILE"; then
+            sed -i '/^android {/a\    buildFeatures {\n        buildConfig = true\n    }' "$BUILD_FILE"
+          fi
+          grep -q 'buildConfig = true' "$BUILD_FILE"
 
       - name: Setup Java 17
         uses: actions/setup-java@v5
