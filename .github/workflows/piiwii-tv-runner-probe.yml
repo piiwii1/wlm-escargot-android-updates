@@ -11,18 +11,28 @@ jobs:
   export-toolchain:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android platform and build tools
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - name: Use preinstalled Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          echo "SDK manager: $SDKMANAGER"
+          "$SDKMANAGER" --version
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          test -f "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar"
 
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -79,24 +89,25 @@ jobs:
           mkdir -p "$OUT/gradle" "$OUT/android-sdk/platforms" "$OUT/android-sdk/build-tools" "$OUT/android-sdk/platform-tools" "$OUT/android-sdk/licenses" "$OUT/gradle-user-home"
           GRADLE_BIN=$(command -v gradle)
           GRADLE_HOME=$(dirname "$(dirname "$(readlink -f "$GRADLE_BIN")")")
+          echo "Gradle home: $GRADLE_HOME"
           cp -a "$GRADLE_HOME"/. "$OUT/gradle/"
           cp -a "$ANDROID_HOME/platforms/android-35" "$OUT/android-sdk/platforms/"
           cp -a "$ANDROID_HOME/build-tools/35.0.0" "$OUT/android-sdk/build-tools/"
           cp -a "$ANDROID_HOME/platform-tools"/. "$OUT/android-sdk/platform-tools/"
-          cp -a "$ANDROID_HOME/licenses"/. "$OUT/android-sdk/licenses/"
+          cp -a "$ANDROID_HOME/licenses"/. "$OUT/android-sdk/licenses/" || true
           cp -a "$HOME/.gradle/caches" "$OUT/gradle-user-home/"
           if [ -d "$HOME/.gradle/native" ]; then cp -a "$HOME/.gradle/native" "$OUT/gradle-user-home/"; fi
           du -sh "$OUT" "$OUT/gradle" "$OUT/android-sdk" "$OUT/gradle-user-home" || true
-          tar -C /tmp -I 'zstd -10 -T0' -cf /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst piiwii-toolchain
-          ls -lh /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst
-          sha256sum /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst > /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
+          tar -C /tmp -czf /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz piiwii-toolchain
+          ls -lh /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz
+          sha256sum /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz > /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
 
       - name: Upload offline toolchain
         uses: actions/upload-artifact@v4
         with:
           name: PiiWii-Android-Toolchain-Gradle8.9-SDK35
           path: |
-            /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.zst
+            /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.tar.gz
             /tmp/PiiWii-Android-Toolchain-Gradle8.9-SDK35.sha256
           retention-days: 1
           if-no-files-found: error
