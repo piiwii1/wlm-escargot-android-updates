@@ -1,0 +1,136 @@
+name: PiiWii Remote 2 Lot3
+
+on:
+  push:
+    branches:
+      - piiwii-remote-v2-lot3-final
+    paths:
+      - 'piiwii-remote-v2-lot3/source/**'
+      - '.github/workflows/piiwii-remote-v2-lot3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-lot3:
+    name: Phone alpha3 + Android TV Receiver alpha1
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct Lot 3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-lot3-src
+          cat piiwii-remote-v2-lot3/source/part_*.b64 | base64 -d > /tmp/piiwii-lot3.tar.xz
+          echo '1035045b2e6cdac85081904575c7aa87ffa251188c9a87bc527bdeed87aa2b00  /tmp/piiwii-lot3.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/piiwii-lot3.tar.xz -C /tmp/piiwii-lot3-src
+          ROOT=/tmp/piiwii-lot3-src/piiwii-remote
+          test -f "$ROOT/settings.gradle.kts"
+          test -f "$ROOT/tvreceiver/src/main/AndroidManifest.xml"
+          grep -q 'include(":remote", ":tvreceiver")' "$ROOT/settings.gradle.kts"
+          grep -q 'applicationId = "ch.piiwii.remote2"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 22' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-alpha3"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'applicationId = "ch.piiwii.remote2.tv"' "$ROOT/tvreceiver/build.gradle.kts"
+          grep -q 'versionCode = 20' "$ROOT/tvreceiver/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-alpha1"' "$ROOT/tvreceiver/build.gradle.kts"
+          grep -q 'android.software.leanback' "$ROOT/tvreceiver/src/main/AndroidManifest.xml"
+          grep -q 'android.permission.BIND_ACCESSIBILITY_SERVICE' "$ROOT/tvreceiver/src/main/AndroidManifest.xml"
+          grep -q 'android.intent.category.LEANBACK_LAUNCHER' "$ROOT/tvreceiver/src/main/AndroidManifest.xml"
+          grep -R -q 'PIIWII_REMOTE/1' "$ROOT/tvreceiver/src/main/java"
+          grep -R -q 'NAV_UP' "$ROOT/tvreceiver/src/main/java"
+          grep -R -q 'NAV_HOME' "$ROOT/tvreceiver/src/main/java"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          set -e
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Run unit tests
+        working-directory: /tmp/piiwii-lot3-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest
+
+      - name: Build both APKs
+        working-directory: /tmp/piiwii-lot3-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:assembleDebug :tvreceiver:assembleDebug
+
+      - name: Validate and package Lot 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-lot3-src/piiwii-remote
+          OUT=/tmp/piiwii-lot3-out
+          mkdir -p "$OUT"
+
+          PHONE_SRC="$ROOT/remote/build/outputs/apk/debug/remote-debug.apk"
+          TV_SRC="$ROOT/tvreceiver/build/outputs/apk/debug/tvreceiver-debug.apk"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-alpha3.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-alpha1.apk"
+          cp "$PHONE_SRC" "$PHONE"
+          cp "$TV_SRC" "$TV"
+
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+
+          "$AAPT" dump badging "$PHONE" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-BADGING.txt"
+          "$AAPT" dump xmltree "$TV" AndroidManifest.xml > "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-MANIFEST.txt"
+
+          grep -q "package: name='ch.piiwii.remote2' versionCode='22' versionName='2.0.0-alpha3'" "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='20' versionName='2.0.0-alpha1'" "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-BADGING.txt"
+          grep -q "uses-feature:'android.software.leanback'" "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-BADGING.txt"
+          grep -q 'android.accessibilityservice.AccessibilityService' "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-MANIFEST.txt"
+          grep -q 'android.permission.BIND_ACCESSIBILITY_SERVICE' "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-MANIFEST.txt"
+
+          "$APKSIGNER" verify --verbose --print-certs "$PHONE" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-SIGNATURE.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$TV" > "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-SIGNATURE.txt"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-ZIPALIGN.txt"
+          unzip -t "$PHONE" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-ZIPTEST.txt"
+
+          sha256sum "$PHONE" > "$OUT/PiiWii-Remote-Phone-2.0.0-alpha3-SHA256.txt"
+          sha256sum "$TV" > "$OUT/PiiWii-Remote-TV-2.0.0-alpha1-SHA256.txt"
+
+          cd /tmp/piiwii-lot3-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-alpha3-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-alpha3-Sources.zip" > "$OUT/PiiWii-Remote-2.0.0-alpha3-Sources-SHA256.txt"
+
+          cat > "$OUT/PiiWii-Remote-2.0.0-alpha3-Lot3-CI.txt" <<'EOF'
+          LOT 3 CI VALIDATED
+          - Phone package/version: ch.piiwii.remote2 / 2.0.0-alpha3 / versionCode 22
+          - TV package/version: ch.piiwii.remote2.tv / 2.0.0-alpha1 / versionCode 20
+          - TV Leanback feature present
+          - TV AccessibilityService present with BIND_ACCESSIBILITY_SERVICE
+          - Unit tests passed for phone and TV protocol
+          - Both APKs built, signature verified, zipalign verified, ZIP integrity verified
+          EOF
+
+      - name: Upload Lot 3 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-2.0.0-alpha3-Lot3
+          path: /tmp/piiwii-lot3-out/*
+          retention-days: 7
+          if-no-files-found: error
