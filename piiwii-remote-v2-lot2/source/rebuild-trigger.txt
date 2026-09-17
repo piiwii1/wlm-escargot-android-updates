@@ -1,0 +1,1 @@
+Lot 2 CI rerun after Windows GUI self-test runner fix.
