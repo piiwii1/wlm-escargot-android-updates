@@ -1,0 +1,89 @@
+name: PiiWii Remote 2 Lot4 Windows Fix
+
+on:
+  push:
+    branches:
+      - piiwii-remote-v2-lot4
+    paths:
+      - '.github/workflows/piiwii-remote-v2-lot4-windows-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-lot4:
+    name: Windows Agent alpha2 pointer corrected
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify Lot 4 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          mkdir -p "$BASE/piiwii-lot4-src"
+          cat piiwii-remote-v2-lot4/source/part_*.b64 | base64 -d > "$BASE/piiwii-lot4.tar.xz"
+          echo "9ae6dfa09c88638c4554c961c7990d55e6d644bfe08bffa46214c7f7b0b4967a  $BASE/piiwii-lot4.tar.xz" | sha256sum -c -
+          tar -xJf "$BASE/piiwii-lot4.tar.xz" -C "$BASE/piiwii-lot4-src"
+          ROOT="$BASE/piiwii-lot4-src/piiwii-remote"
+          grep -q '2.0.0-alpha2' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'POINTER_MOVE' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'POINTER_LEFT_CLICK' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'POINTER_RIGHT_CLICK' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'POINTER_DOUBLE_CLICK' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'POINTER_SCROLL' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+
+      - name: Setup MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile native x64 agent
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-lot4-src\piiwii-remote\windows-agent
+        run: |
+          rc /nologo /fo PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp PiiWiiRemoteAgent.res /link /SUBSYSTEM:WINDOWS /OUT:PiiWii-Remote-Agent-2.0.0-alpha2.exe
+
+      - name: Run Windows Agent self-test
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'piiwii-lot4-src\piiwii-remote\windows-agent\PiiWii-Remote-Agent-2.0.0-alpha2.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Agent self-test failed with exit code $($p.ExitCode)" }
+
+      - name: Validate x64 and version metadata
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'piiwii-lot4-src\piiwii-remote\windows-agent'
+          $exe = Join-Path $root 'PiiWii-Remote-Agent-2.0.0-alpha2.exe'
+          $headers = & dumpbin /headers $exe | Out-String
+          if ($headers -notmatch 'machine \(x64\)' -and $headers -notmatch '8664 machine') { throw 'EXE is not x64' }
+          if ($headers -notmatch 'PE32\+') { throw 'EXE is not PE32+' }
+          $vi = (Get-Item $exe).VersionInfo
+          if ($vi.ProductVersion -notlike '2.0.0-alpha2*') { throw "Unexpected ProductVersion: $($vi.ProductVersion)" }
+          $out = Join-Path $env:RUNNER_TEMP 'piiwii-lot4-windows'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item $exe (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha2.exe')
+          $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower()
+          "$hash  PiiWii-Remote-Agent-2.0.0-alpha2.exe" | Set-Content (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha2-SHA256.txt')
+          @"
+          LOT 4 WINDOWS CI VALIDATED
+          - Native Win32 x64 / PE32+
+          - ProductVersion 2.0.0-alpha2
+          - Self-test passed
+          - Pointer move, left/right/double click and vertical wheel command handlers present
+          - Pointer payload parsing covered by self-test without physically moving the CI cursor
+          "@ | Set-Content (Join-Path $out 'PiiWii-Remote-Agent-2.0.0-alpha2-CI.txt')
+
+      - name: Upload Windows Lot 4 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-Agent-2.0.0-alpha2-Lot4
+          path: ${{ runner.temp }}\piiwii-lot4-windows\*
+          retention-days: 7
+          if-no-files-found: error
