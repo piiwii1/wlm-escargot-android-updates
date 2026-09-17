@@ -49,7 +49,7 @@ jobs:
           echo '666aaceca6db5970208dcdd1c7d0e5e34a4a9722e3099d8d905f830ea64ab86b  /tmp/lot10.patch.xz' | sha256sum -c -
           xz -dc /tmp/lot10.patch.xz > /tmp/lot10.patch
           echo '8e54de010b77dcb5aee80f712a061d1fe72ec4a178b2f0b1dcbeb2c7403ce0f7  /tmp/lot10.patch' | sha256sum -c -
-          (cd "$ROOT" && patch -p1 < /tmp/lot10.patch)
+          (cd "$ROOT" && patch -p2 < /tmp/lot10.patch)
           grep -q 'versionCode = 29' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-alpha10"' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionCode = 24' "$ROOT/tvreceiver/build.gradle.kts"
@@ -146,7 +146,7 @@ jobs:
           base64 -d piiwii-remote-v2-lot7/lot7.patch.xz.b64 | xz -dc > "$BASE/lot7.patch"; (cd "$ROOT" && patch -p2 < "$BASE/lot7.patch")
           base64 -d piiwii-remote-v2-lot8/lot8.patch.xz.b64 | xz -dc > "$BASE/lot8.patch"; (cd "$ROOT" && patch -p2 < "$BASE/lot8.patch")
           base64 -d piiwii-remote-v2-lot9/lot9.patch.xz.b64 | xz -dc > "$BASE/lot9.patch"; (cd "$ROOT" && patch -p1 < "$BASE/lot9.patch")
-          base64 -d piiwii-remote-v2-lot10/lot10.patch.xz.b64 | xz -dc > "$BASE/lot10.patch"; (cd "$ROOT" && patch -p1 < "$BASE/lot10.patch")
+          base64 -d piiwii-remote-v2-lot10/lot10.patch.xz.b64 | xz -dc > "$BASE/lot10.patch"; (cd "$ROOT" && patch -p2 < "$BASE/lot10.patch")
           grep -q '2.0.0-alpha6' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
           grep -q 'SetSuspendState' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
           grep -q 'LockWorkStation' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
