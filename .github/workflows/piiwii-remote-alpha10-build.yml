@@ -32,13 +32,17 @@ jobs:
           mkdir -p /tmp/src
           tar -xJf /tmp/piiwii-remote-alpha10.tar.xz -C /tmp/src
           MAIN=/tmp/src/piiwii-remote/remote/src/main/java/ch/piiwii/remote/MainActivity.java
+          TVACC=/tmp/src/piiwii-remote/tvreceiver/src/main/java/ch/piiwii/remote/tv/RemoteAccessibilityService.java
           test -f /tmp/src/piiwii-remote/settings.gradle
           test -f "$MAIN"
+          test -f "$TVACC"
           test -f /tmp/src/piiwii-remote/tvreceiver/src/main/java/ch/piiwii/remote/tv/RemoteService.java
           sed -i 's/header\.setBackground(Color\.rgb(9, 20, 33));/header.setBackgroundColor(Color.rgb(9, 20, 33));/' "$MAIN"
           sed -i 's/nav\.setBackground(Color\.rgb(7, 15, 24));/nav.setBackgroundColor(Color.rgb(7, 15, 24));/' "$MAIN"
+          sed -i 's/node\.performAction(AccessibilityNodeInfo\.ACTION_IME_ENTER)/node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId())/' "$TVACC"
           grep -q 'header.setBackgroundColor(Color.rgb(9, 20, 33));' "$MAIN"
           grep -q 'nav.setBackgroundColor(Color.rgb(7, 15, 24));' "$MAIN"
+          grep -q 'AccessibilityAction.ACTION_IME_ENTER.getId()' "$TVACC"
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
