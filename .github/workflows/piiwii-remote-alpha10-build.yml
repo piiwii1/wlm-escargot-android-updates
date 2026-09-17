@@ -23,7 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct sources
+      - name: Reconstruct and patch sources
         shell: bash
         run: |
           set -euo pipefail
@@ -31,9 +31,14 @@ jobs:
           echo 'a5fee44c458449b95be6e67acadcd186ca1d6117f7ce95e810529af00f59a1bf  /tmp/piiwii-remote-alpha10.tar.xz' | sha256sum -c -
           mkdir -p /tmp/src
           tar -xJf /tmp/piiwii-remote-alpha10.tar.xz -C /tmp/src
+          MAIN=/tmp/src/piiwii-remote/remote/src/main/java/ch/piiwii/remote/MainActivity.java
           test -f /tmp/src/piiwii-remote/settings.gradle
-          test -f /tmp/src/piiwii-remote/remote/src/main/java/ch/piiwii/remote/MainActivity.java
+          test -f "$MAIN"
           test -f /tmp/src/piiwii-remote/tvreceiver/src/main/java/ch/piiwii/remote/tv/RemoteService.java
+          sed -i 's/header\.setBackground(Color\.rgb(9, 20, 33));/header.setBackgroundColor(Color.rgb(9, 20, 33));/' "$MAIN"
+          sed -i 's/nav\.setBackground(Color\.rgb(7, 15, 24));/nav.setBackgroundColor(Color.rgb(7, 15, 24));/' "$MAIN"
+          grep -q 'header.setBackgroundColor(Color.rgb(9, 20, 33));' "$MAIN"
+          grep -q 'nav.setBackgroundColor(Color.rgb(7, 15, 24));' "$MAIN"
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
