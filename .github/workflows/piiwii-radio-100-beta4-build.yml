@@ -48,7 +48,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat piiwii-radio-100-beta4-build/src-parts/part-*.bin > /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip
+          cat \
+            piiwii-radio-100-beta4-build/src-parts/part-00.bin \
+            piiwii-radio-100-beta4-build/src-parts/part-01a.bin \
+            piiwii-radio-100-beta4-build/src-parts/part-01b.bin \
+            piiwii-radio-100-beta4-build/src-parts/part-02.bin \
+            piiwii-radio-100-beta4-build/src-parts/part-03.bin \
+            > /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip
           test "$(wc -c < /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip)" -eq 22564
           echo "8f69835058b2065711bf2d8d31e1ae83a2417428ced08c1c72e85c15937e912c  /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip" | sha256sum -c -
           rm -rf /tmp/piiwii-radio
