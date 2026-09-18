@@ -13,7 +13,7 @@
      }
 --- a/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt
 +++ b/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt
-@@ -9,6 +9,7 @@
+@@ -9,10 +9,12 @@
  import android.view.animation.DecelerateInterpolator
  import android.view.animation.TranslateAnimation
  import android.widget.FrameLayout
@@ -21,7 +21,11 @@
  import android.widget.LinearLayout
  import android.widget.TextView
  import android.widget.ViewFlipper
-@@ -299,11 +300,11 @@
++import ch.piiwii.remote2.R
+ import ch.piiwii.remote2.device.RemoteDevice
+ import ch.piiwii.remote2.protocol.RemoteApp
+ import ch.piiwii.remote2.protocol.CustomShortcut
+@@ -299,11 +301,11 @@
          }
          addView(deviceBlock, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
  
@@ -38,7 +42,7 @@
              isClickable = true
              isFocusable = true
              contentDescription = "Paramètres"
-@@ -313,6 +314,14 @@
+@@ -313,6 +315,14 @@
              marginStart = UiKit.dp(context, 8)
          })
      }
@@ -53,7 +57,7 @@
  
      private fun bottomBar(): View = LinearLayout(context).apply {
          orientation = HORIZONTAL
-@@ -325,10 +334,11 @@
+@@ -325,10 +335,11 @@
                  gravity = Gravity.CENTER
                  isClickable = true
                  isFocusable = true
