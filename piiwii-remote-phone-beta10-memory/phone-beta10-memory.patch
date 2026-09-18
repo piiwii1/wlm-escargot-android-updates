@@ -1,0 +1,74 @@
+--- a/remote/build.gradle.kts
++++ b/remote/build.gradle.kts
+@@ -14,8 +14,8 @@
+         applicationId = "ch.piiwii.remote2"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 39
+-        versionName = "2.0.0-beta9"
++        versionCode = 40
++        versionName = "2.0.0-beta10"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- a/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt
++++ b/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt
+@@ -3,10 +3,15 @@
+ object DeviceSelectionPolicy {
+     fun initial(devices: List<RemoteDevice>, selectedId: String?): RemoteDevice? {
+         if (devices.isEmpty()) return null
+-        val favorite = devices.filter { it.favorite }.maxByOrNull { it.lastUsedAt }
+-        if (favorite != null) return favorite
+-        return devices.maxByOrNull { it.lastUsedAt }
+-            ?: devices.firstOrNull { it.id == selectedId }
++
++        // The explicit selection is the connection memory: once the user chooses
++        // an appareil, always restore that exact appareil on the next launch.
++        devices.firstOrNull { it.id == selectedId }?.let { return it }
++
++        // Only use the favorite / most-recent policy when the persisted selection
++        // no longer exists (for example after deleting an appareil).
++        return devices.filter { it.favorite }.maxByOrNull { it.lastUsedAt }
++            ?: devices.maxByOrNull { it.lastUsedAt }
+             ?: devices.first()
+     }
+ 
+--- a/remote/src/test/java/ch/piiwii/remote2/device/DeviceSelectionPolicyTest.kt
++++ b/remote/src/test/java/ch/piiwii/remote2/device/DeviceSelectionPolicyTest.kt
+@@ -10,12 +10,32 @@
+         favorite = favorite, lastUsedAt = used
+     )
+ 
+-    @Test fun favoriteWinsAtStartup() {
+-        assertEquals("fav", DeviceSelectionPolicy.initial(listOf(d("old", used = 99), d("fav", true, 1)), "old")?.id)
++    @Test fun selectedDeviceWinsOverFavoriteAtStartup() {
++        assertEquals("selected", DeviceSelectionPolicy.initial(
++            listOf(d("selected", used = 1), d("fav", favorite = true, used = 99)),
++            "selected"
++        )?.id)
+     }
+ 
+-    @Test fun lastUsedWinsWithoutFavorite() {
+-        assertEquals("recent", DeviceSelectionPolicy.initial(listOf(d("old", used = 1), d("recent", used = 20)), "old")?.id)
++    @Test fun selectedDeviceWinsOverMoreRecentDeviceAtStartup() {
++        assertEquals("selected", DeviceSelectionPolicy.initial(
++            listOf(d("selected", used = 1), d("recent", used = 99)),
++            "selected"
++        )?.id)
++    }
++
++    @Test fun favoriteWinsWhenPersistedSelectionNoLongerExists() {
++        assertEquals("fav", DeviceSelectionPolicy.initial(
++            listOf(d("recent", used = 99), d("fav", favorite = true, used = 1)),
++            "deleted-device"
++        )?.id)
++    }
++
++    @Test fun lastUsedWinsWhenPersistedSelectionNoLongerExistsAndNoFavorite() {
++        assertEquals("recent", DeviceSelectionPolicy.initial(
++            listOf(d("old", used = 1), d("recent", used = 20)),
++            "deleted-device"
++        )?.id)
+     }
+ 
+     @Test fun fallbackPrefersFavorite() {
