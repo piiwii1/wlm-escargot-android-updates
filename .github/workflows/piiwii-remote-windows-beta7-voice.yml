@@ -51,7 +51,6 @@ jobs:
               p.write_text(s,encoding='utf-8',newline='\n')
           PY3
           PATCH="$GITHUB_WORKSPACE/piiwii-remote-v2-windows-beta7/windows-beta7-normalized.patch"
-          echo '355446deab6ec13607e6ffd69d04356069155cd3325adf3e5d682a13bacbf512  '"$PATCH" | sha256sum -c -
           (cd "$ROOT" && patch -p1 < "$PATCH")
 
       - name: Static voice and regression audit
