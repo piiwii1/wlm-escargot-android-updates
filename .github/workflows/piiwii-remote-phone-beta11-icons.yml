@@ -89,7 +89,6 @@ jobs:
           s,c=nav_pattern.subn(new_nav,s,count=1)
           assert c==1, 'bottom nav blocks not replaced'
 
-          # Transparent PNG means no dark/surface button is drawn behind any of the four icons.
           state_pattern = re.compile(
               r'\s*view\.background = UiKit\.rounded\(if \(active\) UiKit\.SURFACE_ALT else UiKit\.SURFACE, 14, context\)\s*\n'
               r'\s*for \(i in 0 until view\.childCount\) \{\s*\n'
@@ -112,6 +111,21 @@ jobs:
           cp "$GITHUB_WORKSPACE/piiwii-remote-phone-beta14-exact-icons/icon-assets/ic_keyboard.png" "$RES/ic_keyboard_custom.png"
           cp "$GITHUB_WORKSPACE/piiwii-remote-phone-beta14-exact-icons/icon-assets/ic_apps.png" "$RES/ic_apps_custom.png"
           curl -fsSL "https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/piiwii-remote-v2-phone-beta10-icons/piiwii-remote-phone-beta10/icon-assets/ic_settings.png" -o "$RES/ic_settings_custom.png"
+
+          # Re-encode PNGs as standard RGBA PNGs. Keeps transparency and artwork, avoids AAPT2 crashes on the original metadata/encoding.
+          python3 -m pip install --quiet pillow
+          python3 - "$RES" <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import sys
+          res = Path(sys.argv[1])
+          for p in res.glob('ic_*_custom.png'):
+              with Image.open(p) as im:
+                  rgba = im.convert('RGBA')
+                  tmp = p.with_suffix('.tmp.png')
+                  rgba.save(tmp, format='PNG', optimize=False, compress_level=6)
+              tmp.replace(p)
+          PY
 
           grep -q 'versionCode = 44' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-beta14"' "$ROOT/remote/build.gradle.kts"
