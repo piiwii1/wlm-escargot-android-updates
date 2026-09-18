@@ -1,0 +1,141 @@
+name: PiiWii Remote Phone beta10 - User icons
+
+on:
+  push:
+    branches: [piiwii-remote-v2-phone-beta10-icons]
+    paths:
+      - 'piiwii-remote-phone-beta10/**'
+      - '.github/workflows/piiwii-remote-phone-beta10-icons.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  beta10:
+    name: Build and audit Phone beta10 user icons
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract exact beta10 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/PiiWii-Remote-2.0.0-beta10-Sources.zip"
+          echo '940422035fb73c02c3d31f47554a787a78904cc830cdc7d0ce2bd21f4d9f69c2  '"$SRC" | sha256sum -c -
+          rm -rf /tmp/piiwii-beta10-src
+          mkdir -p /tmp/piiwii-beta10-src
+          unzip -q "$SRC" -d /tmp/piiwii-beta10-src
+          test -f /tmp/piiwii-beta10-src/piiwii-remote/settings.gradle.kts
+
+      - name: Static beta10 regression and icon audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-beta10-src/piiwii-remote
+          BUILD="$ROOT/remote/build.gradle.kts"
+          SHELL="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          SCREEN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
+          KBD="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt"
+          COMMAND="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt"
+          RES="$ROOT/remote/src/main/res/drawable-nodpi"
+
+          grep -q 'versionCode = 40' "$BUILD"
+          grep -q 'versionName = "2.0.0-beta10"' "$BUILD"
+          grep -q 'listOf(RemoteSection.REMOTE, RemoteSection.TOUCHPAD, RemoteSection.KEYBOARD, RemoteSection.APPS)' "$SHELL"
+          grep -q 'R.drawable.ic_settings' "$SHELL"
+          grep -q 'RemoteSection.REMOTE, RemoteSection.NAVIGATION -> R.drawable.ic_remote' "$SHELL"
+          grep -q 'RemoteSection.TOUCHPAD -> R.drawable.ic_touchpad' "$SHELL"
+          grep -q 'RemoteSection.KEYBOARD, RemoteSection.KEYBOARD_ADVANCED -> R.drawable.ic_keyboard' "$SHELL"
+          grep -q 'RemoteSection.APPS -> R.drawable.ic_apps' "$SHELL"
+          grep -q '"youtube" -> R.drawable.ic_youtube' "$SCREEN"
+          grep -q '"spotify" -> R.drawable.ic_spotify' "$SCREEN"
+          grep -q '"vlc" -> R.drawable.ic_vlc' "$SCREEN"
+          grep -q '"browser" -> R.drawable.ic_browser' "$SCREEN"
+
+          for n in remote settings apps keyboard touchpad browser vlc youtube spotify; do
+            test -s "$RES/ic_${n}.png"
+          done
+
+          grep -q 'Maintenir pour parler' "$KBD"
+          grep -q 'button("Espace"' "$KBD"
+          grep -q 'Touches avancées' "$KBD"
+          for c in VOICE_START VOICE_FRAME VOICE_STOP; do grep -q "$c" "$COMMAND"; done
+          grep -R -q 'PIIWII_REMOTE/1' "$ROOT/remote/src/main/java" "$ROOT/tvreceiver/src/main/java"
+
+          if find "$ROOT" -type f \( -name '*.jks' -o -name '*.keystore' -o -name '*Signing.properties' \) | grep -q .; then
+            echo 'Private signing material must not be in source tree' >&2
+            exit 1
+          fi
+          echo 'STATIC BETA10 ICON AUDIT: OK'
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and release compilation
+        working-directory: /tmp/piiwii-beta10-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate beta10 APK and package deliverables
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-beta10-src/piiwii-remote
+          OUT=/tmp/piiwii-beta10-out
+          mkdir -p "$OUT"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-beta10-UNSIGNED.apk"
+          test -f "$RAW"
+          "$ZIPALIGN" -f 4 "$RAW" "$PHONE"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='40' versionName='2.0.0-beta10'" "$OUT/PHONE-BADGING.txt"
+          if "$APKSIGNER" verify "$PHONE" >/dev/null 2>&1; then echo 'APK unexpectedly signed' >&2; exit 1; fi
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -l "$PHONE" > "$OUT/PHONE-CONTENTS.txt"
+          for n in remote settings apps keyboard touchpad browser vlc youtube spotify; do
+            grep -q "ic_${n}\.png" "$OUT/PHONE-CONTENTS.txt"
+          done
+          python - "$PHONE" <<'PY'
+          import sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              dex=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          for value in ['2.0.0-beta10','Maintenir pour parler','Touches avancées','VOICE_START','VOICE_FRAME','VOICE_STOP']:
+              assert value.encode('utf-8') in dex, value
+          print('DEX BETA10 REGRESSION AUDIT: OK')
+          PY
+          cp "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/PiiWii-Remote-2.0.0-beta10-Sources.zip" "$OUT/"
+          sha256sum "$PHONE" "$OUT/PiiWii-Remote-2.0.0-beta10-Sources.zip" > "$OUT/SHA256.txt"
+          cat > "$OUT/AUDIT.txt" <<'EOF'
+          PIIWII REMOTE PHONE 2.0.0-beta10 ICON AUDIT PASSED
+          User-provided icon resources integrated: remote, settings, apps, keyboard, touchpad, browser, VLC, YouTube, Spotify.
+          beta9 keyboard, voice, navigation, touchpad and protocol regressions checked.
+          Package: ch.piiwii.remote2
+          versionCode: 40
+          Signing: intentionally unsigned CI artifact; stable signing is applied after CI validation.
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta10-User-Icons-UNSIGNED
+          path: /tmp/piiwii-beta10-out/*
+          retention-days: 7
+          if-no-files-found: error
