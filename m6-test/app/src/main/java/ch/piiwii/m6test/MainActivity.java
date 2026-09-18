@@ -1,7 +1,6 @@
 package ch.piiwii.m6test;
 
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
@@ -30,7 +29,9 @@ import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
     private static final String HIDE_ME_PACKAGE = "hideme.android.vpn";
+    private static final String HIDE_ME_PLAY = "https://play.google.com/store/apps/details?id=hideme.android.vpn";
     private static final String M6_URL = "https://www.m6.fr/";
+    private static final String M6_GEO_URL = "https://geo.6play.fr/v1/geoInfo/?";
     private static final String IP_CHECK_URL = "https://ipwho.is/";
 
     private TextView status;
@@ -51,16 +52,16 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(245, 247, 250));
 
         TextView title = new TextView(this);
-        title.setText("PiiWii M6 Test");
-        title.setTextSize(26);
+        title.setText("PiiWii M6 Test 0.1.1");
+        title.setTextSize(25);
         title.setTextColor(Color.rgb(20, 31, 48));
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         title.setPadding(0, 0, 0, dp(8));
         root.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView help = new TextView(this);
-        help.setText("1. Ouvre le VPN et choisis France\n2. Reviens ici et vérifie la sortie réseau\n3. Si le statut est FRANCE, ouvre M6+");
-        help.setTextSize(16);
+        help.setText("Le VPN n’est pas intégré à ce prototype.\n1. Installe/ouvre hide.me\n2. Dans hide.me, choisis France et connecte\n3. Reviens ici et vérifie\n4. Puis teste M6+");
+        help.setTextSize(15);
         help.setTextColor(Color.DKGRAY);
         help.setGravity(Gravity.CENTER_HORIZONTAL);
         help.setPadding(dp(8), 0, dp(8), dp(10));
@@ -80,13 +81,21 @@ public class MainActivity extends Activity {
         progressParams.setMargins(0, dp(4), 0, dp(8));
         root.addView(progress, progressParams);
 
-        Button vpnButton = makeButton("Ouvrir hide.me VPN");
+        Button vpnButton = makeButton("Installer / ouvrir hide.me");
         vpnButton.setOnClickListener(v -> openHideMe());
         root.addView(vpnButton);
+
+        Button vpnWebButton = makeButton("Page hide.me sur Google Play (secours)");
+        vpnWebButton.setOnClickListener(v -> openExternal(HIDE_ME_PLAY));
+        root.addView(vpnWebButton);
 
         Button checkButton = makeButton("Vérifier : suis-je en France ?");
         checkButton.setOnClickListener(v -> checkIpCountry());
         root.addView(checkButton);
+
+        Button m6GeoButton = makeButton("Test officiel M6 : pays détecté");
+        m6GeoButton.setOnClickListener(v -> openExternal(M6_GEO_URL));
+        root.addView(m6GeoButton);
 
         LinearLayout m6Row = new LinearLayout(this);
         m6Row.setOrientation(LinearLayout.HORIZONTAL);
@@ -98,7 +107,7 @@ public class MainActivity extends Activity {
         m6Row.addView(m6Button, half1);
 
         Button browserButton = makeButton("M6+ navigateur");
-        browserButton.setOnClickListener(v -> openBrowser(M6_URL));
+        browserButton.setOnClickListener(v -> openExternal(M6_URL));
         LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, dp(58), 1f);
         half2.setMargins(dp(5), dp(5), 0, dp(5));
         m6Row.addView(browserButton, half2);
@@ -111,35 +120,27 @@ public class MainActivity extends Activity {
         ws.setMediaPlaybackRequiresUserGesture(true);
         ws.setLoadWithOverviewMode(true);
         ws.setUseWideViewPort(true);
-        ws.setBuiltInZoomControls(false);
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient());
-        webView.loadData(
-                "<html><body style='font-family:sans-serif;text-align:center;padding:32px;color:#666;background:#fff'>"
-                        + "M6+ apparaîtra ici.<br><br>Si le lecteur protégé refuse la vue intégrée, utilise le bouton <b>M6+ navigateur</b>."
-                        + "</body></html>",
-                "text/html",
-                "UTF-8"
-        );
+        webView.loadData("<html><body style='font-family:sans-serif;text-align:center;padding:28px;color:#666;background:#fff'>M6+ apparaîtra ici.<br><br>Si la vidéo refuse la vue intégrée, utilise <b>M6+ navigateur</b>.</body></html>", "text/html", "UTF-8");
 
         LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
         webParams.setMargins(0, dp(6), 0, 0);
         root.addView(webView, webParams);
-
         setContentView(root);
     }
 
     private Button makeButton(String text) {
         Button b = new Button(this);
         b.setText(text);
-        b.setTextSize(16);
+        b.setTextSize(15);
         b.setAllCaps(false);
         b.setFocusable(true);
         b.setMinHeight(dp(56));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
-        p.setMargins(0, dp(5), 0, dp(5));
+        p.setMargins(0, dp(4), 0, dp(4));
         b.setLayoutParams(p);
         return b;
     }
@@ -157,12 +158,9 @@ public class MainActivity extends Activity {
                 connection.setConnectTimeout(8000);
                 connection.setReadTimeout(8000);
                 connection.setRequestProperty("Accept", "application/json");
-                connection.setRequestProperty("User-Agent", "PiiWii-M6-Test/0.1.0");
-
+                connection.setRequestProperty("User-Agent", "PiiWii-M6-Test/0.1.1");
                 int code = connection.getResponseCode();
-                if (code < 200 || code >= 300) {
-                    throw new IllegalStateException("HTTP " + code);
-                }
+                if (code < 200 || code >= 300) throw new IllegalStateException("HTTP " + code);
 
                 BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
                 StringBuilder body = new StringBuilder();
@@ -179,17 +177,17 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
                     if (france) {
-                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nTu peux tester M6+.");
+                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nTeste maintenant le bouton officiel M6.");
                         status.setTextColor(Color.rgb(27, 120, 55));
                     } else {
-                        status.setText("❌ Pas en France : " + country + " (" + countryCode + ")\nIP : " + ip + "\nConnecte le VPN sur France puis revérifie.");
+                        status.setText("❌ Pas en France : " + country + " (" + countryCode + ")\nIP : " + ip + "\nOuvre hide.me, choisis France, connecte puis reviens.");
                         status.setTextColor(Color.rgb(180, 70, 35));
                     }
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
-                    status.setText("⚠️ Impossible de vérifier le pays\n" + e.getClass().getSimpleName() + ": " + safeMessage(e));
+                    status.setText("⚠️ Vérification impossible\n" + safeMessage(e));
                     status.setTextColor(Color.rgb(180, 70, 35));
                 });
             } finally {
@@ -199,23 +197,26 @@ public class MainActivity extends Activity {
     }
 
     private void openHideMe() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage(HIDE_ME_PACKAGE);
-        if (launch != null) {
-            startActivity(launch);
-            return;
-        }
         try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + HIDE_ME_PACKAGE)));
-        } catch (ActivityNotFoundException e) {
-            openBrowser("https://play.google.com/store/apps/details?id=" + HIDE_ME_PACKAGE);
+            Intent launch = getPackageManager().getLaunchIntentForPackage(HIDE_ME_PACKAGE);
+            if (launch != null) {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(launch);
+                return;
+            }
+        } catch (Exception ignored) {
         }
+        Toast.makeText(this, "hide.me n’est pas installé. Ouverture de Google Play.", Toast.LENGTH_LONG).show();
+        openExternal(HIDE_ME_PLAY);
     }
 
-    private void openBrowser(String url) {
+    private void openExternal(String url) {
         try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
         } catch (Exception e) {
-            Toast.makeText(this, "Aucun navigateur disponible", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Impossible d’ouvrir le lien", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -230,11 +231,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        if (webView != null && webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
     }
 
     @Override
