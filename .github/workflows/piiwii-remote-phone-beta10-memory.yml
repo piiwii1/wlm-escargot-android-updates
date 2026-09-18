@@ -1,0 +1,170 @@
+name: PiiWii Remote Phone beta10 - persistent connection memory
+
+on:
+  push:
+    branches: [piiwii-remote-v2-phone-beta10-memory]
+    paths:
+      - 'piiwii-remote-phone-beta10-memory/**'
+      - '.github/workflows/piiwii-remote-phone-beta10-memory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  beta10-memory:
+    name: Build and audit Phone beta10 memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct official beta9 then apply connection-memory patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/piiwii-beta10-src
+          ROOT=/tmp/piiwii-beta10-src/piiwii-remote
+
+          base64 -d piiwii-remote-phone-beta3/phone-beta3.patch.xz.b64 > /tmp/phone-beta3.patch.xz
+          echo 'b0510a468202e0898d0c07b2056daa3d06ecbb35b574c9a54655c7b63dbb7a1e  /tmp/phone-beta3.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta3.patch.xz > /tmp/phone-beta3.patch
+          echo '7e0019639f059feb9f6b409e01b7e47377be9c297d303a161d46c1c23a9c07cb  /tmp/phone-beta3.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta3.patch)
+
+          base64 -d piiwii-remote-phone-beta4/phone-beta4.patch.xz.b64 > /tmp/phone-beta4.patch.xz
+          echo '45ffb0cf4741eaf7364b95933cc744ec7968720ad334a50a91ceac8071ef9519  /tmp/phone-beta4.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta4.patch.xz > /tmp/phone-beta4.patch
+          echo '490272fe7e7a386d83f78c2de37810605421551aff9d9577a9f53e77c55efeed  /tmp/phone-beta4.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta4.patch)
+
+          base64 -d piiwii-remote-phone-beta5/phone-beta5.patch.xz.b64 > /tmp/phone-beta5.patch.xz
+          echo 'dbd42fa96eb3b7c32a8777e0fa2718a50b524b1b4666019b59316edd0afe7128  /tmp/phone-beta5.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta5.patch.xz > /tmp/phone-beta5.patch
+          echo 'a4f347649bee64f637d56c181a6f38a34a5991f9bcd65e9acfa8f40bab1d68a3  /tmp/phone-beta5.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta5.patch)
+
+          base64 -d piiwii-remote-phone-beta6/phone-beta6.patch.xz.b64 > /tmp/phone-beta6.patch.xz
+          echo '56ca922ce6493e1963dd03f19cc07a38d62de0031f62ade8b477591c947d2719  /tmp/phone-beta6.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta6.patch.xz > /tmp/phone-beta6.patch
+          echo 'b922f805e558bfd87ca960595d82e6f4f6ee25585359a1be2370987e4f025ae7  /tmp/phone-beta6.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta6.patch)
+
+          base64 -d piiwii-remote-phone-beta7/phone-beta7.patch.xz.b64 > /tmp/phone-beta7.patch.xz
+          echo '4c9188f19ea66e77d80ddf568d704b9ce8b30b39083988fc2a6b1253901b32d2  /tmp/phone-beta7.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta7.patch.xz > /tmp/phone-beta7.patch
+          echo 'f25b835ab11488c3fd072b8e5dc1c98cad9a0e8777fffdb7b1dfc42a1a74119b  /tmp/phone-beta7.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta7.patch)
+
+          base64 -d piiwii-remote-phone-beta8/phone-beta8.patch.xz.b64 > /tmp/phone-beta8.patch.xz
+          echo 'ea3f3bdbe1edc231f956656a36dabdddbffaf7d90274a78e80365261a7df8960  /tmp/phone-beta8.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta8.patch.xz > /tmp/phone-beta8.patch
+          echo '63fbcb0bae007d3cb67658ef0442a2d331dbeecb8f45e78738db971243502231  /tmp/phone-beta8.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta8.patch)
+
+          base64 -d piiwii-remote-phone-beta9/phone-beta9.patch.xz.b64 > /tmp/phone-beta9.patch.xz
+          echo 'd702112e3659382491c4172bd32573dbd5daf5d63cc69f07efcef11b0edb3ea9  /tmp/phone-beta9.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta9.patch.xz > /tmp/phone-beta9.patch
+          echo 'd0ef1e21ed3b86fc41cbce899642dca74d037a9e489e8cae9de2525dc6505d93  /tmp/phone-beta9.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta9.patch)
+
+          FIX="$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-fix1.patch"
+          echo '37d3d54dd4617de1ca0b6b005bdd51ac7ce378ab351134fce2b270dca86954d4  '"$FIX" | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < "$FIX")
+          SPACE="$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-space.patch"
+          echo '8cd543092cd70c05aa87fb5e8d26bdcd5e2a208b27d9c6cb83da753d05dfec5d  '"$SPACE" | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < "$SPACE")
+
+          MEMORY="$GITHUB_WORKSPACE/piiwii-remote-phone-beta10-memory/phone-beta10-memory.patch"
+          echo 'b084e62f645e5eacbe75de969b0b3a6a535e8eefd2d8df16aa52ed668427039f  '"$MEMORY" | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < "$MEMORY")
+
+      - name: Static memory regression audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-beta10-src/piiwii-remote
+          BUILD="$ROOT/remote/build.gradle.kts"
+          POLICY="$ROOT/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt"
+          REPO="$ROOT/remote/src/main/java/ch/piiwii/remote2/device/SharedPreferencesDeviceRepository.kt"
+          VM="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt"
+          MANIFEST="$ROOT/remote/src/main/AndroidManifest.xml"
+
+          grep -q 'versionCode = 40' "$BUILD"
+          grep -q 'versionName = "2.0.0-beta10"' "$BUILD"
+          grep -q 'devices.firstOrNull { it.id == selectedId }?.let { return it }' "$POLICY"
+          grep -q 'piiwii_remote_devices_v2' "$REPO"
+          grep -q 'selected_device_id' "$REPO"
+          grep -q 'authToken' "$REPO"
+          grep -q 'initialDevice = DeviceSelectionPolicy.initial(repository.all(), repository.selectedId())' "$VM"
+          grep -q 'initialDevice?.let { repository.select(it.id) }' "$VM"
+          grep -q 'RECONNECT_INTERVAL_MS = 10_000L' "$VM"
+          grep -q 'android:allowBackup="true"' "$MANIFEST"
+          grep -R -q 'PIIWII_REMOTE/1' "$ROOT/remote/src/main/java"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and release compilation
+        working-directory: /tmp/piiwii-beta10-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package beta10
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-beta10-src/piiwii-remote
+          OUT=/tmp/piiwii-beta10-memory-out
+          mkdir -p "$OUT"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta10-MEMORY-UNSIGNED.apk"
+          test -f "$RAW"
+          "$ZIPALIGN" -f 4 "$RAW" "$APK"
+          "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$AAPT" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='40' versionName='2.0.0-beta10'" "$OUT/BADGING.txt"
+          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
+            echo 'Release APK unexpectedly signed in public CI' >&2
+            exit 1
+          fi
+          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
+          sha256sum "$APK" > "$OUT/SHA256.txt"
+          cp "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10-memory/phone-beta10-memory.patch" "$OUT/"
+          cd /tmp/piiwii-beta10-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-beta10-MEMORY-Sources.zip" piiwii-remote \
+            -x '*/build/*' '*/.gradle/*' '*/.kotlin/*' '*.jks' '*.keystore' '*Signing.properties'
+          unzip -t "$OUT/PiiWii-Remote-2.0.0-beta10-MEMORY-Sources.zip" > "$OUT/SOURCES-ZIPTEST.txt"
+          cat > "$OUT/AUDIT.txt" <<'EOF'
+          PiiWii Remote Phone 2.0.0-beta10 / versionCode 40
+          Base: official Phone beta9 source chain
+          Change: persistent exact-device connection memory
+          Saved data retained: name, host, port, authToken, selected_device_id
+          Startup policy: explicit previously-selected device wins over favorite/recent fallback
+          Automatic ping/reconnection remains active every 10 seconds and starts when UI becomes active
+          Package unchanged: ch.piiwii.remote2
+          Public CI output intentionally unsigned; official stable PiiWii key must be applied outside public repository.
+          EOF
+
+      - name: Upload beta10 build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta10-MEMORY-CI
+          path: /tmp/piiwii-beta10-memory-out/*
+          retention-days: 3
+          if-no-files-found: error
