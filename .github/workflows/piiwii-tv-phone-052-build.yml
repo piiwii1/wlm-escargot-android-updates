@@ -47,7 +47,9 @@ jobs:
       - name: Restore and verify source package
         run: |
           set -euo pipefail
-          base64 -d piiwii-tv-phone-052-build/PiiWii-TV-Phone-0.5.2-Sources.zip.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip
+          cat piiwii-tv-phone-052-build/src-parts/part-*.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64
+          test "$(wc -c < /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64)" -eq 72204
+          base64 -d /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip
           echo "5ecf8dd1925cd2e69b015f5379e105a09340d1e4468ade2433e13e287947d04a  /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip" | sha256sum -c -
           rm -rf /tmp/piiwii052
           mkdir -p /tmp/piiwii052
