@@ -1,0 +1,126 @@
+name: Build PiiWii Radio 1.0.0-beta4
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-radio-100-beta4-build
+    paths:
+      - 'piiwii-radio-100-beta4-build/**'
+      - '.github/workflows/piiwii-radio-100-beta4-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore and verify source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat piiwii-radio-100-beta4-build/src-parts/part-*.bin > /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip
+          test "$(wc -c < /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip)" -eq 22564
+          echo "8f69835058b2065711bf2d8d31e1ae83a2417428ced08c1c72e85c15937e912c  /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip" | sha256sum -c -
+          rm -rf /tmp/piiwii-radio
+          mkdir -p /tmp/piiwii-radio
+          unzip -q /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip -d /tmp/piiwii-radio
+          test -f /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+          test -f /tmp/piiwii-radio/PiiWiiRadio/app/src/main/java/ch/piiwii/radio/RadioPlaybackService.java
+          grep -q "applicationId 'ch.piiwii.radio'" /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+          grep -q 'versionCode 4' /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+          grep -q "versionName '1.0.0-beta4'" /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+          grep -q 'prefs.contains("favorites")' /tmp/piiwii-radio/PiiWiiRadio/app/src/main/java/ch/piiwii/radio/MainActivity.java
+          grep -q 'defaults.add("rhonefm")' /tmp/piiwii-radio/PiiWiiRadio/app/src/main/java/ch/piiwii/radio/MainActivity.java
+          grep -q 'EXTRA_FALLBACK_URL' /tmp/piiwii-radio/PiiWiiRadio/app/src/main/java/ch/piiwii/radio/RadioPlaybackService.java
+          grep -q 'registerDefaultNetworkCallback' /tmp/piiwii-radio/PiiWiiRadio/app/src/main/java/ch/piiwii/radio/RadioPlaybackService.java
+          grep -q 'ic_launcher_radio' /tmp/piiwii-radio/PiiWiiRadio/app/src/main/AndroidManifest.xml
+
+      - name: Probe priority direct streams
+        shell: bash
+        run: |
+          python - <<'PY'
+          import urllib.request
+          streams = {
+              'Rhône FM': 'https://rhonefm.ice.infomaniak.ch/rhonefm-high.mp3',
+              'One FM': 'https://onefm.ice.infomaniak.ch/onefm-high.mp3',
+              'Couleur 3': 'https://stream.srg-ssr.ch/m/couleur3/mp3_128',
+              'Nostalgie': 'https://scdn.nrjaudio.fm/audio1/fr/30601/mp3_128.mp3',
+          }
+          ok = {}
+          for name, url in streams.items():
+              try:
+                  req = urllib.request.Request(url, headers={'User-Agent':'PiiWiiRadioBuild/1.0'})
+                  with urllib.request.urlopen(req, timeout=8) as r:
+                      data = r.read(512)
+                      ok[name] = bool(data)
+                      print(f'{name}: HTTP {getattr(r, "status", "?")} {len(data)} bytes')
+              except Exception as e:
+                  ok[name] = False
+                  print(f'WARNING {name}: {e}')
+          if not ok.get('Rhône FM'):
+              raise SystemExit('Rhône FM direct stream probe failed')
+          PY
+
+      - name: Build unsigned release APK
+        working-directory: /tmp/piiwii-radio/PiiWiiRadio
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Align and inspect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/piiwii-radio/PiiWiiRadio/app/build/outputs/apk/release/app-release-unsigned.apk
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -s "$SRC"
+          mkdir -p out
+          "$BT/zipalign" -f 4 "$SRC" out/PiiWii-Radio-1.0.0-beta4-UNSIGNED-ALIGNED.apk
+          "$BT/zipalign" -c -v 4 out/PiiWii-Radio-1.0.0-beta4-UNSIGNED-ALIGNED.apk > out/ZIPALIGN-UNSIGNED.txt
+          "$BT/aapt" dump badging out/PiiWii-Radio-1.0.0-beta4-UNSIGNED-ALIGNED.apk > out/BADGING.txt
+          "$BT/aapt" dump permissions out/PiiWii-Radio-1.0.0-beta4-UNSIGNED-ALIGNED.apk > out/PERMISSIONS.txt
+          grep -F "package: name='ch.piiwii.radio'" out/BADGING.txt
+          grep -F "versionCode='4'" out/BADGING.txt
+          grep -F "versionName='1.0.0-beta4'" out/BADGING.txt
+          cp /tmp/PiiWii-Radio-1.0.0-beta4-SOURCES.zip out/
+          mkdir -p /tmp/apksigner-tool/lib
+          cp "$BT/apksigner" /tmp/apksigner-tool/
+          cp "$BT/lib/apksigner.jar" /tmp/apksigner-tool/lib/
+          tar -C /tmp -czf out/android-apksigner-35-linux.tar.gz apksigner-tool
+          sha256sum out/PiiWii-Radio-1.0.0-beta4-UNSIGNED-ALIGNED.apk > out/UNSIGNED.sha256
+
+      - name: Upload unsigned build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Radio-1.0.0-beta4-UNSIGNED
+          path: out/*
+          retention-days: 7
+          if-no-files-found: error
