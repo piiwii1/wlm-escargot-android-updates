@@ -53,7 +53,7 @@ jobs:
           mkdir -p /tmp/piiwii055
           unzip -q /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip -d /tmp/piiwii055
 
-      - name: Integrate the four PiiWii menu icons
+      - name: Integrate exact validated PiiWii menu icons
         shell: bash
         run: |
           set -euo pipefail
@@ -61,14 +61,19 @@ jobs:
           MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
           BUILD="$PRJ/app/build.gradle"
           RES="$PRJ/app/src/main/res/drawable-nodpi"
+          SRC="$GITHUB_WORKSPACE/piiwii-tv-phone-055/exact-icons"
           mkdir -p "$RES"
 
-          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$RES/nav_direct.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$RES/nav_guide.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$RES/nav_recordings.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$RES/nav_settings.png"
+          cp "$SRC/nav_direct.png" "$RES/nav_direct.png"
+          cp "$SRC/nav_guide.png" "$RES/nav_guide.png"
+          cp "$SRC/nav_recordings.png" "$RES/nav_recordings.png"
+          cp "$SRC/nav_settings.png" "$RES/nav_settings.png"
 
-          # Verify the four PNG assets before Android resource compilation.
+          echo "94f2991149767c2eb9d34ee4f8285daab727074874323d89b0616198fe8993eb  $RES/nav_direct.png" | sha256sum -c -
+          echo "8744b69f54e7dd1f1de7009ec9bae6e3d8b3e84ce583d5750211340f7fe20d27  $RES/nav_guide.png" | sha256sum -c -
+          echo "f4cec233818ff8e77fbb5261c8433b80e12f43f666fc6642abde6468b39d5256  $RES/nav_recordings.png" | sha256sum -c -
+          echo "a7c53ee724dea83a5d41d0b480a33eb24028d8fff6e5e9ad046bc08d74394c82  $RES/nav_settings.png" | sha256sum -c -
+
           python3 -m pip install --quiet pillow
           python3 - <<'PY'
           from pathlib import Path
@@ -77,10 +82,10 @@ jobs:
           for name in ('nav_direct.png','nav_guide.png','nav_recordings.png','nav_settings.png'):
               p=res/name
               with Image.open(p) as im:
-                  if im.size != (128,128) or im.mode != 'RGBA':
-                      raise SystemExit(f'bad icon {name}: {im.size} {im.mode}')
-                  if not im.getbbox():
-                      raise SystemExit(f'empty icon {name}')
+                  im.load()
+                  assert im.size == (128,128), (name, im.size)
+                  assert im.mode == 'RGBA', (name, im.mode)
+                  assert im.getbbox(), name
           PY
 
           python3 - <<'PY'
@@ -113,7 +118,6 @@ jobs:
           grep -q 'R.drawable.nav_settings' "$MAIN"
           grep -q 'dp(44), dp(44)' "$MAIN"
           sha256sum "$RES"/nav_*.png > /tmp/ICON-HASHES.txt
-          cat /tmp/ICON-HASHES.txt
 
       - name: Build clean release APK
         working-directory: /tmp/piiwii055/piiwii-tv-phone-0.5.2
