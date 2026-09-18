@@ -54,53 +54,59 @@ jobs:
           mkdir -p /tmp/piiwii054
           unzip -q /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip -d /tmp/piiwii054
 
-      - name: Apply 0.5.4 menu icon update
+      - name: Apply 0.5.4 menu update
         shell: bash
         run: |
           set -euo pipefail
           PRJ=/tmp/piiwii054/piiwii-tv-phone-0.5.2
           MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
           BUILD="$PRJ/app/build.gradle"
-          RES="$PRJ/app/src/main/res/drawable-nodpi"
-          mkdir -p "$RES"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$RES/nav_direct.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$RES/nav_guide.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$RES/nav_recordings.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$RES/nav_settings.png"
+          NODPI="$PRJ/app/src/main/res/drawable-nodpi"
+          DRAW="$PRJ/app/src/main/res/drawable"
+          mkdir -p "$NODPI" "$DRAW"
 
-          # Re-encode every icon as a plain 8-bit RGBA PNG and enlarge the artwork
-          # on the 128x128 canvas. This avoids AAPT2 crashing on the original PNG chunks.
-          if command -v magick >/dev/null 2>&1; then
-            IM=magick
-          elif command -v convert >/dev/null 2>&1; then
-            IM=convert
-          else
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq imagemagick
-            IM=convert
-          fi
-          for f in "$RES"/nav_*.png; do
-            tmp="${f%.png}.clean.png"
-            "$IM" "$f" -trim +repage -resize 118x118 -background none -gravity center -extent 128x128 -strip PNG32:"$tmp"
-            mv "$tmp" "$f"
-            file "$f"
-          done
+          # Direct and Guide: generated PNG assets already known to compile correctly.
+          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$NODPI/nav_direct.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$NODPI/nav_guide.png"
+
+          # Recording: same visual idea as the approved icon, implemented as a vector
+          # so Android renders it reliably and sharply at any density.
+          cat > "$DRAW/nav_recordings.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="48dp" android:height="48dp"
+              android:viewportWidth="100" android:viewportHeight="100">
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#31C7FF"
+                  android:strokeWidth="10" android:strokeLineCap="round" android:strokeLineJoin="round"
+                  android:pathData="M30,18 H18 V30 M70,18 H82 V30 M30,82 H18 V70 M70,82 H82 V70"/>
+              <path android:fillColor="#FF2447" android:strokeColor="#FF7790" android:strokeWidth="2"
+                  android:pathData="M50,28 a22,22 0,1 0,0 44 a22,22 0,1 0,0 -44"/>
+          </vector>
+          XML
+
+          # Settings: rounded blue gear, matching the same blue/cyan family.
+          cat > "$DRAW/nav_settings.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="48dp" android:height="48dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+              <path android:fillColor="#36C7FF" android:strokeColor="#0A84FF" android:strokeWidth="0.35"
+                  android:pathData="M19.43,12.98c0.04,-0.32 0.07,-0.65 0.07,-0.98s-0.02,-0.66 -0.07,-0.98l2.11,-1.65c0.19,-0.15 0.24,-0.42 0.12,-0.64l-2,-3.46c-0.12,-0.22 -0.37,-0.31 -0.6,-0.22l-2.49,1c-0.52,-0.4 -1.08,-0.73 -1.69,-0.98L14.5,2.42C14.47,2.18 14.25,2 14,2h-4c-0.25,0 -0.46,0.18 -0.5,0.42L9.12,5.07c-0.61,0.25 -1.18,0.59 -1.69,0.98l-2.49,-1c-0.23,-0.08 -0.48,0 -0.6,0.22l-2,3.46c-0.13,0.22 -0.07,0.49 0.12,0.64l2.11,1.65c-0.04,0.32 -0.08,0.66 -0.08,0.98s0.03,0.66 0.08,0.98l-2.11,1.65c-0.19,0.15 -0.24,0.42 -0.12,0.64l2,3.46c0.12,0.22 0.37,0.31 0.6,0.22l2.49,-1c0.52,0.4 1.08,0.73 1.69,0.98l0.38,2.65c0.04,0.24 0.25,0.42 0.5,0.42h4c0.25,0 0.46,-0.18 0.5,-0.42l0.38,-2.65c0.61,-0.25 1.18,-0.58 1.69,-0.98l2.49,1c0.23,0.08 0.48,0 0.6,-0.22l2,-3.46c0.12,-0.22 0.07,-0.49 -0.12,-0.64l-2.11,-1.65zM12,15.5A3.5,3.5 0,1 1,12,8a3.5,3.5 0,0 1,0,7.5z"/>
+          </vector>
+          XML
 
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/src/main/java/ch/piiwii/tvphone/MainActivity.java')
           s=p.read_text()
-          s=s.replace('bottomNav.setPadding(dp(8), dp(5), dp(8), dp(5));','bottomNav.setPadding(dp(8), dp(6), dp(8), dp(6));')
-          s=s.replace('bottomNav.addView(navItem("●", "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_direct, "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(70), 1f));')
-          s=s.replace('bottomNav.addView(navItem("☷", "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_guide, "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(70), 1f));')
-          s=s.replace('bottomNav.addView(navItem("▣", "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_recordings, "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(70), 1f));')
-          s=s.replace('bottomNav.addView(navItem("⚙", "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_settings, "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(70), 1f));')
+          s=s.replace('bottomNav.setPadding(dp(8), dp(5), dp(8), dp(5));','bottomNav.setPadding(dp(8), dp(5), dp(8), dp(5));')
+          s=s.replace('bottomNav.addView(navItem("●", "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_direct, "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(68), 1f));')
+          s=s.replace('bottomNav.addView(navItem("☷", "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_guide, "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(68), 1f));')
+          s=s.replace('bottomNav.addView(navItem("▣", "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_recordings, "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(68), 1f));')
+          s=s.replace('bottomNav.addView(navItem("⚙", "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_settings, "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(68), 1f));')
           old='''    private View navItem(String icon, String label, Tab target) {\n        LinearLayout box = new LinearLayout(this);\n        box.setOrientation(LinearLayout.VERTICAL);\n        box.setGravity(Gravity.CENTER);\n        box.setPadding(dp(4), dp(4), dp(4), dp(4));\n        box.setTag(target);\n        TextView i = text(icon, 19, MUTED, true); i.setGravity(Gravity.CENTER); box.addView(i);\n        TextView l = text(label, 11, MUTED, true); l.setGravity(Gravity.CENTER); box.addView(l);\n        box.setOnClickListener(v -> showTab(target));\n        return box;\n    }\n'''
-          new='''    private View navItem(int iconRes, String label, Tab target) {\n        LinearLayout box = new LinearLayout(this);\n        box.setOrientation(LinearLayout.VERTICAL);\n        box.setGravity(Gravity.CENTER);\n        box.setPadding(dp(3), dp(4), dp(3), dp(4));\n        box.setTag(target);\n        ImageView icon = new ImageView(this);\n        icon.setImageResource(iconRes);\n        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);\n        icon.setAlpha(0.72f);\n        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(36), dp(36));\n        iconLp.bottomMargin = dp(1);\n        box.addView(icon, iconLp);\n        TextView l = text(label, 9, MUTED, true);\n        l.setGravity(Gravity.CENTER);\n        l.setSingleLine(true);\n        box.addView(l, new LinearLayout.LayoutParams(-1, dp(20)));\n        box.setOnClickListener(v -> showTab(target));\n        return box;\n    }\n'''
+          new='''    private View navItem(int iconRes, String label, Tab target) {\n        LinearLayout box = new LinearLayout(this);\n        box.setOrientation(LinearLayout.VERTICAL);\n        box.setGravity(Gravity.CENTER);\n        box.setPadding(dp(3), dp(3), dp(3), dp(3));\n        box.setTag(target);\n        ImageView icon = new ImageView(this);\n        icon.setImageResource(iconRes);\n        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);\n        icon.setAlpha(0.78f);\n        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(38), dp(38));\n        iconLp.bottomMargin = dp(1);\n        box.addView(icon, iconLp);\n        TextView l = text(label, 9, MUTED, true);\n        l.setGravity(Gravity.CENTER);\n        l.setSingleLine(true);\n        box.addView(l, new LinearLayout.LayoutParams(-1, dp(18)));\n        box.setOnClickListener(v -> showTab(target));\n        return box;\n    }\n'''
           if old not in s:
               raise SystemExit('navItem source block not found')
           s=s.replace(old,new)
-          s=s.replace('if (item instanceof ImageView) ((ImageView) item).setAlpha(active ? 1.0f : 0.58f);','if (item instanceof ImageView) ((ImageView) item).setAlpha(active ? 1.0f : 0.72f);')
           s=s.replace('Version 0.5.2 · Media3 / ExoPlayer','Version 0.5.4 · Media3 / ExoPlayer')
           p.write_text(s)
           b=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/build.gradle')
@@ -111,16 +117,16 @@ jobs:
           grep -q "versionName '0.5.4'" "$BUILD"
           grep -q 'R.drawable.nav_recordings' "$MAIN"
           grep -q 'R.drawable.nav_settings' "$MAIN"
-          test -s "$RES/nav_direct.png"
-          test -s "$RES/nav_guide.png"
-          test -s "$RES/nav_recordings.png"
-          test -s "$RES/nav_settings.png"
+          test -s "$NODPI/nav_direct.png"
+          test -s "$NODPI/nav_guide.png"
+          test -s "$DRAW/nav_recordings.xml"
+          test -s "$DRAW/nav_settings.xml"
 
       - name: Build unsigned release APK
         working-directory: /tmp/piiwii054/piiwii-tv-phone-0.5.2
         run: gradle --no-daemon --stacktrace :app:assembleRelease
 
-      - name: Verify unsigned APK metadata
+      - name: Verify metadata and export tools
         shell: bash
         run: |
           set -euo pipefail
@@ -134,6 +140,8 @@ jobs:
           grep -F "versionCode='9'" out/BADGING.txt
           grep -F "versionName='0.5.4'" out/BADGING.txt
           sha256sum out/PiiWii-TV-Phone-0.5.4-unsigned.apk > out/PiiWii-TV-Phone-0.5.4-unsigned.apk.sha256
+          cp "$BT/lib/apksigner.jar" out/apksigner.jar
+          cp "$BT/zipalign" out/zipalign
 
       - name: Upload unsigned build
         uses: actions/upload-artifact@v4
