@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      actions: read
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -48,6 +49,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq imagemagick
 
+      - name: Download verified 0.5.3 build
+        uses: actions/download-artifact@v4
+        with:
+          name: PiiWii-TV-Phone-0.5.3-DELIVERY
+          path: /tmp/piiwii053-artifact
+          run-id: 35342251150
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Restore verified 0.5.2 sources
         shell: bash
         run: |
@@ -68,17 +77,17 @@ jobs:
           MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
           BUILD="$PRJ/app/build.gradle"
           RES="$PRJ/app/src/main/res/drawable-nodpi"
-          mkdir -p "$RES"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$RES/nav_direct.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$RES/nav_guide.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$RES/nav_recordings.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$RES/nav_settings.png"
-          IM="$(command -v magick || command -v convert)"
-          test -n "$IM"
-          for f in "$RES"/nav_*.png; do
-            tmp="${f%.png}.clean.png"
-            "$IM" "$f" -trim +repage -resize '118x118>' -background none -gravity center -extent 128x128 -strip -depth 8 PNG32:"$tmp"
-            mv "$tmp" "$f"
+          APK=/tmp/piiwii053-artifact/PiiWii-TV-Phone-0.5.3.apk
+          test -s "$APK"
+          mkdir -p "$RES" /tmp/icons053
+          unzip -p "$APK" res/drawable-nodpi-v4/nav_direct.png > /tmp/icons053/nav_direct.png
+          unzip -p "$APK" res/drawable-nodpi-v4/nav_guide.png > /tmp/icons053/nav_guide.png
+          unzip -p "$APK" res/drawable-nodpi-v4/nav_recordings.png > /tmp/icons053/nav_recordings.png
+          unzip -p "$APK" res/drawable-nodpi-v4/nav_settings.png > /tmp/icons053/nav_settings.png
+          for f in /tmp/icons053/nav_*.png; do
+            out="$RES/$(basename "$f")"
+            convert "$f" -trim +repage -resize '118x118>' -background none -gravity center -extent 128x128 -strip -depth 8 PNG32:"$out"
+            test -s "$out"
           done
           python3 - <<'PY'
           from pathlib import Path
