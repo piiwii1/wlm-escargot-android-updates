@@ -81,9 +81,12 @@ jobs:
           p.write_text(s)
           PY
 
+          python3 -m pip install --quiet pillow
           python3 - "$ROOT" "$GITHUB_WORKSPACE" <<'PY'
           from pathlib import Path
-          import base64, re, sys
+          import base64, re, sys, io
+          from PIL import Image, ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=True
           root=Path(sys.argv[1]); ws=Path(sys.argv[2])
           out=root/'remote/src/main/res/drawable-nodpi'; out.mkdir(parents=True,exist_ok=True)
           for n in ['settings','apps','keyboard','touchpad','remote']:
@@ -91,8 +94,11 @@ jobs:
               clean=re.sub(r'[^A-Za-z0-9+/=]','',txt)
               clean += '='*((4-len(clean)%4)%4)
               data=base64.b64decode(clean, validate=False)
-              assert data.startswith(b'\x89PNG\r\n\x1a\n'), n
-              (out/f'ic_{n}_custom.png').write_bytes(data)
+              im=Image.open(io.BytesIO(data))
+              im.load()
+              if im.mode not in ('RGB','RGBA'):
+                  im=im.convert('RGBA')
+              im.save(out/f'ic_{n}_custom.png','PNG',optimize=False)
           PY
 
           grep -q 'versionCode = 41' "$ROOT/remote/build.gradle.kts"
