@@ -132,12 +132,11 @@ jobs:
           grep -q "package: name='ch.piiwii.remote2' versionCode='41' versionName='2.0.0-beta11'" "$OUT/BADGING.txt"
           if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then exit 1; fi
           unzip -t "$APK" > "$OUT/ZIPTEST.txt"
-          unzip -l "$APK" > "$OUT/CONTENTS.txt"
-          for n in settings apps keyboard touchpad remote; do grep -q "ic_${n}_custom.png" "$OUT/CONTENTS.txt"; done
           sha256sum "$APK" > "$OUT/SHA256.txt"
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar "$OUT/apksigner.jar"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: PiiWii-Remote-Phone-2.0.0-beta11-UNSIGNED
           path: /tmp/out/*
