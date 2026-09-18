@@ -1,0 +1,128 @@
+name: Build PiiWii TV Phone 0.5.3
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-tv-phone-053-build
+    paths:
+      - 'piiwii-tv-phone-053-build/**'
+      - '.github/workflows/piiwii-tv-phone-053-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore verified 0.5.2 sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat piiwii-tv-phone-052-build/src-parts/part-*.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64
+          test "$(wc -c < /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64)" -eq 72204
+          base64 -d /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip
+          echo "5ecf8dd1925cd2e69b015f5379e105a09340d1e4468ade2433e13e287947d04a  /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip" | sha256sum -c -
+          rm -rf /tmp/piiwii053
+          mkdir -p /tmp/piiwii053
+          unzip -q /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip -d /tmp/piiwii053
+
+      - name: Apply 0.5.3 menu icon update
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRJ=/tmp/piiwii053/piiwii-tv-phone-0.5.2
+          MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
+          BUILD="$PRJ/app/build.gradle"
+          mkdir -p "$PRJ/app/src/main/res/drawable-nodpi"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_direct.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_guide.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_recordings.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_settings.png"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/piiwii053/piiwii-tv-phone-0.5.2/app/src/main/java/ch/piiwii/tvphone/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('bottomNav.addView(navItem("●", "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_direct, "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(62), 1f));')
+          s=s.replace('bottomNav.addView(navItem("☷", "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_guide, "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(62), 1f));')
+          s=s.replace('bottomNav.addView(navItem("▣", "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_recordings, "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(62), 1f));')
+          s=s.replace('bottomNav.addView(navItem("⚙", "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_settings, "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(62), 1f));')
+          old='''    private View navItem(String icon, String label, Tab target) {\n        LinearLayout box = new LinearLayout(this);\n        box.setOrientation(LinearLayout.VERTICAL);\n        box.setGravity(Gravity.CENTER);\n        box.setPadding(dp(4), dp(4), dp(4), dp(4));\n        box.setTag(target);\n        TextView i = text(icon, 19, MUTED, true); i.setGravity(Gravity.CENTER); box.addView(i);\n        TextView l = text(label, 11, MUTED, true); l.setGravity(Gravity.CENTER); box.addView(l);\n        box.setOnClickListener(v -> showTab(target));\n        return box;\n    }\n'''
+          new='''    private View navItem(int iconRes, String label, Tab target) {\n        LinearLayout box = new LinearLayout(this);\n        box.setOrientation(LinearLayout.VERTICAL);\n        box.setGravity(Gravity.CENTER);\n        box.setPadding(dp(4), dp(3), dp(4), dp(3));\n        box.setTag(target);\n        ImageView icon = new ImageView(this);\n        icon.setImageResource(iconRes);\n        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);\n        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(30), dp(30));\n        iconLp.bottomMargin = dp(1);\n        box.addView(icon, iconLp);\n        TextView l = text(label, 10, MUTED, true);\n        l.setGravity(Gravity.CENTER);\n        l.setSingleLine(true);\n        box.addView(l);\n        box.setOnClickListener(v -> showTab(target));\n        return box;\n    }\n'''
+          if old not in s:
+              raise SystemExit('navItem source block not found')
+          s=s.replace(old,new)
+          s=s.replace('Version 0.5.2 · Media3 / ExoPlayer','Version 0.5.3 · Media3 / ExoPlayer')
+          p.write_text(s)
+          b=Path('/tmp/piiwii053/piiwii-tv-phone-0.5.2/app/build.gradle')
+          t=b.read_text().replace('versionCode 7','versionCode 8').replace("versionName '0.5.2'","versionName '0.5.3'")
+          b.write_text(t)
+          PY
+          grep -q 'versionCode 8' "$BUILD"
+          grep -q "versionName '0.5.3'" "$BUILD"
+          grep -q 'R.drawable.nav_direct' "$MAIN"
+          grep -q 'R.drawable.nav_guide' "$MAIN"
+          grep -q 'R.drawable.nav_recordings' "$MAIN"
+          grep -q 'R.drawable.nav_settings' "$MAIN"
+          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_direct.png"
+          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_guide.png"
+          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_recordings.png"
+          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_settings.png"
+
+      - name: Build APK
+        working-directory: /tmp/piiwii053/piiwii-tv-phone-0.5.2
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/piiwii053/piiwii-tv-phone-0.5.2/app/build/outputs/apk/debug/app-debug.apk
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -s "$APK"
+          mkdir -p out
+          cp "$APK" out/PiiWii-TV-Phone-0.5.3.apk
+          "$BT/zipalign" -c -v 4 "$APK" > out/ZIPALIGN.txt
+          "$BT/apksigner" verify --verbose --print-certs "$APK" > out/APKSIGNER.txt
+          "$BT/aapt" dump badging "$APK" > out/BADGING.txt
+          grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
+          grep -F "versionCode='8'" out/BADGING.txt
+          grep -F "versionName='0.5.3'" out/BADGING.txt
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' out/APKSIGNER.txt
+          sha256sum out/PiiWii-TV-Phone-0.5.3.apk > out/PiiWii-TV-Phone-0.5.3.apk.sha256
+          cat out/PiiWii-TV-Phone-0.5.3.apk.sha256
+
+      - name: Upload delivery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-TV-Phone-0.5.3-DELIVERY
+          path: out/*
+          retention-days: 7
+          if-no-files-found: error
