@@ -1,4 +1,4 @@
-name: Build PiiWii TV Phone 0.5.4 unsigned
+name: Build PiiWii TV Phone 0.5.4 clean
 
 on:
   push:
@@ -41,14 +41,6 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Download verified 0.5.3 build
-        uses: actions/download-artifact@v4
-        with:
-          name: PiiWii-TV-Phone-0.5.3-DELIVERY
-          path: /tmp/piiwii053-artifact
-          run-id: 35342251150
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Restore verified 0.5.2 sources
         shell: bash
         run: |
@@ -61,33 +53,46 @@ jobs:
           mkdir -p /tmp/piiwii054
           unzip -q /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip -d /tmp/piiwii054
 
-      - name: Apply 0.5.4 menu icon update
+      - name: Apply clean 0.5.4 bottom menu update
         shell: bash
         run: |
           set -euo pipefail
           PRJ=/tmp/piiwii054/piiwii-tv-phone-0.5.2
           MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
           BUILD="$PRJ/app/build.gradle"
-          RES="$PRJ/app/src/main/res/drawable-nodpi"
-          APK=/tmp/piiwii053-artifact/PiiWii-TV-Phone-0.5.3.apk
-          test -s "$APK"
+          RES="$PRJ/app/src/main/res/drawable"
           mkdir -p "$RES"
-          unzip -p "$APK" res/drawable-nodpi-v4/nav_direct.png > "$RES/nav_direct.png"
-          unzip -p "$APK" res/drawable-nodpi-v4/nav_guide.png > "$RES/nav_guide.png"
-          unzip -p "$APK" res/drawable-nodpi-v4/nav_recordings.png > "$RES/nav_recordings.png"
-          unzip -p "$APK" res/drawable-nodpi-v4/nav_settings.png > "$RES/nav_settings.png"
 
-          python3 -m pip install --quiet pillow
-          python3 - <<'PY'
-          from pathlib import Path
-          from PIL import Image
-          res=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/src/main/res/drawable-nodpi')
-          for p in res.glob('nav_*.png'):
-              im=Image.open(p).convert('RGBA')
-              im.save(p, format='PNG', optimize=False)
-              with Image.open(p) as check:
-                  check.verify()
-          PY
+          cat > "$RES/nav_direct.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+              <path android:fillColor="#52B8FF" android:pathData="M15,11 L34,24 L15,37 Z"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#8BD6FF" android:strokeWidth="2.8" android:strokeLineCap="round" android:pathData="M35,15 C39,17.5 41,20.5 41,24 C41,27.5 39,30.5 35,33"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#8BD6FF" android:strokeWidth="2.8" android:strokeLineCap="round" android:pathData="M38.5,10 C44.5,13.5 47,18.2 47,24 C47,29.8 44.5,34.5 38.5,38"/>
+          </vector>
+          XML
+
+          cat > "$RES/nav_guide.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#63C3FF" android:strokeWidth="2.8" android:strokeLineJoin="round" android:pathData="M8,10 L34,10 L34,38 L8,38 Z"/>
+              <path android:fillColor="#63C3FF" android:pathData="M13,16 L29,16 L29,19 L13,19 Z M13,23 L26,23 L26,26 L13,26 Z M13,30 L23,30 L23,33 L13,33 Z"/>
+              <path android:fillColor="#0F2038" android:strokeColor="#9CDFFF" android:strokeWidth="2.4" android:pathData="M30,26 A9,9 0,1 0,30,44 A9,9 0,1 0,30,26"/>
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#9CDFFF" android:strokeWidth="2.4" android:strokeLineCap="round" android:pathData="M39,35 L39,30 M39,35 L43,37"/>
+          </vector>
+          XML
+
+          cat > "$RES/nav_recordings.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#63C3FF" android:strokeWidth="2.8" android:strokeLineJoin="round" android:pathData="M8,9 L40,9 L40,39 L8,39 Z"/>
+              <path android:fillColor="#FF5C68" android:pathData="M24,16 A8,8 0,1 0,24,32 A8,8 0,1 0,24,16"/>
+              <path android:fillColor="#FFC1C6" android:pathData="M24,20 A4,4 0,1 0,24,28 A4,4 0,1 0,24,20"/>
+          </vector>
+          XML
+
+          cat > "$RES/nav_settings.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="24" android:viewportHeight="24">
+              <path android:fillColor="#63C3FF" android:pathData="M19.43,12.98c0.04,-0.32 0.07,-0.65 0.07,-0.98s-0.02,-0.66 -0.07,-0.98l2.11,-1.65c0.19,-0.15 0.24,-0.42 0.12,-0.64l-2,-3.46c-0.12,-0.22 -0.37,-0.31 -0.6,-0.22l-2.49,1c-0.52,-0.4 -1.08,-0.73 -1.69,-0.98L14.5,2.42C14.47,2.18 14.25,2 14,2h-4c-0.25,0 -0.46,0.18 -0.49,0.42L9.13,5.07c-0.61,0.25 -1.17,0.59 -1.69,0.98l-2.49,-1c-0.23,-0.08 -0.48,0 -0.6,0.22l-2,3.46c-0.13,0.22 -0.07,0.49 0.12,0.64l2.11,1.65c-0.04,0.32 -0.08,0.66 -0.08,0.98s0.03,0.66 0.08,0.98l-2.11,1.65c-0.19,0.15 -0.24,0.42 -0.12,0.64l2,3.46c0.12,0.22 0.37,0.31 0.6,0.22l2.49,-1c0.52,0.4 1.08,0.73 1.69,0.98l0.38,2.65c0.03,0.24 0.24,0.42 0.49,0.42h4c0.25,0 0.46,-0.18 0.49,-0.42l0.38,-2.65c0.61,-0.25 1.17,-0.58 1.69,-0.98l2.49,1c0.23,0.08 0.48,0 0.6,-0.22l2,-3.46c0.12,-0.22 0.07,-0.49 -0.12,-0.64l-2.11,-1.65zM12,15.5A3.5,3.5 0,1 1,12,8a3.5,3.5 0,0 1,0,7.5z"/>
+          </vector>
+          XML
 
           python3 - <<'PY'
           from pathlib import Path
@@ -109,16 +114,17 @@ jobs:
           t=b.read_text().replace('versionCode 7','versionCode 9').replace("versionName '0.5.2'","versionName '0.5.4'")
           b.write_text(t)
           PY
+
           grep -q 'versionCode 9' "$BUILD"
           grep -q "versionName '0.5.4'" "$BUILD"
           grep -q 'R.drawable.nav_recordings' "$MAIN"
           grep -q 'R.drawable.nav_settings' "$MAIN"
 
-      - name: Build unsigned release APK
+      - name: Build clean release APK
         working-directory: /tmp/piiwii054/piiwii-tv-phone-0.5.2
         run: gradle --no-daemon --stacktrace :app:assembleRelease
 
-      - name: Package unsigned APK and signing tools
+      - name: Verify and package unsigned APK
         shell: bash
         run: |
           set -euo pipefail
@@ -126,21 +132,20 @@ jobs:
           APK="$PRJ/app/build/outputs/apk/release/app-release-unsigned.apk"
           BT="$ANDROID_HOME/build-tools/35.0.0"
           test -s "$APK"
-          mkdir -p out/build-tools/lib
-          cp "$APK" out/PiiWii-TV-Phone-0.5.4-unsigned.apk
-          cp "$BT/apksigner" out/build-tools/apksigner
-          cp "$BT/lib/apksigner.jar" out/build-tools/lib/apksigner.jar
+          mkdir -p out
+          cp "$APK" out/PiiWii-TV-Phone-0.5.4-clean-unsigned.apk
           "$BT/aapt" dump badging "$APK" > out/BADGING.txt
           grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
           grep -F "versionCode='9'" out/BADGING.txt
           grep -F "versionName='0.5.4'" out/BADGING.txt
-          sha256sum out/PiiWii-TV-Phone-0.5.4-unsigned.apk > out/PiiWii-TV-Phone-0.5.4-unsigned.apk.sha256
-          (cd /tmp/piiwii054 && zip -qr "$GITHUB_WORKSPACE/out/PiiWii-TV-Phone-0.5.4-Sources.zip" piiwii-tv-phone-0.5.2)
+          "$BT/zipalign" -c -v 4 "$APK" > out/ZIPALIGN-CHECK.txt || true
+          sha256sum out/PiiWii-TV-Phone-0.5.4-clean-unsigned.apk > out/PiiWii-TV-Phone-0.5.4-clean-unsigned.apk.sha256
+          (cd /tmp/piiwii054 && zip -qr "$GITHUB_WORKSPACE/out/PiiWii-TV-Phone-0.5.4-clean-Sources.zip" piiwii-tv-phone-0.5.2)
 
-      - name: Upload unsigned artifact
+      - name: Upload clean unsigned artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-Phone-0.5.4-UNSIGNED
+          name: PiiWii-TV-Phone-0.5.4-CLEAN-UNSIGNED
           path: out/*
           retention-days: 14
           if-no-files-found: error
