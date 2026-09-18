@@ -6,15 +6,17 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
+    <queries>
+        <package android:name="hideme.android.vpn" />
+        <package android:name="fr.m6.m6replay" />
+        <package android:name="com.android.chrome" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:label="PiiWii M6 Test"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
-        <activity
-            android:name=".M6Activity"
-            android:exported="false"
-            android:screenOrientation="unspecified" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
