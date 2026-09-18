@@ -35,7 +35,77 @@ jobs:
           (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-fix1.patch")
           (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-space.patch")
           (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10-memory/phone-beta10-memory.patch")
-          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta11-icons/phone-beta11-icons.patch")
+
+          python3 - "$ROOT" <<'PY'
+          from pathlib import Path
+          import sys
+          root = Path(sys.argv[1])
+
+          p = root / 'remote/build.gradle.kts'
+          s = p.read_text()
+          assert 'versionCode = 40' in s
+          assert 'versionName = "2.0.0-beta10"' in s
+          s = s.replace('versionCode = 40', 'versionCode = 41', 1)
+          s = s.replace('versionName = "2.0.0-beta10"', 'versionName = "2.0.0-beta11"', 1)
+          p.write_text(s)
+
+          p = root / 'remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt'
+          s = p.read_text()
+          if 'import android.widget.ImageView\n' not in s:
+              s = s.replace('import android.widget.FrameLayout\n', 'import android.widget.FrameLayout\nimport android.widget.ImageView\n', 1)
+          if 'import ch.piiwii.remote2.R\n' not in s:
+              s = s.replace('import android.widget.ViewFlipper\n', 'import android.widget.ViewFlipper\nimport ch.piiwii.remote2.R\n', 1)
+
+          old_settings = '''        addView(TextView(context).apply {
+              text = "⚙"
+              textSize = 23f
+              gravity = Gravity.CENTER
+              setTextColor(UiKit.TEXT)
+              isClickable = true
+              isFocusable = true
+              contentDescription = "Paramètres"
+              background = UiKit.interactive(context, 14, UiKit.SURFACE)
+              setOnClickListener { settingsClick?.invoke() }
+          }, LayoutParams(UiKit.dp(context, 52), UiKit.dp(context, 52)).apply {
+              marginStart = UiKit.dp(context, 8)
+          })'''
+          new_settings = '''        addView(ImageView(context).apply {
+              setImageResource(R.drawable.ic_settings_custom)
+              adjustViewBounds = true
+              scaleType = ImageView.ScaleType.FIT_CENTER
+              val pad = UiKit.dp(context, 9)
+              setPadding(pad, pad, pad, pad)
+              isClickable = true
+              isFocusable = true
+              contentDescription = "Paramètres"
+              background = UiKit.interactive(context, 14, UiKit.SURFACE)
+              setOnClickListener { settingsClick?.invoke() }
+          }, LayoutParams(UiKit.dp(context, 52), UiKit.dp(context, 52)).apply {
+              marginStart = UiKit.dp(context, 8)
+          })'''
+          assert old_settings in s, 'settings block not found'
+          s = s.replace(old_settings, new_settings, 1)
+
+          old_nav = '''                addView(TextView(context).apply {
+                      text = section.glyph
+                      textSize = 21f
+                      gravity = Gravity.CENTER
+                  })'''
+          new_nav = '''                addView(ImageView(context).apply {
+                      setImageResource(when (section) {
+                          RemoteSection.REMOTE, RemoteSection.NAVIGATION -> R.drawable.ic_remote_custom
+                          RemoteSection.TOUCHPAD -> R.drawable.ic_touchpad_custom
+                          RemoteSection.KEYBOARD, RemoteSection.KEYBOARD_ADVANCED -> R.drawable.ic_keyboard_custom
+                          RemoteSection.APPS -> R.drawable.ic_apps_custom
+                      })
+                      adjustViewBounds = true
+                      scaleType = ImageView.ScaleType.FIT_CENTER
+                      contentDescription = section.label
+                  }, LayoutParams(UiKit.dp(context, 24), UiKit.dp(context, 24)))'''
+          assert old_nav in s, 'navigation glyph block not found'
+          s = s.replace(old_nav, new_nav, 1)
+          p.write_text(s)
+          PY
 
           RES="$ROOT/remote/src/main/res/drawable-nodpi"
           mkdir -p "$RES"
@@ -46,7 +116,7 @@ jobs:
 
           grep -q 'versionCode = 41' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-beta11"' "$ROOT/remote/build.gradle.kts"
-          grep -q 'devices.firstOrNull { it.id == selectedId }?.let { return it }' "$ROOT/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt"
+          grep -Fq 'devices.firstOrNull { it.id == selectedId }?.let { return it }' "$ROOT/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt"
           grep -q 'R.drawable.ic_settings_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
           grep -q 'R.drawable.ic_touchpad_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
 
