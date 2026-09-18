@@ -1,0 +1,38 @@
+name: Export Android signing tools
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-tv-phone-053-build
+    paths:
+      - '.github/workflows/piiwii-export-signing-tools.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Prepare Android SDK tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "build-tools;35.0.0"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          mkdir -p out/build-tools/lib
+          cp "$BT/apksigner" out/build-tools/apksigner
+          cp "$BT/lib/apksigner.jar" out/build-tools/lib/apksigner.jar
+          cp "$BT/zipalign" out/build-tools/zipalign
+          cp "$BT/aapt" out/build-tools/aapt
+          chmod +x out/build-tools/apksigner out/build-tools/zipalign out/build-tools/aapt
+          "$BT/apksigner" version > out/APKSIGNER_VERSION.txt
+
+      - name: Upload tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-signing-tools-35.0.0
+          path: out/*
+          retention-days: 7
+          if-no-files-found: error
