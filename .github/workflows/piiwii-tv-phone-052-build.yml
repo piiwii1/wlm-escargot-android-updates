@@ -15,6 +15,9 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,11 +28,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Prepare preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -41,6 +49,7 @@ jobs:
           set -euo pipefail
           base64 -d piiwii-tv-phone-052-build/PiiWii-TV-Phone-0.5.2-Sources.zip.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip
           echo "5ecf8dd1925cd2e69b015f5379e105a09340d1e4468ade2433e13e287947d04a  /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip" | sha256sum -c -
+          rm -rf /tmp/piiwii052
           mkdir -p /tmp/piiwii052
           unzip -q /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip -d /tmp/piiwii052
           test -f /tmp/piiwii052/piiwii-tv-phone-0.5.2/app/build.gradle
@@ -66,6 +75,7 @@ jobs:
           grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
           grep -F "versionCode='7'" out/BADGING.txt
           grep -F "versionName='0.5.2'" out/BADGING.txt
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' out/APKSIGNER.txt
           sha256sum out/PiiWii-TV-Phone-0.5.2.apk > out/PiiWii-TV-Phone-0.5.2.apk.sha256
           cat out/PiiWii-TV-Phone-0.5.2.apk.sha256
 
