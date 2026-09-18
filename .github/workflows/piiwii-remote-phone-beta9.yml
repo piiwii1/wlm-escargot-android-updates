@@ -70,6 +70,9 @@ jobs:
           FIX="$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-fix1.patch"
           echo '37d3d54dd4617de1ca0b6b005bdd51ac7ce378ab351134fce2b270dca86954d4  '"$FIX" | sha256sum -c -
           (cd "$ROOT" && patch -p1 < "$FIX")
+          SPACE="$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-space.patch"
+          echo '8cd543092cd70c05aa87fb5e8d26bdcd5e2a208b27d9c6cb83da753d05dfec5d  '"$SPACE" | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < "$SPACE")
 
       - name: Static beta9 regression audit
         shell: bash
@@ -81,7 +84,6 @@ jobs:
           MAIN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
           VM="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt"
           SHELL="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
-          SCREEN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
           KBD="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt"
           VOICE="$ROOT/remote/src/main/java/ch/piiwii/remote2/network/VoiceStreamer.kt"
           COMMAND="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt"
@@ -106,9 +108,9 @@ jobs:
           grep -q 'Texte & touches rapides' "$KBD"
           grep -q 'Écrire un texte…' "$KBD"
           grep -q 'Maintenir pour parler' "$KBD"
-          grep -q 'Retour arrière\|⌫' "$KBD"
+          grep -q '⌫' "$KBD"
           grep -q 'RemoteCommand.NAV_LEFT' "$KBD"
-          ! grep -q 'button("Espace"' "$KBD"
+          grep -q 'button("Espace"' "$KBD"
 
           grep -q 'Touches avancées' "$KBD"
           grep -q 'keyRow("F1", "F2", "F3", "F4")' "$KBD"
@@ -193,7 +195,7 @@ jobs:
           def dex(path):
               with zipfile.ZipFile(path) as z: return b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
           phone=dex(sys.argv[1]); tv=dex(sys.argv[2])
-          for value in ['Texte & touches rapides','Touches avancées','Maintenir pour parler','VOICE_START','VOICE_FRAME','VOICE_STOP','2.0.0-beta9']:
+          for value in ['Texte & touches rapides','Espace','Touches avancées','Maintenir pour parler','VOICE_START','VOICE_FRAME','VOICE_STOP','2.0.0-beta9']:
               assert value.encode('utf-8') in phone,value
           assert b'KEYBOARD_KEY' in phone
           for value in ['VOICE_START','VOICE_FRAME','VOICE_STOP','2.0.0-beta2']:
@@ -209,7 +211,7 @@ jobs:
           cat > "$OUT/AUDIT.txt" <<'EOT'
           PIIWII REMOTE PHONE 2.0.0-beta9 / versionCode 39
           PIIWII REMOTE TV RECEIVER 2.0.0-beta2 / versionCode 27
-          KEYBOARD: two vertical full-screen pages. Quick page = text composer, Backspace/Enter/Escape/Tab, arrows and push-to-talk. Advanced page = F1-F12, Ctrl/Alt/Shift/Win and shortcuts.
+          KEYBOARD: two vertical full-screen pages. Quick page = text composer, Backspace/Enter/Space/Tab/Escape, arrows and push-to-talk. Advanced page = F1-F12, Ctrl/Alt/Shift/Win and shortcuts.
           MICROPHONE: hold-to-talk only; RECORD_AUDIO runtime permission; lifecycle stops recording; authenticated 16 kHz mono PCM16 / 20 ms LAN frames.
           ANDROID TV: authenticated voice playback with AudioTrack stream mode.
           REGRESSIONS: beta2 IP fix + beta3 Remote + beta4 Navigation + beta5 PC power safety + beta6 touchpad + beta7 tabs + beta8 extended keyboard preserved. KEYBOARD_KEY is explicitly allowed at runtime.
