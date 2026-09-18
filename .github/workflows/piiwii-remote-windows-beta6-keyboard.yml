@@ -1,0 +1,148 @@
+name: PiiWii Remote Windows beta6 - Extended keyboard keys
+
+on:
+  push:
+    branches: [piiwii-remote-v2-windows-beta6-keyboard]
+    paths:
+      - 'piiwii-remote-v2-windows-beta6/**'
+      - '.github/workflows/piiwii-remote-windows-beta6-keyboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build and test Windows beta6 keyboard
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta5 and apply beta6 keyboard patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh "$BASE/piiwii-beta6-src"
+          ROOT="$BASE/piiwii-beta6-src/piiwii-remote"
+          base64 -d piiwii-remote-v2-windows-beta4/beta4.patch.xz.b64 | xz -d > "$BASE/beta4.patch"
+          (cd "$ROOT" && patch -p1 < "$BASE/beta4.patch")
+          mkdir -p "$ROOT/windows-agent/installer"
+          cp piiwii-remote-v2-windows-beta4/PiiWiiRemoteAgent.iss "$ROOT/windows-agent/installer/"
+          base64 -d piiwii-remote-v2-windows-beta5/beta5.patch.xz.b64 | xz -d > "$BASE/beta5.patch"
+          (cd "$ROOT" && patch --binary -p2 < "$BASE/beta5.patch")
+          base64 -d piiwii-remote-v2-windows-beta6/windows-beta6.patch.xz.b64 > "$BASE/windows-beta6.patch.xz"
+          echo 'd631c8b81fe6600624c160a908f0fca99dd5cc8d2212f8c464d37ec00fd103d8  '"$BASE/windows-beta6.patch.xz" | sha256sum -c -
+          xz -dc "$BASE/windows-beta6.patch.xz" > "$BASE/windows-beta6.patch"
+          echo '2a0df8bc0b008844e5550e31dc4eb4d2028cc974e767b48c215491ba46d21432  '"$BASE/windows-beta6.patch" | sha256sum -c -
+          (cd "$ROOT" && patch --binary -p1 < "$BASE/windows-beta6.patch")
+          grep -q '2.0.0-beta6' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'KEYBOARD_KEY' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -q 'FILEVERSION 2,0,0,13' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc"
+          grep -q 'PiiWii-Remote-Agent-2.0.0-beta5.exe' "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss"
+
+      - name: Static extended keyboard audit
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta6-src\piiwii-remote\windows-agent'
+          $cpp=Get-Content (Join-Path $root 'src\PiiWiiRemoteAgent.cpp') -Raw -Encoding UTF8
+          foreach($needle in @('KEYBOARD_KEY','sendKeyboardKeyPayload','keyboardVirtualKeyForToken','VK_F5','VK_MENU','VK_DELETE','VK_SNAPSHOT','VK_LWIN')){
+            if(-not $cpp.Contains($needle)){throw "Missing keyboard feature: $needle"}
+          }
+          foreach($token in @('CTRL','ALT','SHIFT','WIN','DELETE','INSERT','HOME','END','PGUP','PGDN','PRINTSCREEN','PAUSE')){
+            if(-not $cpp.Contains('"'+$token+'"')){throw "Missing key token: $token"}
+          }
+          $iss=Get-Content (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') -Raw -Encoding UTF8
+          if(-not $iss.Contains('2.0.0-beta6')){throw 'Installer beta6 version missing'}
+          if(-not $iss.Contains('VersionInfoProductVersion=2.0.0.13')){throw 'Installer numeric version missing'}
+          'STATIC EXTENDED KEYBOARD AUDIT: OK'
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile Agent beta6 x64 with explicit UTF-8
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-beta6-src\piiwii-remote\windows-agent
+        run: |
+          if not exist build mkdir build
+          rc /nologo /fo build\PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /utf-8 /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp build\PiiWiiRemoteAgent.res gdi32.lib user32.lib advapi32.lib PowrProf.lib bcrypt.lib shell32.lib /link /SUBSYSTEM:WINDOWS /OUT:build\PiiWii-Remote-Agent-2.0.0-beta6.exe
+
+      - name: Validate Agent beta6
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta6-src\piiwii-remote\windows-agent'
+          $exe=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta6.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Agent self-test failed: $($p.ExitCode)"}
+          $r=Start-Process -FilePath $exe -ArgumentList '--reopen-self-test' -Wait -PassThru
+          if($r.ExitCode -ne 0){throw "Reopen self-test failed: $($r.ExitCode)"}
+          $h=& dumpbin /headers $exe | Out-String
+          if($h -notmatch 'PE32\+' -or ($h -notmatch 'machine \(x64\)' -and $h -notmatch '8664 machine')){throw 'Agent is not PE32+ x64'}
+          $v=(Get-Item $exe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta6*'){throw "Bad ProductVersion: $($v.ProductVersion)"}
+          'AGENT BETA6 SELF-TESTS: OK'
+
+      - name: Build beta6 installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta6-src\piiwii-remote\windows-agent'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not(Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          & $iscc (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          if($LASTEXITCODE -ne 0){throw "Inno Setup failed: $LASTEXITCODE"}
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta6.exe'
+          if(-not(Test-Path $setup)){throw 'Setup missing'}
+          if((Get-Item $setup).VersionInfo.ProductVersion -notlike '2.0.0.13*'){throw 'Bad setup version'}
+
+      - name: Install beta6 and verify canonical upgrade path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta6-src\piiwii-remote\windows-agent'
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta6.exe'
+          $installDir=Join-Path $env:LOCALAPPDATA 'Programs\PiiWii Remote Agent'
+          $installedExe=Join-Path $installDir 'PiiWii-Remote-Agent.exe'
+          $p=Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS="autostart"') -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Install failed: $($p.ExitCode)"}
+          if(-not(Test-Path $installedExe)){throw 'Canonical installed agent missing'}
+          $v=(Get-Item $installedExe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta6*'){throw "Installed version is not beta6: $($v.ProductVersion)"}
+          $t=Start-Process $installedExe -ArgumentList '--self-test' -Wait -PassThru
+          if($t.ExitCode -ne 0){throw 'Installed beta6 self-test failed'}
+          $un=Join-Path $installDir 'unins000.exe'
+          $u=Start-Process $un -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if($u.ExitCode -ne 0){throw 'Uninstall failed'}
+          'INSTALL / SELF-TEST / UNINSTALL: OK'
+
+      - name: Package beta6
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta6-src\piiwii-remote\windows-agent'
+          $out=Join-Path $env:RUNNER_TEMP 'piiwii-beta6-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta6.exe') $out
+          Copy-Item (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta6.exe') $out
+          Copy-Item (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') $out
+          @(
+            'PIIWII REMOTE WINDOWS 2.0.0-beta6 EXTENDED KEYBOARD AUDIT PASSED',
+            'Baseline beta5 UTF-8 behavior preserved',
+            'Protocol remains PIIWII_REMOTE/1',
+            'Additive KEYBOARD_KEY supported',
+            'F1-F12 mapping supported',
+            'Ctrl / Alt / Shift / Win supported',
+            'Delete / Insert / Home / End / Page Up / Page Down / arrows / Print Screen / Pause supported',
+            'Multi-key shortcuts up to 4 keys supported',
+            'Agent PE32+ x64 self-test + reopen self-test: OK',
+            'Installer ProductVersion 2.0.0.13: OK'
+          ) | Set-Content -Encoding UTF8 (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta6-AUDIT.txt')
+          Compress-Archive -Path (Join-Path $root 'src'),(Join-Path $root 'installer') -DestinationPath (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta6-Sources.zip') -Force
+          Get-ChildItem $out -File | Where-Object {$_.Name -ne 'PiiWii-Remote-Windows-2.0.0-beta6-SHA256.txt'} | ForEach-Object {"$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"} | Set-Content -Encoding ascii (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta6-SHA256.txt')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-2.0.0-beta6-Keyboard
+          path: ${{ runner.temp }}\piiwii-beta6-out\*
+          retention-days: 7
+          if-no-files-found: error
