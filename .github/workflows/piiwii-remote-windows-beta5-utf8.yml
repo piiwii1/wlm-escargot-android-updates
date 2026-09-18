@@ -51,12 +51,12 @@ jobs:
           foreach($f in $files){
             $bytes=[IO.File]::ReadAllBytes($f)
             try { $text=$utf8Strict.GetString($bytes) } catch { throw "Not valid UTF-8: $f" }
-            foreach($bad in @('PrÃ','rÃ©','dâ€™','DÃ©','TÃ©','â€”','â€¦','Â·')){
+            foreach($bad in @("PrÃ","rÃ©","dâ€™","DÃ©","TÃ©","â€”","â€¦","Â·")){
               if($text.Contains($bad)){ throw "Mojibake pattern [$bad] found in $f" }
             }
           }
           $cpp=[IO.File]::ReadAllText((Join-Path $root 'src\PiiWiiRemoteAgent.cpp'),$utf8Strict)
-          foreach($good in @('Prêt','réseau','d’appairage','Démarrer','Téléphone','—','·','…')){
+          foreach($good in @("Prêt","réseau","d’appairage","Démarrer","Téléphone","—","·","…")){
             if(-not $cpp.Contains($good)){ throw "Expected UTF-8 UI text missing: $good" }
           }
           'SOURCE UTF-8 + UI STRING AUDIT: OK'
@@ -97,11 +97,11 @@ jobs:
             return $false
           }
           $bin=[IO.File]::ReadAllBytes($exe)
-          foreach($good in @('● Prêt — réseau local','Code d’appairage : ','Dernier téléphone : —','Démarrer automatiquement avec Windows','Autoriser dans le pare-feu','Cliquez sur l’icône près de l’horloge')){
+          foreach($good in @("● Prêt — réseau local","Code d’appairage : ","Dernier téléphone : —","Démarrer automatiquement avec Windows","Autoriser dans le pare-feu","Cliquez sur l’icône près de l’horloge")){
             $bytes=[Text.Encoding]::Unicode.GetBytes($good)
             if(-not (Contains-Bytes $bin $bytes)){throw "Correct UTF-16 UI literal missing from EXE: $good"}
           }
-          foreach($bad in @('PrÃªt','rÃ©seau','dâ€™appairage','DÃ©marrer','TÃ©lÃ©phone')){
+          foreach($bad in @("PrÃªt","rÃ©seau","dâ€™appairage","DÃ©marrer","TÃ©lÃ©phone")){
             $bytes=[Text.Encoding]::Unicode.GetBytes($bad)
             if(Contains-Bytes $bin $bytes){throw "Mojibake UTF-16 literal found in EXE: $bad"}
           }
