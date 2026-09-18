@@ -36,6 +36,7 @@ jobs:
           grep -q 'R.drawable.ic_settings' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
           grep -q 'R.drawable.ic_youtube' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
           grep -q 'Maintenir pour parler' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt"
+          file "$ROOT/remote/src/main/res/drawable-nodpi/ic_remote.png" "$ROOT/remote/src/main/res/drawable-nodpi/ic_settings.png"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
