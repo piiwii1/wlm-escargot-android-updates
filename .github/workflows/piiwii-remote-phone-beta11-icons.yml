@@ -40,23 +40,17 @@ jobs:
           from pathlib import Path
           import re, sys
           root = Path(sys.argv[1])
-
           p = root / 'remote/build.gradle.kts'
-          s = p.read_text()
-          assert 'versionCode = 40' in s
-          assert 'versionName = "2.0.0-beta10"' in s
-          s = s.replace('versionCode = 40', 'versionCode = 41', 1)
-          s = s.replace('versionName = "2.0.0-beta10"', 'versionName = "2.0.0-beta11"', 1)
+          s = p.read_text().replace('versionCode = 40','versionCode = 41',1).replace('versionName = "2.0.0-beta10"','versionName = "2.0.0-beta11"',1)
           p.write_text(s)
-
           p = root / 'remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt'
           s = p.read_text()
           if 'import android.widget.ImageView\n' not in s:
-              s = s.replace('import android.widget.FrameLayout\n', 'import android.widget.FrameLayout\nimport android.widget.ImageView\n', 1)
+              s = s.replace('import android.widget.FrameLayout\n','import android.widget.FrameLayout\nimport android.widget.ImageView\n',1)
           if 'import ch.piiwii.remote2.R\n' not in s:
-              s = s.replace('import android.widget.ViewFlipper\n', 'import android.widget.ViewFlipper\nimport ch.piiwii.remote2.R\n', 1)
-
-          new_settings = '''        addView(ImageView(context).apply {
+              s = s.replace('import android.widget.ViewFlipper\n','import android.widget.ViewFlipper\nimport ch.piiwii.remote2.R\n',1)
+          settings_pattern = re.compile(r'        addView\(TextView\(context\)\.apply \{\s*\n\s*text = "⚙"\s*\n.*?contentDescription = "Paramètres".*?\n\s*\}, LayoutParams\(UiKit\.dp\(context, 52\), UiKit\.dp\(context, 52\)\)\.apply \{\s*\n\s*marginStart = UiKit\.dp\(context, 8\)\s*\n\s*\}\)', re.S)
+          new_settings='''        addView(ImageView(context).apply {
               setImageResource(R.drawable.ic_settings_custom)
               adjustViewBounds = true
               scaleType = ImageView.ScaleType.FIT_CENTER
@@ -70,17 +64,9 @@ jobs:
           }, LayoutParams(UiKit.dp(context, 52), UiKit.dp(context, 52)).apply {
               marginStart = UiKit.dp(context, 8)
           })'''
-          settings_pattern = re.compile(
-              r'        addView\(TextView\(context\)\.apply \{\s*\n'
-              r'\s*text = "⚙"\s*\n'
-              r'.*?contentDescription = "Paramètres".*?\n'
-              r'\s*\}, LayoutParams\(UiKit\.dp\(context, 52\), UiKit\.dp\(context, 52\)\)\.apply \{\s*\n'
-              r'\s*marginStart = UiKit\.dp\(context, 8\)\s*\n'
-              r'\s*\}\)', re.S)
-          s, count = settings_pattern.subn(new_settings, s, count=1)
-          assert count == 1, 'settings block not found'
-
-          new_nav = '''                addView(ImageView(context).apply {
+          s,c=settings_pattern.subn(new_settings,s,count=1); assert c==1
+          nav_pattern=re.compile(r'                addView\(TextView\(context\)\.apply \{\s*\n\s*text = section\.glyph\s*\n\s*textSize = 21f\s*\n\s*gravity = Gravity\.CENTER\s*\n\s*\}\)')
+          new_nav='''                addView(ImageView(context).apply {
                       setImageResource(when (section) {
                           RemoteSection.REMOTE, RemoteSection.NAVIGATION -> R.drawable.ic_remote_custom
                           RemoteSection.TOUCHPAD -> R.drawable.ic_touchpad_custom
@@ -91,23 +77,23 @@ jobs:
                       scaleType = ImageView.ScaleType.FIT_CENTER
                       contentDescription = section.label
                   }, LayoutParams(UiKit.dp(context, 24), UiKit.dp(context, 24)))'''
-          nav_pattern = re.compile(
-              r'                addView\(TextView\(context\)\.apply \{\s*\n'
-              r'\s*text = section\.glyph\s*\n'
-              r'\s*textSize = 21f\s*\n'
-              r'\s*gravity = Gravity\.CENTER\s*\n'
-              r'\s*\}\)')
-          s, count = nav_pattern.subn(new_nav, s, count=1)
-          assert count == 1, 'navigation glyph block not found'
+          s,c=nav_pattern.subn(new_nav,s,count=1); assert c==1
           p.write_text(s)
           PY
 
-          RES="$ROOT/remote/src/main/res/drawable-nodpi"
-          mkdir -p "$RES"
-          for n in settings apps keyboard touchpad remote; do
-            base64 -d "$GITHUB_WORKSPACE/piiwii-remote-phone-beta11-icons/assets/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"
-            test -s "$RES/ic_${n}_custom.png"
-          done
+          python3 - "$ROOT" "$GITHUB_WORKSPACE" <<'PY'
+          from pathlib import Path
+          import base64, re, sys
+          root=Path(sys.argv[1]); ws=Path(sys.argv[2])
+          out=root/'remote/src/main/res/drawable-nodpi'; out.mkdir(parents=True,exist_ok=True)
+          for n in ['settings','apps','keyboard','touchpad','remote']:
+              txt=(ws/f'piiwii-remote-phone-beta11-icons/assets/ic_{n}_custom.png.b64').read_text()
+              clean=re.sub(r'[^A-Za-z0-9+/=]','',txt)
+              clean += '='*((4-len(clean)%4)%4)
+              data=base64.b64decode(clean, validate=False)
+              assert data.startswith(b'\x89PNG\r\n\x1a\n'), n
+              (out/f'ic_{n}_custom.png').write_bytes(data)
+          PY
 
           grep -q 'versionCode = 41' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-beta11"' "$ROOT/remote/build.gradle.kts"
@@ -151,15 +137,10 @@ jobs:
           "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$AAPT" dump badging "$APK" > "$OUT/BADGING.txt"
           grep -q "package: name='ch.piiwii.remote2' versionCode='41' versionName='2.0.0-beta11'" "$OUT/BADGING.txt"
-          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
-            echo 'Unexpectedly signed APK' >&2
-            exit 1
-          fi
+          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then exit 1; fi
           unzip -t "$APK" > "$OUT/ZIPTEST.txt"
           unzip -l "$APK" > "$OUT/CONTENTS.txt"
-          for n in settings apps keyboard touchpad remote; do
-            grep -q "ic_${n}_custom.png" "$OUT/CONTENTS.txt"
-          done
+          for n in settings apps keyboard touchpad remote; do grep -q "ic_${n}_custom.png" "$OUT/CONTENTS.txt"; done
           sha256sum "$APK" > "$OUT/SHA256.txt"
 
       - uses: actions/upload-artifact@v4
