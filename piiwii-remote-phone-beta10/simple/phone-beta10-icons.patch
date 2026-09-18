@@ -1,0 +1,173 @@
+diff -ruN '--exclude=*.png' piiwii_beta9_base/piiwii-remote/remote/build.gradle.kts piiwii_beta10_work/piiwii-remote/remote/build.gradle.kts
+--- piiwii_beta9_base/piiwii-remote/remote/build.gradle.kts	2026-09-18 02:13:27.000000000 +0000
++++ piiwii_beta10_work/piiwii-remote/remote/build.gradle.kts	2026-09-18 02:37:00.276168549 +0000
+@@ -14,8 +14,8 @@
+         applicationId = "ch.piiwii.remote2"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 39
+-        versionName = "2.0.0-beta9"
++        versionCode = 40
++        versionName = "2.0.0-beta10"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+diff -ruN '--exclude=*.png' piiwii_beta9_base/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt piiwii_beta10_work/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt
+--- piiwii_beta9_base/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt	2026-09-18 02:13:27.000000000 +0000
++++ piiwii_beta10_work/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt	2026-09-18 02:37:00.276823019 +0000
+@@ -11,7 +11,9 @@
+ import android.widget.FrameLayout
+ import android.widget.LinearLayout
+ import android.widget.TextView
++import android.widget.ImageView
+ import android.widget.ViewFlipper
++import ch.piiwii.remote2.R
+ import ch.piiwii.remote2.device.RemoteDevice
+ import ch.piiwii.remote2.protocol.RemoteApp
+ import ch.piiwii.remote2.protocol.CustomShortcut
+@@ -147,7 +149,14 @@
+                 (key == RemoteSection.KEYBOARD && section == RemoteSection.KEYBOARD_ADVANCED)
+             view.background = UiKit.rounded(if (active) UiKit.SURFACE_ALT else UiKit.SURFACE, 14, context)
+             for (i in 0 until view.childCount) {
+-                (view.getChildAt(i) as? TextView)?.setTextColor(if (active) UiKit.ACCENT else UiKit.TEXT_SECONDARY)
++                when (val child = view.getChildAt(i)) {
++                    is TextView -> child.setTextColor(if (active) UiKit.ACCENT else UiKit.TEXT_SECONDARY)
++                    is ImageView -> {
++                        child.alpha = if (active) 1f else 0.58f
++                        child.scaleX = if (active) 1.06f else 1f
++                        child.scaleY = if (active) 1.06f else 1f
++                    }
++                }
+             }
+         }
+     }
+@@ -299,21 +308,28 @@
+         }
+         addView(deviceBlock, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+ 
+-        addView(TextView(context).apply {
+-            text = "⚙"
+-            textSize = 23f
+-            gravity = Gravity.CENTER
+-            setTextColor(UiKit.TEXT)
++        addView(ImageView(context).apply {
++            setImageResource(R.drawable.ic_settings)
++            scaleType = ImageView.ScaleType.CENTER_INSIDE
+             isClickable = true
+             isFocusable = true
+             contentDescription = "Paramètres"
+             background = UiKit.interactive(context, 14, UiKit.SURFACE)
++            val pad = UiKit.dp(context, 7)
++            setPadding(pad, pad, pad, pad)
+             setOnClickListener { settingsClick?.invoke() }
+         }, LayoutParams(UiKit.dp(context, 52), UiKit.dp(context, 52)).apply {
+             marginStart = UiKit.dp(context, 8)
+         })
+     }
+ 
++    private fun sectionIconRes(section: RemoteSection): Int = when (section) {
++        RemoteSection.REMOTE, RemoteSection.NAVIGATION -> R.drawable.ic_remote
++        RemoteSection.TOUCHPAD -> R.drawable.ic_touchpad
++        RemoteSection.KEYBOARD, RemoteSection.KEYBOARD_ADVANCED -> R.drawable.ic_keyboard
++        RemoteSection.APPS -> R.drawable.ic_apps
++    }
++
+     private fun bottomBar(): View = LinearLayout(context).apply {
+         orientation = HORIZONTAL
+         gravity = Gravity.CENTER
+@@ -325,11 +341,12 @@
+                 gravity = Gravity.CENTER
+                 isClickable = true
+                 isFocusable = true
+-                addView(TextView(context).apply {
+-                    text = section.glyph
+-                    textSize = 21f
+-                    gravity = Gravity.CENTER
+-                })
++                addView(ImageView(context).apply {
++                    setImageResource(sectionIconRes(section))
++                    scaleType = ImageView.ScaleType.CENTER_INSIDE
++                    alpha = 0.58f
++                    contentDescription = section.label
++                }, LayoutParams(UiKit.dp(context, 34), UiKit.dp(context, 34)))
+                 addView(TextView(context).apply {
+                     text = section.label
+                     textSize = 10f
+diff -ruN '--exclude=*.png' piiwii_beta9_base/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt piiwii_beta10_work/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt
+--- piiwii_beta9_base/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt	2026-09-18 02:13:27.000000000 +0000
++++ piiwii_beta10_work/piiwii-remote/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt	2026-09-18 02:37:00.277432472 +0000
+@@ -7,9 +7,11 @@
+ import android.view.View
+ import android.widget.GridLayout
+ import android.widget.LinearLayout
++import android.widget.ImageView
+ import android.widget.ScrollView
+ import android.widget.PopupMenu
+ import android.widget.TextView
++import ch.piiwii.remote2.R
+ import ch.piiwii.remote2.device.DeviceType
+ import ch.piiwii.remote2.device.RemoteDevice
+ import ch.piiwii.remote2.protocol.RemoteApp
+@@ -628,12 +630,11 @@
+                         isFocusable = true
+                         val pad = UiKit.dp(context, 12)
+                         setPadding(pad, UiKit.dp(context, 14), pad, UiKit.dp(context, 12))
+-                        addView(TextView(context).apply {
+-                            text = if (shortcut.type == ShortcutType.URL) "🌐" else "▣"
+-                            textSize = 25f
+-                            gravity = Gravity.CENTER
+-                            setTextColor(UiKit.ACCENT)
+-                        })
++                        addView(ImageView(context).apply {
++                            setImageResource(if (shortcut.type == ShortcutType.URL) R.drawable.ic_browser else R.drawable.ic_apps)
++                            scaleType = ImageView.ScaleType.CENTER_INSIDE
++                            contentDescription = if (shortcut.type == ShortcutType.URL) "Navigateur" else "Application"
++                        }, LinearLayout.LayoutParams(UiKit.dp(context, 44), UiKit.dp(context, 44)))
+                         addView(TextView(context).apply {
+                             text = shortcut.name
+                             textSize = 14f
+@@ -669,6 +670,14 @@
+         addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+     }
+ 
++    private fun appIconRes(id: String): Int? = when (id) {
++        "youtube" -> R.drawable.ic_youtube
++        "spotify" -> R.drawable.ic_spotify
++        "vlc" -> R.drawable.ic_vlc
++        "browser" -> R.drawable.ic_browser
++        else -> null
++    }
++
+     private fun appGrid(context: Context, apps: List<RemoteApp>, onLaunch: (String) -> Unit): GridLayout = GridLayout(context).apply {
+         columnCount = 2
+         alignmentMode = GridLayout.ALIGN_BOUNDS
+@@ -682,13 +691,22 @@
+                 isFocusable = true
+                 val pad = UiKit.dp(context, 12)
+                 setPadding(pad, UiKit.dp(context, 16), pad, UiKit.dp(context, 14))
+-                addView(TextView(context).apply {
+-                    text = app.glyph
+-                    textSize = if (app.glyph.length > 2) 18f else 27f
+-                    gravity = Gravity.CENTER
+-                    setTextColor(UiKit.ACCENT)
+-                    setTypeface(typeface, Typeface.BOLD)
+-                })
++                val iconRes = appIconRes(app.id)
++                if (iconRes != null) {
++                    addView(ImageView(context).apply {
++                        setImageResource(iconRes)
++                        scaleType = ImageView.ScaleType.CENTER_INSIDE
++                        contentDescription = app.name
++                    }, LinearLayout.LayoutParams(UiKit.dp(context, 48), UiKit.dp(context, 48)))
++                } else {
++                    addView(TextView(context).apply {
++                        text = app.glyph
++                        textSize = if (app.glyph.length > 2) 18f else 27f
++                        gravity = Gravity.CENTER
++                        setTextColor(UiKit.ACCENT)
++                        setTypeface(typeface, Typeface.BOLD)
++                    })
++                }
+                 addView(TextView(context).apply {
+                     text = app.name
+                     textSize = 14f
