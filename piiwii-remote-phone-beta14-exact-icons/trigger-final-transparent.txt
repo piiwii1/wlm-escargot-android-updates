@@ -1,0 +1,1 @@
+Build beta14 final: exact four supplied transparent icons, 64dp, no menu-item background, no labels.
