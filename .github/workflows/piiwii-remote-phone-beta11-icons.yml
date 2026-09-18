@@ -1,0 +1,105 @@
+name: PiiWii Remote Phone beta11 icons + memory
+
+on:
+  push:
+    branches: [piiwii-remote-phone-beta11-icons]
+    paths:
+      - 'piiwii-remote-phone-beta11-icons/**'
+      - '.github/workflows/piiwii-remote-phone-beta11-icons.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta9, apply memory and beta11 icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/src
+          ROOT=/tmp/src/piiwii-remote
+          for v in 3 4 5 6 7 8; do
+            base64 -d piiwii-remote-phone-beta${v}/phone-beta${v}.patch.xz.b64 > /tmp/p.patch.xz
+            xz -dc /tmp/p.patch.xz > /tmp/p.patch
+            (cd "$ROOT" && patch -p1 < /tmp/p.patch)
+          done
+          base64 -d piiwii-remote-phone-beta9/phone-beta9.patch.xz.b64 > /tmp/p9.patch.xz
+          xz -dc /tmp/p9.patch.xz > /tmp/p9.patch
+          (cd "$ROOT" && patch -p1 < /tmp/p9.patch)
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-fix1.patch")
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-space.patch")
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10-memory/phone-beta10-memory.patch")
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta11-icons/phone-beta11-icons.patch")
+
+          RES="$ROOT/remote/src/main/res/drawable-nodpi"
+          mkdir -p "$RES"
+          for n in settings apps keyboard touchpad remote; do
+            base64 -d "$GITHUB_WORKSPACE/piiwii-remote-phone-beta11-icons/assets/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"
+            test -s "$RES/ic_${n}_custom.png"
+          done
+
+          grep -q 'versionCode = 41' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta11"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'devices.firstOrNull { it.id == selectedId }?.let { return it }' "$ROOT/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt"
+          grep -q 'R.drawable.ic_settings_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'R.drawable.ic_touchpad_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and release build
+        working-directory: /tmp/src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package unsigned beta11
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/src/piiwii-remote
+          OUT=/tmp/out
+          mkdir -p "$OUT"
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta11-UNSIGNED.apk"
+          "$ZIPALIGN" -f 4 "$RAW" "$APK"
+          "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$AAPT" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='41' versionName='2.0.0-beta11'" "$OUT/BADGING.txt"
+          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
+            echo 'Unexpectedly signed APK' >&2
+            exit 1
+          fi
+          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
+          unzip -l "$APK" > "$OUT/CONTENTS.txt"
+          for n in settings apps keyboard touchpad remote; do
+            grep -q "ic_${n}_custom.png" "$OUT/CONTENTS.txt"
+          done
+          sha256sum "$APK" > "$OUT/SHA256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta11-UNSIGNED
+          path: /tmp/out/*
+          retention-days: 7
+          if-no-files-found: error
