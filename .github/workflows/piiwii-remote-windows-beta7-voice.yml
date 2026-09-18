@@ -1,0 +1,155 @@
+name: PiiWii Remote Windows beta7 - Push-to-talk voice
+
+on:
+  push:
+    branches: [piiwii-remote-v2-windows-beta7-voice]
+    paths:
+      - 'piiwii-remote-v2-windows-beta7/**'
+      - '.github/workflows/piiwii-remote-windows-beta7-voice.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build and test Windows Agent 2.0.0-beta7 voice
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct final beta6 and apply beta7 voice patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh "$BASE/piiwii-beta7-src"
+          ROOT="$BASE/piiwii-beta7-src/piiwii-remote"
+          base64 -d piiwii-remote-v2-windows-beta4/beta4.patch.xz.b64 | xz -d > "$BASE/beta4.patch"
+          (cd "$ROOT" && patch -p1 < "$BASE/beta4.patch")
+          mkdir -p "$ROOT/windows-agent/installer"
+          cp piiwii-remote-v2-windows-beta4/PiiWiiRemoteAgent.iss "$ROOT/windows-agent/installer/"
+          base64 -d piiwii-remote-v2-windows-beta5/beta5.patch.xz.b64 | xz -d > "$BASE/beta5.patch"
+          (cd "$ROOT" && patch --binary -p2 < "$BASE/beta5.patch")
+          base64 -d piiwii-remote-v2-windows-beta6/windows-beta6.patch.xz.b64 | xz -d > "$BASE/beta6.patch"
+          (cd "$ROOT" && patch --binary -p1 < "$BASE/beta6.patch")
+          python - "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp" <<'PY2'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]); s=p.read_text(encoding='utf-8')
+          old='PiiWii Remote Agent\\n2.0.0-beta5\\n'; new='PiiWii Remote Agent\\n2.0.0-beta6\\n'
+          if old not in s: raise SystemExit('beta6 PONG baseline string not found')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY2
+          cat piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part00 piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part01 piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part02 piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part03 | base64 -d > "$BASE/windows-beta7.patch.xz"
+          echo '6d1f8a14ebd8a44b2e6e0374f21b6995bd125aa879fa3a7bdfd90da1a915e6c8  '"$BASE/windows-beta7.patch.xz" | sha256sum -c -
+          xz -dc "$BASE/windows-beta7.patch.xz" > "$BASE/windows-beta7.patch"
+          echo 'e3f377894fbce0f4046c73968fb531dce3459ca98bca1349b1ce92219e59c736  '"$BASE/windows-beta7.patch" | sha256sum -c -
+          (cd "$ROOT" && patch --binary -p1 < "$BASE/windows-beta7.patch")
+
+      - name: Static voice and regression audit
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta7-src\piiwii-remote\windows-agent'
+          $cpp=Get-Content (Join-Path $root 'src\PiiWiiRemoteAgent.cpp') -Raw -Encoding UTF8
+          foreach($needle in @('2.0.0-beta7','KEYBOARD_KEY','VOICE_START','VOICE_FRAME','VOICE_STOP','waveOutOpen','waveOutWrite','decodeVoiceFramePayload','WAVE_FORMAT_PCM','16000','winmm.lib')){
+            if(-not $cpp.Contains($needle)){throw "Missing beta7 voice feature: $needle"}
+          }
+          foreach($needle in @('sendKeyboardKeyPayload','VK_F5','VK_MENU','VK_DELETE','VK_SNAPSHOT','VK_LWIN')){
+            if(-not $cpp.Contains($needle)){throw "Keyboard regression: $needle"}
+          }
+          $rc=Get-Content (Join-Path $root 'src\PiiWiiRemoteAgent.rc') -Raw -Encoding UTF8
+          if(-not $rc.Contains('FILEVERSION 2,0,0,14')){throw 'Agent file version missing'}
+          $iss=Get-Content (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') -Raw -Encoding UTF8
+          if(-not $iss.Contains('2.0.0-beta7') -or -not $iss.Contains('VersionInfoProductVersion=2.0.0.14')){throw 'Installer beta7 version missing'}
+          'STATIC WINDOWS BETA7 VOICE AUDIT: OK'
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile Agent beta7 x64 with UTF-8 and WinMM
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-beta7-src\piiwii-remote\windows-agent
+        run: |
+          if not exist build mkdir build
+          rc /nologo /fo build\PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /utf-8 /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp build\PiiWiiRemoteAgent.res gdi32.lib user32.lib advapi32.lib PowrProf.lib bcrypt.lib shell32.lib winmm.lib /link /SUBSYSTEM:WINDOWS /OUT:build\PiiWii-Remote-Agent-2.0.0-beta7.exe
+
+      - name: Validate Agent beta7
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta7-src\piiwii-remote\windows-agent'
+          $exe=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta7.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Agent self-test failed: $($p.ExitCode)"}
+          $r=Start-Process -FilePath $exe -ArgumentList '--reopen-self-test' -Wait -PassThru
+          if($r.ExitCode -ne 0){throw "Reopen self-test failed: $($r.ExitCode)"}
+          $h=& dumpbin /headers $exe | Out-String
+          if($h -notmatch 'PE32\+' -or ($h -notmatch 'machine \(x64\)' -and $h -notmatch '8664 machine')){throw 'Agent is not PE32+ x64'}
+          $v=(Get-Item $exe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta7*'){throw "Bad ProductVersion: $($v.ProductVersion)"}
+          'AGENT BETA7 SELF-TESTS: OK'
+
+      - name: Build beta7 installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta7-src\piiwii-remote\windows-agent'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not(Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          & $iscc (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          if($LASTEXITCODE -ne 0){throw "Inno Setup failed: $LASTEXITCODE"}
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta7.exe'
+          if(-not(Test-Path $setup)){throw 'Setup missing'}
+          if((Get-Item $setup).VersionInfo.ProductVersion -notlike '2.0.0.14*'){throw 'Bad setup version'}
+
+      - name: Install beta7 and verify upgrade path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta7-src\piiwii-remote\windows-agent'
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta7.exe'
+          $installDir=Join-Path $env:LOCALAPPDATA 'Programs\PiiWii Remote Agent'
+          $installedExe=Join-Path $installDir 'PiiWii-Remote-Agent.exe'
+          $p=Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS="autostart"') -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Install failed: $($p.ExitCode)"}
+          if(-not(Test-Path $installedExe)){throw 'Canonical installed agent missing'}
+          $v=(Get-Item $installedExe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta7*'){throw "Installed version is not beta7: $($v.ProductVersion)"}
+          $t=Start-Process $installedExe -ArgumentList '--self-test' -Wait -PassThru
+          if($t.ExitCode -ne 0){throw 'Installed beta7 self-test failed'}
+          $un=Join-Path $installDir 'unins000.exe'
+          $u=Start-Process $un -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if($u.ExitCode -ne 0){throw 'Uninstall failed'}
+          'INSTALL / SELF-TEST / UNINSTALL: OK'
+
+      - name: Package beta7
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta7-src\piiwii-remote\windows-agent'
+          $out=Join-Path $env:RUNNER_TEMP 'piiwii-beta7-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta7.exe') $out
+          Copy-Item (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta7.exe') $out
+          Copy-Item (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') $out
+          @(
+            'PIIWII REMOTE WINDOWS 2.0.0-beta7 PUSH-TO-TALK AUDIT PASSED',
+            'Protocol PIIWII_REMOTE/1 retained',
+            'VOICE_START / VOICE_FRAME / VOICE_STOP authenticated commands supported',
+            '16 kHz mono PCM16 playback via Windows waveOut / WinMM',
+            'Voice frame payload parser self-tested without requiring CI audio hardware',
+            'beta6 extended keyboard features preserved',
+            'Agent PE32+ x64 self-test + reopen self-test: OK',
+            'Installer ProductVersion 2.0.0.14: OK',
+            'Install / installed self-test / uninstall: OK',
+            'Physical speaker playback requires device testing'
+          ) | Set-Content -Encoding UTF8 (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta7-AUDIT.txt')
+          Compress-Archive -Path (Join-Path $root 'src'),(Join-Path $root 'installer') -DestinationPath (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta7-Sources.zip') -Force
+          Get-ChildItem $out -File | Where-Object {$_.Name -ne 'PiiWii-Remote-Windows-2.0.0-beta7-SHA256.txt'} | ForEach-Object {"$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"} | Set-Content -Encoding ascii (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta7-SHA256.txt')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-2.0.0-beta7-Voice
+          path: ${{ runner.temp }}\piiwii-beta7-out\*
+          retention-days: 7
+          if-no-files-found: error
