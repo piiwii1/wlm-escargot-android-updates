@@ -1,0 +1,137 @@
+name: PiiWii Remote Phone beta4 - Navigation UI
+
+on:
+  push:
+    branches: [piiwii-remote-v2-phone-beta4-navigation]
+    paths:
+      - 'piiwii-remote-phone-beta4/**'
+      - '.github/workflows/piiwii-remote-phone-beta4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phone-beta4:
+    name: Build and audit Phone 2.0.0-beta4
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct beta3 and apply beta4 navigation UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/piiwii-phone-beta4-src
+          ROOT=/tmp/piiwii-phone-beta4-src/piiwii-remote
+          base64 -d piiwii-remote-phone-beta3/phone-beta3.patch.xz.b64 > /tmp/phone-beta3.patch.xz
+          echo 'b0510a468202e0898d0c07b2056daa3d06ecbb35b574c9a54655c7b63dbb7a1e  /tmp/phone-beta3.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta3.patch.xz > /tmp/phone-beta3.patch
+          echo '7e0019639f059feb9f6b409e01b7e47377be9c297d303a161d46c1c23a9c07cb  /tmp/phone-beta3.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta3.patch)
+          base64 -d piiwii-remote-phone-beta4/phone-beta4.patch.xz.b64 > /tmp/phone-beta4.patch.xz
+          echo '45ffb0cf4741eaf7364b95933cc744ec7968720ad334a50a91ceac8071ef9519  /tmp/phone-beta4.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta4.patch.xz > /tmp/phone-beta4.patch
+          echo '490272fe7e7a386d83f78c2de37810605421551aff9d9577a9f53e77c55efeed  /tmp/phone-beta4.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta4.patch)
+
+      - name: Static regression audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta4-src/piiwii-remote
+          BUILD="$ROOT/remote/build.gradle.kts"
+          MAIN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          SCREEN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
+          SECTIONS="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteSection.kt"
+          PROTO="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/Protocol.kt"
+          grep -q 'applicationId = "ch.piiwii.remote2"' "$BUILD"
+          grep -q 'compileSdk = 35' "$BUILD"
+          grep -q 'minSdk = 26' "$BUILD"
+          grep -q 'targetSdk = 35' "$BUILD"
+          grep -q 'versionCode = 34' "$BUILD"
+          grep -q 'versionName = "2.0.0-beta4"' "$BUILD"
+          grep -q 'JavaVersion.VERSION_17' "$BUILD"
+          grep -q 'jvmTarget = "17"' "$BUILD"
+          grep -q 'WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' "$MAIN"
+          grep -q 'DigitsKeyListener.getInstance("0123456789.,")' "$MAIN"
+          grep -q 'TYPE_NUMBER_FLAG_DECIMAL' "$MAIN"
+          grep -q "replace(',', '.')" "$MAIN"
+          grep -q 'Alimentation du PC' "$SCREEN"
+          grep -q 'Lecture / pause' "$SCREEN"
+          grep -q 'commandSettings.mediaLeft.command' "$SCREEN"
+          grep -q 'commandSettings.mediaRight.command' "$SCREEN"
+          grep -q 'navigationQuickButton' "$SCREEN"
+          grep -q 'navigationQuickRow' "$SCREEN"
+          grep -q 'sectionLabel(context, "Direction")' "$SCREEN"
+          grep -q 'sectionLabel(context, "Raccourcis")' "$SCREEN"
+          grep -q 'contentDescription = description' "$SCREEN"
+          grep -q 'performHapticFeedback' "$SCREEN"
+          grep -q '"Valider", RemoteCommand.NAV_OK' "$SCREEN"
+          for c in NAV_UP NAV_DOWN NAV_LEFT NAV_RIGHT NAV_OK NAV_BACK NAV_HOME NAV_MENU; do grep -q "RemoteCommand.$c" "$SCREEN"; done
+          python - "$SECTIONS" "$PROTO" <<'PY'
+          from pathlib import Path
+          import re,sys
+          sections=Path(sys.argv[1]).read_text(encoding='utf-8')
+          labels=re.findall(r'\("([^"]+)",\s*"[^"]*"\)',sections)
+          assert labels==['Télécommande','Navigation','Pavé tactile','Applications'],labels
+          assert 'PIIWII_REMOTE/1' in Path(sys.argv[2]).read_text(encoding='utf-8')
+          tree=Path(sys.argv[1]).parents[3]
+          assert '45821' in '\n'.join(p.read_text(encoding='utf-8',errors='ignore') for p in tree.rglob('*.kt'))
+          PY
+          ! find "$ROOT" -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'Signing.properties' \) | grep -q .
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Unit tests and release compilation
+        working-directory: /tmp/piiwii-phone-beta4-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate unsigned release and package sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta4-src/piiwii-remote
+          OUT=/tmp/piiwii-phone-beta4-out; mkdir -p "$OUT"
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta4-UNSIGNED.apk"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          test -f "$RAW"
+          "$ZIPALIGN" -f 4 "$RAW" "$APK"
+          "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$AAPT" dump badging "$APK" > "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='34' versionName='2.0.0-beta4'" "$OUT/PHONE-BADGING.txt"
+          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then exit 1; fi
+          unzip -t "$APK" > "$OUT/PHONE-ZIPTEST.txt"
+          python - "$APK" <<'PY'
+          import sys,zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:data=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          need=['Télécommande','Navigation','Pavé tactile','Applications','Alimentation du PC','Lecture / pause','Direction','Raccourcis','Retour','Accueil','Menu','Valider','Aucun appareil sélectionné','PAIR_REQUEST','AUTH1','2.0.0-beta4']
+          missing=[s for s in need if s.encode() not in data]
+          assert not missing,missing
+          PY
+          cd /tmp/piiwii-phone-beta4-src
+          zip -qr "$OUT/PiiWii-Remote-Phone-2.0.0-beta4-Sources.zip" piiwii-remote -x '*/build/*' '*/.gradle/*' '*/.kotlin/*' '*.jks' '*.keystore' '*Signing.properties'
+          unzip -t "$OUT/PiiWii-Remote-Phone-2.0.0-beta4-Sources.zip" > "$OUT/SOURCES-ZIPTEST.txt"
+          sha256sum "$APK" "$OUT/PiiWii-Remote-Phone-2.0.0-beta4-Sources.zip" > "$OUT/SHA256.txt"
+          printf '%s\n' 'PIIWII REMOTE PHONE 2.0.0-beta4 / versionCode 34' 'PACKAGE: ch.piiwii.remote2' 'SCOPE: Navigation UI + retained beta3 Remote UI + beta2 IP fix' 'NAVIGATION: larger D-pad, highlighted OK, haptics, status strip, Back/Home/Menu, scroll-safe layout' 'EXPECTED FINAL CERT SHA-256: d86a9c8c8f9ea2001108d6f8afec076ba7b6343c0383ca812647bed61de6c717' 'SIGNING: unsigned candidate only; do not distribute as final.' > "$OUT/AUDIT.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta4-Navigation-UNSIGNED
+          path: /tmp/piiwii-phone-beta4-out/*
+          retention-days: 7
+          if-no-files-found: error
