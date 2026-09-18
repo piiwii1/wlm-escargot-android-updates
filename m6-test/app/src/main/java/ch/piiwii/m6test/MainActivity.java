@@ -25,8 +25,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
-    private static final String HIDE_ME_PACKAGE = "hideme.android.vpn";
-    private static final String HIDE_ME_PLAY = "https://play.google.com/store/apps/details?id=hideme.android.vpn";
+    private static final String WINDSCRIBE_PACKAGE = "com.windscribe.vpn";
+    private static final String WINDSCRIBE_PLAY = "https://play.google.com/store/apps/details?id=com.windscribe.vpn";
     private static final String M6_PACKAGE = "fr.m6.m6replay";
     private static final String M6_PLAY = "https://play.google.com/store/apps/details?id=fr.m6.m6replay";
     private static final String CHROME_PACKAGE = "com.android.chrome";
@@ -56,15 +56,15 @@ public class MainActivity extends Activity {
         scroll.addView(root, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView title = new TextView(this);
-        title.setText("PiiWii M6 Test 0.1.3");
-        title.setTextSize(25);
+        title.setText("PiiWii M6 Test 0.1.4 — Windscribe");
+        title.setTextSize(24);
         title.setTextColor(Color.rgb(20, 31, 48));
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         title.setPadding(0, 0, 0, dp(8));
         root.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView help = new TextView(this);
-        help.setText("Connexion Google : on n’utilise plus la WebView.\n1. Connecte hide.me sur France\n2. Vérifie l’IP\n3. Ouvre l’app M6+ officielle ou Chrome\n4. Connecte-toi avec Google normalement");
+        help.setText("hide.me est écarté pour M6+.\n1. Installe/ouvre Windscribe\n2. Choisis France et connecte\n3. Vérifie l’IP dans cette appli ET dans Chrome\n4. Teste le pays M6 puis M6+");
         help.setTextSize(15);
         help.setTextColor(Color.DKGRAY);
         help.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -85,33 +85,33 @@ public class MainActivity extends Activity {
         progressParams.setMargins(0, dp(4), 0, dp(8));
         root.addView(progress, progressParams);
 
-        Button vpnButton = makeButton("1. Installer / ouvrir hide.me");
-        vpnButton.setOnClickListener(v -> openPackageOrStore(HIDE_ME_PACKAGE, HIDE_ME_PLAY, "hide.me"));
+        Button vpnButton = makeButton("1. Installer / ouvrir Windscribe");
+        vpnButton.setOnClickListener(v -> openPackageOrStore(WINDSCRIBE_PACKAGE, WINDSCRIBE_PLAY, "Windscribe"));
         root.addView(vpnButton);
 
-        Button checkButton = makeButton("2. Vérifier : suis-je en France ?");
+        Button checkButton = makeButton("2. Vérifier l’IP dans PiiWii M6 Test");
         checkButton.setOnClickListener(v -> checkIpCountry());
         root.addView(checkButton);
 
-        Button diagButton = makeButton("3. Diagnostic réseau M6");
+        Button chromeIpButton = makeButton("3. Vérifier l’IP DANS CHROME");
+        chromeIpButton.setOnClickListener(v -> openInChrome(IP_CHECK_URL));
+        root.addView(chromeIpButton);
+
+        Button m6GeoButton = makeButton("4. Pays détecté par M6 dans Chrome");
+        m6GeoButton.setOnClickListener(v -> openInChrome(M6_GEO_URL));
+        root.addView(m6GeoButton);
+
+        Button diagButton = makeButton("Diagnostic réseau M6");
         diagButton.setOnClickListener(v -> runDiagnostics());
         root.addView(diagButton);
 
-        Button officialM6Button = makeButton("4. Ouvrir l’application officielle M6+");
+        Button officialM6Button = makeButton("5. Ouvrir l’application officielle M6+");
         officialM6Button.setOnClickListener(v -> openPackageOrStore(M6_PACKAGE, M6_PLAY, "M6+"));
         root.addView(officialM6Button);
 
         Button chromeButton = makeButton("M6+ dans Chrome — connexion Google");
         chromeButton.setOnClickListener(v -> openInChrome(M6_URL));
         root.addView(chromeButton);
-
-        Button browserButton = makeButton("M6+ dans le navigateur système");
-        browserButton.setOnClickListener(v -> openExternal(M6_URL));
-        root.addView(browserButton);
-
-        Button m6GeoButton = makeButton("Test officiel M6 : pays détecté");
-        m6GeoButton.setOnClickListener(v -> openExternal(M6_GEO_URL));
-        root.addView(m6GeoButton);
 
         setContentView(scroll);
     }
@@ -151,10 +151,10 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
                     if (france) {
-                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nTu peux ouvrir M6+ officielle ou Chrome.");
+                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nMaintenant vérifie aussi l’IP dans Chrome.");
                         status.setTextColor(Color.rgb(27, 120, 55));
                     } else {
-                        status.setText("❌ Pas en France : " + country + " (" + countryCode + ")\nIP : " + ip + "\nConnecte hide.me sur France puis revérifie.");
+                        status.setText("❌ Pas en France : " + country + " (" + countryCode + ")\nIP : " + ip + "\nConnecte Windscribe sur France puis revérifie.");
                         status.setTextColor(Color.rgb(180, 70, 35));
                     }
                 });
@@ -231,7 +231,7 @@ public class MainActivity extends Activity {
                 report.append(code >= 200 && code < 400 ? "✅ Geo M6 : HTTP " : "❌ Geo M6 : HTTP ").append(code);
                 if (code >= 200 && code < 300) {
                     String body = readBody(c).replace('\n', ' ').trim();
-                    if (body.length() > 180) body = body.substring(0, 180) + "…";
+                    if (body.length() > 200) body = body.substring(0, 200) + "…";
                     if (!body.isEmpty()) report.append("\n↳ ").append(body);
                 }
                 report.append('\n');
@@ -248,10 +248,10 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 progress.setVisibility(View.GONE);
                 String conclusion;
-                if (!finalInternetOk) conclusion = "\n\n➡ Le VPN coupe ou perturbe Internet.";
-                else if (!finalFranceOk) conclusion = "\n\n➡ Le VPN ne sort pas réellement en France.";
-                else if (!finalM6Ok) conclusion = "\n\n➡ Internet + France sont OK, mais M6 refuse ou n’est pas joignable via cette sortie.";
-                else conclusion = "\n\n➡ Réseau + France + site M6 sont joignables. Utilise maintenant l’app M6+ officielle ou Chrome pour la connexion Google.";
+                if (!finalInternetOk) conclusion = "\n\n➡ Windscribe coupe ou perturbe Internet.";
+                else if (!finalFranceOk) conclusion = "\n\n➡ Windscribe ne sort pas en France.";
+                else if (!finalM6Ok) conclusion = "\n\n➡ France OK mais M6 refuse cette sortie.";
+                else conclusion = "\n\n➡ Réseau + France + site M6 sont joignables. Vérifie maintenant le pays M6 dans Chrome.";
                 status.setText(finalReport + conclusion);
                 status.setTextColor((finalInternetOk && finalFranceOk) ? Color.rgb(27, 100, 55) : Color.rgb(180, 70, 35));
             });
@@ -264,7 +264,7 @@ public class MainActivity extends Activity {
         connection.setReadTimeout(10000);
         connection.setInstanceFollowRedirects(true);
         connection.setRequestProperty("Accept", accept);
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36 PiiWii-M6-Test/0.1.3");
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36 PiiWii-M6-Test/0.1.4");
         return connection;
     }
 
