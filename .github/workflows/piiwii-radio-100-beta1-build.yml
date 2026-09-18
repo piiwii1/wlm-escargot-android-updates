@@ -1,0 +1,91 @@
+name: Build PiiWii Radio 1.0.0-beta1
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-radio-100-beta1-build
+    paths:
+      - 'piiwii-radio-100-beta1-build/**'
+      - '.github/workflows/piiwii-radio-100-beta1-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore and verify source package
+        run: |
+          set -euo pipefail
+          cat piiwii-radio-100-beta1-build/src-parts/part-*.b64 > /tmp/PiiWii-Radio-1.0.0-beta1-SOURCES.zip.b64
+          test "$(wc -c < /tmp/PiiWii-Radio-1.0.0-beta1-SOURCES.zip.b64)" -eq 18616
+          base64 -d /tmp/PiiWii-Radio-1.0.0-beta1-SOURCES.zip.b64 > /tmp/PiiWii-Radio-1.0.0-beta1-SOURCES.zip
+          echo "4b7101c7790b2257525a9ce2a2692e92aefe175f1d87a59c6508ab7c666687ec  /tmp/PiiWii-Radio-1.0.0-beta1-SOURCES.zip" | sha256sum -c -
+          rm -rf /tmp/piiwii-radio
+          mkdir -p /tmp/piiwii-radio
+          unzip -q /tmp/PiiWii-Radio-1.0.0-beta1-SOURCES.zip -d /tmp/piiwii-radio
+          test -f /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+          grep -q "applicationId 'ch.piiwii.radio'" /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+          grep -q 'versionCode 1' /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+          grep -q "versionName '1.0.0-beta1'" /tmp/piiwii-radio/PiiWiiRadio/app/build.gradle
+
+      - name: Build APK
+        working-directory: /tmp/piiwii-radio/PiiWiiRadio
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          APK=/tmp/piiwii-radio/PiiWiiRadio/app/build/outputs/apk/debug/app-debug.apk
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -s "$APK"
+          mkdir -p out
+          cp "$APK" out/PiiWii-Radio-1.0.0-beta1.apk
+          "$BT/zipalign" -c -v 4 "$APK" > out/ZIPALIGN.txt
+          "$BT/apksigner" verify --verbose --print-certs "$APK" > out/APKSIGNER.txt
+          "$BT/aapt" dump badging "$APK" > out/BADGING.txt
+          grep -F "package: name='ch.piiwii.radio'" out/BADGING.txt
+          grep -F "versionCode='1'" out/BADGING.txt
+          grep -F "versionName='1.0.0-beta1'" out/BADGING.txt
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' out/APKSIGNER.txt
+          sha256sum out/PiiWii-Radio-1.0.0-beta1.apk > out/PiiWii-Radio-1.0.0-beta1.apk.sha256
+          cp /tmp/PiiWii-Radio-1.0.0-beta1-SOURCES.zip out/
+          cat out/PiiWii-Radio-1.0.0-beta1.apk.sha256
+
+      - name: Upload delivery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Radio-1.0.0-beta1-DELIVERY
+          path: out/*
+          retention-days: 7
+          if-no-files-found: error
