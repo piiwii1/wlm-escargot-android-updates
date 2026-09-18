@@ -61,11 +61,31 @@ jobs:
           PRJ=/tmp/piiwii054/piiwii-tv-phone-0.5.2
           MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
           BUILD="$PRJ/app/build.gradle"
-          mkdir -p "$PRJ/app/src/main/res/drawable-nodpi"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_direct.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_guide.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_recordings.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_settings.png"
+          RES="$PRJ/app/src/main/res/drawable-nodpi"
+          mkdir -p "$RES"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$RES/nav_direct.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$RES/nav_guide.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$RES/nav_recordings.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$RES/nav_settings.png"
+
+          # Re-encode every icon as a plain 8-bit RGBA PNG and enlarge the artwork
+          # on the 128x128 canvas. This avoids AAPT2 crashing on the original PNG chunks.
+          if command -v magick >/dev/null 2>&1; then
+            IM=magick
+          elif command -v convert >/dev/null 2>&1; then
+            IM=convert
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq imagemagick
+            IM=convert
+          fi
+          for f in "$RES"/nav_*.png; do
+            tmp="${f%.png}.clean.png"
+            "$IM" "$f" -trim +repage -resize 118x118 -background none -gravity center -extent 128x128 -strip PNG32:"$tmp"
+            mv "$tmp" "$f"
+            file "$f"
+          done
+
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/src/main/java/ch/piiwii/tvphone/MainActivity.java')
@@ -91,10 +111,10 @@ jobs:
           grep -q "versionName '0.5.4'" "$BUILD"
           grep -q 'R.drawable.nav_recordings' "$MAIN"
           grep -q 'R.drawable.nav_settings' "$MAIN"
-          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_direct.png"
-          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_guide.png"
-          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_recordings.png"
-          test -s "$PRJ/app/src/main/res/drawable-nodpi/nav_settings.png"
+          test -s "$RES/nav_direct.png"
+          test -s "$RES/nav_guide.png"
+          test -s "$RES/nav_recordings.png"
+          test -s "$RES/nav_settings.png"
 
       - name: Build unsigned release APK
         working-directory: /tmp/piiwii054/piiwii-tv-phone-0.5.2
