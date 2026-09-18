@@ -1,0 +1,102 @@
+name: Prepare PiiWii Radio beta6 split toolchain
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-radio-100-beta6-build
+    paths:
+      - '.github/workflows/piiwii-radio-beta6-toolchain-split.yml'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Warm Gradle cache with beta5
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat piiwii-radio-100-beta5-build/src-parts/part-*.b64 > /tmp/beta5.zip.b64
+          base64 -d /tmp/beta5.zip.b64 > /tmp/beta5.zip
+          rm -rf /tmp/beta5 && mkdir -p /tmp/beta5
+          unzip -q /tmp/beta5.zip -d /tmp/beta5
+          cd /tmp/beta5/PiiWiiRadio
+          gradle --no-daemon :app:assembleRelease
+
+      - name: Pack SDK and Gradle
+        shell: bash
+        run: |
+          set -euo pipefail
+          GRADLE_BIN="$(readlink -f "$(command -v gradle)")"
+          GRADLE_HOME="$(cd "$(dirname "$GRADLE_BIN")/.." && pwd)"
+          mkdir -p /tmp/toolchain/sdk/platforms /tmp/toolchain/sdk/build-tools /tmp/toolchain/gradle
+          cp -a "$ANDROID_HOME/platforms/android-35" /tmp/toolchain/sdk/platforms/
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/toolchain/sdk/build-tools/
+          cp -a "$GRADLE_HOME" /tmp/toolchain/gradle/gradle-8.9
+          tar -C /tmp -czf sdk-gradle.tar.gz toolchain
+          ls -lh sdk-gradle.tar.gz
+
+      - name: Pack Gradle dependency cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gradle-cache/caches
+          cp -a "$HOME/.gradle/caches/modules-2" /tmp/gradle-cache/caches/
+          tar -C /tmp -czf gradle-modules-cache.tar.gz gradle-cache
+          ls -lh gradle-modules-cache.tar.gz
+          du -sh "$HOME/.gradle/caches/modules-2" || true
+
+      - name: Pack extra Gradle caches
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gradle-extra/caches
+          [ -d "$HOME/.gradle/caches/8.9" ] && cp -a "$HOME/.gradle/caches/8.9" /tmp/gradle-extra/caches/ || true
+          [ -d "$HOME/.gradle/caches/transforms-4" ] && cp -a "$HOME/.gradle/caches/transforms-4" /tmp/gradle-extra/caches/ || true
+          tar -C /tmp -czf gradle-extra-cache.tar.gz gradle-extra
+          ls -lh gradle-extra-cache.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Radio-beta6-sdk-gradle
+          path: sdk-gradle.tar.gz
+          retention-days: 2
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Radio-beta6-gradle-modules
+          path: gradle-modules-cache.tar.gz
+          retention-days: 2
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Radio-beta6-gradle-extra
+          path: gradle-extra-cache.tar.gz
+          retention-days: 2
+          if-no-files-found: error
