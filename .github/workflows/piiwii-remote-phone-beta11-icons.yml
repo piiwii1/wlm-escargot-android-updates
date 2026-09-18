@@ -57,7 +57,6 @@ jobs:
           s = s.replace('addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 70)))',
                         'addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 88)))',1)
 
-          # Keep settings icon as before; the user's current request concerns the four bottom-menu icons.
           settings_pattern = re.compile(r'        addView\(TextView\(context\)\.apply \{\s*\n\s*text = "⚙"\s*\n.*?contentDescription = "Paramètres".*?\n\s*\}, LayoutParams\(UiKit\.dp\(context, 52\), UiKit\.dp\(context, 52\)\)\.apply \{\s*\n\s*marginStart = UiKit\.dp\(context, 8\)\s*\n\s*\}\)', re.S)
           new_settings='''        addView(ImageView(context).apply {
               setImageResource(R.drawable.ic_settings_custom)
@@ -90,18 +89,19 @@ jobs:
           s,c=nav_pattern.subn(new_nav,s,count=1)
           assert c==1, 'bottom nav blocks not replaced'
 
-          # The images already contain transparency. Do not draw a button/background behind them.
-          old_bg='view.background = UiKit.rounded(if (active) UiKit.SURFACE_ALT else UiKit.SURFACE, 14, context)'
-          assert old_bg in s, 'nav background line not found'
-          s = s.replace(old_bg, 'view.background = null', 1)
-          old_loop='''            for (i in 0 until view.childCount) {
-                (view.getChildAt(i) as? TextView)?.setTextColor(if (active) UiKit.ACCENT else UiKit.TEXT_SECONDARY)
-            }'''
-          new_loop='''            for (i in 0 until view.childCount) {
+          # Transparent PNG means no dark/surface button is drawn behind any of the four icons.
+          state_pattern = re.compile(
+              r'\s*view\.background = UiKit\.rounded\(if \(active\) UiKit\.SURFACE_ALT else UiKit\.SURFACE, 14, context\)\s*\n'
+              r'\s*for \(i in 0 until view\.childCount\) \{\s*\n'
+              r'\s*\(view\.getChildAt\(i\) as\? TextView\)\?\.setTextColor\(if \(active\) UiKit\.ACCENT else UiKit\.TEXT_SECONDARY\)\s*\n'
+              r'\s*\}', re.S)
+          replacement='''
+            view.background = null
+            for (i in 0 until view.childCount) {
                 (view.getChildAt(i) as? ImageView)?.alpha = if (active) 1f else 0.84f
             }'''
-          assert old_loop in s, 'nav state loop not found'
-          s = s.replace(old_loop, new_loop, 1)
+          s,c=state_pattern.subn(replacement,s,count=1)
+          assert c==1, 'nav state block not replaced'
           p.write_text(s)
           PY
 
