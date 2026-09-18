@@ -42,6 +42,12 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Install ImageMagick
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+
       - name: Restore verified 0.5.2 sources
         shell: bash
         run: |
