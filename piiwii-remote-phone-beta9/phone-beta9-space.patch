@@ -1,0 +1,18 @@
+--- a/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt
++++ b/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt
+@@ -69,15 +69,16 @@
+         addView(row(
+             commandButton("⌫", RemoteCommand.KEYBOARD_BACKSPACE),
+             commandButton("Entrée", RemoteCommand.KEYBOARD_ENTER),
+-            commandButton("Échap", RemoteCommand.KEYBOARD_ESCAPE),
++            button("Espace") { onCommand(RemoteCommand.KEYBOARD_TEXT, " ") },
+             commandButton("Tab", RemoteCommand.KEYBOARD_TAB)
+         ))
+         addGap(7)
+         addView(row(
++            commandButton("Échap", RemoteCommand.KEYBOARD_ESCAPE),
+             commandButton("←", RemoteCommand.NAV_LEFT),
+             commandButton("↑", RemoteCommand.NAV_UP),
+             commandButton("↓", RemoteCommand.NAV_DOWN),
+             commandButton("→", RemoteCommand.NAV_RIGHT)
+         ))
