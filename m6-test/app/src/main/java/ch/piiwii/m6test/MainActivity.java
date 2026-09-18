@@ -27,6 +27,9 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
     private static final String HIDE_ME_PACKAGE = "hideme.android.vpn";
     private static final String HIDE_ME_PLAY = "https://play.google.com/store/apps/details?id=hideme.android.vpn";
+    private static final String M6_PACKAGE = "fr.m6.m6replay";
+    private static final String M6_PLAY = "https://play.google.com/store/apps/details?id=fr.m6.m6replay";
+    private static final String CHROME_PACKAGE = "com.android.chrome";
     private static final String M6_URL = "https://www.m6.fr/";
     private static final String M6_GEO_URL = "https://geo.6play.fr/v1/geoInfo/?";
     private static final String IP_CHECK_URL = "https://ipwho.is/";
@@ -53,7 +56,7 @@ public class MainActivity extends Activity {
         scroll.addView(root, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView title = new TextView(this);
-        title.setText("PiiWii M6 Test 0.1.2");
+        title.setText("PiiWii M6 Test 0.1.3");
         title.setTextSize(25);
         title.setTextColor(Color.rgb(20, 31, 48));
         title.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -61,7 +64,7 @@ public class MainActivity extends Activity {
         root.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView help = new TextView(this);
-        help.setText("1. Connecte hide.me sur France\n2. Vérifie l’IP\n3. Lance le diagnostic M6\n4. Ouvre M6+ en plein écran");
+        help.setText("Connexion Google : on n’utilise plus la WebView.\n1. Connecte hide.me sur France\n2. Vérifie l’IP\n3. Ouvre l’app M6+ officielle ou Chrome\n4. Connecte-toi avec Google normalement");
         help.setTextSize(15);
         help.setTextColor(Color.DKGRAY);
         help.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -82,33 +85,33 @@ public class MainActivity extends Activity {
         progressParams.setMargins(0, dp(4), 0, dp(8));
         root.addView(progress, progressParams);
 
-        Button vpnButton = makeButton("Installer / ouvrir hide.me");
-        vpnButton.setOnClickListener(v -> openHideMe());
+        Button vpnButton = makeButton("1. Installer / ouvrir hide.me");
+        vpnButton.setOnClickListener(v -> openPackageOrStore(HIDE_ME_PACKAGE, HIDE_ME_PLAY, "hide.me"));
         root.addView(vpnButton);
 
-        Button checkButton = makeButton("Vérifier : suis-je en France ?");
+        Button checkButton = makeButton("2. Vérifier : suis-je en France ?");
         checkButton.setOnClickListener(v -> checkIpCountry());
         root.addView(checkButton);
 
-        Button diagButton = makeButton("Diagnostic réseau M6");
+        Button diagButton = makeButton("3. Diagnostic réseau M6");
         diagButton.setOnClickListener(v -> runDiagnostics());
         root.addView(diagButton);
 
-        Button m6FullButton = makeButton("M6+ PLEIN ÉCRAN");
-        m6FullButton.setOnClickListener(v -> startActivity(new Intent(this, M6Activity.class)));
-        root.addView(m6FullButton);
+        Button officialM6Button = makeButton("4. Ouvrir l’application officielle M6+");
+        officialM6Button.setOnClickListener(v -> openPackageOrStore(M6_PACKAGE, M6_PLAY, "M6+"));
+        root.addView(officialM6Button);
 
-        Button browserButton = makeButton("M6+ dans le navigateur externe");
+        Button chromeButton = makeButton("M6+ dans Chrome — connexion Google");
+        chromeButton.setOnClickListener(v -> openInChrome(M6_URL));
+        root.addView(chromeButton);
+
+        Button browserButton = makeButton("M6+ dans le navigateur système");
         browserButton.setOnClickListener(v -> openExternal(M6_URL));
         root.addView(browserButton);
 
         Button m6GeoButton = makeButton("Test officiel M6 : pays détecté");
         m6GeoButton.setOnClickListener(v -> openExternal(M6_GEO_URL));
         root.addView(m6GeoButton);
-
-        Button vpnWebButton = makeButton("Page hide.me Google Play (secours)");
-        vpnWebButton.setOnClickListener(v -> openExternal(HIDE_ME_PLAY));
-        root.addView(vpnWebButton);
 
         setContentView(scroll);
     }
@@ -148,7 +151,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
                     if (france) {
-                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nLance maintenant ‘Diagnostic réseau M6’. ");
+                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nTu peux ouvrir M6+ officielle ou Chrome.");
                         status.setTextColor(Color.rgb(27, 120, 55));
                     } else {
                         status.setText("❌ Pas en France : " + country + " (" + countryCode + ")\nIP : " + ip + "\nConnecte hide.me sur France puis revérifie.");
@@ -248,7 +251,7 @@ public class MainActivity extends Activity {
                 if (!finalInternetOk) conclusion = "\n\n➡ Le VPN coupe ou perturbe Internet.";
                 else if (!finalFranceOk) conclusion = "\n\n➡ Le VPN ne sort pas réellement en France.";
                 else if (!finalM6Ok) conclusion = "\n\n➡ Internet + France sont OK, mais M6 refuse ou n’est pas joignable via cette sortie.";
-                else conclusion = "\n\n➡ Réseau + France + site M6 sont joignables. Si M6+ affiche encore ‘pas de connexion’, le blocage est probablement au niveau du site/lecteur ou de la détection VPN.";
+                else conclusion = "\n\n➡ Réseau + France + site M6 sont joignables. Utilise maintenant l’app M6+ officielle ou Chrome pour la connexion Google.";
                 status.setText(finalReport + conclusion);
                 status.setTextColor((finalInternetOk && finalFranceOk) ? Color.rgb(27, 100, 55) : Color.rgb(180, 70, 35));
             });
@@ -261,7 +264,7 @@ public class MainActivity extends Activity {
         connection.setReadTimeout(10000);
         connection.setInstanceFollowRedirects(true);
         connection.setRequestProperty("Accept", accept);
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36 PiiWii-M6-Test/0.1.2");
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36 PiiWii-M6-Test/0.1.3");
         return connection;
     }
 
@@ -275,9 +278,9 @@ public class MainActivity extends Activity {
         return body.toString();
     }
 
-    private void openHideMe() {
+    private void openPackageOrStore(String packageName, String playUrl, String label) {
         try {
-            Intent launch = getPackageManager().getLaunchIntentForPackage(HIDE_ME_PACKAGE);
+            Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
             if (launch != null) {
                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(launch);
@@ -285,8 +288,27 @@ public class MainActivity extends Activity {
             }
         } catch (Exception ignored) {
         }
-        Toast.makeText(this, "hide.me n’est pas installé. Ouverture de Google Play.", Toast.LENGTH_LONG).show();
-        openExternal(HIDE_ME_PLAY);
+
+        Toast.makeText(this, label + " n’est pas installé. Ouverture de sa fiche.", Toast.LENGTH_LONG).show();
+        try {
+            Intent market = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + packageName));
+            market.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(market);
+        } catch (Exception e) {
+            openExternal(playUrl);
+        }
+    }
+
+    private void openInChrome(String url) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.setPackage(CHROME_PACKAGE);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Chrome non disponible : ouverture du navigateur système.", Toast.LENGTH_SHORT).show();
+            openExternal(url);
+        }
     }
 
     private void openExternal(String url) {
