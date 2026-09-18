@@ -1,10 +1,9 @@
-name: PiiWii Remote Phone beta11 icons + memory
+name: PiiWii Remote Phone beta12 large icons no labels
 
 on:
   push:
     branches: [piiwii-remote-phone-beta11-icons]
     paths:
-      - 'piiwii-remote-phone-beta11-icons/**'
       - '.github/workflows/piiwii-remote-phone-beta11-icons.yml'
   workflow_dispatch:
 
@@ -18,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct beta9, apply memory and beta11 icons
+      - name: Reconstruct beta10 memory and apply beta12 UI
         shell: bash
         run: |
           set -euo pipefail
@@ -40,32 +39,41 @@ jobs:
           from pathlib import Path
           import re, sys
           root = Path(sys.argv[1])
+
           p = root / 'remote/build.gradle.kts'
-          s = p.read_text().replace('versionCode = 40','versionCode = 41',1).replace('versionName = "2.0.0-beta10"','versionName = "2.0.0-beta11"',1)
+          s = p.read_text()
+          s = s.replace('versionCode = 40','versionCode = 42',1)
+          s = s.replace('versionName = "2.0.0-beta10"','versionName = "2.0.0-beta12"',1)
           p.write_text(s)
+
           p = root / 'remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt'
           s = p.read_text()
           if 'import android.widget.ImageView\n' not in s:
               s = s.replace('import android.widget.FrameLayout\n','import android.widget.FrameLayout\nimport android.widget.ImageView\n',1)
           if 'import ch.piiwii.remote2.R\n' not in s:
               s = s.replace('import android.widget.ViewFlipper\n','import android.widget.ViewFlipper\nimport ch.piiwii.remote2.R\n',1)
+
+          s = s.replace('addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 70)))',
+                        'addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 74)))',1)
+
           settings_pattern = re.compile(r'        addView\(TextView\(context\)\.apply \{\s*\n\s*text = "⚙"\s*\n.*?contentDescription = "Paramètres".*?\n\s*\}, LayoutParams\(UiKit\.dp\(context, 52\), UiKit\.dp\(context, 52\)\)\.apply \{\s*\n\s*marginStart = UiKit\.dp\(context, 8\)\s*\n\s*\}\)', re.S)
           new_settings='''        addView(ImageView(context).apply {
               setImageResource(R.drawable.ic_settings_custom)
               adjustViewBounds = true
               scaleType = ImageView.ScaleType.FIT_CENTER
-              val pad = UiKit.dp(context, 9)
-              setPadding(pad, pad, pad, pad)
+              setPadding(UiKit.dp(context, 2), UiKit.dp(context, 2), UiKit.dp(context, 2), UiKit.dp(context, 2))
               isClickable = true
               isFocusable = true
               contentDescription = "Paramètres"
-              background = UiKit.interactive(context, 14, UiKit.SURFACE)
+              background = null
               setOnClickListener { settingsClick?.invoke() }
-          }, LayoutParams(UiKit.dp(context, 52), UiKit.dp(context, 52)).apply {
+          }, LayoutParams(UiKit.dp(context, 48), UiKit.dp(context, 48)).apply {
               marginStart = UiKit.dp(context, 8)
           })'''
-          s,c=settings_pattern.subn(new_settings,s,count=1); assert c==1
-          nav_pattern=re.compile(r'                addView\(TextView\(context\)\.apply \{\s*\n\s*text = section\.glyph\s*\n\s*textSize = 21f\s*\n\s*gravity = Gravity\.CENTER\s*\n\s*\}\)')
+          s,c=settings_pattern.subn(new_settings,s,count=1)
+          assert c==1, 'settings block not replaced'
+
+          nav_pattern=re.compile(r'                addView\(TextView\(context\)\.apply \{\s*\n\s*text = section\.glyph\s*\n\s*textSize = 21f\s*\n\s*gravity = Gravity\.CENTER\s*\n\s*\}\)\s*\n\s*addView\(TextView\(context\)\.apply \{\s*\n\s*text = section\.label\s*\n\s*textSize = 10f\s*\n\s*gravity = Gravity\.CENTER\s*\n\s*maxLines = 1\s*\n\s*\}\)')
           new_nav='''                addView(ImageView(context).apply {
                       setImageResource(when (section) {
                           RemoteSection.REMOTE, RemoteSection.NAVIGATION -> R.drawable.ic_remote_custom
@@ -76,8 +84,9 @@ jobs:
                       adjustViewBounds = true
                       scaleType = ImageView.ScaleType.FIT_CENTER
                       contentDescription = section.label
-                  }, LayoutParams(UiKit.dp(context, 24), UiKit.dp(context, 24)))'''
-          s,c=nav_pattern.subn(new_nav,s,count=1); assert c==1
+                  }, LayoutParams(UiKit.dp(context, 38), UiKit.dp(context, 38)))'''
+          s,c=nav_pattern.subn(new_nav,s,count=1)
+          assert c==1, 'bottom nav blocks not replaced'
           p.write_text(s)
           PY
 
@@ -88,11 +97,11 @@ jobs:
             test -s "$RES/ic_${n}_custom.png"
           done
 
-          grep -q 'versionCode = 41' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta11"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 42' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta12"' "$ROOT/remote/build.gradle.kts"
           grep -Fq 'devices.firstOrNull { it.id == selectedId }?.let { return it }' "$ROOT/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt"
-          grep -q 'R.drawable.ic_settings_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
-          grep -q 'R.drawable.ic_touchpad_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'UiKit.dp(context, 38)' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          ! grep -q 'text = section.label' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
 
       - uses: actions/setup-java@v5
         with:
@@ -114,7 +123,7 @@ jobs:
         working-directory: /tmp/src/piiwii-remote
         run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
 
-      - name: Validate and package unsigned beta11
+      - name: Validate and package beta12
         shell: bash
         run: |
           set -euo pipefail
@@ -123,22 +132,19 @@ jobs:
           mkdir -p "$OUT"
           ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
           AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
-          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
           RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
-          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta11-UNSIGNED.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta12-UNSIGNED.apk"
           "$ZIPALIGN" -f 4 "$RAW" "$APK"
           "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$AAPT" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='41' versionName='2.0.0-beta11'" "$OUT/BADGING.txt"
-          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then exit 1; fi
+          grep -q "package: name='ch.piiwii.remote2' versionCode='42' versionName='2.0.0-beta12'" "$OUT/BADGING.txt"
           unzip -t "$APK" > "$OUT/ZIPTEST.txt"
           sha256sum "$APK" > "$OUT/SHA256.txt"
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar "$OUT/apksigner.jar"
 
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: PiiWii-Remote-Phone-2.0.0-beta11-UNSIGNED
+          name: PiiWii-Remote-Phone-2.0.0-beta12-UNSIGNED
           path: /tmp/out/*
           retention-days: 7
           if-no-files-found: error
