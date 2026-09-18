@@ -116,13 +116,13 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient());
-
-        TextView startPage = new TextView(this);
-        startPage.setText("La page M6+ apparaîtra ici.\nLe bouton navigateur est prévu si le lecteur protégé refuse de fonctionner dans WebView.");
-        startPage.setTextSize(16);
-        startPage.setTextColor(Color.GRAY);
-        startPage.setGravity(Gravity.CENTER);
-        webView.addView(startPage);
+        webView.loadData(
+                "<html><body style='font-family:sans-serif;text-align:center;padding:32px;color:#666;background:#fff'>"
+                        + "M6+ apparaîtra ici.<br><br>Si le lecteur protégé refuse la vue intégrée, utilise le bouton <b>M6+ navigateur</b>."
+                        + "</body></html>",
+                "text/html",
+                "UTF-8"
+        );
 
         LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
         webParams.setMargins(0, dp(6), 0, 0);
