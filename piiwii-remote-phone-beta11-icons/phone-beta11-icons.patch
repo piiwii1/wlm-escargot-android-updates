@@ -1,0 +1,71 @@
+--- a/remote/build.gradle.kts
++++ b/remote/build.gradle.kts
+@@ -14,8 +14,8 @@
+         applicationId = "ch.piiwii.remote2"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 40
+-        versionName = "2.0.0-beta10"
++        versionCode = 41
++        versionName = "2.0.0-beta11"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- a/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt
++++ b/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt
+@@ -9,6 +9,7 @@
+ import android.view.animation.DecelerateInterpolator
+ import android.view.animation.TranslateAnimation
+ import android.widget.FrameLayout
++import android.widget.ImageView
+ import android.widget.LinearLayout
+ import android.widget.TextView
+ import android.widget.ViewFlipper
+@@ -299,11 +300,11 @@
+         }
+         addView(deviceBlock, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+ 
+-        addView(TextView(context).apply {
+-            text = "⚙"
+-            textSize = 23f
+-            gravity = Gravity.CENTER
+-            setTextColor(UiKit.TEXT)
++        addView(ImageView(context).apply {
++            setImageResource(R.drawable.ic_settings_custom)
++            adjustViewBounds = true
++            scaleType = ImageView.ScaleType.FIT_CENTER
++            setPadding(UiKit.dp(context, 9), UiKit.dp(context, 9), UiKit.dp(context, 9), UiKit.dp(context, 9))
+             isClickable = true
+             isFocusable = true
+             contentDescription = "Paramètres"
+@@ -313,6 +314,14 @@
+             marginStart = UiKit.dp(context, 8)
+         })
+     }
++
++    private fun iconForSection(section: RemoteSection): Int = when (section) {
++        RemoteSection.REMOTE, RemoteSection.NAVIGATION -> R.drawable.ic_remote_custom
++        RemoteSection.TOUCHPAD -> R.drawable.ic_touchpad_custom
++        RemoteSection.KEYBOARD, RemoteSection.KEYBOARD_ADVANCED -> R.drawable.ic_keyboard_custom
++        RemoteSection.APPS -> R.drawable.ic_apps_custom
++    }
++
+ 
+     private fun bottomBar(): View = LinearLayout(context).apply {
+         orientation = HORIZONTAL
+@@ -325,10 +334,11 @@
+                 gravity = Gravity.CENTER
+                 isClickable = true
+                 isFocusable = true
+-                addView(TextView(context).apply {
+-                    text = section.glyph
+-                    textSize = 21f
+-                    gravity = Gravity.CENTER
++                addView(ImageView(context).apply {
++                    setImageResource(iconForSection(section))
++                    adjustViewBounds = true
++                    scaleType = ImageView.ScaleType.FIT_CENTER
++                    layoutParams = LayoutParams(UiKit.dp(context, 24), UiKit.dp(context, 24))
+                 })
+                 addView(TextView(context).apply {
+                     text = section.label
