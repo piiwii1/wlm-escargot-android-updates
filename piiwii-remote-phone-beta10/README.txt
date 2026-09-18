@@ -1,0 +1,1 @@
+Beta10 icon integration uses the user's original supplied PNG assets only. No regenerated images are used in the application build.
