@@ -51,13 +51,24 @@ jobs:
           foreach($f in $files){
             $bytes=[IO.File]::ReadAllBytes($f)
             try { $text=$utf8Strict.GetString($bytes) } catch { throw "Not valid UTF-8: $f" }
-            foreach($bad in @("PrÃ","rÃ©","dâ€™","DÃ©","TÃ©","â€”","â€¦","Â·")){
-              if($text.Contains($bad)){ throw "Mojibake pattern [$bad] found in $f" }
+            foreach($badCodePoint in @(0x00C3,0x00E2,0x00C2)){
+              $bad=[string][char]$badCodePoint
+              if($text.Contains($bad)){ throw "Mojibake marker U+$('{0:X4}' -f $badCodePoint) found in $f" }
             }
           }
           $cpp=[IO.File]::ReadAllText((Join-Path $root 'src\PiiWiiRemoteAgent.cpp'),$utf8Strict)
-          foreach($good in @("Prêt","réseau","d’appairage","Démarrer","Téléphone","—","·","…")){
-            if(-not $cpp.Contains($good)){ throw "Expected UTF-8 UI text missing: $good" }
+          $expected=@(
+            ('Pr'+[char]0x00EA+'t'),
+            ('r'+[char]0x00E9+'seau'),
+            ('d'+[char]0x2019+'appairage'),
+            ('D'+[char]0x00E9+'marrer'),
+            ('T'+[char]0x00E9+'l'+[char]0x00E9+'phone'),
+            ([string][char]0x2014),
+            ([string][char]0x00B7),
+            ([string][char]0x2026)
+          )
+          foreach($good in $expected){
+            if(-not $cpp.Contains($good)){ throw "Expected Unicode UI text missing (codepoint-built string)" }
           }
           'SOURCE UTF-8 + UI STRING AUDIT: OK'
 
@@ -97,13 +108,21 @@ jobs:
             return $false
           }
           $bin=[IO.File]::ReadAllBytes($exe)
-          foreach($good in @("● Prêt — réseau local","Code d’appairage : ","Dernier téléphone : —","Démarrer automatiquement avec Windows","Autoriser dans le pare-feu","Cliquez sur l’icône près de l’horloge")){
-            $bytes=[Text.Encoding]::Unicode.GetBytes($good)
-            if(-not (Contains-Bytes $bin $bytes)){throw "Correct UTF-16 UI literal missing from EXE: $good"}
+          $correct=@(
+            ([char]0x25CF+' Pr'+[char]0x00EA+'t '+[char]0x2014+' r'+[char]0x00E9+'seau local'),
+            ('Code d'+[char]0x2019+'appairage : '),
+            ('Dernier t'+[char]0x00E9+'l'+[char]0x00E9+'phone : '+[char]0x2014),
+            ('D'+[char]0x00E9+'marrer automatiquement avec Windows'),
+            ('Autoriser dans le pare-feu'),
+            ('Cliquez sur l'+[char]0x2019+'ic'+[char]0x00F4+'ne pr'+[char]0x00E8+'s de l'+[char]0x2019+'horloge')
+          )
+          foreach($good in $correct){
+            $bytes=[Text.Encoding]::Unicode.GetBytes([string]$good)
+            if(-not (Contains-Bytes $bin $bytes)){throw "Correct UTF-16 UI literal missing from EXE"}
           }
-          foreach($bad in @("PrÃªt","rÃ©seau","dâ€™appairage","DÃ©marrer","TÃ©lÃ©phone")){
-            $bytes=[Text.Encoding]::Unicode.GetBytes($bad)
-            if(Contains-Bytes $bin $bytes){throw "Mojibake UTF-16 literal found in EXE: $bad"}
+          foreach($badCodePoint in @(0x00C3,0x00E2,0x00C2)){
+            $badBytes=[Text.Encoding]::Unicode.GetBytes([string][char]$badCodePoint)
+            if(Contains-Bytes $bin $badBytes){throw "Mojibake marker U+$('{0:X4}' -f $badCodePoint) found in EXE"}
           }
           'COMPILED UTF-16 UI AUDIT: OK'
 
