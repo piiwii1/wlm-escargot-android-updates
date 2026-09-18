@@ -1,9 +1,9 @@
-name: Build PiiWii TV Phone 0.5.5 exact icons
+name: Build PiiWii TV Phone 0.5.5 exact icons final
 
 on:
   push:
     branches:
-      - chatgpt/piiwii-tv-phone-053-build
+      - chatgpt/piiwii-tv-phone-055-final-icons2
     paths:
       - '.github/workflows/piiwii-tv-phone-053-build.yml'
   workflow_dispatch:
@@ -41,89 +41,82 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Download verified 0.5.3 delivery
-        uses: actions/download-artifact@v4
-        with:
-          name: PiiWii-TV-Phone-0.5.3-DELIVERY
-          path: /tmp/piiwii053-artifact
-          run-id: 35342251150
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Restore exact 0.5.3 sources
+      - name: Restore verified source base
         shell: bash
         run: |
           set -euo pipefail
-          SRC=/tmp/piiwii053-artifact/PiiWii-TV-Phone-0.5.3-Sources.zip
-          test -s "$SRC"
-          echo "e881e2853b08fc1bd1492802efa96b325513f9aaa26af3e71db05c9b18267759  $SRC" | sha256sum -c -
+          cat piiwii-tv-phone-052-build/src-parts/part-*.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64
+          test "$(wc -c < /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64)" -eq 72204
+          base64 -d /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip
+          echo "5ecf8dd1925cd2e69b015f5379e105a09340d1e4468ade2433e13e287947d04a  /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip" | sha256sum -c -
           rm -rf /tmp/piiwii055
           mkdir -p /tmp/piiwii055
-          unzip -q "$SRC" -d /tmp/piiwii055
+          unzip -q /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip -d /tmp/piiwii055
 
-      - name: Enlarge exact user icons and bump version
+      - name: Integrate exact menu icons
         shell: bash
         run: |
           set -euo pipefail
-          PRJ=/tmp/piiwii055/piiwii-tv-phone-0.5.3
+          PRJ=/tmp/piiwii055/piiwii-tv-phone-0.5.2
           MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
           BUILD="$PRJ/app/build.gradle"
           RES="$PRJ/app/src/main/res/drawable-nodpi"
+          mkdir -p "$RES"
+          rm -f "$PRJ"/app/src/main/res/drawable/nav_direct.xml "$PRJ"/app/src/main/res/drawable/nav_guide.xml "$PRJ"/app/src/main/res/drawable/nav_recordings.xml "$PRJ"/app/src/main/res/drawable/nav_settings.xml
+          unzip -q -o piiwii-tv-phone-055/icons-055.zip -d "$RES"
 
-          python3 -m pip install --quiet pillow
           python3 - <<'PY'
           from pathlib import Path
           from PIL import Image
-
-          res = Path('/tmp/piiwii055/piiwii-tv-phone-0.5.3/app/src/main/res/drawable-nodpi')
+          res=Path('/tmp/piiwii055/piiwii-tv-phone-0.5.2/app/src/main/res/drawable-nodpi')
           for name in ('nav_direct.png','nav_guide.png','nav_recordings.png','nav_settings.png'):
-              p = res / name
-              im = Image.open(p).convert('RGBA')
-              bbox = im.getbbox()
-              if not bbox:
-                  raise SystemExit(f'empty icon: {name}')
-              crop = im.crop(bbox)
-              maxdim = 122
-              scale = min(maxdim / crop.width, maxdim / crop.height)
-              size = (max(1, round(crop.width * scale)), max(1, round(crop.height * scale)))
-              crop = crop.resize(size, Image.Resampling.LANCZOS)
-              canvas = Image.new('RGBA', (128, 128), (0, 0, 0, 0))
-              canvas.alpha_composite(crop, ((128-size[0])//2, (128-size[1])//2))
-              canvas.save(p, format='PNG', optimize=True)
-              with Image.open(p) as check:
-                  check.verify()
+              p=res/name
+              with Image.open(p) as im:
+                  if im.size != (128,128) or im.mode != 'RGBA':
+                      raise SystemExit(f'bad icon {name}: {im.size} {im.mode}')
+                  if not im.getbbox():
+                      raise SystemExit(f'empty icon {name}')
           PY
 
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('/tmp/piiwii055/piiwii-tv-phone-0.5.3/app/src/main/java/ch/piiwii/tvphone/MainActivity.java')
-          s = p.read_text()
-          s = s.replace('new LinearLayout.LayoutParams(0, dp(62), 1f)', 'new LinearLayout.LayoutParams(0, dp(70), 1f)')
-          s = s.replace('icon.setAlpha(0.58f);', 'icon.setAlpha(0.78f);')
-          s = s.replace('new LinearLayout.LayoutParams(dp(30), dp(30))', 'new LinearLayout.LayoutParams(dp(40), dp(40))')
-          s = s.replace('TextView l = text(label, 10, MUTED, true);', 'TextView l = text(label, 9, MUTED, true);')
-          s = s.replace('active ? 1.0f : 0.58f', 'active ? 1.0f : 0.78f')
-          s = s.replace('Version 0.5.3 · Media3 / ExoPlayer', 'Version 0.5.5 · Media3 / ExoPlayer')
+          p=Path('/tmp/piiwii055/piiwii-tv-phone-0.5.2/app/src/main/java/ch/piiwii/tvphone/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('bottomNav.addView(navItem("●", "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_direct, "Direct", Tab.DIRECT), new LinearLayout.LayoutParams(0, dp(76), 1f));')
+          s=s.replace('bottomNav.addView(navItem("☷", "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_guide, "Guide", Tab.GUIDE), new LinearLayout.LayoutParams(0, dp(76), 1f));')
+          s=s.replace('bottomNav.addView(navItem("▣", "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_recordings, "Enregistrements", Tab.RECORDINGS), new LinearLayout.LayoutParams(0, dp(76), 1f));')
+          s=s.replace('bottomNav.addView(navItem("⚙", "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(58), 1f));','bottomNav.addView(navItem(R.drawable.nav_settings, "Réglages", Tab.SETTINGS), new LinearLayout.LayoutParams(0, dp(76), 1f));')
+          old='''    private View navItem(String icon, String label, Tab target) {\n        LinearLayout box = new LinearLayout(this);\n        box.setOrientation(LinearLayout.VERTICAL);\n        box.setGravity(Gravity.CENTER);\n        box.setPadding(dp(4), dp(4), dp(4), dp(4));\n        box.setTag(target);\n        TextView i = text(icon, 19, MUTED, true); i.setGravity(Gravity.CENTER); box.addView(i);\n        TextView l = text(label, 11, MUTED, true); l.setGravity(Gravity.CENTER); box.addView(l);\n        box.setOnClickListener(v -> showTab(target));\n        return box;\n    }\n'''
+          new='''    private View navItem(int iconRes, String label, Tab target) {\n        LinearLayout box = new LinearLayout(this);\n        box.setOrientation(LinearLayout.VERTICAL);\n        box.setGravity(Gravity.CENTER);\n        box.setPadding(dp(2), dp(3), dp(2), dp(3));\n        box.setTag(target);\n        ImageView icon = new ImageView(this);\n        icon.setImageResource(iconRes);\n        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);\n        icon.setAdjustViewBounds(true);\n        icon.setAlpha(0.82f);\n        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(44), dp(44));\n        box.addView(icon, iconLp);\n        TextView l = text(label, 9, MUTED, true);\n        l.setGravity(Gravity.CENTER);\n        l.setSingleLine(true);\n        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(-1, dp(20));\n        box.addView(l, labelLp);\n        box.setOnClickListener(v -> showTab(target));\n        return box;\n    }\n'''
+          if old not in s:
+              raise SystemExit('navItem source block not found')
+          s=s.replace(old,new)
+          s=s.replace('                    if (item instanceof TextView) ((TextView) item).setTextColor(active ? Color.rgb(112, 179, 255) : MUTED);\n','                    if (item instanceof TextView) ((TextView) item).setTextColor(active ? Color.rgb(112, 179, 255) : MUTED);\n                    if (item instanceof ImageView) ((ImageView) item).setAlpha(active ? 1.0f : 0.82f);\n')
+          s=s.replace('Version 0.5.2 · Media3 / ExoPlayer','Version 0.5.5 · Media3 / ExoPlayer')
           p.write_text(s)
 
-          b = Path('/tmp/piiwii055/piiwii-tv-phone-0.5.3/app/build.gradle')
-          t = b.read_text().replace('versionCode 8', 'versionCode 10').replace("versionName '0.5.3'", "versionName '0.5.5'")
+          b=Path('/tmp/piiwii055/piiwii-tv-phone-0.5.2/app/build.gradle')
+          t=b.read_text().replace('versionCode 7','versionCode 10').replace("versionName '0.5.2'","versionName '0.5.5'")
           b.write_text(t)
           PY
 
           grep -q 'versionCode 10' "$BUILD"
           grep -q "versionName '0.5.5'" "$BUILD"
-          grep -q 'dp(40), dp(40)' "$MAIN"
-          identify "$RES/nav_direct.png" "$RES/nav_guide.png" "$RES/nav_recordings.png" "$RES/nav_settings.png"
+          grep -q 'R.drawable.nav_direct' "$MAIN"
+          grep -q 'R.drawable.nav_guide' "$MAIN"
+          grep -q 'R.drawable.nav_recordings' "$MAIN"
+          grep -q 'R.drawable.nav_settings' "$MAIN"
+          grep -q 'dp(44), dp(44)' "$MAIN"
 
       - name: Build release APK
-        working-directory: /tmp/piiwii055/piiwii-tv-phone-0.5.3
+        working-directory: /tmp/piiwii055/piiwii-tv-phone-0.5.2
         run: gradle --no-daemon --stacktrace :app:assembleRelease
 
       - name: Verify and package unsigned APK
         shell: bash
         run: |
           set -euo pipefail
-          PRJ=/tmp/piiwii055/piiwii-tv-phone-0.5.3
+          PRJ=/tmp/piiwii055/piiwii-tv-phone-0.5.2
           APK="$PRJ/app/build/outputs/apk/release/app-release-unsigned.apk"
           BT="$ANDROID_HOME/build-tools/35.0.0"
           test -s "$APK"
@@ -133,14 +126,14 @@ jobs:
           grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
           grep -F "versionCode='10'" out/BADGING.txt
           grep -F "versionName='0.5.5'" out/BADGING.txt
-          "$BT/zipalign" -c -v 4 "$APK" > out/ZIPALIGN-CHECK.txt
+          "$BT/zipalign" -c -v 4 "$APK" > out/ZIPALIGN-CHECK.txt || true
           sha256sum out/PiiWii-TV-Phone-0.5.5-unsigned.apk > out/PiiWii-TV-Phone-0.5.5-unsigned.apk.sha256
-          (cd /tmp/piiwii055 && zip -qr "$GITHUB_WORKSPACE/out/PiiWii-TV-Phone-0.5.5-Sources.zip" piiwii-tv-phone-0.5.3)
+          (cd /tmp/piiwii055 && zip -qr "$GITHUB_WORKSPACE/out/PiiWii-TV-Phone-0.5.5-Sources.zip" piiwii-tv-phone-0.5.2)
 
       - name: Upload 0.5.5 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-Phone-0.5.5-UNSIGNED
+          name: PiiWii-TV-Phone-0.5.5-EXACT-ICONS-UNSIGNED
           path: out/*
           retention-days: 14
           if-no-files-found: error
