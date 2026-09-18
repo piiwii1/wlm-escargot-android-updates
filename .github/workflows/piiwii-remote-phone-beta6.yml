@@ -1,0 +1,230 @@
+name: PiiWii Remote Phone beta6 - Touchpad full page + secondary tools
+
+on:
+  push:
+    branches: [piiwii-remote-v2-phone-beta6-touchpad-pages]
+    paths:
+      - 'piiwii-remote-phone-beta6/**'
+      - '.github/workflows/piiwii-remote-phone-beta6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phone-beta6:
+    name: Build and audit Phone 2.0.0-beta6
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta5 and apply beta6 touchpad pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/piiwii-phone-beta6-src
+          ROOT=/tmp/piiwii-phone-beta6-src/piiwii-remote
+
+          base64 -d piiwii-remote-phone-beta3/phone-beta3.patch.xz.b64 > /tmp/phone-beta3.patch.xz
+          echo 'b0510a468202e0898d0c07b2056daa3d06ecbb35b574c9a54655c7b63dbb7a1e  /tmp/phone-beta3.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta3.patch.xz > /tmp/phone-beta3.patch
+          echo '7e0019639f059feb9f6b409e01b7e47377be9c297d303a161d46c1c23a9c07cb  /tmp/phone-beta3.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta3.patch)
+
+          base64 -d piiwii-remote-phone-beta4/phone-beta4.patch.xz.b64 > /tmp/phone-beta4.patch.xz
+          echo '45ffb0cf4741eaf7364b95933cc744ec7968720ad334a50a91ceac8071ef9519  /tmp/phone-beta4.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta4.patch.xz > /tmp/phone-beta4.patch
+          echo '490272fe7e7a386d83f78c2de37810605421551aff9d9577a9f53e77c55efeed  /tmp/phone-beta4.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta4.patch)
+
+          base64 -d piiwii-remote-phone-beta5/phone-beta5.patch.xz.b64 > /tmp/phone-beta5.patch.xz
+          echo 'dbd42fa96eb3b7c32a8777e0fa2718a50b524b1b4666019b59316edd0afe7128  /tmp/phone-beta5.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta5.patch.xz > /tmp/phone-beta5.patch
+          echo 'a4f347649bee64f637d56c181a6f38a34a5991f9bcd65e9acfa8f40bab1d68a3  /tmp/phone-beta5.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta5.patch)
+
+          base64 -d piiwii-remote-phone-beta6/phone-beta6.patch.xz.b64 > /tmp/phone-beta6.patch.xz
+          echo '56ca922ce6493e1963dd03f19cc07a38d62de0031f62ade8b477591c947d2719  /tmp/phone-beta6.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta6.patch.xz > /tmp/phone-beta6.patch
+          echo 'b922f805e558bfd87ca960595d82e6f4f6ee25585359a1be2370987e4f025ae7  /tmp/phone-beta6.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta6.patch)
+
+      - name: Static regression audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta6-src/piiwii-remote
+          BUILD="$ROOT/remote/build.gradle.kts"
+          MAIN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          SHELL="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          SCREEN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
+          TOUCHPAD="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/TouchpadView.kt"
+          SECTIONS="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteSection.kt"
+          PROTO="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/Protocol.kt"
+
+          grep -q 'applicationId = "ch.piiwii.remote2"' "$BUILD"
+          grep -q 'compileSdk = 35' "$BUILD"
+          grep -q 'minSdk = 26' "$BUILD"
+          grep -q 'targetSdk = 35' "$BUILD"
+          grep -q 'versionCode = 36' "$BUILD"
+          grep -q 'versionName = "2.0.0-beta6"' "$BUILD"
+          grep -q 'JavaVersion.VERSION_17' "$BUILD"
+          grep -q 'jvmTarget = "17"' "$BUILD"
+
+          grep -q 'WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' "$MAIN"
+          grep -q 'DigitsKeyListener.getInstance("0123456789.,")' "$MAIN"
+          grep -q 'TYPE_NUMBER_FLAG_DECIMAL' "$MAIN"
+          grep -q "replace(',', '.')" "$MAIN"
+
+          # beta3 Remote + beta4 Navigation retained
+          grep -q 'remoteStatusStrip' "$SCREEN"
+          grep -q 'Lecture / pause' "$SCREEN"
+          grep -q 'commandSettings.mediaLeft.command' "$SCREEN"
+          grep -q 'commandSettings.mediaRight.command' "$SCREEN"
+          grep -q 'RemoteCommand.VOLUME_MUTE' "$SCREEN"
+          grep -q 'RemoteCommand.MEDIA_STOP' "$SCREEN"
+          grep -q 'navigationQuickButton' "$SCREEN"
+          grep -q 'navigationQuickRow' "$SCREEN"
+          grep -q 'sectionLabel(context, "Direction")' "$SCREEN"
+          grep -q 'sectionLabel(context, "Raccourcis")' "$SCREEN"
+          for c in NAV_UP NAV_DOWN NAV_LEFT NAV_RIGHT NAV_OK NAV_BACK NAV_HOME NAV_MENU; do grep -q "RemoteCommand.$c" "$SCREEN"; done
+
+          # beta5 retained: full-screen Remote/Navigation pager + safer hidden PC power menu
+          grep -q 'class RemoteNavigationPager' "$SHELL"
+          grep -q ': ViewFlipper(context)' "$SHELL"
+          grep -q 'setPage(if (section == RemoteSection.NAVIGATION) 1 else 0)' "$SHELL"
+          grep -q 'discreetPcOptionsButton' "$SCREEN"
+          grep -q '⋮  Options PC' "$SCREEN"
+          grep -q 'Mettre le PC en veille ?' "$SCREEN"
+          grep -q 'Verrouiller le PC ?' "$SCREEN"
+          grep -q 'Redémarrer le PC ?' "$SCREEN"
+          grep -q 'Éteindre le PC ?' "$SCREEN"
+
+          # beta6: touchpad occupies first page; click row at bottom; text/keyboard on second snapped page
+          grep -q 'class TouchpadSectionPager' "$SHELL"
+          grep -q 'primarySwipeFromBottomOnly' "$SHELL"
+          grep -q 'primaryBottomZone' "$SHELL"
+          grep -q 'secondaryTopZone' "$SHELL"
+          grep -q 'createTouchpadPrimary' "$SCREEN"
+          grep -q 'createTouchpadSecondary' "$SCREEN"
+          grep -q 'touchpadClickRow' "$SCREEN"
+          grep -q '"Clic gauche"' "$SCREEN"
+          grep -q '"Clic droit"' "$SCREEN"
+          grep -q '"Clavier & commandes"' "$SCREEN"
+          grep -q '"Gestes du pavé tactile"' "$SCREEN"
+          grep -q 'RemoteCommand.POINTER_LEFT_CLICK' "$SCREEN"
+          grep -q 'RemoteCommand.POINTER_RIGHT_CLICK' "$SCREEN"
+          ! grep -q 'canvas.drawText' "$TOUCHPAD"
+
+          python - "$SECTIONS" "$PROTO" "$SCREEN" "$SHELL" <<'PY'
+          from pathlib import Path
+          import re,sys
+          sections=Path(sys.argv[1]).read_text(encoding='utf-8')
+          labels=re.findall(r'\("([^"]+)",\s*"[^"]*"\)',sections)
+          expected=['Télécommande','Navigation','Pavé tactile','Applications']
+          assert labels==expected,(labels,expected)
+          proto=Path(sys.argv[2]).read_text(encoding='utf-8')
+          assert 'PIIWII_REMOTE/1' in proto
+          screen=Path(sys.argv[3]).read_text(encoding='utf-8')
+          shell=Path(sys.argv[4]).read_text(encoding='utf-8')
+          assert screen.count('addView(powerMenuButton') == 1
+          idx=screen.index('addView(powerMenuButton')
+          assert 'DeviceType.ANDROID_TV' in screen[max(0,idx-250):idx]
+          assert 'RemoteSection.REMOTE || section == RemoteSection.NAVIGATION' in shell
+          assert 'FrameLayout.LayoutParams.MATCH_PARENT' in shell
+          tree=Path(sys.argv[1]).parents[3]
+          assert '45821' in '\n'.join(p.read_text(encoding='utf-8',errors='ignore') for p in tree.rglob('*.kt'))
+          print('Static phone beta6 touchpad-pages audit OK')
+          PY
+
+          if find "$ROOT" -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'Signing.properties' \) | grep -q .; then
+            echo 'Private signing material must not be in source tree' >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and release compilation
+        working-directory: /tmp/piiwii-phone-beta6-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate unsigned release and package sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta6-src/piiwii-remote
+          OUT=/tmp/piiwii-phone-beta6-out
+          mkdir -p "$OUT"
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta6-UNSIGNED.apk"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+
+          test -f "$RAW"
+          "$ZIPALIGN" -f 4 "$RAW" "$APK"
+          "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$AAPT" dump badging "$APK" > "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='36' versionName='2.0.0-beta6'" "$OUT/PHONE-BADGING.txt"
+          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
+            echo 'Release candidate was unexpectedly signed' >&2
+            exit 1
+          fi
+          unzip -t "$APK" > "$OUT/PHONE-ZIPTEST.txt"
+
+          python - "$APK" <<'PY'
+          import sys,zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              data=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          required=[
+              'Télécommande','Navigation','Pavé tactile','Applications',
+              'Options PC','Mettre le PC en veille ?','Verrouiller le PC ?',
+              'Redémarrer le PC ?','Éteindre le PC ?',
+              'Direction','Raccourcis','Retour','Accueil','Menu','Valider',
+              'PAIR_REQUEST','AUTH1','2.0.0-beta6',
+              'Clic gauche','Clic droit','Clavier & commandes','Gestes du pavé tactile'
+          ]
+          missing=[s for s in required if s.encode('utf-8') not in data]
+          assert not missing,missing
+          print('DEX beta6 feature audit OK')
+          PY
+
+          cd /tmp/piiwii-phone-beta6-src
+          zip -qr "$OUT/PiiWii-Remote-Phone-2.0.0-beta6-Sources.zip" piiwii-remote \
+            -x '*/build/*' '*/.gradle/*' '*/.kotlin/*' '*.jks' '*.keystore' '*Signing.properties'
+          unzip -t "$OUT/PiiWii-Remote-Phone-2.0.0-beta6-Sources.zip" > "$OUT/SOURCES-ZIPTEST.txt"
+          sha256sum "$APK" "$OUT/PiiWii-Remote-Phone-2.0.0-beta6-Sources.zip" > "$OUT/SHA256.txt"
+          cat > "$OUT/AUDIT.txt" <<'EOT'
+          PIIWII REMOTE PHONE 2.0.0-beta6 / versionCode 36
+          PACKAGE: ch.piiwii.remote2
+          SCOPE: touchpad full-screen primary page + bottom left/right click row + secondary keyboard/tools page; beta5 Remote/Navigation pager and PC power safety retained
+          TOUCHPAD: first page is a clean full-height PC touch surface with only Clic gauche / Clic droit above the bottom app menu
+          TOUCHPAD PAGER: swipe upward from the bottom click area opens a full-height Clavier & commandes page; swipe down from the top returns; page snaps and stops
+          REGRESSIONS: beta2 IP keyboard fix + beta3 Remote controls + beta4 Navigation + beta5 safer PC power + Remote/Navigation pager + exact four bottom sections preserved
+          SDK: min 26 / target 35 / compile 35 / Java-Kotlin 17
+          TESTS: unit tests + release build + aapt badging + zipalign + ZIP integrity + DEX strings + static regressions
+          SIGNING: UNSIGNED release candidate by design. Final delivery must use stable PiiWii private key.
+          EXPECTED FINAL CERT SHA-256: d86a9c8c8f9ea2001108d6f8afec076ba7b6343c0383ca812647bed61de6c717
+          EOT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta6-Touchpad-Pages-UNSIGNED
+          path: /tmp/piiwii-phone-beta6-out/*
+          retention-days: 7
+          if-no-files-found: error
