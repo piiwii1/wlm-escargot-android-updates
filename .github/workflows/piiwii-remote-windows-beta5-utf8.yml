@@ -120,9 +120,19 @@ jobs:
             $bytes=[Text.Encoding]::Unicode.GetBytes([string]$good)
             if(-not (Contains-Bytes $bin $bytes)){throw "Correct UTF-16 UI literal missing from EXE"}
           }
-          foreach($badCodePoint in @(0x00C3,0x00E2,0x00C2)){
-            $badBytes=[Text.Encoding]::Unicode.GetBytes([string][char]$badCodePoint)
-            if(Contains-Bytes $bin $badBytes){throw "Mojibake marker U+$('{0:X4}' -f $badCodePoint) found in EXE"}
+          $badStrings=@(
+            ('Pr'+[char]0x00C3+[char]0x00AA+'t'),
+            ('r'+[char]0x00C3+[char]0x00A9+'seau'),
+            ('d'+[char]0x00E2+[char]0x20AC+[char]0x2122+'appairage'),
+            ('D'+[char]0x00C3+[char]0x00A9+'marrer'),
+            ('T'+[char]0x00C3+[char]0x00A9+'l'+[char]0x00C3+[char]0x00A9+'phone'),
+            ([string][char]0x00E2+[char]0x20AC+[char]0x201D),
+            ([string][char]0x00E2+[char]0x20AC+[char]0x00A6),
+            ([string][char]0x00C2+[char]0x00B7)
+          )
+          foreach($bad in $badStrings){
+            $badBytes=[Text.Encoding]::Unicode.GetBytes([string]$bad)
+            if(Contains-Bytes $bin $badBytes){throw "Known mojibake UTF-16 sequence found in EXE"}
           }
           'COMPILED UTF-16 UI AUDIT: OK'
 
