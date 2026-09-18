@@ -1,0 +1,78 @@
+name: Build PiiWii TV Phone 0.5.2
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-tv-phone-052-build
+    paths:
+      - 'piiwii-tv-phone-052-build/**'
+      - '.github/workflows/piiwii-tv-phone-052-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore and verify source package
+        run: |
+          set -euo pipefail
+          base64 -d piiwii-tv-phone-052-build/PiiWii-TV-Phone-0.5.2-Sources.zip.b64 > /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip
+          echo "5ecf8dd1925cd2e69b015f5379e105a09340d1e4468ade2433e13e287947d04a  /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip" | sha256sum -c -
+          mkdir -p /tmp/piiwii052
+          unzip -q /tmp/PiiWii-TV-Phone-0.5.2-Sources.zip -d /tmp/piiwii052
+          test -f /tmp/piiwii052/piiwii-tv-phone-0.5.2/app/build.gradle
+          grep -q "applicationId 'ch.piiwii.tvphone'" /tmp/piiwii052/piiwii-tv-phone-0.5.2/app/build.gradle
+          grep -q 'versionCode 7' /tmp/piiwii052/piiwii-tv-phone-0.5.2/app/build.gradle
+          grep -q "versionName '0.5.2'" /tmp/piiwii052/piiwii-tv-phone-0.5.2/app/build.gradle
+
+      - name: Build APK
+        working-directory: /tmp/piiwii052/piiwii-tv-phone-0.5.2
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          APK=/tmp/piiwii052/piiwii-tv-phone-0.5.2/app/build/outputs/apk/debug/app-debug.apk
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          test -s "$APK"
+          mkdir -p out
+          cp "$APK" out/PiiWii-TV-Phone-0.5.2.apk
+          "$BT/zipalign" -c -v 4 "$APK" > out/ZIPALIGN.txt
+          "$BT/apksigner" verify --verbose --print-certs "$APK" > out/APKSIGNER.txt
+          "$BT/aapt" dump badging "$APK" > out/BADGING.txt
+          grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
+          grep -F "versionCode='7'" out/BADGING.txt
+          grep -F "versionName='0.5.2'" out/BADGING.txt
+          sha256sum out/PiiWii-TV-Phone-0.5.2.apk > out/PiiWii-TV-Phone-0.5.2.apk.sha256
+          cat out/PiiWii-TV-Phone-0.5.2.apk.sha256
+
+      - name: Upload delivery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-TV-Phone-0.5.2-DELIVERY
+          path: out/*
+          retention-days: 7
+          if-no-files-found: error
