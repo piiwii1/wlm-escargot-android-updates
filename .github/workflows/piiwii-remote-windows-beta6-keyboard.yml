@@ -37,7 +37,19 @@ jobs:
           xz -dc "$BASE/windows-beta6.patch.xz" > "$BASE/windows-beta6.patch"
           echo '2a0df8bc0b008844e5550e31dc4eb4d2028cc974e767b48c215491ba46d21432  '"$BASE/windows-beta6.patch" | sha256sum -c -
           (cd "$ROOT" && patch --binary -p1 < "$BASE/windows-beta6.patch")
+          python - "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1])
+          s=p.read_text(encoding='utf-8')
+          old='PiiWii Remote Agent\\n2.0.0-beta5\\n'
+          new='PiiWii Remote Agent\\n2.0.0-beta6\\n'
+          if old not in s:
+              raise SystemExit('Expected beta5 PONG string not found')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
           grep -q '2.0.0-beta6' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
+          grep -Fq 'PiiWii Remote Agent\n2.0.0-beta6\n' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
           grep -q 'KEYBOARD_KEY' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp"
           grep -q 'FILEVERSION 2,0,0,13' "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc"
           grep -q 'PiiWii-Remote-Agent-2.0.0-beta5.exe' "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss"
@@ -53,6 +65,7 @@ jobs:
           foreach($token in @('CTRL','ALT','SHIFT','WIN','DELETE','INSERT','HOME','END','PGUP','PGDN','PRINTSCREEN','PAUSE')){
             if(-not $cpp.Contains('"'+$token+'"')){throw "Missing key token: $token"}
           }
+          if(-not $cpp.Contains('PiiWii Remote Agent\n2.0.0-beta6\n')){throw 'PONG version regression'}
           $iss=Get-Content (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') -Raw -Encoding UTF8
           if(-not $iss.Contains('2.0.0-beta6')){throw 'Installer beta6 version missing'}
           if(-not $iss.Contains('VersionInfoProductVersion=2.0.0.13')){throw 'Installer numeric version missing'}
