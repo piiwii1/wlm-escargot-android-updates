@@ -1,0 +1,14 @@
+--- a/tvreceiver/src/main/java/ch/piiwii/remote2/tv/network/TvVoicePlayer.kt
++++ b/tvreceiver/src/main/java/ch/piiwii/remote2/tv/network/TvVoicePlayer.kt
+@@ -44,7 +44,10 @@
+         if (split <= 0 || split + 1 >= payload.length) return false
+         val pcm = runCatching { Base64.decode(payload.substring(split + 1), Base64.DEFAULT) }.getOrNull() ?: return false
+         if (pcm.isEmpty() || pcm.size > MAX_FRAME_BYTES) return false
+-        val audio = track ?: if (start()) track else null ?: return false
++        val audio = track ?: run {
++            if (!start()) return false
++            track ?: return false
++        }
+         return audio.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING) >= 0
+     }
+ 
