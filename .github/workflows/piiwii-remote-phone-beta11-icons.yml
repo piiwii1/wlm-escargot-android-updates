@@ -1,4 +1,4 @@
-name: PiiWii Remote Phone beta12 large icons no labels
+name: PiiWii Remote Phone beta13 bigger menu icons
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct beta10 memory and apply beta12 UI
+      - name: Reconstruct beta10 memory and apply beta13 UI
         shell: bash
         run: |
           set -euo pipefail
@@ -42,8 +42,8 @@ jobs:
 
           p = root / 'remote/build.gradle.kts'
           s = p.read_text()
-          s = s.replace('versionCode = 40','versionCode = 42',1)
-          s = s.replace('versionName = "2.0.0-beta10"','versionName = "2.0.0-beta12"',1)
+          s = s.replace('versionCode = 40','versionCode = 43',1)
+          s = s.replace('versionName = "2.0.0-beta10"','versionName = "2.0.0-beta13"',1)
           p.write_text(s)
 
           p = root / 'remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt'
@@ -54,7 +54,7 @@ jobs:
               s = s.replace('import android.widget.ViewFlipper\n','import android.widget.ViewFlipper\nimport ch.piiwii.remote2.R\n',1)
 
           s = s.replace('addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 70)))',
-                        'addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 74)))',1)
+                        'addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 84)))',1)
 
           settings_pattern = re.compile(r'        addView\(TextView\(context\)\.apply \{\s*\n\s*text = "⚙"\s*\n.*?contentDescription = "Paramètres".*?\n\s*\}, LayoutParams\(UiKit\.dp\(context, 52\), UiKit\.dp\(context, 52\)\)\.apply \{\s*\n\s*marginStart = UiKit\.dp\(context, 8\)\s*\n\s*\}\)', re.S)
           new_settings='''        addView(ImageView(context).apply {
@@ -84,7 +84,7 @@ jobs:
                       adjustViewBounds = true
                       scaleType = ImageView.ScaleType.FIT_CENTER
                       contentDescription = section.label
-                  }, LayoutParams(UiKit.dp(context, 38), UiKit.dp(context, 38)))'''
+                  }, LayoutParams(UiKit.dp(context, 50), UiKit.dp(context, 50)))'''
           s,c=nav_pattern.subn(new_nav,s,count=1)
           assert c==1, 'bottom nav blocks not replaced'
           p.write_text(s)
@@ -97,10 +97,10 @@ jobs:
             test -s "$RES/ic_${n}_custom.png"
           done
 
-          grep -q 'versionCode = 42' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta12"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 43' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta13"' "$ROOT/remote/build.gradle.kts"
           grep -Fq 'devices.firstOrNull { it.id == selectedId }?.let { return it }' "$ROOT/remote/src/main/java/ch/piiwii/remote2/device/DeviceSelectionPolicy.kt"
-          grep -q 'UiKit.dp(context, 38)' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'UiKit.dp(context, 50)' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
           ! grep -q 'text = section.label' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
 
       - uses: actions/setup-java@v5
@@ -123,7 +123,7 @@ jobs:
         working-directory: /tmp/src/piiwii-remote
         run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
 
-      - name: Validate and package beta12
+      - name: Validate and package beta13
         shell: bash
         run: |
           set -euo pipefail
@@ -133,18 +133,18 @@ jobs:
           ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
           AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
           RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
-          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta12-UNSIGNED.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta13-UNSIGNED.apk"
           "$ZIPALIGN" -f 4 "$RAW" "$APK"
           "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$AAPT" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='42' versionName='2.0.0-beta12'" "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='43' versionName='2.0.0-beta13'" "$OUT/BADGING.txt"
           unzip -t "$APK" > "$OUT/ZIPTEST.txt"
           sha256sum "$APK" > "$OUT/SHA256.txt"
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar "$OUT/apksigner.jar"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-Phone-2.0.0-beta12-UNSIGNED
+          name: PiiWii-Remote-Phone-2.0.0-beta13-UNSIGNED
           path: /tmp/out/*
           retention-days: 7
           if-no-files-found: error
