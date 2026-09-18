@@ -1,0 +1,218 @@
+name: PiiWii Remote Phone beta8 - Keyboard UX + extended PC keys
+
+on:
+  push:
+    branches: [piiwii-remote-v2-phone-beta8-keyboard]
+    paths:
+      - 'piiwii-remote-phone-beta8/**'
+      - '.github/workflows/piiwii-remote-phone-beta8.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phone-beta8:
+    name: Build and audit Phone 2.0.0-beta8
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta7 and apply beta8 keyboard UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/piiwii-phone-beta8-src
+          ROOT=/tmp/piiwii-phone-beta8-src/piiwii-remote
+
+          base64 -d piiwii-remote-phone-beta3/phone-beta3.patch.xz.b64 > /tmp/phone-beta3.patch.xz
+          echo 'b0510a468202e0898d0c07b2056daa3d06ecbb35b574c9a54655c7b63dbb7a1e  /tmp/phone-beta3.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta3.patch.xz > /tmp/phone-beta3.patch
+          echo '7e0019639f059feb9f6b409e01b7e47377be9c297d303a161d46c1c23a9c07cb  /tmp/phone-beta3.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta3.patch)
+
+          base64 -d piiwii-remote-phone-beta4/phone-beta4.patch.xz.b64 > /tmp/phone-beta4.patch.xz
+          echo '45ffb0cf4741eaf7364b95933cc744ec7968720ad334a50a91ceac8071ef9519  /tmp/phone-beta4.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta4.patch.xz > /tmp/phone-beta4.patch
+          echo '490272fe7e7a386d83f78c2de37810605421551aff9d9577a9f53e77c55efeed  /tmp/phone-beta4.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta4.patch)
+
+          base64 -d piiwii-remote-phone-beta5/phone-beta5.patch.xz.b64 > /tmp/phone-beta5.patch.xz
+          echo 'dbd42fa96eb3b7c32a8777e0fa2718a50b524b1b4666019b59316edd0afe7128  /tmp/phone-beta5.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta5.patch.xz > /tmp/phone-beta5.patch
+          echo 'a4f347649bee64f637d56c181a6f38a34a5991f9bcd65e9acfa8f40bab1d68a3  /tmp/phone-beta5.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta5.patch)
+
+          base64 -d piiwii-remote-phone-beta6/phone-beta6.patch.xz.b64 > /tmp/phone-beta6.patch.xz
+          echo '56ca922ce6493e1963dd03f19cc07a38d62de0031f62ade8b477591c947d2719  /tmp/phone-beta6.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta6.patch.xz > /tmp/phone-beta6.patch
+          echo 'b922f805e558bfd87ca960595d82e6f4f6ee25585359a1be2370987e4f025ae7  /tmp/phone-beta6.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta6.patch)
+
+          base64 -d piiwii-remote-phone-beta7/phone-beta7.patch.xz.b64 > /tmp/phone-beta7.patch.xz
+          echo '4c9188f19ea66e77d80ddf568d704b9ce8b30b39083988fc2a6b1253901b32d2  /tmp/phone-beta7.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta7.patch.xz > /tmp/phone-beta7.patch
+          echo 'f25b835ab11488c3fd072b8e5dc1c98cad9a0e8777fffdb7b1dfc42a1a74119b  /tmp/phone-beta7.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta7.patch)
+
+          base64 -d piiwii-remote-phone-beta8/phone-beta8.patch.xz.b64 > /tmp/phone-beta8.patch.xz
+          echo 'ea3f3bdbe1edc231f956656a36dabdddbffaf7d90274a78e80365261a7df8960  /tmp/phone-beta8.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta8.patch.xz > /tmp/phone-beta8.patch
+          echo '63fbcb0bae007d3cb67658ef0442a2d331dbeecb8f45e78738db971243502231  /tmp/phone-beta8.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta8.patch)
+
+      - name: Static regression audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta8-src/piiwii-remote
+          BUILD="$ROOT/remote/build.gradle.kts"
+          MAIN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          SHELL="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          SCREEN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
+          KBD="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt"
+          COMMAND="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt"
+          PROTO="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/Protocol.kt"
+
+          grep -q 'applicationId = "ch.piiwii.remote2"' "$BUILD"
+          grep -q 'compileSdk = 35' "$BUILD"
+          grep -q 'minSdk = 26' "$BUILD"
+          grep -q 'targetSdk = 35' "$BUILD"
+          grep -q 'versionCode = 38' "$BUILD"
+          grep -q 'versionName = "2.0.0-beta8"' "$BUILD"
+          grep -q 'JavaVersion.VERSION_17' "$BUILD"
+          grep -q 'jvmTarget = "17"' "$BUILD"
+
+          grep -q 'WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' "$MAIN"
+          grep -q 'DigitsKeyListener.getInstance("0123456789.,")' "$MAIN"
+          grep -q 'TYPE_NUMBER_FLAG_DECIMAL' "$MAIN"
+          grep -q "replace(',', '.')" "$MAIN"
+
+          grep -q 'listOf(RemoteSection.REMOTE, RemoteSection.TOUCHPAD, RemoteSection.KEYBOARD, RemoteSection.APPS)' "$SHELL"
+          grep -q 'key == RemoteSection.REMOTE && section == RemoteSection.NAVIGATION' "$SHELL"
+          grep -q 'class RemoteNavigationPager' "$SHELL"
+          grep -q 'discreetPcOptionsButton' "$SCREEN"
+          grep -q 'createTouchpadPrimary' "$SCREEN"
+          grep -q 'touchpadClickRow' "$SCREEN"
+
+          grep -q 'text = "Envoyer du texte"' "$KBD"
+          grep -q 'hint = "Écrire un texte…"' "$KBD"
+          grep -q 'contentDescription = "Envoyer"' "$KBD"
+          grep -q 'IME_ACTION_SEND' "$KBD"
+          grep -q 'input.text?.clear()' "$KBD"
+          ! grep -q 'Ouvrir le clavier' "$KBD"
+
+          grep -q 'supportsExtendedPcKeys' "$KBD"
+          grep -q 'RemoteCommand.KEYBOARD_KEY' "$KBD"
+          grep -q 'KEYBOARD_KEY' "$COMMAND"
+          grep -q 'keyRow("F1", "F2", "F3", "F4")' "$KBD"
+          grep -q 'keyRow("F5", "F6", "F7", "F8")' "$KBD"
+          grep -q 'keyRow("F9", "F10", "F11", "F12")' "$KBD"
+          grep -q 'keyRow("Ctrl", "Alt", "Shift", "Win")' "$KBD"
+          grep -q 'Ctrl+C' "$KBD"
+          grep -q 'Alt+Tab' "$KBD"
+          grep -q 'Win+D' "$KBD"
+          grep -q 'device.type == DeviceType.WINDOWS_PC' "$SCREEN"
+
+          python - "$PROTO" "$KBD" "$SHELL" <<'PY2'
+          from pathlib import Path
+          import sys
+          proto=Path(sys.argv[1]).read_text(encoding='utf-8')
+          kbd=Path(sys.argv[2]).read_text(encoding='utf-8')
+          shell=Path(sys.argv[3]).read_text(encoding='utf-8')
+          assert 'PIIWII_REMOTE/1' in proto
+          for k in ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12','Ctrl','Alt','Shift','Win','Suppr','Pg↑','Pg↓','Alt+F4']:
+              assert k in kbd,k
+          bottom=shell[shell.index('private fun bottomBar'):]
+          assert 'RemoteSection.NAVIGATION' not in bottom
+          assert 'RemoteSection.KEYBOARD' in bottom
+          tree=Path(sys.argv[1]).parents[3]
+          assert '45821' in '\n'.join(p.read_text(encoding='utf-8',errors='ignore') for p in tree.rglob('*.kt'))
+          print('Static phone beta8 keyboard audit OK')
+          PY2
+
+          if find "$ROOT" -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'Signing.properties' \) | grep -q .; then
+            echo 'Private signing material must not be in source tree' >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and release compilation
+        working-directory: /tmp/piiwii-phone-beta8-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate unsigned release and package sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta8-src/piiwii-remote
+          OUT=/tmp/piiwii-phone-beta8-out
+          mkdir -p "$OUT"
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta8-UNSIGNED.apk"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+
+          test -f "$RAW"
+          "$ZIPALIGN" -f 4 "$RAW" "$APK"
+          "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$AAPT" dump badging "$APK" > "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='38' versionName='2.0.0-beta8'" "$OUT/PHONE-BADGING.txt"
+          if "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
+            echo 'Release candidate was unexpectedly signed' >&2
+            exit 1
+          fi
+          unzip -t "$APK" > "$OUT/PHONE-ZIPTEST.txt"
+
+          python - "$APK" <<'PY2'
+          import sys,zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              data=b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          required=['Télécommande','Pavé tactile','Clavier','Applications','Envoyer du texte','Écrire un texte','F1','F5','F12','Ctrl+C','Alt+Tab','Win+D','KEYBOARD_KEY','2.0.0-beta8']
+          missing=[s for s in required if s.encode('utf-8') not in data]
+          assert not missing,missing
+          assert b'Ouvrir le clavier' not in data
+          print('DEX beta8 keyboard feature audit OK')
+          PY2
+
+          cd /tmp/piiwii-phone-beta8-src
+          zip -qr "$OUT/PiiWii-Remote-Phone-2.0.0-beta8-Sources.zip" piiwii-remote \
+            -x '*/build/*' '*/.gradle/*' '*/.kotlin/*' '*.jks' '*.keystore' '*Signing.properties'
+          unzip -t "$OUT/PiiWii-Remote-Phone-2.0.0-beta8-Sources.zip" > "$OUT/SOURCES-ZIPTEST.txt"
+          sha256sum "$APK" "$OUT/PiiWii-Remote-Phone-2.0.0-beta8-Sources.zip" > "$OUT/SHA256.txt"
+          cat > "$OUT/AUDIT.txt" <<'EOT'
+          PIIWII REMOTE PHONE 2.0.0-beta8 / versionCode 38
+          PACKAGE: ch.piiwii.remote2
+          KEYBOARD UX: WhatsApp-like composer with right-side send button; redundant Open keyboard button removed; IME Send supported; text clears after send.
+          WINDOWS EXTENDED KEYS: F1-F12, Ctrl, Alt, Shift, Win, Delete, Insert, Home, End, Page Up/Down, arrows, Print Screen, Pause and useful shortcuts through additive KEYBOARD_KEY.
+          ANDROID TV: extended PC-only keys stay hidden; existing text/Enter/Backspace/Escape/Tab behavior preserved.
+          REGRESSIONS: beta2 IP fix + beta3 Remote + beta4 Navigation + beta5 PC power safety + beta6 touchpad + beta7 tabs preserved.
+          PROTOCOL: PIIWII_REMOTE/1 retained; KEYBOARD_KEY is additive.
+          SDK: min 26 / target 35 / compile 35 / Java-Kotlin 17
+          SIGNING: UNSIGNED release candidate by design. Final delivery must use stable PiiWii private key.
+          EXPECTED FINAL CERT SHA-256: d86a9c8c8f9ea2001108d6f8afec076ba7b6343c0383ca812647bed61de6c717
+          EOT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta8-Keyboard-UNSIGNED
+          path: /tmp/piiwii-phone-beta8-out/*
+          retention-days: 7
+          if-no-files-found: error
