@@ -76,10 +76,19 @@ jobs:
           unzip -p "$APK" res/drawable-nodpi-v4/nav_guide.png > "$RES/nav_guide.png"
           unzip -p "$APK" res/drawable-nodpi-v4/nav_recordings.png > "$RES/nav_recordings.png"
           unzip -p "$APK" res/drawable-nodpi-v4/nav_settings.png > "$RES/nav_settings.png"
-          test -s "$RES/nav_direct.png"
-          test -s "$RES/nav_guide.png"
-          test -s "$RES/nav_recordings.png"
-          test -s "$RES/nav_settings.png"
+
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          res=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/src/main/res/drawable-nodpi')
+          for p in res.glob('nav_*.png'):
+              im=Image.open(p).convert('RGBA')
+              im.save(p, format='PNG', optimize=False)
+              with Image.open(p) as check:
+                  check.verify()
+          PY
+
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/src/main/java/ch/piiwii/tvphone/MainActivity.java')
@@ -109,25 +118,29 @@ jobs:
         working-directory: /tmp/piiwii054/piiwii-tv-phone-0.5.2
         run: gradle --no-daemon --stacktrace :app:assembleRelease
 
-      - name: Verify unsigned APK metadata
+      - name: Package unsigned APK and signing tools
         shell: bash
         run: |
           set -euo pipefail
-          APK=/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/build/outputs/apk/release/app-release-unsigned.apk
+          PRJ=/tmp/piiwii054/piiwii-tv-phone-0.5.2
+          APK="$PRJ/app/build/outputs/apk/release/app-release-unsigned.apk"
           BT="$ANDROID_HOME/build-tools/35.0.0"
           test -s "$APK"
-          mkdir -p out
+          mkdir -p out/build-tools/lib
           cp "$APK" out/PiiWii-TV-Phone-0.5.4-unsigned.apk
+          cp "$BT/apksigner" out/build-tools/apksigner
+          cp "$BT/lib/apksigner.jar" out/build-tools/lib/apksigner.jar
           "$BT/aapt" dump badging "$APK" > out/BADGING.txt
           grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
           grep -F "versionCode='9'" out/BADGING.txt
           grep -F "versionName='0.5.4'" out/BADGING.txt
           sha256sum out/PiiWii-TV-Phone-0.5.4-unsigned.apk > out/PiiWii-TV-Phone-0.5.4-unsigned.apk.sha256
+          (cd /tmp/piiwii054 && zip -qr "$GITHUB_WORKSPACE/out/PiiWii-TV-Phone-0.5.4-Sources.zip" piiwii-tv-phone-0.5.2)
 
       - name: Upload unsigned artifact
         uses: actions/upload-artifact@v4
         with:
           name: PiiWii-TV-Phone-0.5.4-UNSIGNED
           path: out/*
-          retention-days: 7
+          retention-days: 14
           if-no-files-found: error
