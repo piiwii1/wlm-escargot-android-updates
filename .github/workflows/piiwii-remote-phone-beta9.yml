@@ -67,6 +67,9 @@ jobs:
           xz -dc /tmp/phone-beta9.patch.xz > /tmp/phone-beta9.patch
           echo 'd0ef1e21ed3b86fc41cbce899642dca74d037a9e489e8cae9de2525dc6505d93  /tmp/phone-beta9.patch' | sha256sum -c -
           (cd "$ROOT" && patch -p1 < /tmp/phone-beta9.patch)
+          FIX="$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-fix1.patch"
+          echo '37d3d54dd4617de1ca0b6b005bdd51ac7ce378ab351134fce2b270dca86954d4  '"$FIX" | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < "$FIX")
 
       - name: Static beta9 regression audit
         shell: bash
@@ -78,6 +81,7 @@ jobs:
           MAIN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
           VM="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt"
           SHELL="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          SCREEN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
           KBD="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt"
           VOICE="$ROOT/remote/src/main/java/ch/piiwii/remote2/network/VoiceStreamer.kt"
           COMMAND="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt"
