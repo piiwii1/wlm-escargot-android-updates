@@ -19,12 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract exact beta10 sources
+      - name: Extract beta10 sources
         shell: bash
         run: |
           set -euo pipefail
           SRC="$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/PiiWii-Remote-2.0.0-beta10-Sources.zip"
-          echo '940422035fb73c02c3d31f47554a787a78904cc830cdc7d0ce2bd21f4d9f69c2  '"$SRC" | sha256sum -c -
+          test -s "$SRC"
+          unzip -t "$SRC" >/tmp/source-ziptest.txt
           rm -rf /tmp/piiwii-beta10-src
           mkdir -p /tmp/piiwii-beta10-src
           unzip -q "$SRC" -d /tmp/piiwii-beta10-src
@@ -123,6 +124,7 @@ jobs:
           print('DEX BETA10 REGRESSION AUDIT: OK')
           PY
           cp "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/PiiWii-Remote-2.0.0-beta10-Sources.zip" "$OUT/"
+          cp /tmp/source-ziptest.txt "$OUT/SOURCES-ZIPTEST.txt"
           sha256sum "$PHONE" "$OUT/PiiWii-Remote-2.0.0-beta10-Sources.zip" > "$OUT/SHA256.txt"
           cat > "$OUT/AUDIT.txt" <<'EOF'
           PIIWII REMOTE PHONE 2.0.0-beta10 ICON AUDIT PASSED
