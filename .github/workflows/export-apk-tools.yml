@@ -1,0 +1,45 @@
+name: Export APK tools
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-tv-phone-055-local054
+    paths:
+      - '.github/workflows/export-apk-tools.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare toolkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK=${ANDROID_HOME:-/usr/local/lib/android/sdk}
+          BT="$SDK/build-tools/35.0.0"
+          if [ ! -x "$BT/apksigner" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0"
+          fi
+          mkdir -p toolkit/build-tools/lib
+          cp "$BT/apksigner" toolkit/build-tools/
+          cp "$BT/zipalign" toolkit/build-tools/
+          cp "$BT/lib/apksigner.jar" toolkit/build-tools/lib/
+          curl -L --fail --retry 3 -o toolkit/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar
+          sha256sum toolkit/apktool.jar toolkit/build-tools/apksigner toolkit/build-tools/zipalign toolkit/build-tools/lib/apksigner.jar > toolkit/SHA256SUMS.txt
+          ls -lhR toolkit
+      - name: Upload toolkit
+        uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-apk-toolkit
+          path: toolkit
+          retention-days: 3
+          if-no-files-found: error
