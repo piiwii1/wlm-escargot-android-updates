@@ -40,9 +40,15 @@ assert old in s
 s=s.replace(old,new)
 p.write_text(s)
 PY2
-RES="$ROOT/remote/src/main/res/drawable-nodpi"
-mkdir -p "$RES"
-for n in remote settings apps keyboard touchpad browser vlc youtube spotify; do
-  base64 -d "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons48/${n}.b64" > "$RES/ic_${n}.png"
-done
+cat "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons.b64.00" \
+    "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons112.b64.01" \
+    "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons112.b64.02" \
+    "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons112.b64.03" \
+    "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons112.b64.04" \
+    "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons112.b64.05" \
+    "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10/icons112.b64.06" > /tmp/beta10-icons.b64
+base64 -d /tmp/beta10-icons.b64 > /tmp/beta10-icons.zip
+unzip -t /tmp/beta10-icons.zip
+unzip -qo /tmp/beta10-icons.zip -d "$ROOT/remote/src/main/res"
+for n in remote settings apps keyboard touchpad browser vlc youtube spotify; do test -s "$ROOT/remote/src/main/res/drawable-nodpi/ic_${n}.png"; done
 echo "beta10 simple icons applied"
