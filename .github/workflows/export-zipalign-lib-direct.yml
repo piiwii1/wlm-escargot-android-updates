@@ -1,0 +1,30 @@
+name: Export zipalign libc direct
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-tv-phone-055-local054
+    paths:
+      - '.github/workflows/export-zipalign-lib-direct.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export build-tools libc++
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK=${ANDROID_HOME:-/usr/local/lib/android/sdk}
+          P="$SDK/build-tools/35.0.0/lib64/libc++.so"
+          test -s "$P"
+          mkdir -p out
+          cp "$P" out/libc++.so
+          sha256sum out/libc++.so > out/libc++.so.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-zipalign-libc-direct
+          path: out/*
+          retention-days: 3
