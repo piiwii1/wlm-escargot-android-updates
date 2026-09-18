@@ -1,0 +1,248 @@
+--- a/windows-agent/installer/PiiWiiRemoteAgent.iss
++++ b/windows-agent/installer/PiiWiiRemoteAgent.iss
+@@ -1,5 +1,5 @@
+ #define MyAppName "PiiWii Remote Agent"
+-#define MyAppVersion "2.0.0-beta6"
++#define MyAppVersion "2.0.0-beta7"
+ #define MyAppPublisher "PiiWii"
+ #define MyAppExeName "PiiWii-Remote-Agent.exe"
+ 
+@@ -8,18 +8,18 @@
+ AppName={#MyAppName}
+ AppVersion={#MyAppVersion}
+ AppPublisher={#MyAppPublisher}
+-VersionInfoVersion=2.0.0.13
++VersionInfoVersion=2.0.0.14
+ VersionInfoCompany=PiiWii
+ VersionInfoDescription=PiiWii Remote Agent Setup
+ VersionInfoProductName=PiiWii Remote Agent
+-VersionInfoProductVersion=2.0.0.13
++VersionInfoProductVersion=2.0.0.14
+ DefaultDirName={localappdata}\Programs\PiiWii Remote Agent
+ DefaultGroupName=PiiWii Remote
+ DisableProgramGroupPage=yes
+ PrivilegesRequired=lowest
+ ArchitecturesAllowed=x64compatible
+ OutputDir=output
+-OutputBaseFilename=PiiWii-Remote-Setup-2.0.0-beta6
++OutputBaseFilename=PiiWii-Remote-Setup-2.0.0-beta7
+ Compression=lzma2
+ SolidCompression=yes
+ WizardStyle=modern
+@@ -32,7 +32,7 @@
+ Name: "autostart"; Description: "Démarrer PiiWii Remote Agent automatiquement avec Windows"; GroupDescription: "Démarrage :"; Flags: checkedonce
+ 
+ [Files]
+-Source: "..\build\PiiWii-Remote-Agent-2.0.0-beta6.exe"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
++Source: "..\build\PiiWii-Remote-Agent-2.0.0-beta7.exe"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
+ 
+ [Icons]
+ Name: "{userdesktop}\PiiWii Remote Agent"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Comment: "Télécommande PiiWii Remote pour Windows"
+--- a/windows-agent/src/PiiWiiRemoteAgent.cpp
++++ b/windows-agent/src/PiiWiiRemoteAgent.cpp
+@@ -6,6 +6,7 @@
+ #include <bcrypt.h>
+ #include <winsock2.h>
+ #include <ws2tcpip.h>
++#include <mmsystem.h>
+ #include <iphlpapi.h>
+ #include <string>
+ #include <vector>
+@@ -21,6 +22,8 @@
+ #include <cwctype>
+ #include <cctype>
+ #include <cstring>
++#include <deque>
++#include <memory>
+ 
+ #pragma comment(lib, "ws2_32.lib")
+ #pragma comment(lib, "user32.lib")
+@@ -29,9 +32,10 @@
+ #pragma comment(lib, "iphlpapi.lib")
+ #pragma comment(lib, "PowrProf.lib")
+ #pragma comment(lib, "bcrypt.lib")
++#pragma comment(lib, "winmm.lib")
+ 
+ static constexpr wchar_t APP_NAME[] = L"PiiWii Remote Agent";
+-static constexpr wchar_t APP_VERSION[] = L"2.0.0-beta6";
++static constexpr wchar_t APP_VERSION[] = L"2.0.0-beta7";
+ static constexpr char PROTOCOL_VERSION[] = "PIIWII_REMOTE/1";
+ static constexpr unsigned short PORT = 45821;
+ static constexpr UINT WM_TRAYICON = WM_APP + 1;
+@@ -625,10 +629,102 @@
+ static bool isPowerCommand(const std::string& command);
+ static bool executePowerCommand(const std::string& command);
+ 
++
++struct VoiceAudioBlock {
++    std::vector<char> pcm;
++    WAVEHDR header{};
++};
++
++static std::mutex gVoiceMutex;
++static HWAVEOUT gVoiceOut = nullptr;
++static std::deque<std::unique_ptr<VoiceAudioBlock>> gVoiceBlocks;
++
++static void clearVoiceBlocksLocked(bool resetDevice) {
++    if (!gVoiceOut) {
++        gVoiceBlocks.clear();
++        return;
++    }
++    if (resetDevice) waveOutReset(gVoiceOut);
++    for (auto& block : gVoiceBlocks) {
++        if (block->header.dwFlags & WHDR_PREPARED) {
++            waveOutUnprepareHeader(gVoiceOut, &block->header, sizeof(WAVEHDR));
++        }
++    }
++    gVoiceBlocks.clear();
++}
++
++static void reapVoiceBlocksLocked() {
++    while (!gVoiceBlocks.empty()) {
++        auto& block = gVoiceBlocks.front();
++        if ((block->header.dwFlags & WHDR_DONE) == 0) break;
++        waveOutUnprepareHeader(gVoiceOut, &block->header, sizeof(WAVEHDR));
++        gVoiceBlocks.pop_front();
++    }
++}
++
++static bool startVoicePlaybackLocked() {
++    if (gVoiceOut) return true;
++    WAVEFORMATEX fmt{};
++    fmt.wFormatTag = WAVE_FORMAT_PCM;
++    fmt.nChannels = 1;
++    fmt.nSamplesPerSec = 16000;
++    fmt.wBitsPerSample = 16;
++    fmt.nBlockAlign = static_cast<WORD>(fmt.nChannels * fmt.wBitsPerSample / 8);
++    fmt.nAvgBytesPerSec = fmt.nSamplesPerSec * fmt.nBlockAlign;
++    fmt.cbSize = 0;
++    return waveOutOpen(&gVoiceOut, WAVE_MAPPER, &fmt, 0, 0, CALLBACK_NULL) == MMSYSERR_NOERROR;
++}
++
++static bool startVoicePlayback() {
++    std::lock_guard<std::mutex> lock(gVoiceMutex);
++    return startVoicePlaybackLocked();
++}
++
++static bool decodeVoiceFramePayload(const std::string& payload, std::string& pcm) {
++    const size_t separator = payload.find('|');
++    if (separator == std::string::npos || separator == 0 || separator + 1 >= payload.size()) return false;
++    if (!std::all_of(payload.begin(), payload.begin() + static_cast<std::ptrdiff_t>(separator), [](unsigned char c){ return std::isdigit(c) != 0; })) return false;
++    if (!base64Decode(payload.substr(separator + 1), pcm)) return false;
++    return !pcm.empty() && pcm.size() <= 1024 && (pcm.size() % 2) == 0;
++}
++
++static bool playVoiceFrame(const std::string& payload) {
++    std::string pcm;
++    if (!decodeVoiceFramePayload(payload, pcm)) return false;
++    std::lock_guard<std::mutex> lock(gVoiceMutex);
++    if (!startVoicePlaybackLocked()) return false;
++    reapVoiceBlocksLocked();
++    if (gVoiceBlocks.size() > 25) clearVoiceBlocksLocked(true); // keep latency below ~0.5 s
++
++    auto block = std::make_unique<VoiceAudioBlock>();
++    block->pcm.assign(pcm.begin(), pcm.end());
++    block->header.lpData = block->pcm.data();
++    block->header.dwBufferLength = static_cast<DWORD>(block->pcm.size());
++    if (waveOutPrepareHeader(gVoiceOut, &block->header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) return false;
++    if (waveOutWrite(gVoiceOut, &block->header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
++        waveOutUnprepareHeader(gVoiceOut, &block->header, sizeof(WAVEHDR));
++        return false;
++    }
++    gVoiceBlocks.push_back(std::move(block));
++    return true;
++}
++
++static bool stopVoicePlayback() {
++    std::lock_guard<std::mutex> lock(gVoiceMutex);
++    if (!gVoiceOut) return true;
++    clearVoiceBlocksLocked(true);
++    const MMRESULT result = waveOutClose(gVoiceOut);
++    gVoiceOut = nullptr;
++    return result == MMSYSERR_NOERROR;
++}
++
+ static bool executeRemoteCommand(const std::string& command, const std::string& payload) {
+     if (executeInputCommand(command, payload)) return true;
+     if (command == "KEYBOARD_TEXT") return sendUnicodeText(payload);
+     if (command == "KEYBOARD_KEY") return sendKeyboardKeyPayload(payload);
++    if (command == "VOICE_START") return startVoicePlayback();
++    if (command == "VOICE_FRAME") return playVoiceFrame(payload);
++    if (command == "VOICE_STOP") return stopVoicePlayback();
+     const WORD vk = keyboardVirtualKeyForCommand(command);
+     if (vk != 0) return sendVirtualKey(vk);
+     if (command == "APP_LAUNCH") return launchDetectedWindowsApp(payload);
+@@ -762,7 +858,7 @@
+             if (msg.command == "PING") {
+                 char hostname[256]{};
+                 gethostname(hostname, sizeof(hostname));
+-                std::string payload = std::string("PiiWii Remote Agent\n2.0.0-beta6\n") + hostname;
++                std::string payload = std::string("PiiWii Remote Agent\n2.0.0-beta7\n") + hostname;
+                 std::string response = makeFrame(msg.requestId, "PONG", payload);
+                 sendto(server, response.data(), static_cast<int>(response.size()), 0, reinterpret_cast<sockaddr*>(&source), sourceLen);
+             } else if (msg.command == "PAIR_REQUEST") {
+@@ -798,6 +894,7 @@
+         closesocket(server);
+         if (gRunning.load()) Sleep(500);
+     }
++    stopVoicePlayback();
+     setNetworkState(false, L"● Agent arrêté");
+ }
+ 
+@@ -897,7 +994,7 @@
+             std::wstring local = L"IP locale : " + getLocalIpSummary();
+             gIp = makeStatic(hwnd, local.c_str(), 26, 67, 430, 25);
+             gPort = makeStatic(hwnd, L"Port : UDP 45821", 26, 97, 430, 25);
+-            gVersion = makeStatic(hwnd, L"Version : 2.0.0-beta6 · Protocole PIIWII_REMOTE/1", 26, 127, 430, 25);
++            gVersion = makeStatic(hwnd, L"Version : 2.0.0-beta7 · Protocole PIIWII_REMOTE/1", 26, 127, 430, 25);
+             gPairing = makeStatic(hwnd, (std::wstring(L"Code d’appairage : ") + pairingCode()).c_str(), 26, 160, 430, 28);
+             gDevice = makeStatic(hwnd, L"Dernier téléphone : —", 26, 196, 430, 42);
+             gStartup = CreateWindowW(L"BUTTON", L"Démarrer automatiquement avec Windows", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 26, 248, 300, 30, hwnd, reinterpret_cast<HMENU>(IDC_STARTUP), gInstance, nullptr);
+@@ -995,7 +1092,7 @@
+     if (sent <= 0 || received <= 0) return false;
+     ProtocolMessage response;
+     if (!parseFrame(std::string(buf, buf + received), response)) return false;
+-    return response.requestId == "self-test-request" && response.command == "PONG" && response.payload.find("2.0.0-beta6") != std::string::npos;
++    return response.requestId == "self-test-request" && response.command == "PONG" && response.payload.find("2.0.0-beta7") != std::string::npos;
+ }
+ 
+ static bool selfTestEncoding() {
+@@ -1045,6 +1142,10 @@
+     ProtocolMessage keyboardParsed;
+     if (!parseFrame(makeFrame("kbd-test", "KEYBOARD_TEXT", keyboardPayload), keyboardParsed)) return false;
+     if (keyboardParsed.payload != keyboardPayload) return false;
++    const std::string voicePcm("\x01\x00\xFF\x7F", 4);
++    std::string decodedVoice;
++    if (!decodeVoiceFramePayload("7|" + base64Encode(voicePcm), decodedVoice) || decodedVoice != voicePcm) return false;
++    if (decodeVoiceFramePayload("bad|AQI=", decodedVoice)) return false;
+     const std::vector<RemoteAppEntry> sampleApps = {
+         {"youtube", L"YouTube", L"https://www.youtube.com", true},
+         {"vlc", L"VLC", L"C:\\Program Files\\VideoLAN\\VLC\\vlc.exe", false}
+--- a/windows-agent/src/PiiWiiRemoteAgent.rc
++++ b/windows-agent/src/PiiWiiRemoteAgent.rc
+@@ -1,8 +1,8 @@
+ #include <windows.h>
+ 
+ VS_VERSION_INFO VERSIONINFO
+- FILEVERSION 2,0,0,13
+- PRODUCTVERSION 2,0,0,13
++ FILEVERSION 2,0,0,14
++ PRODUCTVERSION 2,0,0,14
+  FILEFLAGSMASK 0x3fL
+  FILEFLAGS 0x0L
+  FILEOS VOS_NT_WINDOWS32
+@@ -15,11 +15,11 @@
+         BEGIN
+             VALUE "CompanyName", "PiiWii\0"
+             VALUE "FileDescription", "PiiWii Remote Agent\0"
+-            VALUE "FileVersion", "2.0.0-beta6\0"
++            VALUE "FileVersion", "2.0.0-beta7\0"
+             VALUE "InternalName", "PiiWii-Remote-Agent\0"
+-            VALUE "OriginalFilename", "PiiWii-Remote-Agent-2.0.0-beta6.exe\0"
++            VALUE "OriginalFilename", "PiiWii-Remote-Agent-2.0.0-beta7.exe\0"
+             VALUE "ProductName", "PiiWii Remote Agent\0"
+-            VALUE "ProductVersion", "2.0.0-beta6\0"
++            VALUE "ProductVersion", "2.0.0-beta7\0"
+         END
+     END
+     BLOCK "VarFileInfo"
