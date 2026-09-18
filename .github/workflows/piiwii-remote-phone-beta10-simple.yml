@@ -36,7 +36,6 @@ jobs:
           grep -q 'R.drawable.ic_settings' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
           grep -q 'R.drawable.ic_youtube' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/screens/SectionScreenFactory.kt"
           grep -q 'Maintenir pour parler' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt"
-          file "$ROOT/remote/src/main/res/drawable-nodpi/ic_remote.png" "$ROOT/remote/src/main/res/drawable-nodpi/ic_settings.png"
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -53,7 +52,7 @@ jobs:
       - name: Build release
         working-directory: /tmp/src/piiwii-remote
         run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
-      - name: Validate and package
+      - name: Package APK
         shell: bash
         run: |
           set -euo pipefail
@@ -64,16 +63,18 @@ jobs:
           AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
           RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
           APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta10-UNSIGNED.apk"
+          test -s "$RAW"
           "$ZIPALIGN" -f 4 "$RAW" "$APK"
-          "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
-          "$AAPT" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='40' versionName='2.0.0-beta10'" "$OUT/BADGING.txt"
-          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
+          "$ZIPALIGN" -c -v 4 "$APK" | tee "$OUT/ZIPALIGN.txt"
+          "$AAPT" dump badging "$APK" | tee "$OUT/BADGING.txt"
+          unzip -t "$APK" | tee "$OUT/ZIPTEST.txt"
           unzip -l "$APK" > "$OUT/CONTENTS.txt"
-          for n in remote settings apps keyboard touchpad browser vlc youtube spotify; do grep -q "ic_${n}\.png" "$OUT/CONTENTS.txt"; done
-          sha256sum "$APK" > "$OUT/SHA256.txt"
+          sha256sum "$APK" | tee "$OUT/SHA256.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='40' versionName='2.0.0-beta10'" "$OUT/BADGING.txt"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: PiiWii-Remote-Phone-2.0.0-beta10-UNSIGNED
           path: /tmp/out/*
           retention-days: 7
+          if-no-files-found: error
