@@ -1,0 +1,32 @@
+name: Export zipalign runtime
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-tv-phone-055-local054
+    paths:
+      - '.github/workflows/export-zipalign-lib.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export libc++
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK=${ANDROID_HOME:-/usr/local/lib/android/sdk}
+          LIB=$(find "$SDK" -type f -name 'libc++.so' | head -n 1)
+          test -n "$LIB"
+          mkdir -p out
+          cp "$LIB" out/libc++.so
+          echo "$LIB" > out/SOURCE.txt
+          sha256sum out/libc++.so > out/libc++.so.sha256
+          ldd "$SDK/build-tools/35.0.0/zipalign" > out/ZIPALIGN-LDD.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-zipalign-runtime
+          path: out/*
+          retention-days: 3
