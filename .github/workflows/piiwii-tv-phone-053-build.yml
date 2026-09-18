@@ -61,11 +61,19 @@ jobs:
           PRJ=/tmp/piiwii054/piiwii-tv-phone-0.5.2
           MAIN="$PRJ/app/src/main/java/ch/piiwii/tvphone/MainActivity.java"
           BUILD="$PRJ/app/build.gradle"
-          mkdir -p "$PRJ/app/src/main/res/drawable-nodpi"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_direct.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_guide.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_recordings.png"
-          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$PRJ/app/src/main/res/drawable-nodpi/nav_settings.png"
+          RES="$PRJ/app/src/main/res/drawable-nodpi"
+          mkdir -p "$RES"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_direct.png.b64 > "$RES/nav_direct.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_guide.png.b64 > "$RES/nav_guide.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_recordings.png.b64 > "$RES/nav_recordings.png"
+          base64 -d piiwii-tv-phone-053-build/icons/nav_settings.png.b64 > "$RES/nav_settings.png"
+          IM="$(command -v magick || command -v convert)"
+          test -n "$IM"
+          for f in "$RES"/nav_*.png; do
+            tmp="${f%.png}.clean.png"
+            "$IM" "$f" -trim +repage -resize '118x118>' -background none -gravity center -extent 128x128 -strip -depth 8 PNG32:"$tmp"
+            mv "$tmp" "$f"
+          done
           python3 - <<'PY'
           from pathlib import Path
           p=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/src/main/java/ch/piiwii/tvphone/MainActivity.java')
@@ -107,8 +115,12 @@ jobs:
           APK=/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/build/outputs/apk/release/app-release-unsigned.apk
           BT="$ANDROID_HOME/build-tools/35.0.0"
           test -s "$APK"
-          mkdir -p out
+          mkdir -p out/signing-tools/lib
           cp "$APK" out/PiiWii-TV-Phone-0.5.4-unsigned.apk
+          cp "$BT/apksigner" out/signing-tools/apksigner
+          cp "$BT/zipalign" out/signing-tools/zipalign
+          cp "$BT/lib/apksigner.jar" out/signing-tools/lib/apksigner.jar
+          chmod +x out/signing-tools/apksigner out/signing-tools/zipalign
           "$BT/aapt" dump badging "$APK" > out/BADGING.txt
           grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
           grep -F "versionCode='9'" out/BADGING.txt
