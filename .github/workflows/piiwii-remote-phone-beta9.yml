@@ -1,0 +1,222 @@
+name: PiiWii Remote beta9 - Two-page keyboard + push-to-talk
+
+on:
+  push:
+    branches: [piiwii-remote-v2-phone-beta9-keyboard-voice]
+    paths:
+      - 'piiwii-remote-phone-beta9/**'
+      - '.github/workflows/piiwii-remote-phone-beta9.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  beta9:
+    name: Build and audit Phone beta9 + TV Receiver beta2
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta8 and apply beta9 keyboard pages + voice
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/piiwii-phone-beta8-src
+          ROOT=/tmp/piiwii-phone-beta8-src/piiwii-remote
+
+          base64 -d piiwii-remote-phone-beta3/phone-beta3.patch.xz.b64 > /tmp/phone-beta3.patch.xz
+          echo 'b0510a468202e0898d0c07b2056daa3d06ecbb35b574c9a54655c7b63dbb7a1e  /tmp/phone-beta3.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta3.patch.xz > /tmp/phone-beta3.patch
+          echo '7e0019639f059feb9f6b409e01b7e47377be9c297d303a161d46c1c23a9c07cb  /tmp/phone-beta3.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta3.patch)
+
+          base64 -d piiwii-remote-phone-beta4/phone-beta4.patch.xz.b64 > /tmp/phone-beta4.patch.xz
+          echo '45ffb0cf4741eaf7364b95933cc744ec7968720ad334a50a91ceac8071ef9519  /tmp/phone-beta4.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta4.patch.xz > /tmp/phone-beta4.patch
+          echo '490272fe7e7a386d83f78c2de37810605421551aff9d9577a9f53e77c55efeed  /tmp/phone-beta4.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta4.patch)
+
+          base64 -d piiwii-remote-phone-beta5/phone-beta5.patch.xz.b64 > /tmp/phone-beta5.patch.xz
+          echo 'dbd42fa96eb3b7c32a8777e0fa2718a50b524b1b4666019b59316edd0afe7128  /tmp/phone-beta5.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta5.patch.xz > /tmp/phone-beta5.patch
+          echo 'a4f347649bee64f637d56c181a6f38a34a5991f9bcd65e9acfa8f40bab1d68a3  /tmp/phone-beta5.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta5.patch)
+
+          base64 -d piiwii-remote-phone-beta6/phone-beta6.patch.xz.b64 > /tmp/phone-beta6.patch.xz
+          echo '56ca922ce6493e1963dd03f19cc07a38d62de0031f62ade8b477591c947d2719  /tmp/phone-beta6.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta6.patch.xz > /tmp/phone-beta6.patch
+          echo 'b922f805e558bfd87ca960595d82e6f4f6ee25585359a1be2370987e4f025ae7  /tmp/phone-beta6.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta6.patch)
+
+          base64 -d piiwii-remote-phone-beta7/phone-beta7.patch.xz.b64 > /tmp/phone-beta7.patch.xz
+          echo '4c9188f19ea66e77d80ddf568d704b9ce8b30b39083988fc2a6b1253901b32d2  /tmp/phone-beta7.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta7.patch.xz > /tmp/phone-beta7.patch
+          echo 'f25b835ab11488c3fd072b8e5dc1c98cad9a0e8777fffdb7b1dfc42a1a74119b  /tmp/phone-beta7.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta7.patch)
+
+          base64 -d piiwii-remote-phone-beta8/phone-beta8.patch.xz.b64 > /tmp/phone-beta8.patch.xz
+          echo 'ea3f3bdbe1edc231f956656a36dabdddbffaf7d90274a78e80365261a7df8960  /tmp/phone-beta8.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta8.patch.xz > /tmp/phone-beta8.patch
+          echo '63fbcb0bae007d3cb67658ef0442a2d331dbeecb8f45e78738db971243502231  /tmp/phone-beta8.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta8.patch)
+
+          base64 -d piiwii-remote-phone-beta9/phone-beta9.patch.xz.b64 > /tmp/phone-beta9.patch.xz
+          echo 'd702112e3659382491c4172bd32573dbd5daf5d63cc69f07efcef11b0edb3ea9  /tmp/phone-beta9.patch.xz' | sha256sum -c -
+          xz -dc /tmp/phone-beta9.patch.xz > /tmp/phone-beta9.patch
+          echo 'd0ef1e21ed3b86fc41cbce899642dca74d037a9e489e8cae9de2525dc6505d93  /tmp/phone-beta9.patch' | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < /tmp/phone-beta9.patch)
+
+      - name: Static beta9 regression audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta8-src/piiwii-remote
+          BUILD="$ROOT/remote/build.gradle.kts"
+          TVBUILD="$ROOT/tvreceiver/build.gradle.kts"
+          MAIN="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
+          VM="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt"
+          SHELL="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          KBD="$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/RemoteKeyboardView.kt"
+          VOICE="$ROOT/remote/src/main/java/ch/piiwii/remote2/network/VoiceStreamer.kt"
+          COMMAND="$ROOT/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt"
+          TVVOICE="$ROOT/tvreceiver/src/main/java/ch/piiwii/remote2/tv/network/TvVoicePlayer.kt"
+          TVUDP="$ROOT/tvreceiver/src/main/java/ch/piiwii/remote2/tv/network/UdpTvReceiver.kt"
+
+          grep -q 'versionCode = 39' "$BUILD"
+          grep -q 'versionName = "2.0.0-beta9"' "$BUILD"
+          grep -q 'versionCode = 27' "$TVBUILD"
+          grep -q 'versionName = "2.0.0-beta2"' "$TVBUILD"
+          grep -q 'android.permission.RECORD_AUDIO' "$ROOT/remote/src/main/AndroidManifest.xml"
+          grep -q 'WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()' "$MAIN"
+          grep -q 'DigitsKeyListener.getInstance("0123456789.,")' "$MAIN"
+          grep -q "replace(',', '.')" "$MAIN"
+
+          grep -q 'listOf(RemoteSection.REMOTE, RemoteSection.TOUCHPAD, RemoteSection.KEYBOARD, RemoteSection.APPS)' "$SHELL"
+          grep -q 'RemoteSection.KEYBOARD_ADVANCED' "$SHELL"
+          grep -q 'key == RemoteSection.KEYBOARD && section == RemoteSection.KEYBOARD_ADVANCED' "$SHELL"
+          grep -q 'class VerticalPagePager' "$SHELL"
+          grep -q '!child.canScrollVertically(-1)' "$SHELL"
+
+          grep -q 'Texte & touches rapides' "$KBD"
+          grep -q 'Écrire un texte…' "$KBD"
+          grep -q 'Maintenir pour parler' "$KBD"
+          grep -q 'Retour arrière\|⌫' "$KBD"
+          grep -q 'RemoteCommand.NAV_LEFT' "$KBD"
+          ! grep -q 'button("Espace"' "$KBD"
+
+          grep -q 'Touches avancées' "$KBD"
+          grep -q 'keyRow("F1", "F2", "F3", "F4")' "$KBD"
+          grep -q 'keyRow("F9", "F10", "F11", "F12")' "$KBD"
+          grep -q 'keyRow("Ctrl", "Alt", "Shift", "Win")' "$KBD"
+          grep -q 'Ctrl+C' "$KBD"
+          grep -q 'Alt+F4' "$KBD"
+          grep -q 'Win+E' "$KBD"
+
+          for c in VOICE_START VOICE_FRAME VOICE_STOP; do grep -q "$c" "$COMMAND"; done
+          grep -q 'PairingCodec.authenticated' "$VOICE"
+          grep -q 'SAMPLE_RATE = 16_000' "$VOICE"
+          grep -q 'FRAME_MS = 20' "$VOICE"
+          grep -q 'AudioSource.VOICE_COMMUNICATION' "$VOICE"
+          grep -q 'vm.stopVoice()' "$MAIN"
+          grep -q 'RemoteCommand.KEYBOARD_KEY' "$VM"
+
+          grep -q 'class TvVoicePlayer' "$TVVOICE"
+          grep -q 'AudioTrack.MODE_STREAM' "$TVVOICE"
+          grep -q 'RemoteCommand.VOICE_START' "$TVUDP"
+          grep -q 'RemoteCommand.VOICE_FRAME' "$TVUDP"
+          grep -q 'RemoteCommand.VOICE_STOP' "$TVUDP"
+          grep -q '2.0.0-beta2' "$TVUDP"
+          grep -R -q 'PIIWII_REMOTE/1' "$ROOT/remote/src/main/java" "$ROOT/tvreceiver/src/main/java"
+
+          if find "$ROOT" -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'Signing.properties' \) | grep -q .; then
+            echo 'Private signing material must not be in source tree' >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and release compilation
+        working-directory: /tmp/piiwii-phone-beta8-src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :tvreceiver:testDebugUnitTest :remote:assembleRelease :tvreceiver:assembleRelease
+
+      - name: Validate unsigned releases and package sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/piiwii-phone-beta8-src/piiwii-remote
+          OUT=/tmp/piiwii-beta9-out
+          mkdir -p "$OUT"
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+
+          PHONE_RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          PHONE="$OUT/PiiWii-Remote-Phone-2.0.0-beta9-UNSIGNED.apk"
+          TV_RAW="$ROOT/tvreceiver/build/outputs/apk/release/tvreceiver-release-unsigned.apk"
+          TV="$OUT/PiiWii-Remote-TV-2.0.0-beta2-UNSIGNED.apk"
+          test -f "$PHONE_RAW"; test -f "$TV_RAW"
+          "$ZIPALIGN" -f 4 "$PHONE_RAW" "$PHONE"
+          "$ZIPALIGN" -f 4 "$TV_RAW" "$TV"
+          "$ZIPALIGN" -c -v 4 "$PHONE" > "$OUT/PHONE-ZIPALIGN.txt"
+          "$ZIPALIGN" -c -v 4 "$TV" > "$OUT/TV-ZIPALIGN.txt"
+          "$AAPT" dump badging "$PHONE" > "$OUT/PHONE-BADGING.txt"
+          "$AAPT" dump badging "$TV" > "$OUT/TV-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='39' versionName='2.0.0-beta9'" "$OUT/PHONE-BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2.tv' versionCode='27' versionName='2.0.0-beta2'" "$OUT/TV-BADGING.txt"
+          if "$APKSIGNER" verify "$PHONE" >/dev/null 2>&1; then echo 'Phone unexpectedly signed' >&2; exit 1; fi
+          if "$APKSIGNER" verify "$TV" >/dev/null 2>&1; then echo 'TV unexpectedly signed' >&2; exit 1; fi
+          unzip -t "$PHONE" > "$OUT/PHONE-ZIPTEST.txt"
+          unzip -t "$TV" > "$OUT/TV-ZIPTEST.txt"
+
+          python - "$PHONE" "$TV" <<'PY2'
+          import sys,zipfile
+          def dex(path):
+              with zipfile.ZipFile(path) as z: return b''.join(z.read(n) for n in z.namelist() if n.startswith('classes') and n.endswith('.dex'))
+          phone=dex(sys.argv[1]); tv=dex(sys.argv[2])
+          for value in ['Texte & touches rapides','Touches avancées','Maintenir pour parler','VOICE_START','VOICE_FRAME','VOICE_STOP','2.0.0-beta9']:
+              assert value.encode('utf-8') in phone,value
+          assert b'KEYBOARD_KEY' in phone
+          for value in ['VOICE_START','VOICE_FRAME','VOICE_STOP','2.0.0-beta2']:
+              assert value.encode('utf-8') in tv,value
+          print('DEX beta9/TV beta2 audit OK')
+          PY2
+
+          cd /tmp/piiwii-phone-beta8-src
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-beta9-Sources.zip" piiwii-remote \
+            -x '*/build/*' '*/.gradle/*' '*/.kotlin/*' '*.jks' '*.keystore' '*Signing.properties'
+          unzip -t "$OUT/PiiWii-Remote-2.0.0-beta9-Sources.zip" > "$OUT/SOURCES-ZIPTEST.txt"
+          sha256sum "$PHONE" "$TV" "$OUT/PiiWii-Remote-2.0.0-beta9-Sources.zip" > "$OUT/SHA256.txt"
+          cat > "$OUT/AUDIT.txt" <<'EOT'
+          PIIWII REMOTE PHONE 2.0.0-beta9 / versionCode 39
+          PIIWII REMOTE TV RECEIVER 2.0.0-beta2 / versionCode 27
+          KEYBOARD: two vertical full-screen pages. Quick page = text composer, Backspace/Enter/Escape/Tab, arrows and push-to-talk. Advanced page = F1-F12, Ctrl/Alt/Shift/Win and shortcuts.
+          MICROPHONE: hold-to-talk only; RECORD_AUDIO runtime permission; lifecycle stops recording; authenticated 16 kHz mono PCM16 / 20 ms LAN frames.
+          ANDROID TV: authenticated voice playback with AudioTrack stream mode.
+          REGRESSIONS: beta2 IP fix + beta3 Remote + beta4 Navigation + beta5 PC power safety + beta6 touchpad + beta7 tabs + beta8 extended keyboard preserved. KEYBOARD_KEY is explicitly allowed at runtime.
+          PROTOCOL: PIIWII_REMOTE/1 retained; VOICE_START/VOICE_FRAME/VOICE_STOP additive.
+          SIGNING: unsigned CI candidates by design. Final APKs must use stable PiiWii private key.
+          EXPECTED CERT SHA-256: d86a9c8c8f9ea2001108d6f8afec076ba7b6343c0383ca812647bed61de6c717
+          EOT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-beta9-Keyboard-Voice-UNSIGNED
+          path: /tmp/piiwii-beta9-out/*
+          retention-days: 7
+          if-no-files-found: error
