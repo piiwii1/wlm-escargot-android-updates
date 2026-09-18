@@ -42,11 +42,17 @@ jobs:
           if old not in s: raise SystemExit('beta6 PONG baseline string not found')
           p.write_text(s.replace(old,new,1),encoding='utf-8')
           PY2
-          cat piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part00 piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part01 piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part02 piiwii-remote-v2-windows-beta7/windows-beta7.patch.xz.b64.part03 | base64 -d > "$BASE/windows-beta7.patch.xz"
-          echo '6d1f8a14ebd8a44b2e6e0374f21b6995bd125aa879fa3a7bdfd90da1a915e6c8  '"$BASE/windows-beta7.patch.xz" | sha256sum -c -
-          xz -dc "$BASE/windows-beta7.patch.xz" > "$BASE/windows-beta7.patch"
-          echo 'e3f377894fbce0f4046c73968fb531dce3459ca98bca1349b1ce92219e59c736  '"$BASE/windows-beta7.patch" | sha256sum -c -
-          (cd "$ROOT" && patch --binary -p1 < "$BASE/windows-beta7.patch")
+          python - "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp" "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc" "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss" <<'PY3'
+          from pathlib import Path
+          import sys
+          for name in sys.argv[1:]:
+              p=Path(name)
+              s=p.read_text(encoding='utf-8-sig', errors='strict').replace('\r\n','\n').replace('\r','\n')
+              p.write_text(s,encoding='utf-8',newline='\n')
+          PY3
+          PATCH="$GITHUB_WORKSPACE/piiwii-remote-v2-windows-beta7/windows-beta7-normalized.patch"
+          echo '355446deab6ec13607e6ffd69d04356069155cd3325adf3e5d682a13bacbf512  '"$PATCH" | sha256sum -c -
+          (cd "$ROOT" && patch -p1 < "$PATCH")
 
       - name: Static voice and regression audit
         shell: pwsh
