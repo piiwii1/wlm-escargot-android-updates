@@ -8,20 +8,17 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.CookieManager;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -33,10 +30,10 @@ public class MainActivity extends Activity {
     private static final String M6_URL = "https://www.m6.fr/";
     private static final String M6_GEO_URL = "https://geo.6play.fr/v1/geoInfo/?";
     private static final String IP_CHECK_URL = "https://ipwho.is/";
+    private static final String CONNECTIVITY_URL = "https://www.google.com/generate_204";
 
     private TextView status;
     private ProgressBar progress;
-    private WebView webView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,13 +43,17 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(12));
+        root.setPadding(dp(18), dp(18), dp(18), dp(24));
         root.setBackgroundColor(Color.rgb(245, 247, 250));
+        scroll.addView(root, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView title = new TextView(this);
-        title.setText("PiiWii M6 Test 0.1.1");
+        title.setText("PiiWii M6 Test 0.1.2");
         title.setTextSize(25);
         title.setTextColor(Color.rgb(20, 31, 48));
         title.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -60,7 +61,7 @@ public class MainActivity extends Activity {
         root.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView help = new TextView(this);
-        help.setText("Le VPN n’est pas intégré à ce prototype.\n1. Installe/ouvre hide.me\n2. Dans hide.me, choisis France et connecte\n3. Reviens ici et vérifie\n4. Puis teste M6+");
+        help.setText("1. Connecte hide.me sur France\n2. Vérifie l’IP\n3. Lance le diagnostic M6\n4. Ouvre M6+ en plein écran");
         help.setTextSize(15);
         help.setTextColor(Color.DKGRAY);
         help.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -69,10 +70,10 @@ public class MainActivity extends Activity {
 
         status = new TextView(this);
         status.setText("Vérification de la connexion…");
-        status.setTextSize(18);
+        status.setTextSize(17);
         status.setTextColor(Color.rgb(55, 71, 79));
         status.setGravity(Gravity.CENTER);
-        status.setPadding(dp(12), dp(10), dp(12), dp(10));
+        status.setPadding(dp(12), dp(12), dp(12), dp(12));
         root.addView(status, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         progress = new ProgressBar(this);
@@ -85,62 +86,42 @@ public class MainActivity extends Activity {
         vpnButton.setOnClickListener(v -> openHideMe());
         root.addView(vpnButton);
 
-        Button vpnWebButton = makeButton("Page hide.me sur Google Play (secours)");
-        vpnWebButton.setOnClickListener(v -> openExternal(HIDE_ME_PLAY));
-        root.addView(vpnWebButton);
-
         Button checkButton = makeButton("Vérifier : suis-je en France ?");
         checkButton.setOnClickListener(v -> checkIpCountry());
         root.addView(checkButton);
+
+        Button diagButton = makeButton("Diagnostic réseau M6");
+        diagButton.setOnClickListener(v -> runDiagnostics());
+        root.addView(diagButton);
+
+        Button m6FullButton = makeButton("M6+ PLEIN ÉCRAN");
+        m6FullButton.setOnClickListener(v -> startActivity(new Intent(this, M6Activity.class)));
+        root.addView(m6FullButton);
+
+        Button browserButton = makeButton("M6+ dans le navigateur externe");
+        browserButton.setOnClickListener(v -> openExternal(M6_URL));
+        root.addView(browserButton);
 
         Button m6GeoButton = makeButton("Test officiel M6 : pays détecté");
         m6GeoButton.setOnClickListener(v -> openExternal(M6_GEO_URL));
         root.addView(m6GeoButton);
 
-        LinearLayout m6Row = new LinearLayout(this);
-        m6Row.setOrientation(LinearLayout.HORIZONTAL);
+        Button vpnWebButton = makeButton("Page hide.me Google Play (secours)");
+        vpnWebButton.setOnClickListener(v -> openExternal(HIDE_ME_PLAY));
+        root.addView(vpnWebButton);
 
-        Button m6Button = makeButton("M6+ dans l’app");
-        m6Button.setOnClickListener(v -> webView.loadUrl(M6_URL));
-        LinearLayout.LayoutParams half1 = new LinearLayout.LayoutParams(0, dp(58), 1f);
-        half1.setMargins(0, dp(5), dp(5), dp(5));
-        m6Row.addView(m6Button, half1);
-
-        Button browserButton = makeButton("M6+ navigateur");
-        browserButton.setOnClickListener(v -> openExternal(M6_URL));
-        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, dp(58), 1f);
-        half2.setMargins(dp(5), dp(5), 0, dp(5));
-        m6Row.addView(browserButton, half2);
-        root.addView(m6Row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        webView = new WebView(this);
-        WebSettings ws = webView.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setDomStorageEnabled(true);
-        ws.setMediaPlaybackRequiresUserGesture(true);
-        ws.setLoadWithOverviewMode(true);
-        ws.setUseWideViewPort(true);
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-        webView.setWebChromeClient(new WebChromeClient());
-        webView.setWebViewClient(new WebViewClient());
-        webView.loadData("<html><body style='font-family:sans-serif;text-align:center;padding:28px;color:#666;background:#fff'>M6+ apparaîtra ici.<br><br>Si la vidéo refuse la vue intégrée, utilise <b>M6+ navigateur</b>.</body></html>", "text/html", "UTF-8");
-
-        LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        webParams.setMargins(0, dp(6), 0, 0);
-        root.addView(webView, webParams);
-        setContentView(root);
+        setContentView(scroll);
     }
 
     private Button makeButton(String text) {
         Button b = new Button(this);
         b.setText(text);
-        b.setTextSize(15);
+        b.setTextSize(16);
         b.setAllCaps(false);
         b.setFocusable(true);
-        b.setMinHeight(dp(56));
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
-        p.setMargins(0, dp(4), 0, dp(4));
+        b.setMinHeight(dp(58));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
+        p.setMargins(0, dp(5), 0, dp(5));
         b.setLayoutParams(p);
         return b;
     }
@@ -153,22 +134,12 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(IP_CHECK_URL);
-                connection = (HttpURLConnection) url.openConnection();
-                connection.setConnectTimeout(8000);
-                connection.setReadTimeout(8000);
-                connection.setRequestProperty("Accept", "application/json");
-                connection.setRequestProperty("User-Agent", "PiiWii-M6-Test/0.1.1");
+                connection = open(IP_CHECK_URL, "application/json");
                 int code = connection.getResponseCode();
                 if (code < 200 || code >= 300) throw new IllegalStateException("HTTP " + code);
 
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
-                StringBuilder body = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) body.append(line);
-                reader.close();
-
-                JSONObject json = new JSONObject(body.toString());
+                String body = readBody(connection);
+                JSONObject json = new JSONObject(body);
                 String countryCode = json.optString("country_code", "?");
                 String country = json.optString("country", "Inconnu");
                 String ip = json.optString("ip", "?");
@@ -177,10 +148,10 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     progress.setVisibility(View.GONE);
                     if (france) {
-                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nTeste maintenant le bouton officiel M6.");
+                        status.setText("✅ FRANCE détectée\nIP : " + ip + "\nLance maintenant ‘Diagnostic réseau M6’. ");
                         status.setTextColor(Color.rgb(27, 120, 55));
                     } else {
-                        status.setText("❌ Pas en France : " + country + " (" + countryCode + ")\nIP : " + ip + "\nOuvre hide.me, choisis France, connecte puis reviens.");
+                        status.setText("❌ Pas en France : " + country + " (" + countryCode + ")\nIP : " + ip + "\nConnecte hide.me sur France puis revérifie.");
                         status.setTextColor(Color.rgb(180, 70, 35));
                     }
                 });
@@ -194,6 +165,114 @@ public class MainActivity extends Activity {
                 if (connection != null) connection.disconnect();
             }
         }).start();
+    }
+
+    private void runDiagnostics() {
+        progress.setVisibility(View.VISIBLE);
+        status.setText("Diagnostic en cours…");
+        status.setTextColor(Color.rgb(55, 71, 79));
+
+        new Thread(() -> {
+            StringBuilder report = new StringBuilder();
+            boolean internetOk = false;
+            boolean franceOk = false;
+            boolean m6Ok = false;
+
+            HttpURLConnection c = null;
+            try {
+                c = open(CONNECTIVITY_URL, "*/*");
+                int code = c.getResponseCode();
+                internetOk = code == 204 || (code >= 200 && code < 400);
+                report.append(internetOk ? "✅ Internet : OK" : "❌ Internet : HTTP " + code).append('\n');
+            } catch (Exception e) {
+                report.append("❌ Internet : ").append(safeMessage(e)).append('\n');
+            } finally {
+                if (c != null) c.disconnect();
+            }
+
+            c = null;
+            try {
+                c = open(IP_CHECK_URL, "application/json");
+                int code = c.getResponseCode();
+                if (code >= 200 && code < 300) {
+                    JSONObject json = new JSONObject(readBody(c));
+                    String cc = json.optString("country_code", "?");
+                    String ip = json.optString("ip", "?");
+                    franceOk = "FR".equalsIgnoreCase(cc);
+                    report.append(franceOk ? "✅ IP France : " : "❌ IP non-France (" + cc + ") : ").append(ip).append('\n');
+                } else {
+                    report.append("❌ IP : HTTP ").append(code).append('\n');
+                }
+            } catch (Exception e) {
+                report.append("❌ IP : ").append(safeMessage(e)).append('\n');
+            } finally {
+                if (c != null) c.disconnect();
+            }
+
+            c = null;
+            try {
+                c = open(M6_URL, "text/html,*/*");
+                int code = c.getResponseCode();
+                m6Ok = code >= 200 && code < 400;
+                report.append(m6Ok ? "✅ www.m6.fr : HTTP " : "❌ www.m6.fr : HTTP ").append(code).append('\n');
+            } catch (Exception e) {
+                report.append("❌ www.m6.fr : ").append(safeMessage(e)).append('\n');
+            } finally {
+                if (c != null) c.disconnect();
+            }
+
+            c = null;
+            try {
+                c = open(M6_GEO_URL, "application/json,text/plain,*/*");
+                int code = c.getResponseCode();
+                report.append(code >= 200 && code < 400 ? "✅ Geo M6 : HTTP " : "❌ Geo M6 : HTTP ").append(code);
+                if (code >= 200 && code < 300) {
+                    String body = readBody(c).replace('\n', ' ').trim();
+                    if (body.length() > 180) body = body.substring(0, 180) + "…";
+                    if (!body.isEmpty()) report.append("\n↳ ").append(body);
+                }
+                report.append('\n');
+            } catch (Exception e) {
+                report.append("❌ Geo M6 : ").append(safeMessage(e)).append('\n');
+            } finally {
+                if (c != null) c.disconnect();
+            }
+
+            boolean finalInternetOk = internetOk;
+            boolean finalFranceOk = franceOk;
+            boolean finalM6Ok = m6Ok;
+            String finalReport = report.toString().trim();
+            runOnUiThread(() -> {
+                progress.setVisibility(View.GONE);
+                String conclusion;
+                if (!finalInternetOk) conclusion = "\n\n➡ Le VPN coupe ou perturbe Internet.";
+                else if (!finalFranceOk) conclusion = "\n\n➡ Le VPN ne sort pas réellement en France.";
+                else if (!finalM6Ok) conclusion = "\n\n➡ Internet + France sont OK, mais M6 refuse ou n’est pas joignable via cette sortie.";
+                else conclusion = "\n\n➡ Réseau + France + site M6 sont joignables. Si M6+ affiche encore ‘pas de connexion’, le blocage est probablement au niveau du site/lecteur ou de la détection VPN.";
+                status.setText(finalReport + conclusion);
+                status.setTextColor((finalInternetOk && finalFranceOk) ? Color.rgb(27, 100, 55) : Color.rgb(180, 70, 35));
+            });
+        }).start();
+    }
+
+    private HttpURLConnection open(String url, String accept) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        connection.setConnectTimeout(10000);
+        connection.setReadTimeout(10000);
+        connection.setInstanceFollowRedirects(true);
+        connection.setRequestProperty("Accept", accept);
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36 PiiWii-M6-Test/0.1.2");
+        return connection;
+    }
+
+    private String readBody(HttpURLConnection connection) throws Exception {
+        InputStream stream = connection.getInputStream();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
+        StringBuilder body = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) body.append(line).append('\n');
+        reader.close();
+        return body.toString();
     }
 
     private void openHideMe() {
@@ -222,25 +301,10 @@ public class MainActivity extends Activity {
 
     private String safeMessage(Exception e) {
         String m = e.getMessage();
-        return m == null || m.trim().isEmpty() ? "erreur réseau" : m;
+        return m == null || m.trim().isEmpty() ? e.getClass().getSimpleName() : m;
     }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (webView != null) {
-            webView.stopLoading();
-            webView.destroy();
-        }
-        super.onDestroy();
     }
 }
