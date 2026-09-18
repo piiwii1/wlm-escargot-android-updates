@@ -1,4 +1,4 @@
-name: Build PiiWii TV Phone 0.5.4 unsigned
+name: Build PiiWii TV Phone 0.5.4 stable-signed
 
 on:
   push:
@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      actions: read
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -103,9 +102,7 @@ jobs:
           if old not in s:
               raise SystemExit('navItem source block not found')
           s=s.replace(old,new)
-          old_update='''                    if (item instanceof TextView) ((TextView) item).setTextColor(active ? Color.rgb(112, 179, 255) : MUTED);\n'''
-          new_update='''                    if (item instanceof TextView) ((TextView) item).setTextColor(active ? Color.rgb(112, 179, 255) : MUTED);\n                    if (item instanceof ImageView) ((ImageView) item).setAlpha(active ? 1.0f : 0.72f);\n'''
-          s=s.replace(old_update,new_update)
+          s=s.replace('                    if (item instanceof TextView) ((TextView) item).setTextColor(active ? Color.rgb(112, 179, 255) : MUTED);\n','                    if (item instanceof TextView) ((TextView) item).setTextColor(active ? Color.rgb(112, 179, 255) : MUTED);\n                    if (item instanceof ImageView) ((ImageView) item).setAlpha(active ? 1.0f : 0.72f);\n')
           s=s.replace('Version 0.5.2 · Media3 / ExoPlayer','Version 0.5.4 · Media3 / ExoPlayer')
           p.write_text(s)
           b=Path('/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/build.gradle')
@@ -123,29 +120,33 @@ jobs:
         working-directory: /tmp/piiwii054/piiwii-tv-phone-0.5.2
         run: gradle --no-daemon --stacktrace :app:assembleRelease
 
-      - name: Verify unsigned APK metadata
+      - name: Create stable signing key and sign APK
         shell: bash
         run: |
           set -euo pipefail
-          APK=/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/build/outputs/apk/release/app-release-unsigned.apk
           BT="$ANDROID_HOME/build-tools/35.0.0"
-          test -s "$APK"
-          mkdir -p out/signing-tools/lib
-          cp "$APK" out/PiiWii-TV-Phone-0.5.4-unsigned.apk
-          cp "$BT/apksigner" out/signing-tools/apksigner
-          cp "$BT/zipalign" out/signing-tools/zipalign
-          cp "$BT/lib/apksigner.jar" out/signing-tools/lib/apksigner.jar
-          chmod +x out/signing-tools/apksigner out/signing-tools/zipalign
-          "$BT/aapt" dump badging "$APK" > out/BADGING.txt
+          UNSIGNED=/tmp/piiwii054/piiwii-tv-phone-0.5.2/app/build/outputs/apk/release/app-release-unsigned.apk
+          mkdir -p out/signing
+          PASS=$(openssl rand -hex 16)
+          KEY=out/signing/PiiWii-TV-Phone-signing.jks
+          keytool -genkeypair -keystore "$KEY" -storepass "$PASS" -keypass "$PASS" -alias piiwii-tv-phone -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=PiiWii TV Phone,O=PiiWii,C=CH" >/dev/null 2>&1
+          "$BT/zipalign" -f -p 4 "$UNSIGNED" out/PiiWii-TV-Phone-0.5.4-aligned.apk
+          "$BT/apksigner" sign --ks "$KEY" --ks-key-alias piiwii-tv-phone --ks-pass "pass:$PASS" --key-pass "pass:$PASS" --out out/PiiWii-TV-Phone-0.5.4.apk out/PiiWii-TV-Phone-0.5.4-aligned.apk
+          rm out/PiiWii-TV-Phone-0.5.4-aligned.apk
+          printf 'Keystore: PiiWii-TV-Phone-signing.jks\nAlias: piiwii-tv-phone\nStore password: %s\nKey password: %s\nKeep this file with the keystore for every future update.\n' "$PASS" "$PASS" > out/signing/SIGNING-CREDENTIALS.txt
+          "$BT/apksigner" verify --verbose --print-certs out/PiiWii-TV-Phone-0.5.4.apk > out/APKSIGNER.txt
+          "$BT/aapt" dump badging out/PiiWii-TV-Phone-0.5.4.apk > out/BADGING.txt
           grep -F "package: name='ch.piiwii.tvphone'" out/BADGING.txt
           grep -F "versionCode='9'" out/BADGING.txt
           grep -F "versionName='0.5.4'" out/BADGING.txt
-          sha256sum out/PiiWii-TV-Phone-0.5.4-unsigned.apk > out/PiiWii-TV-Phone-0.5.4-unsigned.apk.sha256
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' out/APKSIGNER.txt
+          sha256sum out/PiiWii-TV-Phone-0.5.4.apk > out/PiiWii-TV-Phone-0.5.4.apk.sha256
+          sha256sum "$KEY" > out/signing/PiiWii-TV-Phone-signing.jks.sha256
 
-      - name: Upload unsigned artifact
+      - name: Upload stable-signed delivery
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-Phone-0.5.4-UNSIGNED
+          name: PiiWii-TV-Phone-0.5.4-STABLE-SIGNED
           path: out/*
           retention-days: 7
           if-no-files-found: error
