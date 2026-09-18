@@ -81,25 +81,12 @@ jobs:
           p.write_text(s)
           PY
 
-          python3 -m pip install --quiet pillow
-          python3 - "$ROOT" "$GITHUB_WORKSPACE" <<'PY'
-          from pathlib import Path
-          import base64, re, sys, io
-          from PIL import Image, ImageFile
-          ImageFile.LOAD_TRUNCATED_IMAGES=True
-          root=Path(sys.argv[1]); ws=Path(sys.argv[2])
-          out=root/'remote/src/main/res/drawable-nodpi'; out.mkdir(parents=True,exist_ok=True)
-          for n in ['settings','apps','keyboard','touchpad','remote']:
-              txt=(ws/f'piiwii-remote-phone-beta11-icons/assets/ic_{n}_custom.png.b64').read_text()
-              clean=re.sub(r'[^A-Za-z0-9+/=]','',txt)
-              clean += '='*((4-len(clean)%4)%4)
-              data=base64.b64decode(clean, validate=False)
-              im=Image.open(io.BytesIO(data))
-              im.load()
-              if im.mode not in ('RGB','RGBA'):
-                  im=im.convert('RGBA')
-              im.save(out/f'ic_{n}_custom.png','PNG',optimize=False)
-          PY
+          RES="$ROOT/remote/src/main/res/drawable-nodpi"
+          mkdir -p "$RES"
+          for n in settings apps keyboard touchpad remote; do
+            curl -fsSL "https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/piiwii-remote-v2-phone-beta10-icons/piiwii-remote-phone-beta10/icon-assets/ic_${n}.png" -o "$RES/ic_${n}_custom.png"
+            test -s "$RES/ic_${n}_custom.png"
+          done
 
           grep -q 'versionCode = 41' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-beta11"' "$ROOT/remote/build.gradle.kts"
@@ -148,6 +135,7 @@ jobs:
           unzip -l "$APK" > "$OUT/CONTENTS.txt"
           for n in settings apps keyboard touchpad remote; do grep -q "ic_${n}_custom.png" "$OUT/CONTENTS.txt"; done
           sha256sum "$APK" > "$OUT/SHA256.txt"
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar "$OUT/apksigner.jar"
 
       - uses: actions/upload-artifact@v4
         with:
