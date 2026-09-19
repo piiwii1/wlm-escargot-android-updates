@@ -79,7 +79,16 @@ jobs:
           s=s.replace('Match en cours détecté automatiquement dans les notifications Google','Match FC Sion programmé automatiquement depuis le calendrier officiel (Google en secours)')
           p.write_text(s)
           PY
-          patch -p1 < "$GITHUB_WORKSPACE/.piiwii-events-133/fix.patch"
+          cp "$GITHUB_WORKSPACE/.piiwii-events-133/FcSionOfficialSchedule.kt" app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/piiwii-events-build')
+          p=root/'app/build.gradle.kts'; s=p.read_text().replace('versionCode = 6','versionCode = 7').replace('versionName = "1.3.2"','versionName = "1.3.3"'); p.write_text(s)
+          p=root/'app/src/main/java/ch/piiwii/events/ui/MainActivity.kt'; s=p.read_text();
+          s=s.replace('Source principale : calendrier officiel du FC Sion. Le prochain coup d’envoi est mémorisé puis déclenché automatiquement, même si la bulle Google n’est pas lisible. Notifications/bulles Google = secours.','Source principale : calendrier officiel football.ch / SFL. fcsion.ch et Google restent en secours. Le prochain coup d’envoi est mémorisé localement.')
+          s=s.replace('Match FC Sion programmé automatiquement depuis le calendrier officiel (Google en secours)','Match FC Sion programmé automatiquement depuis football.ch / SFL (fcsion.ch et Google en secours)')
+          p.write_text(s)
+          PY
           grep -q 'versionName = "1.3.3"' app/build.gradle.kts
           grep -q 'club.football.ch' app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
           grep -q 'football.ch / SFL' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
