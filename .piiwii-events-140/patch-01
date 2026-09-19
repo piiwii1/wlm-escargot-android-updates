@@ -1,0 +1,165 @@
++            status.addView(UiFactory.dangerButton(this, "Quitter le mode test").apply {
++                setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, null); showTab(TAB_HOME) }
++            })
++        }
+         body.addView(status)
+-        body.addView(imagesOverviewCard(config.events))
+ 
+         val actions = UiFactory.card(this)
+-        actions.addView(UiFactory.title(this, "Actions", 18f))
++        actions.addView(UiFactory.title(this, "Actions rapides", 18f))
+         UiFactory.addRowButtons(this, actions,
+-            UiFactory.button(this, "Actualiser le widget").apply { setOnClickListener { WidgetRenderer.updateAll(this@MainActivity, "home_refresh"); showTab(0) } },
+-            UiFactory.secondaryButton(this, "Ajouter sur l’écran d’accueil").apply { setOnClickListener { requestAddWidget() } }
++            UiFactory.button(this, "Actualiser").apply {
++                setOnClickListener { WidgetRenderer.updateAll(this@MainActivity, "home_refresh"); showTab(TAB_HOME) }
++            },
++            UiFactory.secondaryButton(this, "Ajouter un événement").apply { setOnClickListener { openEditor(null) } }
+         )
+         actions.addView(UiFactory.spacer(this, 8))
+-        UiFactory.addRowButtons(this, actions,
+-            UiFactory.button(this, "Ajouter un événement").apply { setOnClickListener { openEditor(null) } },
+-            UiFactory.secondaryButton(this, "Fuseau horaire").apply { setOnClickListener { showTimeZoneDialog() } }
+-        )
++        actions.addView(UiFactory.secondaryButton(this, "Ajouter le widget à l’écran d’accueil").apply {
++            setOnClickListener { requestAddWidget() }
++        })
+         body.addView(actions)
+ 
+         val fcSionEvent = config.events.firstOrNull { it.id == DefaultEvents.FC_SION_ID }
+-        if (fcSionEvent != null) {
+-            val fcSion = UiFactory.card(this)
+-            fcSion.addView(UiFactory.title(this, "FC Sion automatique", 18f))
+-            fcSion.addView(UiFactory.muted(this, "Source principale : calendrier officiel football.ch / SFL. fcsion.ch et Google restent en secours. Le prochain coup d’envoi est mémorisé localement."))
+-            val access = notificationListenerAccessGranted()
+-            val bubbleAccess = accessibilityBubbleAccessGranted()
+-            fcSion.addView(UiFactory.body(this, if (access) "✓ Accès aux notifications autorisé" else "⚠ Accès aux notifications à autoriser", 14f))
+-            fcSion.addView(UiFactory.body(this, if (bubbleAccess) "✓ Détection des bulles Google autorisée" else "⚠ Détection des bulles Google à autoriser", 14f))
+-            val active = config.settings.fcSionActiveUntil > System.currentTimeMillis()
+-            fcSion.addView(UiFactory.muted(this, if (active) "État : match détecté — actif jusqu’à ${formatMillis(config.settings.fcSionActiveUntil)}" else "État : aucun match FC Sion détecté actuellement"))
+-            fcSion.addView(UiFactory.muted(this, "Dernier signal : ${config.settings.fcSionLastSignal} · ${formatMillis(config.settings.fcSionLastDetectedAt)}"))
+-            fcSion.addView(UiFactory.secondaryButton(this, "Après le match : ${formatPostMatchDuration(config.settings.fcSionPostMatchMinutes)} — modifier").apply {
+-                setOnClickListener { showFcSionPostMatchDialog() }
+-            })
+-            fcSion.addView(UiFactory.button(this, "Synchroniser le calendrier FC Sion").apply {
+-                setOnClickListener {
+-                    isEnabled = false
+-                    text = "Synchronisation…"
+-                    Thread {
+-                        val result = FcSionOfficialSchedule.sync(this@MainActivity)
+-                        runOnUiThread {
+-                            toast(result.message)
+-                            WidgetRenderer.updateAll(this@MainActivity, "fc_sion_manual_sync")
+-                            showTab(0)
+-                        }
+-                    }.start()
+-                }
+-            })
+-            UiFactory.addRowButtons(this, fcSion,
+-                UiFactory.button(this, if (access) "Réglages notifications" else "Autoriser les notifications").apply {
+-                    setOnClickListener { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+-                },
+-                UiFactory.secondaryButton(this, if (bubbleAccess) "Réglages bulles" else "Autoriser les bulles").apply {
+-                    setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+-                }
+-            )
+-            fcSion.addView(UiFactory.secondaryButton(this, "Tester l’image").apply {
+-                setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, DefaultEvents.FC_SION_ID); toast("Image FC Sion affichée en mode test") }
++        if (fcSionEvent != null && fcSionEvent.enabled) {
++            val fc = UiFactory.card(this)
++            fc.addView(UiFactory.title(this, "FC Sion", 18f))
++            val currentMs = System.currentTimeMillis()
++            val active = config.settings.fcSionActiveSince > 0L && currentMs in config.settings.fcSionActiveSince until config.settings.fcSionActiveUntil
++            fc.addView(UiFactory.body(this, if (active) "🔴 Match / affichage FC Sion actif" else "Calendrier automatique actif", 15f))
++            fc.addView(UiFactory.muted(this, config.settings.fcSionLastSignal))
++            fc.addView(UiFactory.secondaryButton(this, "Réglages FC Sion", true).apply {
++                setOnClickListener { navigateToTab(TAB_SETTINGS) }
+             })
+-            body.addView(fcSion)
+-        }
+-
+-        val lockScreen = UiFactory.card(this)
+-        lockScreen.addView(UiFactory.title(this, "Écran verrouillé", 18f))
+-        lockScreen.addView(UiFactory.muted(this, "Le widget est déclaré compatible avec l’écran d’accueil et l’écran verrouillé. L’emplacement final dépend du système Samsung/Android installé sur le téléphone."))
+-        lockScreen.addView(UiFactory.button(this, "Configurer l’écran verrouillé").apply { setOnClickListener { showLockScreenHelp() } })
+-        body.addView(lockScreen)
+-
+-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+-            !getSystemService(AlarmManager::class.java).canScheduleExactAlarms()) {
+-            val exactAlarm = UiFactory.card(this)
+-            exactAlarm.addView(UiFactory.title(this, "Mises à jour à l’heure exacte", 18f))
+-            exactAlarm.addView(UiFactory.muted(this, "Autorisez « Alarmes et rappels » pour que les débuts et fins d’événements soient déclenchés à la minute configurée, même en veille."))
+-            exactAlarm.addView(UiFactory.button(this, "Autoriser les alarmes exactes").apply { setOnClickListener { requestExactAlarmAccess() } })
+-            body.addView(exactAlarm)
++            body.addView(fc)
+         }
+ 
+-        val backup = UiFactory.card(this)
+-        backup.addView(UiFactory.title(this, "Sauvegarde locale", 18f))
+-        backup.addView(UiFactory.muted(this, "Exporte ou importe la configuration et les images dans une archive locale."))
+-        UiFactory.addRowButtons(this, backup,
+-            UiFactory.button(this, "Exporter").apply { setOnClickListener { exportBackup() } },
+-            UiFactory.secondaryButton(this, "Importer").apply { setOnClickListener { importBackup() } }
+-        )
+-        body.addView(backup)
+         return page(body)
+     }
+ 
+@@ -244,8 +320,8 @@
+         top.addView(UiFactory.title(this, "Événements", 20f))
+         UiFactory.addRowButtons(this, top,
+             UiFactory.button(this, "Ajouter un événement").apply { setOnClickListener { openEditor(null) } },
+-            UiFactory.secondaryButton(this, "Tout activer").apply { setOnClickListener { repository.setAllEnabled(true); WidgetRenderer.updateAll(this@MainActivity, "all_enabled"); showTab(1) } },
+-            UiFactory.dangerButton(this, "Tout désactiver").apply { setOnClickListener { repository.setAllEnabled(false); WidgetRenderer.updateAll(this@MainActivity, "all_disabled"); showTab(1) } }
++            UiFactory.secondaryButton(this, "Tout activer").apply { setOnClickListener { repository.setAllEnabled(true); WidgetRenderer.updateAll(this@MainActivity, "all_enabled"); showTab(TAB_EVENTS) } },
++            UiFactory.dangerButton(this, "Tout désactiver").apply { setOnClickListener { repository.setAllEnabled(false); WidgetRenderer.updateAll(this@MainActivity, "all_disabled"); showTab(TAB_EVENTS) } }
+         )
+         val filters = listOf("Tous", "Actifs", "Désactivés", "Annuels", "Ponctuels", "Calculés automatiquement")
+         val spinner = Spinner(this).apply {
+@@ -255,7 +331,7 @@
+                 override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+                 override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                     val next = filters[position]
+-                    if (next != eventFilter) { eventFilter = next; showTab(1) }
++                    if (next != eventFilter) { eventFilter = next; showTab(TAB_EVENTS) }
+                 }
+             }
+         }
+@@ -269,7 +345,7 @@
+             header.addView(imagePreview(event, 72), LinearLayout.LayoutParams(UiFactory.dp(this, 72), UiFactory.dp(this, 72)))
+             val labels = UiFactory.vertical(this, 4)
+             labels.addView(UiFactory.title(this, event.name, 18f))
+-            labels.addView(UiFactory.muted(this, "${if (event.id == DefaultEvents.FC_SION_ID) "Automatique via Google" else event.recurrenceRule.label} · priorité ${event.priority}"))
++            labels.addView(UiFactory.muted(this, "${if (event.id == DefaultEvents.FC_SION_ID) "Automatique" else event.recurrenceRule.label} · priorité ${event.priority}"))
+             labels.addView(UiFactory.muted(this, periodSummary(event)))
+             header.addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+             val toggle = Switch(this).apply {
+@@ -287,8 +363,8 @@
+             if (event.id == DefaultEvents.FC_SION_ID) {
+                 UiFactory.addRowButtons(this, card,
+                     UiFactory.button(this, "Tester", true).apply { setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); toast("${event.name} affiché dans le widget") } },
+-                    UiFactory.secondaryButton(this, "Choisir l’image", true).apply { setOnClickListener { selectedTab = 2; showTab(2) } },
+-                    UiFactory.secondaryButton(this, "Accès notifications", true).apply { setOnClickListener { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
++                    UiFactory.secondaryButton(this, "Image", true).apply { setOnClickListener { openSettingsSection(SETTINGS_IMAGES) } },
++                    UiFactory.secondaryButton(this, "Réglages FC Sion", true).apply { setOnClickListener { navigateToTab(TAB_SETTINGS) } }
+                 )
+             } else {
+                 UiFactory.addRowButtons(this, card,
+@@ -306,6 +382,113 @@
+         return page(body)
+     }
+ 
++    private fun settingsPage(): View {
++        val body = UiFactory.vertical(this, 16)
++        val config = repository.load()
++        val fcSionEvent = config.events.firstOrNull { it.id == DefaultEvents.FC_SION_ID }
++
++        body.addView(UiFactory.title(this, "Réglages", 24f))
++        body.addView(UiFactory.muted(this, "Les options sont regroupées ici pour garder l’accueil simple."))
++
++        if (fcSionEvent != null) {
++            val fc = UiFactory.card(this)
++            val header = UiFactory.horizontal(this)
++            header.addView(UiFactory.title(this, "FC Sion automatique", 18f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
++            header.addView(Switch(this).apply {
++                isChecked = fcSionEvent.enabled
