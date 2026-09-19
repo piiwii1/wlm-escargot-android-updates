@@ -64,7 +64,8 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/piiwii-events-build
-          patch -p1 < "$GITHUB_WORKSPACE/.piiwii-events-142/ergonomics.patch"
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-142/ergonomics.patch.gz.b64" | gzip -d > /tmp/ergonomics.patch
+          patch -p1 < /tmp/ergonomics.patch
 
           mkdir -p app/src/main/res/drawable-nodpi
           python3 - <<'PY'
