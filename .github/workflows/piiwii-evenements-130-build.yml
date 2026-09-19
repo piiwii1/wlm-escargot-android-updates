@@ -1,0 +1,88 @@
+name: PiiWii Evenements 1.3.0 Build
+
+on:
+  push:
+    branches:
+      - chatgpt/piiwii-evenements-130-build
+    paths:
+      - '.piiwii-events-130/**'
+      - '.github/workflows/piiwii-evenements-130-build.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.piiwii-events-130/**'
+      - '.github/workflows/piiwii-evenements-130-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Setup Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Reconstruct source package
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/piiwii-events-build
+          mkdir -p /tmp/piiwii-events-build
+          cat .piiwii-events-130/b64/chunk-* | base64 -d > /tmp/events130-minbuild.zip
+          echo "9709f2da805b276aa588b6834cefb522a27293b5a252730a374f48f97213cbed  /tmp/events130-minbuild.zip" | sha256sum -c -
+          unzip -q /tmp/events130-minbuild.zip -d /tmp/piiwii-events-build
+
+      - name: Build and test release
+        working-directory: /tmp/piiwii-events-build
+        run: gradle --no-daemon --stacktrace test assembleRelease
+
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          APK="$(find /tmp/piiwii-events-build/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/zipalign" -c -v 4 "$APK"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/signature.txt
+          "$BT/aapt" dump badging "$APK" | head -n 1 | tee /tmp/badging.txt
+          grep -q "package: name='ch.piiwii.events' versionCode='4' versionName='1.3.0'" /tmp/badging.txt
+          CERT="$(grep -i 'Signer #1 certificate SHA-256 digest:' /tmp/signature.txt | sed 's/.*digest: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test "$CERT" = "63a2a61bc07cda7fc7da2425a76c19c4f11ecf9a7e570ad5f6038d5bdc4c9a8c"
+          mkdir -p delivery
+          cp "$APK" delivery/PiiWii-Evenements-1.3.0.apk
+          sha256sum delivery/PiiWii-Evenements-1.3.0.apk | tee delivery/APK_SHA256.txt
+          cp /tmp/signature.txt delivery/SIGNATURE.txt
+          cp /tmp/badging.txt delivery/BADGING.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Evenements-1.3.0-APK
+          path: delivery/
+          retention-days: 7
+          if-no-files-found: error
