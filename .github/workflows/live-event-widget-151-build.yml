@@ -78,62 +78,62 @@ jobs:
           start = s.index('            settingsButton =', s.index('private fun buildShell()'))
           end = s.index('\n', s.index('            head.addView(settingsButton', start)) + 1
           new_settings = '''            settingsButton = TextView(this@MainActivity).apply {
-                text = "⚙"
-                textSize = 23f
-                gravity = Gravity.CENTER
-                setTextColor(UiFactory.NAVY)
-                background = UiFactory.rounded(UiFactory.SOFT_BLUE, 15f, this@MainActivity)
-                contentDescription = "Réglages"
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    settingsSection = SettingsSection.ROOT
-                    settingsOpen = true
-                    showTab(selectedTab)
-                }
-            }
-            head.addView(settingsButton, LinearLayout.LayoutParams(UiFactory.dp(this@MainActivity, 46), UiFactory.dp(this@MainActivity, 46)))
-'''
+              text = "⚙"
+              textSize = 23f
+              gravity = Gravity.CENTER
+              setTextColor(UiFactory.NAVY)
+              background = UiFactory.rounded(UiFactory.SOFT_BLUE, 15f, this@MainActivity)
+              contentDescription = "Réglages"
+              isClickable = true
+              isFocusable = true
+              setOnClickListener {
+                  settingsSection = SettingsSection.ROOT
+                  settingsOpen = true
+                  showTab(selectedTab)
+              }
+          }
+          head.addView(settingsButton, LinearLayout.LayoutParams(UiFactory.dp(this@MainActivity, 46), UiFactory.dp(this@MainActivity, 46)))
+          '''
           s = s[:start] + new_settings + s[end:]
 
           widget_start = s.index('    private fun widgetPage(): View {')
           actions_start = s.index('        val actions = UiFactory.card(this)', widget_start)
           actions_end = s.index('\n', s.index('        body.addView(actions)', actions_start)) + 1
           new_actions = '''        val actions = UiFactory.card(this)
-        val widgetManager = AppWidgetManager.getInstance(this)
-        val widgetIds = widgetManager.getAppWidgetIds(ComponentName(this, PiiWiiEventsWidgetProvider::class.java))
-        actions.addView(UiFactory.title(this, "Widget d’accueil", 17f))
-        actions.addView(UiFactory.muted(this, if (widgetIds.isEmpty()) {
-            "Aucun widget installé pour l’instant."
-        } else {
-            "${widgetIds.size} widget${if (widgetIds.size > 1) "s" else ""} installé${if (widgetIds.size > 1) "s" else ""}."
-        }))
-        UiFactory.addRowButtons(this, actions,
-            UiFactory.button(this, "Ajouter widget", true).apply { setOnClickListener { requestAddWidget() } },
-            UiFactory.secondaryButton(this, "Actualiser", true).apply {
-                setOnClickListener {
-                    WidgetRenderer.updateAll(this@MainActivity, "widget_page_refresh")
-                    toast("Widget actualisé")
-                    showTab(3)
-                }
-            }
-        )
-        actions.addView(UiFactory.secondaryButton(this, "Aide écran d’accueil / verrouillage").apply {
-            setOnClickListener { showLockScreenHelp() }
-        })
-        body.addView(actions)
-'''
+          val widgetManager = AppWidgetManager.getInstance(this)
+          val widgetIds = widgetManager.getAppWidgetIds(ComponentName(this, PiiWiiEventsWidgetProvider::class.java))
+          actions.addView(UiFactory.title(this, "Widget d’accueil", 17f))
+          actions.addView(UiFactory.muted(this, if (widgetIds.isEmpty()) {
+              "Aucun widget installé pour l’instant."
+          } else {
+              "${widgetIds.size} widget${if (widgetIds.size > 1) "s" else ""} installé${if (widgetIds.size > 1) "s" else ""}."
+          }))
+          UiFactory.addRowButtons(this, actions,
+              UiFactory.button(this, "Ajouter widget", true).apply { setOnClickListener { requestAddWidget() } },
+              UiFactory.secondaryButton(this, "Actualiser", true).apply {
+                  setOnClickListener {
+                      WidgetRenderer.updateAll(this@MainActivity, "widget_page_refresh")
+                      toast("Widget actualisé")
+                      showTab(3)
+                  }
+              }
+          )
+          actions.addView(UiFactory.secondaryButton(this, "Aide écran d’accueil / verrouillage").apply {
+              setOnClickListener { showLockScreenHelp() }
+          })
+          body.addView(actions)
+          '''
           s = s[:actions_start] + new_actions + s[actions_end:]
 
           root_start = s.index('    private fun settingsRootPage(): View {')
           item_start = s.index('        addItem("▣", "Widget"', root_start)
           item_end = s.index('        addItem("⚽"', item_start)
           new_item = '''        addItem("▣", "Widget", "Options du widget et aide d’affichage") {
-            settingsOpen = false
-            selectedTab = 3
-            showTab(3)
-        }
-'''
+              settingsOpen = false
+              selectedTab = 3
+              showTab(3)
+          }
+          '''
           s = s[:item_start] + new_item + s[item_end:]
           p.write_text(s)
 
