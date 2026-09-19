@@ -1,0 +1,208 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index d87c117..fc3b532 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -11,8 +11,8 @@ android {
+         applicationId = "ch.piiwii.events"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 6
+-        versionName = "1.3.2"
++        versionCode = 7
++        versionName = "1.3.3"
+     }
+ 
+     signingConfigs {
+diff --git a/app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt b/app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
+index 9a9fe92..80fe22c 100644
+--- a/app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
++++ b/app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
+@@ -11,17 +11,21 @@ import java.time.format.DateTimeFormatter
+ import java.util.Locale
+ 
+ /**
+- * Source principale FC Sion : calendrier publié sur le site officiel du club.
+- * Une synchronisation suffit à programmer l'intervalle du prochain match ;
+- * le moteur d'événements et AlarmManager prennent ensuite le relais hors-ligne.
++ * Source principale FC Sion : calendrier officiel football.ch / SFL.
++ * Le site FC Sion reste en secours. Le prochain coup d'envoi est mémorisé
++ * localement puis le moteur d'événements prend le relais hors-ligne.
+  */
+ object FcSionOfficialSchedule {
+-    private const val URL_OFFICIAL = "https://www.fcsion.ch/fr"
++    private const val URL_FOOTBALL_CH = "https://club.football.ch/fr/club/equipes/team/calendrier-equipe/%26v%3D777833%26t%3D52463"
++    private const val URL_FC_SION = "https://www.fcsion.ch/fr"
+     private const val MATCH_DURATION_MS = 2L * 60L * 60L * 1000L + 30L * 60L * 1000L
++    private const val RECENT_MATCH_GRACE_MS = 30L * 60L * 1000L
+     private val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", Locale.ROOT)
+-    private val dateRegex = Regex("(\\d{2}\\.\\d{2}\\.\\d{4})\\s*-\\s*(\\d{2}:\\d{2})")
++    private val footballDateRegex = Regex("(?:Lu|Ma|Me|Je|Ve|Sa|Di)\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s+(\\d{2}:\\d{2})", RegexOption.IGNORE_CASE)
++    private val fcSionDateRegex = Regex("(\\d{2}\\.\\d{2}\\.\\d{4})\\s*[-–—]\\s*(\\d{2}:\\d{2})")
+ 
+     data class SyncResult(val ok: Boolean, val message: String)
++    private data class Fixture(val kickoffMs: Long, val label: String)
+ 
+     fun sync(context: Context): SyncResult {
+         val repo = EventRepository.get(context)
+@@ -30,49 +34,97 @@ object FcSionOfficialSchedule {
+             ?: return SyncResult(false, "Événement FC Sion absent")
+         if (!event.enabled) return SyncResult(false, "FC Sion automatique désactivé")
+ 
+-        return runCatching {
+-            val conn = (URL(URL_OFFICIAL).openConnection() as HttpURLConnection).apply {
+-                connectTimeout = 7000
+-                readTimeout = 7000
+-                instanceFollowRedirects = true
+-                requestMethod = "GET"
+-                setRequestProperty("User-Agent", "Mozilla/5.0 (Android) PiiWii-Evenements/1.3.2")
+-                setRequestProperty("Accept-Language", "fr-CH,fr;q=0.9")
+-            }
+-            try {
+-                val code = conn.responseCode
+-                if (code !in 200..299) error("HTTP $code")
+-                val html = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+-                val text = htmlToText(html)
+-                val anchor = text.indexOf("Prochain match", ignoreCase = true)
+-                if (anchor < 0) error("bloc Prochain match introuvable")
+-                val block = text.substring(anchor, minOf(text.length, anchor + 1200))
+-                val match = dateRegex.find(block) ?: error("date du prochain match introuvable")
+-                val local = LocalDateTime.parse("${match.groupValues[1]} ${match.groupValues[2]}", formatter)
+-                val zone = ZoneId.of("Europe/Zurich")
+-                val kickoff = local.atZone(zone).toInstant().toEpochMilli()
+-                val end = kickoff + MATCH_DURATION_MS
+-                val now = System.currentTimeMillis()
++        val primary = runCatching { fetchFootballCh() }
++        val fixture = primary.getOrNull() ?: runCatching { fetchFcSionHome() }.getOrNull()
++        val source = if (primary.isSuccess) "football.ch / SFL" else "fcsion.ch (secours)"
+ 
+-                // Le site officiel peut conserver le match courant comme « prochain match ».
+-                // On accepte donc le match s'il n'est pas terminé depuis plus de 30 minutes.
+-                if (end + 30L * 60L * 1000L < now) error("horaire officiel déjà dépassé")
+-
+-                config.settings.fcSionActiveSince = kickoff
+-                config.settings.fcSionActiveUntil = end
+-                config.settings.fcSionLastDetectedAt = now
+-                config.settings.fcSionLastSignal = "Calendrier officiel FC Sion : ${match.groupValues[1]} à ${match.groupValues[2]}"
+-                repo.save(config)
+-                SyncResult(true, config.settings.fcSionLastSignal)
+-            } finally {
+-                conn.disconnect()
+-            }
+-        }.getOrElse { error ->
++        if (fixture == null) {
++            val details = buildList {
++                primary.exceptionOrNull()?.message?.let { add("football.ch: $it") }
++                runCatching { fetchFcSionHome() }.exceptionOrNull()?.message?.let { add("fcsion.ch: $it") }
++            }.joinToString(" · ").ifBlank { "aucun horaire exploitable" }
+             val now = System.currentTimeMillis()
+             config.settings.fcSionLastDetectedAt = now
+-            config.settings.fcSionLastSignal = "Calendrier officiel indisponible : ${error.message ?: error.javaClass.simpleName}"
++            config.settings.fcSionLastSignal = "Synchronisation FC Sion impossible : $details"
++            repo.save(config)
++            return SyncResult(false, config.settings.fcSionLastSignal)
++        }
++
++        val end = fixture.kickoffMs + MATCH_DURATION_MS
++        val now = System.currentTimeMillis()
++        if (end + RECENT_MATCH_GRACE_MS < now) {
++            config.settings.fcSionLastDetectedAt = now
++            config.settings.fcSionLastSignal = "Calendrier $source lu, mais aucun match actuel ou futur trouvé"
+             repo.save(config)
+-            SyncResult(false, config.settings.fcSionLastSignal)
++            return SyncResult(false, config.settings.fcSionLastSignal)
++        }
++
++        config.settings.fcSionActiveSince = fixture.kickoffMs
++        config.settings.fcSionActiveUntil = end
++        config.settings.fcSionLastDetectedAt = now
++        config.settings.fcSionLastSignal = "$source : ${fixture.label}"
++        repo.save(config)
++        return SyncResult(true, config.settings.fcSionLastSignal)
++    }
++
++    private fun fetchFootballCh(): Fixture {
++        val text = htmlToText(httpGet(URL_FOOTBALL_CH))
++        val zone = ZoneId.of("Europe/Zurich")
++        val now = System.currentTimeMillis()
++        val matches = footballDateRegex.findAll(text).toList()
++        if (matches.isEmpty()) error("aucune date de match trouvée")
++
++        val candidates = matches.mapNotNull { match ->
++            val start = match.range.first
++            val end = minOf(text.length, start + 520)
++            val block = text.substring(start, end)
++            if (!block.contains("FC Sion", ignoreCase = true)) return@mapNotNull null
++            if (Regex("FC Sion\\s*(?:M-|U-|1ère|2|3)", RegexOption.IGNORE_CASE).containsMatchIn(block)) return@mapNotNull null
++            val local = LocalDateTime.parse("${match.groupValues[1]} ${match.groupValues[2]}", formatter)
++            val kickoff = local.atZone(zone).toInstant().toEpochMilli()
++            if (kickoff + MATCH_DURATION_MS + RECENT_MATCH_GRACE_MS < now) return@mapNotNull null
++            val label = block.replace(Regex("\\s+"), " ").take(180).trim()
++            Fixture(kickoff, label)
++        }.sortedBy { it.kickoffMs }
++
++        return candidates.firstOrNull { it.kickoffMs + MATCH_DURATION_MS + RECENT_MATCH_GRACE_MS >= now }
++            ?: error("aucun match actuel ou futur")
++    }
++
++    private fun fetchFcSionHome(): Fixture {
++        val text = htmlToText(httpGet(URL_FC_SION))
++        val anchor = text.indexOf("Prochain match", ignoreCase = true)
++        if (anchor < 0) error("bloc Prochain match introuvable")
++        val block = text.substring(anchor, minOf(text.length, anchor + 1400))
++        val match = fcSionDateRegex.find(block) ?: error("date du prochain match introuvable")
++        val local = LocalDateTime.parse("${match.groupValues[1]} ${match.groupValues[2]}", formatter)
++        val kickoff = local.atZone(ZoneId.of("Europe/Zurich")).toInstant().toEpochMilli()
++        return Fixture(kickoff, "${match.groupValues[1]} à ${match.groupValues[2]}")
++    }
++
++    private fun httpGet(url: String): String {
++        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
++            connectTimeout = 8000
++            readTimeout = 8000
++            instanceFollowRedirects = true
++            requestMethod = "GET"
++            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
++            setRequestProperty("Accept", "text/html,application/xhtml+xml")
++            setRequestProperty("Accept-Language", "fr-CH,fr;q=0.9,de;q=0.7")
++            setRequestProperty("Accept-Encoding", "identity")
++            setRequestProperty("Cache-Control", "no-cache")
++        }
++        return try {
++            val code = conn.responseCode
++            if (code !in 200..299) error("HTTP $code")
++            conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
++        } finally {
++            conn.disconnect()
+         }
+     }
+ 
+@@ -84,6 +136,7 @@ object FcSionOfficialSchedule {
+         .replace("&amp;", "&")
+         .replace("&ndash;", "-")
+         .replace("&mdash;", "-")
++        .replace("&#39;", "'")
+         .replace(Regex("\\s+"), " ")
+         .trim()
+ }
+diff --git a/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt b/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+index 0b88b60..a932a55 100644
+--- a/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
++++ b/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+@@ -173,7 +173,7 @@ class MainActivity : Activity() {
+         if (fcSionEvent != null) {
+             val fcSion = UiFactory.card(this)
+             fcSion.addView(UiFactory.title(this, "FC Sion automatique", 18f))
+-            fcSion.addView(UiFactory.muted(this, "Source principale : calendrier officiel du FC Sion. Le prochain coup d’envoi est mémorisé puis déclenché automatiquement, même si la bulle Google n’est pas lisible. Notifications/bulles Google = secours."))
++            fcSion.addView(UiFactory.muted(this, "Source principale : calendrier officiel football.ch / SFL. fcsion.ch et Google restent en secours. Le prochain coup d’envoi est mémorisé localement."))
+             val access = notificationListenerAccessGranted()
+             val bubbleAccess = accessibilityBubbleAccessGranted()
+             fcSion.addView(UiFactory.body(this, if (access) "✓ Accès aux notifications autorisé" else "⚠ Accès aux notifications à autoriser", 14f))
+@@ -532,7 +532,7 @@ class MainActivity : Activity() {
+     }
+ 
+     private fun periodSummary(event: EventDefinition): String {
+-        if (event.id == DefaultEvents.FC_SION_ID) return "Match FC Sion programmé automatiquement depuis le calendrier officiel (Google en secours)"
++        if (event.id == DefaultEvents.FC_SION_ID) return "Match FC Sion programmé automatiquement depuis football.ch / SFL (fcsion.ch et Google en secours)"
+         if (event.alwaysActive) return "Toujours actif"
+         if (event.periods.isEmpty()) return "Aucune période"
+         return event.periods.take(2).joinToString(" · ") { p ->
