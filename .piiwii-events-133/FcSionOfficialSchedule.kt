@@ -19,7 +19,6 @@ object FcSionOfficialSchedule {
     private const val URL_FOOTBALL_CH = "https://club.football.ch/fr/club/equipes/team/calendrier-equipe/%26v%3D777833%26t%3D52463"
     private const val URL_FC_SION = "https://www.fcsion.ch/fr"
     private const val MATCH_DURATION_MS = 2L * 60L * 60L * 1000L + 30L * 60L * 1000L
-    private const val RECENT_MATCH_GRACE_MS = 30L * 60L * 1000L
     private val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", Locale.ROOT)
     private val footballDateRegex = Regex("(?:Lu|Ma|Me|Je|Ve|Sa|Di)\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s+(\\d{2}:\\d{2})", RegexOption.IGNORE_CASE)
     private val fcSionDateRegex = Regex("(\\d{2}\\.\\d{2}\\.\\d{4})\\s*[-–—]\\s*(\\d{2}:\\d{2})")
@@ -53,13 +52,6 @@ object FcSionOfficialSchedule {
 
         val end = fixture.kickoffMs + MATCH_DURATION_MS
         val now = System.currentTimeMillis()
-        if (end + RECENT_MATCH_GRACE_MS < now) {
-            config.settings.fcSionLastDetectedAt = now
-            config.settings.fcSionLastSignal = "Calendrier $source lu, mais aucun match actuel ou futur trouvé"
-            repo.save(config)
-            return SyncResult(false, config.settings.fcSionLastSignal)
-        }
-
         config.settings.fcSionActiveSince = fixture.kickoffMs
         config.settings.fcSionActiveUntil = end
         config.settings.fcSionLastDetectedAt = now
@@ -83,13 +75,15 @@ object FcSionOfficialSchedule {
             if (Regex("FC Sion\\s*(?:M-|U-|1ère|2|3)", RegexOption.IGNORE_CASE).containsMatchIn(block)) return@mapNotNull null
             val local = LocalDateTime.parse("${match.groupValues[1]} ${match.groupValues[2]}", formatter)
             val kickoff = local.atZone(zone).toInstant().toEpochMilli()
-            if (kickoff + MATCH_DURATION_MS + RECENT_MATCH_GRACE_MS < now) return@mapNotNull null
             val label = block.replace(Regex("\\s+"), " ").take(180).trim()
             Fixture(kickoff, label)
         }.sortedBy { it.kickoffMs }
 
-        return candidates.firstOrNull { it.kickoffMs + MATCH_DURATION_MS + RECENT_MATCH_GRACE_MS >= now }
-            ?: error("aucun match actuel ou futur")
+        val active = candidates.firstOrNull {
+            it.kickoffMs <= now && now < it.kickoffMs + MATCH_DURATION_MS
+        }
+        val future = candidates.firstOrNull { it.kickoffMs > now }
+        return active ?: future ?: error("aucun match actuel ou futur")
     }
 
     private fun fetchFcSionHome(): Fixture {
@@ -100,6 +94,8 @@ object FcSionOfficialSchedule {
         val match = fcSionDateRegex.find(block) ?: error("date du prochain match introuvable")
         val local = LocalDateTime.parse("${match.groupValues[1]} ${match.groupValues[2]}", formatter)
         val kickoff = local.atZone(ZoneId.of("Europe/Zurich")).toInstant().toEpochMilli()
+        val now = System.currentTimeMillis()
+        if (kickoff + MATCH_DURATION_MS <= now) error("match affiché déjà terminé")
         return Fixture(kickoff, "${match.groupValues[1]} à ${match.groupValues[2]}")
     }
 
