@@ -68,10 +68,11 @@ jobs:
           mkdir -p app/src/main/res/drawable-nodpi
           python3 - <<'PY'
           from pathlib import Path
-          import base64, glob, hashlib, os
-          paths = sorted(glob.glob(os.environ['GITHUB_WORKSPACE'] + '/.piiwii-events-141/icon192small_chunks/part-*'))
-          chunks = [Path(p).read_text().strip() for p in paths]
-          print('icon chunks:', [(Path(p).name, len(c)) for p, c in zip(paths, chunks)])
+          import base64, hashlib, os
+          root = Path(os.environ['GITHUB_WORKSPACE']) / '.piiwii-events-141' / 'icon192small_chunks'
+          paths = [root/'part-00', root/'fix01-0', root/'fix01-1', root/'part-02', root/'part-03', root/'part-04']
+          chunks = [p.read_text().strip() for p in paths]
+          print('icon chunks:', [(p.name, len(c)) for p, c in zip(paths, chunks)])
           data = ''.join(chunks)
           print('base64 chars:', len(data))
           raw = base64.b64decode(data, validate=True)
