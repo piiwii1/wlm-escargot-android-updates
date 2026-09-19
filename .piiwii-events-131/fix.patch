@@ -1,0 +1,344 @@
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts	2026-09-19 16:46:11.000000000 +0000
++++ b/app/build.gradle.kts	2026-09-19 17:50:33.866831544 +0000
+@@ -11,8 +11,8 @@
+         applicationId = "ch.piiwii.events"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 4
+-        versionName = "1.3.0"
++        versionCode = 5
++        versionName = "1.3.1"
+     }
+ 
+     signingConfigs {
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+--- a/app/src/main/AndroidManifest.xml	2026-09-19 16:46:12.000000000 +0000
++++ b/app/src/main/AndroidManifest.xml	2026-09-19 17:50:33.022727199 +0000
+@@ -28,6 +28,19 @@
+                 <action android:name="android.service.notification.NotificationListenerService" />
+             </intent-filter>
+         </service>
++        <service
++            android:name=".service.FcSionBubbleAccessibilityService"
++            android:label="PiiWii Événements — bulles FC Sion"
++            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
++            android:exported="true">
++            <intent-filter>
++                <action android:name="android.accessibilityservice.AccessibilityService" />
++            </intent-filter>
++            <meta-data
++                android:name="android.accessibilityservice"
++                android:resource="@xml/fc_sion_accessibility_service" />
++        </service>
++
+ 
+         <receiver
+             android:name=".widget.PiiWiiEventsWidgetProvider"
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/java/ch/piiwii/events/service/FcSionBubbleAccessibilityService.kt b/app/src/main/java/ch/piiwii/events/service/FcSionBubbleAccessibilityService.kt
+--- a/app/src/main/java/ch/piiwii/events/service/FcSionBubbleAccessibilityService.kt	1970-01-01 00:00:00.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/events/service/FcSionBubbleAccessibilityService.kt	2026-09-19 17:50:30.639786967 +0000
+@@ -0,0 +1,73 @@
++package ch.piiwii.events.service
++
++import android.accessibilityservice.AccessibilityService
++import android.accessibilityservice.AccessibilityServiceInfo
++import android.os.Handler
++import android.os.Looper
++import android.view.accessibility.AccessibilityEvent
++import android.view.accessibility.AccessibilityNodeInfo
++import android.view.accessibility.AccessibilityWindowInfo
++
++/**
++ * Détection locale du score flottant Google « épinglé ».
++ * Le service est limité à l'application Google et ne conserve aucun texte :
++ * il ne persiste qu'un signal FC Sion trouvé / fin de match.
++ */
++class FcSionBubbleAccessibilityService : AccessibilityService() {
++    private val handler = Handler(Looper.getMainLooper())
++    private var lastScanAt = 0L
++
++    override fun onServiceConnected() {
++        super.onServiceConnected()
++        serviceInfo = serviceInfo.apply {
++            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
++        }
++        handler.postDelayed({ scanGoogleWindows() }, 500L)
++    }
++
++    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
++        val now = System.currentTimeMillis()
++        if (now - lastScanAt < 250L) return
++        lastScanAt = now
++        handler.removeCallbacksAndMessages(null)
++        handler.postDelayed({ scanGoogleWindows() }, 80L)
++    }
++
++    override fun onInterrupt() = Unit
++
++    private fun scanGoogleWindows() {
++        val currentWindows = windows ?: return
++        currentWindows.forEach { window ->
++            // Les scores épinglés Google sont normalement des fenêtres flottantes.
++            // On accepte aussi TYPE_APPLICATION car certains constructeurs reclassent l'overlay.
++            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION_OVERLAY &&
++                window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@forEach
++
++            val root = window.root ?: return@forEach
++            val packageName = root.packageName?.toString().orEmpty()
++            if (!FcSionNotificationParser.isGooglePackage(packageName)) return@forEach
++
++            val text = collectText(root)
++            when (FcSionNotificationParser.classifyPinnedScore(packageName, text)) {
++                FcSionNotificationParser.Signal.LIVE -> FcSionMatchState.activate(this, "bulle Google")
++                FcSionNotificationParser.Signal.FINISHED -> FcSionMatchState.finish(this, "bulle Google")
++                FcSionNotificationParser.Signal.IGNORE -> Unit
++            }
++        }
++    }
++
++    private fun collectText(root: AccessibilityNodeInfo): String {
++        val parts = ArrayList<String>(24)
++        val stack = ArrayDeque<AccessibilityNodeInfo>()
++        stack.add(root)
++        var visited = 0
++        while (stack.isNotEmpty() && visited < 300) {
++            val node = stack.removeLast()
++            visited++
++            node.text?.toString()?.takeIf { it.isNotBlank() }?.let(parts::add)
++            node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let(parts::add)
++            for (i in 0 until node.childCount) node.getChild(i)?.let(stack::add)
++        }
++        return parts.joinToString(" · ")
++    }
++}
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/java/ch/piiwii/events/service/FcSionMatchState.kt b/app/src/main/java/ch/piiwii/events/service/FcSionMatchState.kt
+--- a/app/src/main/java/ch/piiwii/events/service/FcSionMatchState.kt	1970-01-01 00:00:00.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/events/service/FcSionMatchState.kt	2026-09-19 17:50:30.635787143 +0000
+@@ -0,0 +1,40 @@
++package ch.piiwii.events.service
++
++import android.content.Context
++import ch.piiwii.events.data.DefaultEvents
++import ch.piiwii.events.data.EventRepository
++import ch.piiwii.events.widget.WidgetRenderer
++
++object FcSionMatchState {
++    private const val LIVE_SAFETY_WINDOW_MS = 5L * 60L * 60L * 1000L
++
++    fun activate(context: Context, source: String) {
++        val repo = EventRepository.get(context)
++        val config = repo.load()
++        val event = config.events.firstOrNull { it.id == DefaultEvents.FC_SION_ID } ?: return
++        if (!event.enabled) return
++        val now = System.currentTimeMillis()
++        if (config.settings.fcSionActiveSince <= 0L || config.settings.fcSionActiveUntil <= now) {
++            config.settings.fcSionActiveSince = now
++        }
++        config.settings.fcSionActiveUntil = now + LIVE_SAFETY_WINDOW_MS
++        config.settings.fcSionLastDetectedAt = now
++        config.settings.fcSionLastSignal = "Match FC Sion détecté via $source"
++        repo.save(config)
++        WidgetRenderer.updateAll(context, "fc_sion_${source.lowercase().replace(' ', '_')}_live")
++    }
++
++    fun finish(context: Context, source: String) {
++        val repo = EventRepository.get(context)
++        val config = repo.load()
++        val event = config.events.firstOrNull { it.id == DefaultEvents.FC_SION_ID } ?: return
++        if (!event.enabled) return
++        val now = System.currentTimeMillis()
++        if (config.settings.fcSionActiveSince <= 0L) config.settings.fcSionActiveSince = now
++        config.settings.fcSionActiveUntil = now
++        config.settings.fcSionLastDetectedAt = now
++        config.settings.fcSionLastSignal = "Fin du match FC Sion détectée via $source"
++        repo.save(config)
++        WidgetRenderer.updateAll(context, "fc_sion_${source.lowercase().replace(' ', '_')}_finished")
++    }
++}
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/java/ch/piiwii/events/service/FcSionNotificationListenerService.kt b/app/src/main/java/ch/piiwii/events/service/FcSionNotificationListenerService.kt
+--- a/app/src/main/java/ch/piiwii/events/service/FcSionNotificationListenerService.kt	2026-09-19 17:23:10.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/events/service/FcSionNotificationListenerService.kt	2026-09-19 17:50:30.639133001 +0000
+@@ -3,17 +3,14 @@
+ import android.app.Notification
+ import android.service.notification.NotificationListenerService
+ import android.service.notification.StatusBarNotification
+-import ch.piiwii.events.data.DefaultEvents
+-import ch.piiwii.events.data.EventRepository
+-import ch.piiwii.events.widget.WidgetRenderer
+ 
+ class FcSionNotificationListenerService : NotificationListenerService() {
+     override fun onNotificationPosted(sbn: StatusBarNotification?) {
+         sbn ?: return
+         val text = extractText(sbn.notification)
+         when (FcSionNotificationParser.classify(sbn.packageName.orEmpty(), text)) {
+-            FcSionNotificationParser.Signal.LIVE -> activateMatch()
+-            FcSionNotificationParser.Signal.FINISHED -> finishMatch()
++            FcSionNotificationParser.Signal.LIVE -> FcSionMatchState.activate(this, "notification Google")
++            FcSionNotificationParser.Signal.FINISHED -> FcSionMatchState.finish(this, "notification Google")
+             FcSionNotificationParser.Signal.IGNORE -> Unit
+         }
+     }
+@@ -23,38 +20,6 @@
+         activeNotifications.orEmpty().forEach { onNotificationPosted(it) }
+     }
+ 
+-    private fun activateMatch() {
+-        val repo = EventRepository.get(this)
+-        val config = repo.load()
+-        val event = config.events.firstOrNull { it.id == DefaultEvents.FC_SION_ID } ?: return
+-        if (!event.enabled) return
+-        val now = System.currentTimeMillis()
+-        if (config.settings.fcSionActiveSince <= 0L || config.settings.fcSionActiveUntil <= now) {
+-            config.settings.fcSionActiveSince = now
+-        }
+-        // Sécurité : la plupart des matchs tiennent dans 2 h, mais 5 h couvre
+-        // prolongations, interruptions et une notification Google non rafraîchie.
+-        config.settings.fcSionActiveUntil = now + LIVE_SAFETY_WINDOW_MS
+-        config.settings.fcSionLastDetectedAt = now
+-        config.settings.fcSionLastSignal = "Match FC Sion détecté via Google"
+-        repo.save(config)
+-        WidgetRenderer.updateAll(this, "fc_sion_google_live")
+-    }
+-
+-    private fun finishMatch() {
+-        val repo = EventRepository.get(this)
+-        val config = repo.load()
+-        val event = config.events.firstOrNull { it.id == DefaultEvents.FC_SION_ID } ?: return
+-        if (!event.enabled) return
+-        val now = System.currentTimeMillis()
+-        if (config.settings.fcSionActiveSince <= 0L) config.settings.fcSionActiveSince = now
+-        config.settings.fcSionActiveUntil = now
+-        config.settings.fcSionLastDetectedAt = now
+-        config.settings.fcSionLastSignal = "Fin du match FC Sion détectée via Google"
+-        repo.save(config)
+-        WidgetRenderer.updateAll(this, "fc_sion_google_finished")
+-    }
+-
+     private fun extractText(notification: Notification): String {
+         val extras = notification.extras ?: return notification.tickerText?.toString().orEmpty()
+         return listOfNotNull(
+@@ -65,8 +30,4 @@
+             notification.tickerText
+         ).joinToString(" · ") { it.toString() }
+     }
+-
+-    companion object {
+-        private const val LIVE_SAFETY_WINDOW_MS = 5L * 60L * 60L * 1000L
+-    }
+ }
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/java/ch/piiwii/events/service/FcSionNotificationParser.kt b/app/src/main/java/ch/piiwii/events/service/FcSionNotificationParser.kt
+--- a/app/src/main/java/ch/piiwii/events/service/FcSionNotificationParser.kt	2026-09-19 17:23:10.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/events/service/FcSionNotificationParser.kt	2026-09-19 17:50:31.285131418 +0000
+@@ -25,11 +25,28 @@
+         return if (liveCue || scoreRegex.containsMatchIn(normalized)) Signal.LIVE else Signal.IGNORE
+     }
+ 
++
++    /** Une fenêtre flottante Google qui mentionne FC Sion est déjà un signal fort :
++     * contrairement à une page de recherche normale, elle correspond au score épinglé. */
++    fun classifyPinnedScore(packageName: String, text: String): Signal {
++        if (!isGooglePackage(packageName)) return Signal.IGNORE
++        val normalized = normalize(text)
++        if (!mentionsFcSionBroad(normalized)) return Signal.IGNORE
++
++        val finished = listOf(
++            "match termine", "termine", "fin du match", "full time", "score final",
++            "apres prolongation", "apres les tirs au but"
++        ).any { normalized.contains(it) }
++        return if (finished) Signal.FINISHED else Signal.LIVE
++    }
++
+     fun isGooglePackage(packageName: String): Boolean = packageName in setOf(
+         "com.google.android.googlequicksearchbox",
+         "com.google.android.apps.searchlite"
+     )
+ 
++    private fun mentionsFcSionBroad(text: String): Boolean = text.contains("fc sion") || text.contains("sion")
++
+     private fun mentionsFcSion(text: String): Boolean {
+         if (text.contains("fc sion")) return true
+         if (!text.contains("sion")) return false
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt b/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+--- a/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt	2026-09-19 16:46:55.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt	2026-09-19 17:50:34.765924162 +0000
+@@ -35,6 +35,7 @@
+ import ch.piiwii.events.data.EventRepository
+ import ch.piiwii.events.data.ImageStorage
+ import ch.piiwii.events.engine.DateEventEngine
++import ch.piiwii.events.service.FcSionBubbleAccessibilityService
+ import ch.piiwii.events.model.EventDefinition
+ import ch.piiwii.events.model.RecurrenceRule
+ import ch.piiwii.events.widget.PiiWiiEventsWidgetProvider
+@@ -165,9 +166,11 @@
+         if (fcSionEvent != null) {
+             val fcSion = UiFactory.card(this)
+             fcSion.addView(UiFactory.title(this, "FC Sion automatique", 18f))
+-            fcSion.addView(UiFactory.muted(this, "Détecte les matchs en cours à partir des notifications sportives de l’app Google. Aucun accès Internet n’est ajouté à PiiWii Événements."))
++            fcSion.addView(UiFactory.muted(this, "Détecte FC Sion soit dans les notifications sportives Google, soit dans la bulle de score épinglée. Aucun accès Internet n’est ajouté à PiiWii Événements."))
+             val access = notificationListenerAccessGranted()
++            val bubbleAccess = accessibilityBubbleAccessGranted()
+             fcSion.addView(UiFactory.body(this, if (access) "✓ Accès aux notifications autorisé" else "⚠ Accès aux notifications à autoriser", 14f))
++            fcSion.addView(UiFactory.body(this, if (bubbleAccess) "✓ Détection des bulles Google autorisée" else "⚠ Détection des bulles Google à autoriser", 14f))
+             val active = config.settings.fcSionActiveUntil > System.currentTimeMillis()
+             fcSion.addView(UiFactory.muted(this, if (active) "État : match détecté — actif jusqu’à ${formatMillis(config.settings.fcSionActiveUntil)}" else "État : aucun match FC Sion détecté actuellement"))
+             fcSion.addView(UiFactory.muted(this, "Dernier signal : ${config.settings.fcSionLastSignal} · ${formatMillis(config.settings.fcSionLastDetectedAt)}"))
+@@ -175,10 +178,13 @@
+                 UiFactory.button(this, if (access) "Réglages notifications" else "Autoriser les notifications").apply {
+                     setOnClickListener { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                 },
+-                UiFactory.secondaryButton(this, "Tester l’image").apply {
+-                    setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, DefaultEvents.FC_SION_ID); toast("Image FC Sion affichée en mode test") }
++                UiFactory.secondaryButton(this, if (bubbleAccess) "Réglages bulles" else "Autoriser les bulles").apply {
++                    setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                 }
+             )
++            fcSion.addView(UiFactory.secondaryButton(this, "Tester l’image").apply {
++                setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, DefaultEvents.FC_SION_ID); toast("Image FC Sion affichée en mode test") }
++            })
+             body.addView(fcSion)
+         }
+ 
+@@ -422,6 +428,7 @@
+             "Dernière actualisation du widget : ${formatMillis(WidgetRenderer.lastUpdateMillis(this))}",
+             "Instances du widget : ${ids.size}",
+             "FC Sion — accès notifications : ${if (notificationListenerAccessGranted()) "autorisé" else "non autorisé"}",
++            "FC Sion — détection bulles : ${if (accessibilityBubbleAccessGranted()) "autorisée" else "non autorisée"}",
+             "FC Sion — dernier signal : ${config.settings.fcSionLastSignal}",
+             "FC Sion — actif jusqu’à : ${formatMillis(config.settings.fcSionActiveUntil)}"
+         )
+@@ -439,6 +446,12 @@
+         return raw.split(':').mapNotNull { ComponentName.unflattenFromString(it) }.any { it.packageName == packageName }
+     }
+ 
++    private fun accessibilityBubbleAccessGranted(): Boolean {
++        val raw = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
++        val expected = ComponentName(this, FcSionBubbleAccessibilityService::class.java)
++        return raw.split(':').mapNotNull { ComponentName.unflattenFromString(it) }.any { it == expected }
++    }
++
+     private fun matchesFilter(event: EventDefinition): Boolean = when (eventFilter) {
+         "Actifs" -> event.enabled
+         "Désactivés" -> !event.enabled
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+--- a/app/src/main/res/values/strings.xml	2026-07-30 22:03:32.000000000 +0000
++++ b/app/src/main/res/values/strings.xml	2026-09-19 17:50:32.189820788 +0000
+@@ -1,4 +1,5 @@
+ <resources>
+     <string name="app_name">PiiWii Événements</string>
+     <string name="widget_description">Personnage transparent qui change selon les dates configurées</string>
++    <string name="fc_sion_accessibility_description">Détecte uniquement les bulles de score de l’application Google afin d’activer automatiquement l’événement FC Sion. Aucun texte n’est enregistré.</string>
+ </resources>
+diff -ruN '--exclude=validation' '--exclude=CHANGELOG-*' '--exclude=APK_SHA256.txt' a/app/src/main/res/xml/fc_sion_accessibility_service.xml b/app/src/main/res/xml/fc_sion_accessibility_service.xml
+--- a/app/src/main/res/xml/fc_sion_accessibility_service.xml	1970-01-01 00:00:00.000000000 +0000
++++ b/app/src/main/res/xml/fc_sion_accessibility_service.xml	2026-09-19 17:50:31.427394110 +0000
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="utf-8"?>
++<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
++    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged|typeViewTextChanged"
++    android:accessibilityFeedbackType="feedbackGeneric"
++    android:notificationTimeout="80"
++    android:canRetrieveWindowContent="true"
++    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
++    android:packageNames="com.google.android.googlequicksearchbox,com.google.android.apps.searchlite"
++    android:description="@string/fc_sion_accessibility_description" />
