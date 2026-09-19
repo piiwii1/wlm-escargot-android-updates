@@ -4,7 +4,6 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - '.piiwii-events-143/**'
       - '.github/workflows/live-event-widget-143-build.yml'
   workflow_dispatch:
 
@@ -50,11 +49,11 @@ jobs:
           start = next(i for i, line in enumerate(src) if line.strip() == '- name: Reconstruct clean Live Event Widget 1.4.0')
           run_line = next(i for i in range(start + 1, len(src)) if src[i].strip() == 'run: |')
           end = next(i for i in range(run_line + 1, len(src)) if src[i].strip() == '- name: Apply ergonomic UI, icon and bump 1.4.2')
-          body = []
-          for line in src[run_line + 1:end]:
+          body=[]
+          for line in src[run_line+1:end]:
               if line.startswith('          '): body.append(line[10:])
-              elif line.strip() == '': body.append('')
-          Path('/tmp/reconstruct140.sh').write_text('\n'.join(body) + '\n')
+              elif not line.strip(): body.append('')
+          Path('/tmp/reconstruct140.sh').write_text('\n'.join(body)+'\n')
           PY
           bash /tmp/reconstruct140.sh
           cd /tmp/piiwii-events-build
@@ -63,20 +62,65 @@ jobs:
           mkdir -p app/src/main/res/drawable-nodpi
           python3 - <<'PY'
           from pathlib import Path
-          import base64, hashlib, os
-          root = Path(os.environ['GITHUB_WORKSPACE']) / '.piiwii-events-141' / 'icon192small_chunks'
-          parts = [root/'part-00', root/'fix01-0', root/'fix01-1', root/'part-02', root/'part-03', root/'part-04']
-          raw = base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True)
-          if hashlib.sha256(raw).hexdigest() != '7e4cad28cbe746afe149344521d15195940ec9adbb0f3a387d3b3471cccf5e76': raise SystemExit('unexpected icon payload')
-          Path('app/src/main/res/drawable-nodpi/ic_launcher_art.png').write_bytes(raw)
+          import base64, os
+          root=Path(os.environ['GITHUB_WORKSPACE'])/'.piiwii-events-141'/'icon192small_chunks'
+          parts=[root/'part-00',root/'fix01-0',root/'fix01-1',root/'part-02',root/'part-03',root/'part-04']
+          Path('app/src/main/res/drawable-nodpi/ic_launcher_art.png').write_bytes(base64.b64decode(''.join(p.read_text().strip() for p in parts),validate=True))
           PY
 
-      - name: Apply 1.4.3 visual redesign and clean adaptive icon
+      - name: Apply 1.4.3 visual redesign and adaptive icon
         run: |
           set -euo pipefail
           cd /tmp/piiwii-events-build
-          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-143/ui.patch.gz.b64" | gzip -d > /tmp/ui143.patch
-          patch -p1 < /tmp/ui143.patch
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('app/build.gradle.kts')
+          s=p.read_text().replace('versionCode = 11','versionCode = 12').replace('versionName = "1.4.2"','versionName = "1.4.3"')
+          p.write_text(s)
+
+          p=Path('app/src/main/AndroidManifest.xml')
+          s=p.read_text().replace('android:icon="@drawable/ic_launcher_art"','android:icon="@mipmap/ic_launcher"').replace('android:roundIcon="@drawable/ic_launcher_art"','android:roundIcon="@mipmap/ic_launcher_round"')
+          p.write_text(s)
+
+          p=Path('app/src/main/java/ch/piiwii/events/ui/UiFactory.kt')
+          s=p.read_text()
+          for a,b in {
+            'Color.rgb(7, 26, 47)':'Color.rgb(17, 35, 63)',
+            'Color.rgb(25, 118, 210)':'Color.rgb(41, 98, 255)',
+            'Color.rgb(244, 247, 251)':'Color.rgb(248, 250, 253)',
+            'Color.rgb(16, 36, 58)':'Color.rgb(24, 38, 56)',
+            'Color.rgb(92, 110, 128)':'Color.rgb(103, 119, 136)',
+            'Color.rgb(231, 241, 252)':'Color.rgb(234, 241, 255)',
+            'Color.rgb(238, 242, 247)':'Color.rgb(241, 244, 248)',
+            'setLineSpacing(0f, 1.15f)':'setLineSpacing(0f, 1.2f)',
+            'background = rounded(BLUE, 12f, context)':'background = rounded(NAVY, 14f, context)',
+            'background = rounded(Color.rgb(226, 233, 241), 12f, context)':'background = rounded(Color.WHITE, 14f, context, Color.rgb(221, 228, 236))',
+            'background = rounded(DANGER, 12f, context)':'background = rounded(DANGER, 14f, context)',
+            'background = rounded(Color.WHITE, 18f, context, Color.rgb(221, 228, 236))':'background = rounded(Color.WHITE, 22f, context, Color.rgb(229, 235, 242))',
+            'elevation = dp(context, 1).toFloat()':'elevation = dp(context, 3).toFloat()',
+            'setMargins(0, 0, 0, dp(context, 10))':'setMargins(0, 0, 0, dp(context, 12))',
+            'textSize = 11f':'textSize = 12f',
+            'minHeight = dp(context, 56)':'minHeight = dp(context, 60)',
+            'setPadding(dp(context, 2), dp(context, 5), dp(context, 2), dp(context, 5))':'setPadding(dp(context, 4), dp(context, 8), dp(context, 4), dp(context, 8))',
+            'setTextColor(if (selected) Color.WHITE else TEXT)':'setTextColor(if (selected) Color.WHITE else MUTED)',
+            'background = rounded(if (selected) BLUE else SOFT_GREY, 18f, context)':'background = rounded(if (selected) NAVY else Color.WHITE, 18f, context, if (selected) null else Color.rgb(225, 231, 239))'
+          }.items(): s=s.replace(a,b)
+          p.write_text(s)
+
+          p=Path('app/src/main/java/ch/piiwii/events/ui/MainActivity.kt')
+          s=p.read_text()
+          s=s.replace('setPadding(UiFactory.dp(this@MainActivity, 18), UiFactory.dp(this@MainActivity, 10), UiFactory.dp(this@MainActivity, 18), UiFactory.dp(this@MainActivity, 8))','setPadding(UiFactory.dp(this@MainActivity, 18), UiFactory.dp(this@MainActivity, 12), UiFactory.dp(this@MainActivity, 18), UiFactory.dp(this@MainActivity, 10))')
+          s=s.replace('topTitle = UiFactory.title(this@MainActivity, "Aujourd’hui", 21f)','addView(UiFactory.muted(this@MainActivity, "LIVE EVENT WIDGET").apply { textSize = 11f; letterSpacing = 0.08f; setPadding(0,0,0,0) })\n            topTitle = UiFactory.title(this@MainActivity, "Aujourd’hui", 23f)')
+          s=s.replace('quick.addView(UiFactory.title(this, "Actions rapides", 17f))','quick.addView(UiFactory.title(this, "Raccourcis", 17f))')
+          s=s.replace('"↻ Actualiser"','"Actualiser"').replace('"+ Événement"','"Nouvel événement"').replace('"▣ Widget"','"Ajouter widget"').replace('"+ Ajouter"','"Ajouter"')
+          s=s.replace('"Calendrier principal : football.ch / SFL"','"Source principale : football.ch / SFL"').replace('"↻ Synchroniser maintenant"','"Synchroniser maintenant"')
+          p.write_text(s)
+
+          Path('app/src/main/res/drawable/ic_launcher_background.xml').write_text('''<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle"><solid android:color="#00000000"/></shape>''')
+          Path('app/src/main/res/drawable/ic_launcher_foreground.xml').write_text('''<inset xmlns:android="http://schemas.android.com/apk/res/android" android:insetLeft="10dp" android:insetTop="10dp" android:insetRight="10dp" android:insetBottom="10dp"><bitmap android:gravity="center" android:src="@drawable/ic_launcher_art_clean" /></inset>''')
+          PY
+
           SRC="app/src/main/res/drawable-nodpi/ic_launcher_art.png"
           DST="app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png"
           if command -v magick >/dev/null 2>&1; then
@@ -84,6 +128,7 @@ jobs:
           else
             convert "$SRC" -alpha on -fuzz 6% -transparent black "$DST"
           fi
+
           grep -q 'versionCode = 12' app/build.gradle.kts
           grep -q 'versionName = "1.4.3"' app/build.gradle.kts
           grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
@@ -97,7 +142,6 @@ jobs:
         run: |
           set -euo pipefail
           APK="$(find /tmp/piiwii-events-build/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
-          test -n "$APK"
           BT="$ANDROID_HOME/build-tools/35.0.0"
           "$BT/zipalign" -c -v 4 "$APK"
           "$BT/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/signature.txt
