@@ -1,0 +1,106 @@
+name: Live Event Widget 1.5.0 Build
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.piiwii-events-150/**'
+      - '.github/workflows/live-event-widget-150-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK 35
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Setup Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Reconstruct Live Event Widget 1.4.2
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('.github/workflows/live-event-widget-142-build.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(src) if line.strip() == '- name: Reconstruct clean Live Event Widget 1.4.0')
+          run_line = next(i for i in range(start + 1, len(src)) if src[i].strip() == 'run: |')
+          end = next(i for i in range(run_line + 1, len(src)) if src[i].strip() == '- name: Apply ergonomic UI, icon and bump 1.4.2')
+          body=[]
+          for line in src[run_line+1:end]:
+              if line.startswith('          '): body.append(line[10:])
+              elif not line.strip(): body.append('')
+          Path('/tmp/reconstruct140.sh').write_text('\n'.join(body)+'\n')
+          PY
+          bash /tmp/reconstruct140.sh
+          cd /tmp/piiwii-events-build
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-142/ergonomics.patch.gz.b64" | gzip -d > /tmp/ergonomics.patch
+          patch -p1 < /tmp/ergonomics.patch
+
+      - name: Apply 1.5.0 redesign
+        run: |
+          set -euo pipefail
+          cd /tmp/piiwii-events-build
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/ui.patch.gz.b64" | gzip -d > /tmp/ui150.patch
+          patch -p1 < /tmp/ui150.patch
+          mkdir -p app/src/main/res/drawable-nodpi
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/icon_clean.b64" > app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png
+          echo "a7c0bb133a6cae58e2f7889bb07ad9bde4411dac88d84975215e046aa29b34c8  app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png" | sha256sum -c -
+          grep -q 'versionCode = 13' app/build.gradle.kts
+          grep -q 'versionName = "1.5.0"' app/build.gradle.kts
+          grep -q 'Triple("▣", "Widget", 3)' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          grep -q 'settingsOpen = true' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+
+      - name: Build and test release
+        working-directory: /tmp/piiwii-events-build
+        run: gradle --no-daemon --stacktrace test assembleRelease
+
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          APK="$(find /tmp/piiwii-events-build/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/zipalign" -c -v 4 "$APK"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/signature.txt
+          "$BT/aapt" dump badging "$APK" | head -n 1 | tee /tmp/badging.txt
+          grep -q "package: name='ch.piiwii.events' versionCode='13' versionName='1.5.0'" /tmp/badging.txt
+          CERT="$(grep -i 'Signer #1 certificate SHA-256 digest:' /tmp/signature.txt | sed 's/.*digest: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test "$CERT" = "63a2a61bc07cda7fc7da2425a76c19c4f11ecf9a7e570ad5f6038d5bdc4c9a8c"
+          mkdir -p delivery
+          cp "$APK" delivery/Live-Event-Widget-1.5.0.apk
+          sha256sum delivery/Live-Event-Widget-1.5.0.apk | tee delivery/APK_SHA256.txt
+          cp /tmp/signature.txt delivery/SIGNATURE.txt
+          cp /tmp/badging.txt delivery/BADGING.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Live-Event-Widget-1.5.0-APK
+          path: delivery/
+          retention-days: 7
+          if-no-files-found: error
