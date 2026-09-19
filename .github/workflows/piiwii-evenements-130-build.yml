@@ -7,6 +7,12 @@ on:
     paths:
       - '.piiwii-events-130/**'
       - '.github/workflows/piiwii-evenements-130-build.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.piiwii-events-130/**'
+      - '.github/workflows/piiwii-evenements-130-build.yml'
   workflow_dispatch:
 
 jobs:
