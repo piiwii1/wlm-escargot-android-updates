@@ -64,9 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/piiwii-events-build
-
-          cat "$GITHUB_WORKSPACE"/.piiwii-events-142/ui_patch_chunks/part-* | base64 -d | gzip -d > /tmp/live-event-widget-142.patch
-          patch -p1 < /tmp/live-event-widget-142.patch
+          patch -p1 < "$GITHUB_WORKSPACE/.piiwii-events-142/ergonomics.patch"
 
           mkdir -p app/src/main/res/drawable-nodpi
           python3 - <<'PY'
@@ -80,21 +78,12 @@ jobs:
           Path('app/src/main/res/drawable-nodpi/ic_launcher_art.png').write_bytes(raw)
           PY
 
-          python3 - <<'PY'
-          from pathlib import Path
-          root = Path('/tmp/piiwii-events-build')
-          p = root/'app/build.gradle.kts'
-          p.write_text(p.read_text().replace('versionCode = 9','versionCode = 11').replace('versionName = "1.4.0"','versionName = "1.4.2"'))
-          p = root/'app/src/main/AndroidManifest.xml'
-          p.write_text(p.read_text().replace('android:icon="@mipmap/ic_launcher"','android:icon="@drawable/ic_launcher_art"').replace('android:roundIcon="@mipmap/ic_launcher_round"','android:roundIcon="@drawable/ic_launcher_art"'))
-          PY
-
           grep -q 'versionCode = 11' app/build.gradle.kts
           grep -q 'versionName = "1.4.2"' app/build.gradle.kts
-          grep -q 'private fun currentPageTitle' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
           grep -q 'showEventActions' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
-          grep -q 'navigationItem' app/src/main/java/ch/piiwii/events/ui/UiFactory.kt
-          grep -q 'settingsRow' app/src/main/java/ch/piiwii/events/ui/UiFactory.kt
+          grep -q 'settingsMenuRow' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          grep -q 'showEventFilterDialog' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          grep -q 'android:icon="@drawable/ic_launcher_art"' app/src/main/AndroidManifest.xml
 
       - name: Build and test release
         working-directory: /tmp/piiwii-events-build
