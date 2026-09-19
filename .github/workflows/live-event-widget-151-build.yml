@@ -84,8 +84,6 @@ jobs:
           p = Path('app/src/main/java/ch/piiwii/events/ui/MainActivity.kt')
           s = p.read_text()
 
-          # 1) Compact gear-only settings button. Find by the stable variable name,
-          # not by the surrounding function name, so the edit survives UI refactors.
           settings_pos = s.find('settingsButton =')
           if settings_pos < 0:
               raise SystemExit('1.5.1: settingsButton marker not found')
@@ -117,7 +115,6 @@ jobs:
           '''
           s = s[:settings_start] + new_settings + s[settings_end:]
 
-          # 2) Add a compact widget-status card with a direct refresh action.
           widget_match = re.search(r'\bfun\s+widgetPage\s*\(\s*\)\s*:\s*View\s*\{', s)
           if not widget_match:
               raise SystemExit('1.5.1: widgetPage marker not found')
@@ -135,7 +132,7 @@ jobs:
           {body_indent}widgetStatus151.addView(UiFactory.muted(this, if (widgetIds151.isEmpty()) {{
           {body_indent}    "Aucun widget installé pour l’instant."
           {body_indent}}} else {{
-          {body_indent}    "${{widgetIds151.size}} widget${{if (widgetIds151.size > 1) "s" else ""}} installé${{if (widgetIds151.size > 1) "s" else ""}}."
+          {body_indent}    widgetIds151.size.toString() + " widget" + (if (widgetIds151.size > 1) "s" else "") + " installé" + (if (widgetIds151.size > 1) "s" else "") + "."
           {body_indent}}}))
           {body_indent}widgetStatus151.addView(UiFactory.secondaryButton(this, "Actualiser maintenant").apply {{
           {body_indent}    setOnClickListener {{
@@ -148,8 +145,6 @@ jobs:
           '''
           s = s[:body_line_end] + status + s[body_line_end:]
 
-          # 3) Settings > Widget now opens the dedicated Widget tab instead of
-          # duplicating a second widget settings dialog.
           item_pos = s.find('addItem("▣", "Widget"')
           if item_pos >= 0:
               item_start = s.rfind('\n', 0, item_pos) + 1
