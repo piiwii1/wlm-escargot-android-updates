@@ -60,6 +60,14 @@ jobs:
           cd /tmp/piiwii-events-build
           base64 -d "$GITHUB_WORKSPACE/.piiwii-events-142/ergonomics.patch.gz.b64" | gzip -d > /tmp/ergonomics.patch
           patch -p1 < /tmp/ergonomics.patch
+          mkdir -p app/src/main/res/drawable-nodpi
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, os
+          root=Path(os.environ['GITHUB_WORKSPACE'])/'.piiwii-events-141'/'icon192small_chunks'
+          parts=[root/'part-00',root/'fix01-0',root/'fix01-1',root/'part-02',root/'part-03',root/'part-04']
+          Path('app/src/main/res/drawable-nodpi/ic_launcher_art.png').write_bytes(base64.b64decode(''.join(p.read_text().strip() for p in parts),validate=True))
+          PY
 
       - name: Install Live Event Widget 1.5.1 UI
         run: |
@@ -71,70 +79,92 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           p = Path('app/src/main/java/ch/piiwii/events/ui/MainActivity.kt')
           s = p.read_text()
 
-          start = s.index('            settingsButton =', s.index('private fun buildShell()'))
-          end = s.index('\n', s.index('            head.addView(settingsButton', start)) + 1
-          new_settings = '''            settingsButton = TextView(this@MainActivity).apply {
-              text = "⚙"
-              textSize = 23f
-              gravity = Gravity.CENTER
-              setTextColor(UiFactory.NAVY)
-              background = UiFactory.rounded(UiFactory.SOFT_BLUE, 15f, this@MainActivity)
-              contentDescription = "Réglages"
-              isClickable = true
-              isFocusable = true
-              setOnClickListener {
-                  settingsSection = SettingsSection.ROOT
-                  settingsOpen = true
-                  showTab(selectedTab)
-              }
-          }
-          head.addView(settingsButton, LinearLayout.LayoutParams(UiFactory.dp(this@MainActivity, 46), UiFactory.dp(this@MainActivity, 46)))
+          # 1) Compact gear-only settings button. Find by the stable variable name,
+          # not by the surrounding function name, so the edit survives UI refactors.
+          settings_pos = s.find('settingsButton =')
+          if settings_pos < 0:
+              raise SystemExit('1.5.1: settingsButton marker not found')
+          settings_start = s.rfind('\n', 0, settings_pos) + 1
+          add_pos = s.find('head.addView(settingsButton', settings_pos)
+          if add_pos < 0:
+              add_pos = s.find('addView(settingsButton', settings_pos)
+          if add_pos < 0:
+              raise SystemExit('1.5.1: settingsButton addView marker not found')
+          settings_end = s.find('\n', add_pos)
+          settings_end = len(s) if settings_end < 0 else settings_end + 1
+          indent = re.match(r'\s*', s[settings_start:settings_pos]).group(0)
+          new_settings = f'''{indent}settingsButton = TextView(this@MainActivity).apply {{
+          {indent}    text = "⚙"
+          {indent}    textSize = 23f
+          {indent}    gravity = Gravity.CENTER
+          {indent}    setTextColor(UiFactory.NAVY)
+          {indent}    background = UiFactory.rounded(UiFactory.SOFT_BLUE, 15f, this@MainActivity)
+          {indent}    contentDescription = "Réglages"
+          {indent}    isClickable = true
+          {indent}    isFocusable = true
+          {indent}    setOnClickListener {{
+          {indent}        settingsSection = SettingsSection.ROOT
+          {indent}        settingsOpen = true
+          {indent}        showTab(selectedTab)
+          {indent}    }}
+          {indent}}}
+          {indent}head.addView(settingsButton, LinearLayout.LayoutParams(UiFactory.dp(this@MainActivity, 46), UiFactory.dp(this@MainActivity, 46)))
           '''
-          s = s[:start] + new_settings + s[end:]
+          s = s[:settings_start] + new_settings + s[settings_end:]
 
-          widget_start = s.index('    private fun widgetPage(): View {')
-          actions_start = s.index('        val actions = UiFactory.card(this)', widget_start)
-          actions_end = s.index('\n', s.index('        body.addView(actions)', actions_start)) + 1
-          new_actions = '''        val actions = UiFactory.card(this)
-          val widgetManager = AppWidgetManager.getInstance(this)
-          val widgetIds = widgetManager.getAppWidgetIds(ComponentName(this, PiiWiiEventsWidgetProvider::class.java))
-          actions.addView(UiFactory.title(this, "Widget d’accueil", 17f))
-          actions.addView(UiFactory.muted(this, if (widgetIds.isEmpty()) {
-              "Aucun widget installé pour l’instant."
-          } else {
-              "${widgetIds.size} widget${if (widgetIds.size > 1) "s" else ""} installé${if (widgetIds.size > 1) "s" else ""}."
-          }))
-          UiFactory.addRowButtons(this, actions,
-              UiFactory.button(this, "Ajouter widget", true).apply { setOnClickListener { requestAddWidget() } },
-              UiFactory.secondaryButton(this, "Actualiser", true).apply {
-                  setOnClickListener {
-                      WidgetRenderer.updateAll(this@MainActivity, "widget_page_refresh")
-                      toast("Widget actualisé")
-                      showTab(3)
-                  }
-              }
-          )
-          actions.addView(UiFactory.secondaryButton(this, "Aide écran d’accueil / verrouillage").apply {
-              setOnClickListener { showLockScreenHelp() }
-          })
-          body.addView(actions)
+          # 2) Add a compact widget-status card with a direct refresh action.
+          widget_match = re.search(r'\bfun\s+widgetPage\s*\(\s*\)\s*:\s*View\s*\{', s)
+          if not widget_match:
+              raise SystemExit('1.5.1: widgetPage marker not found')
+          body_pos = s.find('val body =', widget_match.end())
+          if body_pos < 0:
+              raise SystemExit('1.5.1: widgetPage body marker not found')
+          body_line_end = s.find('\n', body_pos)
+          body_line_end = len(s) if body_line_end < 0 else body_line_end + 1
+          body_line_start = s.rfind('\n', 0, body_pos) + 1
+          body_indent = re.match(r'\s*', s[body_line_start:body_pos]).group(0)
+          status = f'''{body_indent}val widgetManager151 = android.appwidget.AppWidgetManager.getInstance(this)
+          {body_indent}val widgetIds151 = widgetManager151.getAppWidgetIds(android.content.ComponentName(this, PiiWiiEventsWidgetProvider::class.java))
+          {body_indent}val widgetStatus151 = UiFactory.card(this)
+          {body_indent}widgetStatus151.addView(UiFactory.title(this, "État du widget", 17f))
+          {body_indent}widgetStatus151.addView(UiFactory.muted(this, if (widgetIds151.isEmpty()) {{
+          {body_indent}    "Aucun widget installé pour l’instant."
+          {body_indent}}} else {{
+          {body_indent}    "${{widgetIds151.size}} widget${{if (widgetIds151.size > 1) "s" else ""}} installé${{if (widgetIds151.size > 1) "s" else ""}}."
+          {body_indent}}}))
+          {body_indent}widgetStatus151.addView(UiFactory.secondaryButton(this, "Actualiser maintenant").apply {{
+          {body_indent}    setOnClickListener {{
+          {body_indent}        WidgetRenderer.updateAll(this@MainActivity, "widget_page_refresh")
+          {body_indent}        toast("Widget actualisé")
+          {body_indent}        showTab(3)
+          {body_indent}    }}
+          {body_indent}}})
+          {body_indent}body.addView(widgetStatus151)
           '''
-          s = s[:actions_start] + new_actions + s[actions_end:]
+          s = s[:body_line_end] + status + s[body_line_end:]
 
-          root_start = s.index('    private fun settingsRootPage(): View {')
-          item_start = s.index('        addItem("▣", "Widget"', root_start)
-          item_end = s.index('        addItem("⚽"', item_start)
-          new_item = '''        addItem("▣", "Widget", "Options du widget et aide d’affichage") {
-              settingsOpen = false
-              selectedTab = 3
-              showTab(3)
-          }
+          # 3) Settings > Widget now opens the dedicated Widget tab instead of
+          # duplicating a second widget settings dialog.
+          item_pos = s.find('addItem("▣", "Widget"')
+          if item_pos >= 0:
+              item_start = s.rfind('\n', 0, item_pos) + 1
+              next_item = s.find('addItem("⚽"', item_pos)
+              if next_item > item_pos:
+                  item_end = s.rfind('\n', 0, next_item) + 1
+                  item_indent = re.match(r'\s*', s[item_start:item_pos]).group(0)
+                  new_item = f'''{item_indent}addItem("▣", "Widget", "Options du widget et aide d’affichage") {{
+          {item_indent}    settingsOpen = false
+          {item_indent}    selectedTab = 3
+          {item_indent}    showTab(3)
+          {item_indent}}}
           '''
-          s = s[:item_start] + new_item + s[item_end:]
+                  s = s[:item_start] + new_item + s[item_end:]
+
           p.write_text(s)
 
           p = Path('app/build.gradle.kts')
@@ -144,36 +174,9 @@ jobs:
           p = Path('app/src/main/AndroidManifest.xml')
           s = p.read_text().replace('android:icon="@drawable/ic_launcher_art"', 'android:icon="@mipmap/ic_launcher"').replace('android:roundIcon="@drawable/ic_launcher_art"', 'android:roundIcon="@mipmap/ic_launcher_round"')
           p.write_text(s)
+          Path('app/src/main/res/drawable/ic_launcher_background.xml').write_text('''<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle"><solid android:color="#00000000"/></shape>''')
+          Path('app/src/main/res/drawable/ic_launcher_foreground.xml').write_text('''<inset xmlns:android="http://schemas.android.com/apk/res/android" android:insetLeft="-6dp" android:insetTop="-6dp" android:insetRight="-6dp" android:insetBottom="-6dp"><bitmap android:gravity="center" android:src="@drawable/ic_launcher_art" /></inset>''')
           PY
-
-          mkdir -p app/src/main/res/drawable-nodpi app/src/main/res/drawable app/src/main/res/mipmap-anydpi-v26
-          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/icon_clean.b64" > app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png
-          test -s app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png
-          file app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png | grep -q 'PNG image data'
-
-          cat > app/src/main/res/drawable/ic_launcher_background.xml <<'EOF'
-          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-              <solid android:color="#F7F9FC" />
-          </shape>
-          EOF
-
-          cat > app/src/main/res/drawable/ic_launcher_foreground.xml <<'EOF'
-          <inset xmlns:android="http://schemas.android.com/apk/res/android"
-              android:insetLeft="10dp"
-              android:insetTop="10dp"
-              android:insetRight="10dp"
-              android:insetBottom="10dp">
-              <bitmap android:gravity="center" android:src="@drawable/ic_launcher_art_clean" />
-          </inset>
-          EOF
-
-          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@drawable/ic_launcher_background" />
-              <foreground android:drawable="@drawable/ic_launcher_foreground" />
-          </adaptive-icon>
-          EOF
-          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
 
           grep -q 'versionCode = 14' app/build.gradle.kts
           grep -q 'versionName = "1.5.1"' app/build.gradle.kts
