@@ -74,98 +74,14 @@ jobs:
           set -euo pipefail
           cd /tmp/piiwii-events-build
 
-          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/MainActivity.kt.gz.b64" | gzip -d > app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-151/MainActivity.kt.gz.b64" | gzip -d > app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
           base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/UiFactory.kt.gz.b64" | gzip -d > app/src/main/java/ch/piiwii/events/ui/UiFactory.kt
 
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
-          p = Path('app/src/main/java/ch/piiwii/events/ui/MainActivity.kt')
-          s = p.read_text()
-
-          settings_pos = s.find('settingsButton =')
-          if settings_pos < 0:
-              raise SystemExit('1.5.1: settingsButton marker not found')
-          settings_start = s.rfind('\n', 0, settings_pos) + 1
-          add_pos = s.find('head.addView(settingsButton', settings_pos)
-          if add_pos < 0:
-              add_pos = s.find('addView(settingsButton', settings_pos)
-          if add_pos < 0:
-              raise SystemExit('1.5.1: settingsButton addView marker not found')
-          settings_end = s.find('\n', add_pos)
-          settings_end = len(s) if settings_end < 0 else settings_end + 1
-          indent = re.match(r'\s*', s[settings_start:settings_pos]).group(0)
-          new_settings = f'''{indent}settingsButton = TextView(this@MainActivity).apply {{
-          {indent}    text = "⚙"
-          {indent}    textSize = 23f
-          {indent}    gravity = Gravity.CENTER
-          {indent}    setTextColor(UiFactory.NAVY)
-          {indent}    background = UiFactory.rounded(UiFactory.SOFT_BLUE, 15f, this@MainActivity)
-          {indent}    contentDescription = "Réglages"
-          {indent}    isClickable = true
-          {indent}    isFocusable = true
-          {indent}    setOnClickListener {{
-          {indent}        settingsSection = SettingsSection.ROOT
-          {indent}        settingsOpen = true
-          {indent}        showTab(selectedTab)
-          {indent}    }}
-          {indent}}}
-          {indent}head.addView(settingsButton, LinearLayout.LayoutParams(UiFactory.dp(this@MainActivity, 46), UiFactory.dp(this@MainActivity, 46)))
-          '''
-          s = s[:settings_start] + new_settings + s[settings_end:]
-
-          widget_match = re.search(r'\bfun\s+widgetPage\s*\(\s*\)\s*:\s*View\s*\{', s)
-          if not widget_match:
-              raise SystemExit('1.5.1: widgetPage marker not found')
-          body_pos = s.find('val body =', widget_match.end())
-          if body_pos < 0:
-              raise SystemExit('1.5.1: widgetPage body marker not found')
-          body_line_end = s.find('\n', body_pos)
-          body_line_end = len(s) if body_line_end < 0 else body_line_end + 1
-          body_line_start = s.rfind('\n', 0, body_pos) + 1
-          body_indent = re.match(r'\s*', s[body_line_start:body_pos]).group(0)
-          status = f'''{body_indent}val widgetManager151 = android.appwidget.AppWidgetManager.getInstance(this)
-          {body_indent}val widgetIds151 = widgetManager151.getAppWidgetIds(android.content.ComponentName(this, PiiWiiEventsWidgetProvider::class.java))
-          {body_indent}val widgetStatus151 = UiFactory.card(this)
-          {body_indent}widgetStatus151.addView(UiFactory.title(this, "État du widget", 17f))
-          {body_indent}widgetStatus151.addView(UiFactory.muted(this, if (widgetIds151.isEmpty()) {{
-          {body_indent}    "Aucun widget installé pour l’instant."
-          {body_indent}}} else {{
-          {body_indent}    widgetIds151.size.toString() + " widget" + (if (widgetIds151.size > 1) "s" else "") + " installé" + (if (widgetIds151.size > 1) "s" else "") + "."
-          {body_indent}}}))
-          {body_indent}widgetStatus151.addView(UiFactory.secondaryButton(this, "Actualiser maintenant").apply {{
-          {body_indent}    setOnClickListener {{
-          {body_indent}        WidgetRenderer.updateAll(this@MainActivity, "widget_page_refresh")
-          {body_indent}        toast("Widget actualisé")
-          {body_indent}        showTab(3)
-          {body_indent}    }}
-          {body_indent}}})
-          {body_indent}body.addView(widgetStatus151)
-          '''
-          s = s[:body_line_end] + status + s[body_line_end:]
-
-          item_pos = s.find('addItem("▣", "Widget"')
-          if item_pos >= 0:
-              item_start = s.rfind('\n', 0, item_pos) + 1
-              next_item = s.find('addItem("⚽"', item_pos)
-              if next_item > item_pos:
-                  item_end = s.rfind('\n', 0, next_item) + 1
-                  item_indent = re.match(r'\s*', s[item_start:item_pos]).group(0)
-                  new_item = f'''{item_indent}addItem("▣", "Widget", "Options du widget et aide d’affichage") {{
-          {item_indent}    settingsOpen = false
-          {item_indent}    selectedTab = 3
-          {item_indent}    showTab(3)
-          {item_indent}}}
-          '''
-                  s = s[:item_start] + new_item + s[item_end:]
-
-          p.write_text(s)
-
           p = Path('app/build.gradle.kts')
           s = p.read_text().replace('versionCode = 11', 'versionCode = 14').replace('versionName = "1.4.2"', 'versionName = "1.5.1"')
           p.write_text(s)
-
           p = Path('app/src/main/AndroidManifest.xml')
           s = p.read_text().replace('android:icon="@drawable/ic_launcher_art"', 'android:icon="@mipmap/ic_launcher"').replace('android:roundIcon="@drawable/ic_launcher_art"', 'android:roundIcon="@mipmap/ic_launcher_round"')
           p.write_text(s)
@@ -175,8 +91,8 @@ jobs:
 
           grep -q 'versionCode = 14' app/build.gradle.kts
           grep -q 'versionName = "1.5.1"' app/build.gradle.kts
-          grep -q 'contentDescription = "Réglages"' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
-          grep -q 'widget_page_refresh' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          grep -q 'ÉTAT DU WIDGET' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          grep -q 'Widget actualisé' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
           grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
 
       - name: Build and test release
