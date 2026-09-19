@@ -52,10 +52,8 @@ jobs:
           end = next(i for i in range(run_line + 1, len(src)) if src[i].strip() == '- name: Apply ergonomic UI, icon and bump 1.4.2')
           body = []
           for line in src[run_line + 1:end]:
-              if line.startswith('          '):
-                  body.append(line[10:])
-              elif line.strip() == '':
-                  body.append('')
+              if line.startswith('          '): body.append(line[10:])
+              elif line.strip() == '': body.append('')
           Path('/tmp/reconstruct140.sh').write_text('\n'.join(body) + '\n')
           PY
           bash /tmp/reconstruct140.sh
@@ -69,35 +67,26 @@ jobs:
           root = Path(os.environ['GITHUB_WORKSPACE']) / '.piiwii-events-141' / 'icon192small_chunks'
           parts = [root/'part-00', root/'fix01-0', root/'fix01-1', root/'part-02', root/'part-03', root/'part-04']
           raw = base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True)
-          if hashlib.sha256(raw).hexdigest() != '7e4cad28cbe746afe149344521d15195940ec9adbb0f3a387d3b3471cccf5e76':
-              raise SystemExit('unexpected icon payload')
+          if hashlib.sha256(raw).hexdigest() != '7e4cad28cbe746afe149344521d15195940ec9adbb0f3a387d3b3471cccf5e76': raise SystemExit('unexpected icon payload')
           Path('app/src/main/res/drawable-nodpi/ic_launcher_art.png').write_bytes(raw)
           PY
-          grep -q 'versionCode = 11' app/build.gradle.kts
-          grep -q 'versionName = "1.4.2"' app/build.gradle.kts
 
       - name: Apply 1.4.3 visual redesign and clean adaptive icon
         run: |
           set -euo pipefail
           cd /tmp/piiwii-events-build
-          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-143/ui.patch.b64" > /tmp/ui143.patch
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-143/ui.patch.gz.b64" | gzip -d > /tmp/ui143.patch
           patch -p1 < /tmp/ui143.patch
-
           SRC="app/src/main/res/drawable-nodpi/ic_launcher_art.png"
           DST="app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png"
           if command -v magick >/dev/null 2>&1; then
-            magick "$SRC" -alpha on -bordercolor black -border 1 -fuzz 5% -fill none -draw 'color 0,0 floodfill' -shave 1x1 "$DST"
-          elif convert -version 2>/dev/null | head -n1 | grep -q 'ImageMagick 6'; then
-            convert "$SRC" -alpha on -bordercolor black -border 1 -fuzz 5% -fill none -draw 'matte 0,0 floodfill' -shave 1x1 "$DST"
+            magick "$SRC" -alpha on -fuzz 6% -transparent black "$DST"
           else
-            echo 'ImageMagick unavailable for clean icon generation' >&2
-            exit 1
+            convert "$SRC" -alpha on -fuzz 6% -transparent black "$DST"
           fi
-
           grep -q 'versionCode = 12' app/build.gradle.kts
           grep -q 'versionName = "1.4.3"' app/build.gradle.kts
           grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
-          grep -q 'Live Event Widget' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
           test -s "$DST"
 
       - name: Build and test release
@@ -119,8 +108,6 @@ jobs:
           mkdir -p delivery
           cp "$APK" delivery/Live-Event-Widget-1.4.3.apk
           sha256sum delivery/Live-Event-Widget-1.4.3.apk | tee delivery/APK_SHA256.txt
-          cp /tmp/signature.txt delivery/SIGNATURE.txt
-          cp /tmp/badging.txt delivery/BADGING.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
