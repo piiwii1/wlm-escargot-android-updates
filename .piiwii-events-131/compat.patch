@@ -1,0 +1,23 @@
+--- a/app/src/main/java/ch/piiwii/events/service/FcSionBubbleAccessibilityService.kt	2026-09-19 17:56:20.971743606 +0000
++++ b/app/src/main/java/ch/piiwii/events/service/FcSionBubbleAccessibilityService.kt	2026-09-19 17:56:15.372674407 +0000
+@@ -38,14 +38,16 @@
+     private fun scanGoogleWindows() {
+         val currentWindows = windows ?: return
+         currentWindows.forEach { window ->
+-            // Les scores épinglés Google sont normalement des fenêtres flottantes.
+-            // On accepte aussi TYPE_APPLICATION car certains constructeurs reclassent l'overlay.
+-            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION_OVERLAY &&
+-                window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@forEach
++            // Android ne publie pas un type spécifique « application overlay » via
++            // AccessibilityWindowInfo. On ignore seulement notre propre overlay
++            // d'accessibilité, puis on retient une fenêtre Google flottante/non active.
++            if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
+ 
+             val root = window.root ?: return@forEach
+             val packageName = root.packageName?.toString().orEmpty()
+             if (!FcSionNotificationParser.isGooglePackage(packageName)) return@forEach
++            // Une page Google normale au premier plan ne doit jamais déclencher le match.
++            if (window.type == AccessibilityWindowInfo.TYPE_APPLICATION && window.isActive) return@forEach
+ 
+             val text = collectText(root)
+             when (FcSionNotificationParser.classifyPinnedScore(packageName, text)) {
