@@ -61,19 +61,63 @@ jobs:
           base64 -d "$GITHUB_WORKSPACE/.piiwii-events-142/ergonomics.patch.gz.b64" | gzip -d > /tmp/ergonomics.patch
           patch -p1 < /tmp/ergonomics.patch
 
-      - name: Apply 1.5.0 redesign
+      - name: Install Live Event Widget 1.5.0 UI
         run: |
           set -euo pipefail
           cd /tmp/piiwii-events-build
-          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/ui.patch.gz.b64" | gzip -d > /tmp/ui150.patch
-          patch -p1 < /tmp/ui150.patch
-          mkdir -p app/src/main/res/drawable-nodpi
+
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/MainActivity.kt.gz.b64" | gzip -d > app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/UiFactory.kt.gz.b64" | gzip -d > app/src/main/java/ch/piiwii/events/ui/UiFactory.kt
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle.kts')
+          s = p.read_text()
+          s = s.replace('versionCode = 11', 'versionCode = 13')
+          s = s.replace('versionName = "1.4.2"', 'versionName = "1.5.0"')
+          p.write_text(s)
+
+          p = Path('app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          s = s.replace('android:icon="@drawable/ic_launcher_art"', 'android:icon="@mipmap/ic_launcher"')
+          s = s.replace('android:roundIcon="@drawable/ic_launcher_art"', 'android:roundIcon="@mipmap/ic_launcher_round"')
+          p.write_text(s)
+          PY
+
+          mkdir -p app/src/main/res/drawable-nodpi app/src/main/res/drawable app/src/main/res/mipmap-anydpi-v26
           base64 -d "$GITHUB_WORKSPACE/.piiwii-events-150/icon_clean.b64" > app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png
           echo "a7c0bb133a6cae58e2f7889bb07ad9bde4411dac88d84975215e046aa29b34c8  app/src/main/res/drawable-nodpi/ic_launcher_art_clean.png" | sha256sum -c -
+
+          cat > app/src/main/res/drawable/ic_launcher_background.xml <<'EOF'
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <solid android:color="#F7F9FC" />
+          </shape>
+          EOF
+
+          cat > app/src/main/res/drawable/ic_launcher_foreground.xml <<'EOF'
+          <inset xmlns:android="http://schemas.android.com/apk/res/android"
+              android:insetLeft="10dp"
+              android:insetTop="10dp"
+              android:insetRight="10dp"
+              android:insetBottom="10dp">
+              <bitmap android:gravity="center" android:src="@drawable/ic_launcher_art_clean" />
+          </inset>
+          EOF
+
+          cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+
+          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
           grep -q 'versionCode = 13' app/build.gradle.kts
           grep -q 'versionName = "1.5.0"' app/build.gradle.kts
           grep -q 'Triple("▣", "Widget", 3)' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
           grep -q 'settingsOpen = true' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
 
       - name: Build and test release
         working-directory: /tmp/piiwii-events-build
