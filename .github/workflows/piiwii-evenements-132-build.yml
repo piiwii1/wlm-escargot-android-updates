@@ -1,0 +1,111 @@
+name: PiiWii Evenements 1.3.2 Build
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.piiwii-events-132/**'
+      - '.github/workflows/piiwii-evenements-132-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android SDK 35
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+      - name: Setup Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Reconstruct 1.3.1 and apply 1.3.2
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-events-build
+          cat .piiwii-events-130/b64/chunk-* | base64 -d > /tmp/events130-minbuild.zip
+          echo "9709f2da805b276aa588b6834cefb522a27293b5a252730a374f48f97213cbed  /tmp/events130-minbuild.zip" | sha256sum -c -
+          unzip -q /tmp/events130-minbuild.zip -d /tmp/piiwii-events-build
+          cd /tmp/piiwii-events-build
+          patch -p1 < "$GITHUB_WORKSPACE/.piiwii-events-131/fix.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/.piiwii-events-131/compat.patch"
+          cp "$GITHUB_WORKSPACE/.piiwii-events-132/FcSionOfficialSchedule.kt" app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/piiwii-events-build')
+          p=root/'app/build.gradle.kts'; s=p.read_text(); s=s.replace('versionCode = 5','versionCode = 6').replace('versionName = "1.3.1"','versionName = "1.3.2"'); p.write_text(s)
+          p=root/'app/src/main/AndroidManifest.xml'; s=p.read_text();
+          if 'android.permission.INTERNET' not in s: s=s.replace('<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />','<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />')
+          p.write_text(s)
+          j=root/'app/src/main/java/ch/piiwii/events'
+          p=j/'engine/DateEventEngine.kt'; s=p.read_text().replace('FC Sion détecté automatiquement dans une notification Google','FC Sion programmé automatiquement depuis le calendrier officiel').replace('Notification Google FC Sion','Calendrier officiel / Google FC Sion'); p.write_text(s)
+          for rel, old in [('receiver/BootReceiver.kt','WidgetRenderer.updateAll(context, intent.action ?: "boot")'),('receiver/DateChangeReceiver.kt','WidgetRenderer.updateAll(context, intent.action ?: "date_change")'),('receiver/EventAlarmReceiver.kt','WidgetRenderer.updateAll(context, "scheduled_boundary")')]:
+              p=j/rel; s=p.read_text();
+              if 'import ch.piiwii.events.service.FcSionOfficialSchedule' not in s: s=s.replace('import ch.piiwii.events.widget.WidgetRenderer','import ch.piiwii.events.widget.WidgetRenderer\nimport ch.piiwii.events.service.FcSionOfficialSchedule')
+              s=s.replace(old, 'FcSionOfficialSchedule.sync(context); '+old)
+              p.write_text(s)
+          p=j/'widget/PiiWiiEventsWidgetProvider.kt'; s=p.read_text();
+          if 'import ch.piiwii.events.service.FcSionOfficialSchedule' not in s: s=s.replace('import android.os.Bundle','import android.os.Bundle\nimport ch.piiwii.events.service.FcSionOfficialSchedule')
+          s=s.replace('WidgetRenderer.updateAll(context, "onUpdate")','Thread { FcSionOfficialSchedule.sync(context); WidgetRenderer.updateAll(context, "onUpdate") }.start()')
+          s=s.replace('try { WidgetRenderer.updateAll(context, "touch") }','try { FcSionOfficialSchedule.sync(context); WidgetRenderer.updateAll(context, "touch") }')
+          s=s.replace('WidgetRenderer.updateAll(context, "enabled")','Thread { FcSionOfficialSchedule.sync(context); WidgetRenderer.updateAll(context, "enabled") }.start()')
+          p.write_text(s)
+          p=j/'ui/MainActivity.kt'; s=p.read_text();
+          if 'import ch.piiwii.events.service.FcSionOfficialSchedule' not in s: s=s.replace('import ch.piiwii.events.service.FcSionBubbleAccessibilityService','import ch.piiwii.events.service.FcSionBubbleAccessibilityService\nimport ch.piiwii.events.service.FcSionOfficialSchedule')
+          s=s.replace('        WidgetRenderer.updateAll(this, "app_opened")','''        Thread {\n            FcSionOfficialSchedule.sync(this)\n            runOnUiThread {\n                WidgetRenderer.updateAll(this, "app_opened_official_sync")\n                if (::contentHost.isInitialized) showTab(selectedTab)\n            }\n        }.start()''')
+          s=s.replace('Détecte FC Sion soit dans les notifications sportives Google, soit dans la bulle de score épinglée. Aucun accès Internet n’est ajouté à PiiWii Événements.','Source principale : calendrier officiel du FC Sion. Le prochain coup d’envoi est mémorisé puis déclenché automatiquement, même si la bulle Google n’est pas lisible. Notifications/bulles Google = secours.')
+          marker='            UiFactory.addRowButtons(this, fcSion,\n                UiFactory.button(this, if (access) "Réglages notifications" else "Autoriser les notifications").apply {'
+          inject='''            fcSion.addView(UiFactory.button(this, "Synchroniser le calendrier FC Sion").apply {\n                setOnClickListener {\n                    isEnabled = false\n                    text = "Synchronisation…"\n                    Thread {\n                        val result = FcSionOfficialSchedule.sync(this@MainActivity)\n                        runOnUiThread {\n                            toast(result.message)\n                            WidgetRenderer.updateAll(this@MainActivity, "fc_sion_manual_sync")\n                            showTab(0)\n                        }\n                    }.start()\n                }\n            })\n'''+marker
+          s=s.replace(marker, inject)
+          s=s.replace('FC Sion — actif jusqu’à : ${formatMillis(config.settings.fcSionActiveUntil)}','FC Sion — actif/prévu jusqu’à : ${formatMillis(config.settings.fcSionActiveUntil)}')
+          s=s.replace('Match en cours détecté automatiquement dans les notifications Google','Match FC Sion programmé automatiquement depuis le calendrier officiel (Google en secours)')
+          p.write_text(s)
+          PY
+          grep -q 'versionName = "1.3.2"' app/build.gradle.kts
+          grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml
+          grep -q 'FcSionOfficialSchedule' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+      - name: Build and test release
+        working-directory: /tmp/piiwii-events-build
+        run: gradle --no-daemon --stacktrace test assembleRelease
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          APK="$(find /tmp/piiwii-events-build/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/zipalign" -c -v 4 "$APK"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/signature.txt
+          "$BT/aapt" dump badging "$APK" | head -n 1 | tee /tmp/badging.txt
+          grep -q "package: name='ch.piiwii.events' versionCode='6' versionName='1.3.2'" /tmp/badging.txt
+          CERT="$(grep -i 'Signer #1 certificate SHA-256 digest:' /tmp/signature.txt | sed 's/.*digest: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test "$CERT" = "63a2a61bc07cda7fc7da2425a76c19c4f11ecf9a7e570ad5f6038d5bdc4c9a8c"
+          mkdir -p delivery
+          cp "$APK" delivery/PiiWii-Evenements-1.3.2.apk
+          sha256sum delivery/PiiWii-Evenements-1.3.2.apk | tee delivery/APK_SHA256.txt
+          cp /tmp/signature.txt delivery/SIGNATURE.txt
+          cp /tmp/badging.txt delivery/BADGING.txt
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Evenements-1.3.2-APK
+          path: delivery/
+          retention-days: 7
+          if-no-files-found: error
