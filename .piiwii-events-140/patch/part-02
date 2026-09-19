@@ -1,0 +1,135 @@
+que via Google" else event.recurrenceRule.label} · priorité ${event.priority}"))
++            val kind = if (event.id == DefaultEvents.FC_SION_ID) "Automatique FC Sion" else event.recurrenceRule.label
++            labels.addView(UiFactory.muted(this, kind))
+             labels.addView(UiFactory.muted(this, periodSummary(event)))
+             header.addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+             val toggle = Switch(this).apply {
+@@ -284,22 +299,29 @@ class MainActivity : Activity() {
+             }
+             header.addView(toggle)
+             card.addView(header)
++
+             if (event.id == DefaultEvents.FC_SION_ID) {
+                 UiFactory.addRowButtons(this, card,
+-                    UiFactory.button(this, "Tester", true).apply { setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); toast("${event.name} affiché dans le widget") } },
+-                    UiFactory.secondaryButton(this, "Choisir l’image", true).apply { setOnClickListener { selectedTab = 2; showTab(2) } },
+-                    UiFactory.secondaryButton(this, "Accès notifications", true).apply { setOnClickListener { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
++                    UiFactory.button(this, "Configurer", true).apply { setOnClickListener { openSettings(SettingsSection.FC_SION) } },
++                    UiFactory.secondaryButton(this, "Image", true).apply { setOnClickListener { chooseImageFor(event.id) } },
++                    UiFactory.secondaryButton(this, "Tester", true).apply {
++                        setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); toast("${event.name} affiché dans le widget") }
++                    }
+                 )
+             } else {
+                 UiFactory.addRowButtons(this, card,
+-                    UiFactory.secondaryButton(this, "Modifier", true).apply { setOnClickListener { openEditor(event.id) } },
+-                    UiFactory.button(this, "Tester", true).apply { setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); toast("${event.name} affiché dans le widget") } },
+-                    UiFactory.secondaryButton(this, "Dupliquer", true).apply { setOnClickListener { duplicate(event) } },
+-                    UiFactory.dangerButton(this, "Supprimer", true).apply {
+-                        isEnabled = event.id != DefaultEvents.NEUTRAL_ID
+-                        setOnClickListener { confirmDelete(event) }
++                    UiFactory.button(this, "Modifier", true).apply { setOnClickListener { openEditor(event.id) } },
++                    UiFactory.secondaryButton(this, "Image", true).apply { setOnClickListener { chooseImageFor(event.id) } },
++                    UiFactory.secondaryButton(this, "Tester", true).apply {
++                        setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); toast("${event.name} affiché dans le widget") }
+                     }
+                 )
++                if (event.id != DefaultEvents.NEUTRAL_ID) {
++                    UiFactory.addRowButtons(this, card,
++                        UiFactory.secondaryButton(this, "Dupliquer", true).apply { setOnClickListener { duplicate(event) } },
++                        UiFactory.dangerButton(this, "Supprimer", true).apply { setOnClickListener { confirmDelete(event) } }
++                    )
++                }
+             }
+             body.addView(card)
+         }
+@@ -308,8 +330,8 @@ class MainActivity : Activity() {
+ 
+     private fun imagesPage(): View {
+         val body = UiFactory.vertical(this, 16)
+-        body.addView(UiFactory.title(this, "Images des événements", 22f))
+-        body.addView(UiFactory.muted(this, "PNG, JPG, JPEG et WEBP. Une copie durable est enregistrée dans le stockage privé de l’application."))
++        body.addView(settingsBackCard("Images des événements"))
++        body.addView(UiFactory.muted(this, "PNG, JPG, JPEG et WEBP. Les images sont copiées dans le stockage privé de l’application."))
+         val imageEvents = repository.load().events.sortedBy { it.priority }
+         body.addView(imagesOverviewCard(imageEvents))
+         imageEvents.forEach { event ->
+@@ -337,9 +359,9 @@ class MainActivity : Activity() {
+         val nav = UiFactory.card(this)
+         nav.addView(UiFactory.title(this, calendarMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.FRENCH)).replaceFirstChar { it.uppercase() }, 22f))
+         UiFactory.addRowButtons(this, nav,
+-            UiFactory.secondaryButton(this, "Mois précédent").apply { setOnClickListener { calendarMonth = calendarMonth.minusMonths(1); showTab(3) } },
+-            UiFactory.button(this, "Aujourd’hui").apply { setOnClickListener { calendarMonth = YearMonth.now(repository.resolvedZoneId()); showTab(3) } },
+-            UiFactory.secondaryButton(this, "Mois suivant").apply { setOnClickListener { calendarMonth = calendarMonth.plusMonths(1); showTab(3) } }
++            UiFactory.secondaryButton(this, "Mois précédent").apply { setOnClickListener { calendarMonth = calendarMonth.minusMonths(1); showTab(2) } },
++            UiFactory.button(this, "Aujourd’hui").apply { setOnClickListener { calendarMonth = YearMonth.now(repository.resolvedZoneId()); showTab(2) } },
++            UiFactory.secondaryButton(this, "Mois suivant").apply { setOnClickListener { calendarMonth = calendarMonth.plusMonths(1); showTab(2) } }
+         )
+         body.addView(nav)
+         val calendarCard = UiFactory.card(this)
+@@ -382,9 +404,9 @@ class MainActivity : Activity() {
+ 
+     private fun prioritiesPage(): View {
+         val body = UiFactory.vertical(this, 16)
++        body.addView(settingsBackCard("Ordre et priorités"))
+         val intro = UiFactory.card(this)
+-        intro.addView(UiFactory.title(this, "Priorités", 22f))
+-        intro.addView(UiFactory.muted(this, "Plus le nombre est petit, plus l’événement passe devant. Utilisez les boutons ou maintenez une ligne pour la déplacer."))
++        intro.addView(UiFactory.muted(this, "Les événements placés en haut passent devant lorsqu’ils sont actifs en même temps."))
+         intro.addView(UiFactory.secondaryButton(this, "Remettre l’ordre par défaut").apply { setOnClickListener { resetPriorities() } })
+         body.addView(intro)
+         val events = repository.load().events.sortedBy { it.priority }.toMutableList()
+@@ -416,6 +438,7 @@ class MainActivity : Activity() {
+ 
+     private fun testsPage(): View {
+         val body = UiFactory.vertical(this, 16)
++        body.addView(settingsBackCard("Avancé et diagnostic"))
+         val config = repository.load()
+         val zone = repository.resolvedZoneId()
+         val now = ZonedDateTime.now(zone)
+@@ -426,12 +449,12 @@ class MainActivity : Activity() {
+         if (state.testMode) tests.addView(UiFactory.body(this, "Mode test actif : ${state.selectedEvent.name}"))
+         config.events.sortedBy { it.priority }.forEach { event ->
+             tests.addView(UiFactory.secondaryButton(this, "Tester : ${event.name}", true).apply {
+-                setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); showTab(5) }
++                setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); showTab(3) }
+             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 6 })
+         }
+         UiFactory.addRowButtons(this, tests,
+             UiFactory.button(this, "Tester l’événement suivant").apply { setOnClickListener { testNext(config.events.sortedBy { it.priority }, testId) } },
+-            UiFactory.dangerButton(this, "Revenir au mode automatique").apply { setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, null); showTab(5) } }
++            UiFactory.dangerButton(this, "Revenir au mode automatique").apply { setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, null); showTab(3) } }
+         )
+         body.addView(tests)
+ 
+@@ -458,7 +481,7 @@ class MainActivity : Activity() {
+             "FC Sion — maintien après match : ${formatPostMatchDuration(config.settings.fcSionPostMatchMinutes)}"
+         )
+         lines.forEach { diagnostic.addView(UiFactory.body(this, it, 14f)) }
+-        diagnostic.addView(UiFactory.button(this, "Actualiser le diagnostic").apply { setOnClickListener { WidgetRenderer.updateAll(this@MainActivity, "diagnostic_refresh"); showTab(5) } })
++        diagnostic.addView(UiFactory.button(this, "Actualiser le diagnostic").apply { setOnClickListener { WidgetRenderer.updateAll(this@MainActivity, "diagnostic_refresh"); showTab(3) } })
+         diagnostic.addView(UiFactory.secondaryButton(this, "Ouvrir les réglages de l’application").apply {
+             setOnClickListener { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
+         })
+@@ -466,6 +489,159 @@ class MainActivity : Activity() {
+         return page(body)
+     }
+ 
++    private fun settingsPage(): View = when (settingsSection) {
++        SettingsSection.ROOT -> settingsRootPage()
++        SettingsSection.FC_SION -> fcSionSettingsPage()
++        SettingsSection.IMAGES -> imagesPage()
++        SettingsSection.PRIORITIES -> prioritiesPage()
++        SettingsSection.ADVANCED -> testsPage()
++    }
++
++    private fun settingsRootPage(): View {
++        val body = UiFactory.vertical(this, 16)
++        val config = repository.load()
++
++        val widget = UiFactory.card(this)
++        widget.addView(UiFactory.title(this, "Widget", 18f))
++        widget.addView(UiFactory.muted(this, "Ajout, écran verrouillé et affichage du widget."))
++        UiFactory.addRowButtons(this, widget,
++            UiFactory.button(this, "Ajouter le widget").apply { setOnClickListener { requestAddWidget() } },
++            UiFactory.secondaryButton(this, "
