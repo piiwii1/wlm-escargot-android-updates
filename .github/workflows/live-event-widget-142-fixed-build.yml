@@ -8,6 +8,7 @@ on:
       - '.github/workflows/live-event-widget-142-fixed-build.yml'
   workflow_dispatch:
 
+# Final trigger for the validated 1.4.2 ergonomic build.
 jobs:
   build:
     runs-on: ubuntu-latest
