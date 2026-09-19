@@ -115,13 +115,15 @@ jobs:
           p.write_text(s)
           PY
 
-          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-134/fix.patch.b64" > /tmp/piiwii134.patch
+          cp "$GITHUB_WORKSPACE/.piiwii-events-134/FcSionOfficialSchedule.kt" app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
+          base64 -d "$GITHUB_WORKSPACE/.piiwii-events-134/fix2.patch.b64" > /tmp/piiwii134.patch
           patch -p1 < /tmp/piiwii134.patch
 
           grep -q 'versionCode = 8' app/build.gradle.kts
           grep -q 'versionName = "1.3.4"' app/build.gradle.kts
           grep -q 'fcSionPostMatchMinutes' app/src/main/java/ch/piiwii/events/data/EventRepository.kt
           grep -q 'Temps après le match' app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+          grep -q 'BASE_MATCH_DURATION_MS' app/src/main/java/ch/piiwii/events/service/FcSionOfficialSchedule.kt
 
       - name: Build and test release
         working-directory: /tmp/piiwii-events-build
