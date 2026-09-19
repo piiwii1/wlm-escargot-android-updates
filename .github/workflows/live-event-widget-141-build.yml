@@ -57,7 +57,9 @@ jobs:
                   body.append(line[10:])
               elif line.strip() == '':
                   body.append('')
-          Path('/tmp/reconstruct140.sh').write_text('\n'.join(body) + '\n')
+          script = '\n'.join(body) + '\n'
+          script = script.replace('.piiwii-events-140/patch/part-*', '.piiwii-events-140/patch/part-0[0-4]')
+          Path('/tmp/reconstruct140.sh').write_text(script)
           PY
           bash /tmp/reconstruct140.sh
 
@@ -74,7 +76,6 @@ jobs:
           chunks = [p.read_text().strip() for p in paths]
           print('icon chunks:', [(p.name, len(c)) for p, c in zip(paths, chunks)])
           data = ''.join(chunks)
-          print('base64 chars:', len(data))
           raw = base64.b64decode(data, validate=True)
           digest = hashlib.sha256(raw).hexdigest()
           print('icon sha256:', digest)
@@ -98,6 +99,7 @@ jobs:
           grep -q 'versionName = "1.4.1"' app/build.gradle.kts
           grep -q 'android:icon="@drawable/ic_launcher_art"' app/src/main/AndroidManifest.xml
           grep -q 'android:roundIcon="@drawable/ic_launcher_art"' app/src/main/AndroidManifest.xml
+          ! grep -q 'liveEventIconOut.writeBytes' app/build.gradle.kts
 
       - name: Build and test release
         working-directory: /tmp/piiwii-events-build
