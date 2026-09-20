@@ -1,0 +1,127 @@
+name: Temporary PiiWii Radio Android Build Kit
+
+on:
+  push:
+    branches:
+      - tmp-piiwii-radio-buildkit
+    paths:
+      - '.github/workflows/tmp-piiwii-radio-buildkit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Gradle 8.9
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/piiwii-kit"
+          curl -fL --retry 5 --retry-delay 2 -o "$RUNNER_TEMP/gradle.zip" https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP/piiwii-kit"
+          "$RUNNER_TEMP/piiwii-kit/gradle-8.9/bin/gradle" --version
+
+      - name: Ensure Android 35 SDK pieces
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
+      - name: Warm Android Gradle Plugin cache
+        shell: bash
+        run: |
+          set -euxo pipefail
+          STUB="$RUNNER_TEMP/stub"
+          mkdir -p "$STUB/app/src/main/java/example/stub"
+          cat > "$STUB/settings.gradle" <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name='stub'
+          include ':app'
+          EOF
+          cat > "$STUB/build.gradle" <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.6.1' apply false
+          }
+          EOF
+          cat > "$STUB/app/build.gradle" <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'example.stub'
+              compileSdk 35
+              buildToolsVersion '35.0.0'
+              defaultConfig {
+                  applicationId 'example.stub'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          EOF
+          cat > "$STUB/app/src/main/AndroidManifest.xml" <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
+          EOF
+          mkdir -p "$STUB/app/src/main/res/values"
+          cat > "$STUB/app/src/main/res/values/styles.xml" <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"/></resources>
+          EOF
+          cat > "$STUB/app/src/main/java/example/stub/MainActivity.java" <<'EOF'
+          package example.stub;
+          public class MainActivity extends android.app.Activity {}
+          EOF
+          "$RUNNER_TEMP/piiwii-kit/gradle-8.9/bin/gradle" --no-daemon -p "$STUB" :app:assembleDebug
+          "$RUNNER_TEMP/piiwii-kit/gradle-8.9/bin/gradle" --no-daemon --offline -p "$STUB" clean :app:assembleDebug
+
+      - name: Assemble portable offline kit
+        shell: bash
+        run: |
+          set -euxo pipefail
+          KIT="$RUNNER_TEMP/piiwii-kit"
+          SDK="$KIT/android-sdk"
+          GR="$KIT/gradle-user-home"
+          mkdir -p "$SDK/platforms" "$SDK/build-tools" "$SDK/platform-tools" "$SDK/licenses" "$GR"
+          cp -a "$ANDROID_HOME/platforms/android-35" "$SDK/platforms/"
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" "$SDK/build-tools/"
+          cp -a "$ANDROID_HOME/platform-tools/." "$SDK/platform-tools/"
+          if [ -d "$ANDROID_HOME/licenses" ]; then cp -a "$ANDROID_HOME/licenses/." "$SDK/licenses/"; fi
+          cp -a "$HOME/.gradle/caches" "$GR/"
+          mkdir -p "$GR/caches/modules-2/files-2.1"
+          cat > "$KIT/README.txt" <<'EOF'
+          PiiWii Android offline build kit.
+          Contains Gradle 8.9, Android platform 35/build-tools 35.0.0/platform-tools,
+          and a warmed Gradle cache for Android Gradle Plugin 8.6.1.
+          EOF
+          du -sh "$KIT"/* || true
+          tar -C "$RUNNER_TEMP" -czf "$GITHUB_WORKSPACE/piiwii-radio-offline-kit.tar.gz" piiwii-kit
+          ls -lh "$GITHUB_WORKSPACE/piiwii-radio-offline-kit.tar.gz"
+
+      - name: Upload build kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-radio-offline-kit
+          path: piiwii-radio-offline-kit.tar.gz
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
