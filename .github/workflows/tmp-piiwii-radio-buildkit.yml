@@ -25,6 +25,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Prepare Gradle 8.9
         shell: bash
         run: |
