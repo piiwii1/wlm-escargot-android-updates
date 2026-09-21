@@ -1,0 +1,73 @@
+name: PiiWii Remote beta15 temporary build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/piiwii-remote-beta15-temp-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat piiwii-remote-beta15-temp/rb15c.00.b64 piiwii-remote-beta15-temp/rb15c.01.b64 piiwii-remote-beta15-temp/rb15c.02.b64 piiwii-remote-beta15-temp/rb15c.03.b64 piiwii-remote-beta15-temp/rb15c.04.b64 piiwii-remote-beta15-temp/rb15c.05.b64 piiwii-remote-beta15-temp/rb15c.06.b64 piiwii-remote-beta15-temp/rb15c.07.b64 | base64 -d > /tmp/remote-beta15.zip
+          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
+          rm -rf /tmp/remote-beta15-src
+          mkdir -p /tmp/remote-beta15-src
+          unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta15-src
+          test -f /tmp/remote-beta15-src/remote_ci_text/remote/build.gradle.kts
+          grep -q 'versionCode = 45' /tmp/remote-beta15-src/remote_ci_text/remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta15"' /tmp/remote-beta15-src/remote_ci_text/remote/build.gradle.kts
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        working-directory: /tmp/remote-beta15-src/remote_ci_text
+        run: gradle --no-daemon --stacktrace :remote:assembleRelease
+
+      - name: Prepare delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='/tmp/remote-beta15-src/remote_ci_text/remote/build/outputs/apk/release/remote-release-unsigned.apk'
+          test -s "$APK"
+          mkdir -p /tmp/delivery
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$APK" /tmp/delivery/PiiWii-Remote-Phone-2.0.0-beta15-ALIGNED-UNSIGNED.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 /tmp/delivery/PiiWii-Remote-Phone-2.0.0-beta15-ALIGNED-UNSIGNED.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/delivery/PiiWii-Remote-Phone-2.0.0-beta15-ALIGNED-UNSIGNED.apk > /tmp/delivery/aapt-badging.txt
+          sha256sum /tmp/delivery/PiiWii-Remote-Phone-2.0.0-beta15-ALIGNED-UNSIGNED.apk > /tmp/delivery/unsigned-sha256.txt
+          unzip -t /tmp/delivery/PiiWii-Remote-Phone-2.0.0-beta15-ALIGNED-UNSIGNED.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-beta15-unsigned
+          path: /tmp/delivery/*
+          retention-days: 1
+          if-no-files-found: error
