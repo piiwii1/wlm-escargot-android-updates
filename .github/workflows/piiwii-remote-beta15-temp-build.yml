@@ -17,32 +17,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch intact beta15 source chunks
+      - name: Download intact beta15 source archive
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          rm -rf /tmp/rb15
-          mkdir -p /tmp/rb15
-          for n in 00 01 02 03 04 05 06 07; do
-            url="https://api.github.com/repos/piiwii1/wpab-builds/contents/build-input/rb15c.${n}.b64?ref=main"
-            curl -fsSL \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "$url" \
-              | python3 -c 'import json,sys,base64; j=json.load(sys.stdin); sys.stdout.buffer.write(base64.b64decode(j["content"]))' \
-              > "/tmp/rb15/rb15c.${n}.b64"
-            test -s "/tmp/rb15/rb15c.${n}.b64"
-          done
+          curl -fL --retry 3 --retry-delay 2 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-444c-820a-906f-971e61ba82dd/raw?se=2026-09-21T23%3A54%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=31edd7f5-5708-561c-8d14-cea81c5bb201&skoid=b5d2651b-fef3-4bb0-a03b-ca59cc22929b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A16%3A02Z&ske=2026-09-22T23%3A16%3A02Z&sks=b&skv=2026-02-06&sig=uSDQs2Ext4%2BfsI/TheddDWKpXQPCFOITBA1soNYMYmY%3D' -o /tmp/remote-beta15.zip
+          test -s /tmp/remote-beta15.zip
+          test "$(wc -c < /tmp/remote-beta15.zip)" -eq 64688
+          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
 
       - name: Reconstruct sources
         shell: bash
         run: |
           set -euo pipefail
-          cat /tmp/rb15/rb15c.00.b64 /tmp/rb15/rb15c.01.b64 /tmp/rb15/rb15c.02.b64 /tmp/rb15/rb15c.03.b64 /tmp/rb15/rb15c.04.b64 /tmp/rb15/rb15c.05.b64 /tmp/rb15/rb15c.06.b64 /tmp/rb15/rb15c.07.b64 | base64 -d > /tmp/remote-beta15.zip
-          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
           rm -rf /tmp/remote-beta15-src
           mkdir -p /tmp/remote-beta15-src
           unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta15-src
