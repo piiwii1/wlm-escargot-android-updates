@@ -1,0 +1,71 @@
+diff -ruN a/remote/build.gradle.kts b/remote/build.gradle.kts
+--- a/remote/build.gradle.kts	2026-09-22 18:59:18.000000000 +0000
++++ b/remote/build.gradle.kts	2026-09-22 19:15:36.039160852 +0000
+@@ -14,8 +14,8 @@
+         applicationId = "ch.piiwii.remote2"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 53
+-        versionName = "2.0.0-beta23"
++        versionCode = 54
++        versionName = "2.0.0-beta24"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+diff -ruN a/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt b/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt
+--- a/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt	2026-09-22 15:22:29.000000000 +0000
++++ b/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt	2026-09-22 19:15:36.036976591 +0000
+@@ -4,7 +4,7 @@
+     NAV_UP, NAV_DOWN, NAV_LEFT, NAV_RIGHT, NAV_OK, NAV_BACK, NAV_HOME, NAV_MENU,
+     MEDIA_PLAY_PAUSE, MEDIA_STOP, MEDIA_NEXT, MEDIA_PREVIOUS,
+     VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,
+-    PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,
++    PIIWII_TV_APP_ACTION, PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,
+     POINTER_MOVE, POINTER_LEFT_CLICK, POINTER_RIGHT_CLICK, POINTER_DOUBLE_CLICK, POINTER_SCROLL,
+     KEYBOARD_TEXT, KEYBOARD_ENTER, KEYBOARD_BACKSPACE, KEYBOARD_ESCAPE, KEYBOARD_TAB, KEYBOARD_KEY,
+     VOICE_START, VOICE_FRAME, VOICE_STOP,
+diff -ruN a/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt b/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+--- a/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt	2026-09-22 18:59:18.000000000 +0000
++++ b/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt	2026-09-22 19:15:36.038732342 +0000
+@@ -118,18 +118,21 @@
+     }
+ 
+     private fun handlePiiWiiTvAction(action: String) {
+-        if (!piiwiiTvClient.isPaired) {
+-            showPiiWiiTvPairing()
++        val selected = vm.selected.value
++
++        // Chemin prioritaire : application Windows PiiWii TV dédiée.
++        // Tout passe en LAN direct vers l'Agent, puis vers l'application PiiWii TV.
++        // Aucune touche globale Windows et aucun aller-retour WordPress.
++        if (selected?.type == DeviceType.WINDOWS_PC) {
++            vm.sendCommand(RemoteCommand.PIIWII_TV_APP_ACTION, action)
+             return
+         }
+ 
+-        // Isolation stricte : aucune touche clavier, aucun F11, aucun volume Windows.
+-        // Toutes les commandes TV sont envoyees au plugin PiiWii TV.
+-        val selected = vm.selected.value
+-        if (selected?.type == DeviceType.WINDOWS_PC && action == "power") {
+-            vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\n${piiwiiTvClient.pageUrl(true)}")
++        // Secours pour un usage sans PC Windows sélectionné : ancien canal WordPress.
++        if (!piiwiiTvClient.isPaired) {
++            showPiiWiiTvPairing()
++            return
+         }
+-
+         piiwiiTvClient.send(action) { ok, message ->
+             if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+         }
+diff -ruN a/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt b/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt
+--- a/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt	2026-09-22 15:22:29.000000000 +0000
++++ b/remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt	2026-09-22 19:15:36.037515934 +0000
+@@ -442,7 +442,7 @@
+             RemoteCommand.NAV_UP, RemoteCommand.NAV_DOWN, RemoteCommand.NAV_LEFT, RemoteCommand.NAV_RIGHT, RemoteCommand.NAV_OK,
+             RemoteCommand.NAV_BACK, RemoteCommand.NAV_HOME, RemoteCommand.NAV_MENU, RemoteCommand.MEDIA_PLAY_PAUSE,
+             RemoteCommand.MEDIA_STOP, RemoteCommand.MEDIA_NEXT, RemoteCommand.MEDIA_PREVIOUS, RemoteCommand.VOLUME_UP,
+-            RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_CHANNEL_UP, RemoteCommand.PIIWII_TV_CHANNEL_DOWN,
++            RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_APP_ACTION, RemoteCommand.PIIWII_TV_CHANNEL_UP, RemoteCommand.PIIWII_TV_CHANNEL_DOWN,
+             RemoteCommand.PIIWII_TV_VOLUME_UP, RemoteCommand.PIIWII_TV_VOLUME_DOWN, RemoteCommand.PIIWII_TV_MUTE, RemoteCommand.POINTER_MOVE, RemoteCommand.POINTER_LEFT_CLICK,
+             RemoteCommand.POINTER_RIGHT_CLICK, RemoteCommand.POINTER_DOUBLE_CLICK, RemoteCommand.POINTER_SCROLL,
+             RemoteCommand.KEYBOARD_TEXT, RemoteCommand.KEYBOARD_ENTER, RemoteCommand.KEYBOARD_BACKSPACE,
