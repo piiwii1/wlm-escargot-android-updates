@@ -25,42 +25,47 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import base64, hashlib, subprocess, zipfile
-          folder=Path('piiwii-remote-beta15-temp')
+          import base64, hashlib, subprocess, zipfile, io, itertools
+          folder='piiwii-remote-beta15-temp'
           names=[f'rb15c.{i:02d}.b64' for i in range(8)]
           target='7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed'
-          def show(commit,name):
-              try:
-                  return subprocess.check_output(['git','show',f'{commit}:{folder/name}'],text=True).strip()
-              except subprocess.CalledProcessError:
-                  return None
-          commits=subprocess.check_output(['git','log','--all','--format=%H','--',str(folder)],text=True).split()
-          print('candidate commits',len(commits))
-          for commit in commits:
-              parts=[]
-              ok=True
-              for name in names:
-                  x=show(commit,name)
-                  if x is None:
-                      ok=False; break
-                  parts.append(''.join(x.split()))
-              if not ok: continue
-              text=''.join(parts)
+          versions=[]
+          for name in names:
+              path=f'{folder}/{name}'
+              commits=subprocess.check_output(['git','log','--all','--format=%H','--',path],text=True).split()
+              vals=[]
+              for c in commits:
+                  try:
+                      x=subprocess.check_output(['git','show',f'{c}:{path}'],text=True,stderr=subprocess.DEVNULL)
+                  except subprocess.CalledProcessError:
+                      continue
+                  x=''.join(x.split())
+                  if x and x not in vals: vals.append(x)
+              if not vals: raise SystemExit(f'No historical content for {name}')
+              print(name,'versions',len(vals),'lengths',[len(v) for v in vals])
+              versions.append(vals)
+          total=1
+          for vals in versions: total*=len(vals)
+          print('candidate combinations',total)
+          if total>20000: raise SystemExit('Too many historical combinations')
+          found=None
+          for combo in itertools.product(*versions):
+              text=''.join(combo)
               try: raw=base64.b64decode(text,validate=True)
               except Exception: continue
-              if hashlib.sha256(raw).hexdigest()==target and zipfile.is_zipfile(__import__('io').BytesIO(raw)):
-                  Path('/tmp/remote-base.zip').write_bytes(raw)
-                  print('recovered exact source from',commit)
-                  break
-          else:
-              raise SystemExit('No intact historical beta15 source archive found')
+              if hashlib.sha256(raw).hexdigest()!=target: continue
+              if not zipfile.is_zipfile(io.BytesIO(raw)): continue
+              found=raw; break
+          if found is None: raise SystemExit('Exact validated beta15 archive not found in historical chunk combinations')
+          Path('/tmp/remote-base.zip').write_bytes(found)
+          print('recovered exact archive bytes',len(found))
           PY
+          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-base.zip' | sha256sum -c -
           rm -rf /tmp/remote-beta18-src && mkdir -p /tmp/remote-beta18-src
           unzip -q /tmp/remote-base.zip -d /tmp/remote-beta18-src
           ROOT=/tmp/remote-beta18-src/remote_ci_text
           test -f "$ROOT/remote/build.gradle.kts"
           echo "$ROOT" > /tmp/remote-root.txt
-          find "$ROOT" -maxdepth 3 -type d | sort | head -80
 
       - name: Apply beta18 LAN fast path
         shell: bash
@@ -72,19 +77,16 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           root=Path(open('/tmp/remote-root.txt').read().strip())
-          # New local UDP commands
           p=root/'remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt'
           s=p.read_text()
           s=s.replace('VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,','VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,\n    PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,')
           p.write_text(s)
-          # Allow on Windows transport
           p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt'
           s=p.read_text()
           marker='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.POINTER_MOVE'
           repl='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_CHANNEL_UP, RemoteCommand.PIIWII_TV_CHANNEL_DOWN,\n            RemoteCommand.PIIWII_TV_VOLUME_UP, RemoteCommand.PIIWII_TV_VOLUME_DOWN, RemoteCommand.PIIWII_TV_MUTE, RemoteCommand.POINTER_MOVE'
           if marker not in s: raise SystemExit('Windows allowlist marker missing')
           p.write_text(s.replace(marker,repl,1))
-          # Route CH/VOL/MUTE through selected Windows PC over local UDP; HTTP remains fallback.
           p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt'
           s=p.read_text()
           old='''        if (action == "power") {\n            val selected = vm.selected.value\n            if (selected?.type == DeviceType.WINDOWS_PC) {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n'''
