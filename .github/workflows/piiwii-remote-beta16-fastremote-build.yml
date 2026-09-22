@@ -1,10 +1,10 @@
-name: PiiWii Remote beta16 fast remote build
+name: PiiWii Remote beta17 restore original navigation icons
 
 on:
   push:
-    branches: [piiwii-remote-phone-beta16-fastremote]
+    branches: [piiwii-remote-phone-beta17-icons-restore]
     paths:
-      - 'piiwii-remote-phone-beta16-fastremote/**'
+      - 'piiwii-remote-beta17-icons/**'
       - '.github/workflows/piiwii-remote-beta16-fastremote-build.yml'
   workflow_dispatch:
 
@@ -31,26 +31,48 @@ jobs:
           text += '=' * ((4 - len(text) % 4) % 4)
           Path('/tmp/remote-beta15.zip').write_bytes(base64.b64decode(text, validate=False))
           PY
-          test -s /tmp/remote-beta15.zip
           echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
-          rm -rf /tmp/remote-beta16-src
-          mkdir -p /tmp/remote-beta16-src
-          unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta16-src
-          ROOT=/tmp/remote-beta16-src/remote_ci_text
-          test -f "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionCode = 45' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta15"' "$ROOT/remote/build.gradle.kts"
+          rm -rf /tmp/remote-beta17-src
+          mkdir -p /tmp/remote-beta17-src
+          unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta17-src
+          test -f /tmp/remote-beta17-src/remote_ci_text/remote/build.gradle.kts
 
-      - name: Apply beta16 responsiveness and complete TV remote patch
+      - name: Preserve beta16 TV remote fixes
         shell: bash
         run: |
           set -euo pipefail
-          ROOT=/tmp/remote-beta16-src/remote_ci_text
+          ROOT=/tmp/remote-beta17-src/remote_ci_text
           base64 -d piiwii-remote-phone-beta16-fastremote/beta16.patch.xz.b64 > /tmp/beta16.patch.xz
           xz -dc /tmp/beta16.patch.xz > /tmp/beta16.patch
           (cd "$ROOT" && patch -p1 < /tmp/beta16.patch)
           grep -q 'versionCode = 46' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-beta16"' "$ROOT/remote/build.gradle.kts"
+
+      - name: Restore original bottom navigation artwork and bump beta17
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/remote-beta17-src/remote_ci_text
+          DRAW="$ROOT/remote/src/main/res/drawable-nodpi"
+          base64 -d piiwii-remote-beta17-icons/ic_remote_custom.png.b64 > "$DRAW/ic_remote_custom.png"
+          base64 -d piiwii-remote-beta17-icons/ic_touchpad_custom.png.b64 > "$DRAW/ic_touchpad_custom.png"
+          base64 -d piiwii-remote-beta17-icons/ic_keyboard_custom.png.b64 > "$DRAW/ic_keyboard_custom.png"
+          base64 -d piiwii-remote-beta17-icons/ic_apps_custom.png.b64 > "$DRAW/ic_apps_custom.png"
+          sed -i 's/versionCode = 46/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
+          sed -i 's/versionName = "2.0.0-beta16"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 47' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta17"' "$ROOT/remote/build.gradle.kts"
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          root=Path('/tmp/remote-beta17-src/remote_ci_text/remote/src/main/res/drawable-nodpi')
+          for name in ['ic_remote_custom.png','ic_touchpad_custom.png','ic_keyboard_custom.png','ic_apps_custom.png']:
+              data=(root/name).read_bytes()
+              if data[:8] != b'\x89PNG\r\n\x1a\n': raise SystemExit(name+' is not PNG')
+              w,h=struct.unpack('>II',data[16:24])
+              if (w,h)!=(48,48): raise SystemExit(f'{name}: unexpected {w}x{h}')
+              print(name,w,h,len(data))
+          PY
           grep -q 'ON / OFF' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt"
           grep -q 'onAction("recordings")' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt"
           grep -q 'fun power(callback:' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt"
@@ -79,29 +101,31 @@ jobs:
           unzip -q /tmp/gradle.zip -d /tmp
 
       - name: Unit tests and release build
-        working-directory: /tmp/remote-beta16-src/remote_ci_text
+        working-directory: /tmp/remote-beta17-src/remote_ci_text
         run: /tmp/gradle-8.9/bin/gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
 
-      - name: Validate and package beta16
+      - name: Validate and package beta17
         shell: bash
         run: |
           set -euo pipefail
-          ROOT=/tmp/remote-beta16-src/remote_ci_text
+          ROOT=/tmp/remote-beta17-src/remote_ci_text
           OUT=/tmp/delivery
           mkdir -p "$OUT"
           RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
-          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta16-ALIGNED-UNSIGNED.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta17-ALIGNED-UNSIGNED.apk"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='46' versionName='2.0.0-beta16'" "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='47' versionName='2.0.0-beta17'" "$OUT/BADGING.txt"
           unzip -t "$APK" > "$OUT/ZIPTEST.txt"
           sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
+          (cd "$ROOT" && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" .)
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" > "$OUT/SHA256-SOURCES.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-beta16-fastremote-unsigned
+          name: PiiWii-Remote-beta17-icons-restored-unsigned
           path: /tmp/delivery/*
           retention-days: 7
           if-no-files-found: error
