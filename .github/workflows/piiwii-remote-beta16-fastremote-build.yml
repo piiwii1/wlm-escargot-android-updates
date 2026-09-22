@@ -17,36 +17,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct exact beta15 source base
+      - name: Download exact validated beta15 source base
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64
-          files=sorted(Path('piiwii-remote-beta15-temp').glob('rb15c.*.b64'))
-          if not files:
-              raise SystemExit('beta15 chunks missing')
-          text=''.join(''.join(p.read_text().split()) for p in files)
-          text += '=' * ((4 - len(text) % 4) % 4)
-          Path('/tmp/remote-beta15.zip').write_bytes(base64.b64decode(text, validate=False))
-          PY
+          curl -fL --retry 3 --retry-delay 2 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-444c-820a-906f-971e61ba82dd/raw?se=2026-09-21T23%3A54%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=31edd7f5-5708-561c-8d14-cea81c5bb201&skoid=b5d2651b-fef3-4bb0-a03b-ca59cc22929b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A16%3A02Z&ske=2026-09-22T23%3A16%3A02Z&sks=b&skv=2026-02-06&sig=uSDQs2Ext4%2BfsI/TheddDWKpXQPCFOITBA1soNYMYmY%3D' -o /tmp/remote-beta15.zip
+          test -s /tmp/remote-beta15.zip
+          test "$(wc -c < /tmp/remote-beta15.zip)" -eq 64688
           echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
           rm -rf /tmp/remote-beta17-src
           mkdir -p /tmp/remote-beta17-src
           unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta17-src
-          test -f /tmp/remote-beta17-src/remote_ci_text/remote/build.gradle.kts
-
-      - name: Preserve beta16 TV remote fixes
-        shell: bash
-        run: |
-          set -euo pipefail
           ROOT=/tmp/remote-beta17-src/remote_ci_text
-          base64 -d piiwii-remote-phone-beta16-fastremote/beta16.patch.xz.b64 > /tmp/beta16.patch.xz
-          xz -dc /tmp/beta16.patch.xz > /tmp/beta16.patch
-          (cd "$ROOT" && patch -p1 < /tmp/beta16.patch)
-          grep -q 'versionCode = 46' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta16"' "$ROOT/remote/build.gradle.kts"
+          test -f "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 45' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta15"' "$ROOT/remote/build.gradle.kts"
 
       - name: Restore original bottom navigation artwork and bump beta17
         shell: bash
@@ -58,8 +43,8 @@ jobs:
           base64 -d piiwii-remote-beta17-icons/ic_touchpad_custom.png.b64 > "$DRAW/ic_touchpad_custom.png"
           base64 -d piiwii-remote-beta17-icons/ic_keyboard_custom.png.b64 > "$DRAW/ic_keyboard_custom.png"
           base64 -d piiwii-remote-beta17-icons/ic_apps_custom.png.b64 > "$DRAW/ic_apps_custom.png"
-          sed -i 's/versionCode = 46/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
-          sed -i 's/versionName = "2.0.0-beta16"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
+          sed -i 's/versionCode = 45/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
+          sed -i 's/versionName = "2.0.0-beta15"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionCode = 47' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-beta17"' "$ROOT/remote/build.gradle.kts"
           python3 - <<'PY'
@@ -73,9 +58,11 @@ jobs:
               if (w,h)!=(48,48): raise SystemExit(f'{name}: unexpected {w}x{h}')
               print(name,w,h,len(data))
           PY
-          grep -q 'ON / OFF' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt"
-          grep -q 'onAction("recordings")' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt"
-          grep -q 'fun power(callback:' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt"
+          grep -q 'R.drawable.ic_remote_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'R.drawable.ic_touchpad_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'R.drawable.ic_keyboard_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'R.drawable.ic_apps_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'R.drawable.ic_piiwii_tv_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
 
       - uses: actions/setup-java@v4
         with:
@@ -98,6 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fL --retry 5 --retry-delay 2 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          rm -rf /tmp/gradle-8.9
           unzip -q /tmp/gradle.zip -d /tmp
 
       - name: Unit tests and release build
