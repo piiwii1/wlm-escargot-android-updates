@@ -1,0 +1,86 @@
+name: PiiWii Remote Agent beta10 app IPC
+
+on:
+  push:
+    branches: [piiwii-tv-desktop-app-beta24]
+    paths:
+      - '.github/workflows/piiwii-agent-beta10-app-ipc.yml'
+      - 'piiwii-agent-beta10-app-ipc.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  agent:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download beta9 source artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip=Join-Path $env:RUNNER_TEMP 'beta9-artifact.zip'
+          $headers=@{Authorization="Bearer $env:GH_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+          Invoke-WebRequest -Uri 'https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/actions/artifacts/10713502284/zip' -Headers $headers -OutFile $zip -MaximumRedirection 5
+          $art=Join-Path $env:RUNNER_TEMP 'beta9-art'; Expand-Archive $zip $art -Force
+          $srczip=Join-Path $art 'PiiWii-Remote-Windows-2.0.0-beta9-Sources.zip'
+          if(-not(Test-Path $srczip)){throw 'beta9 source zip missing'}
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'; Expand-Archive $srczip $root -Force
+      - name: Apply beta10 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(cygpath -u "$RUNNER_TEMP")/beta10"
+          cd "$ROOT"
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-agent-beta10-app-ipc.patch"
+          grep -q 'PIIWII_TV_APP_ACTION' src/PiiWiiRemoteAgent.cpp
+          grep -q 'sendPiiWiiTvAppAction' src/PiiWiiRemoteAgent.cpp
+          grep -q '2.0.0-beta10' src/PiiWiiRemoteAgent.cpp
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Compile Agent beta10
+        shell: cmd
+        working-directory: ${{ runner.temp }}\beta10
+        run: |
+          if not exist build mkdir build
+          rc /nologo /fo build\PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /utf-8 /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp build\PiiWiiRemoteAgent.res gdi32.lib user32.lib advapi32.lib PowrProf.lib bcrypt.lib shell32.lib winmm.lib /link /SUBSYSTEM:WINDOWS /OUT:build\PiiWii-Remote-Agent-2.0.0-beta10.exe
+      - name: Validate Agent beta10
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'
+          $exe=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta10.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Agent self-test failed: $($p.ExitCode)"}
+          $src=Get-Content (Join-Path $root 'src\PiiWiiRemoteAgent.cpp') -Raw -Encoding UTF8
+          foreach($needle in @('PIIWII_TV_APP_ACTION','sendPiiWiiTvAppAction','WM_COPYDATA','piiwiitv.exe')){if(-not $src.Contains($needle)){throw "Missing $needle"}}
+          foreach($forbidden in @('PIIWII_TV_CHANNEL_DOWN") return sendVirtualKey','PIIWII_TV_VOLUME_UP") return sendVirtualKey','PIIWII_TV_MUTE") return sendVirtualKey')){if($src.Contains($forbidden)){throw "Global TV key remains: $forbidden"}}
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not(Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          & $iscc (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          if($LASTEXITCODE -ne 0){throw 'Inno Setup failed'}
+          if(-not(Test-Path (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta10.exe'))){throw 'beta10 setup missing'}
+      - name: Package
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'; $out=Join-Path $env:RUNNER_TEMP 'beta10-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta10.exe') $out
+          Copy-Item (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta10.exe') $out
+          Compress-Archive -Path (Join-Path $root 'src'),(Join-Path $root 'installer') -DestinationPath (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta10-Sources.zip') -Force
+          @('PiiWii Remote Agent 2.0.0-beta10','PiiWii TV actions -> installed PiiWiiTV.exe only','WM_COPYDATA PTW1','No global F13-F17 for PiiWii TV') | Set-Content -Encoding UTF8 (Join-Path $out 'VALIDATION.txt')
+          Get-ChildItem $out -File | ForEach-Object {"$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"} | Set-Content -Encoding ascii (Join-Path $out 'SHA256.txt')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-beta10-App-IPC
+          path: ${{ runner.temp }}\beta10-out\*
+          retention-days: 7
+          if-no-files-found: error
