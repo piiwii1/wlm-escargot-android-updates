@@ -1,11 +1,10 @@
-name: PiiWii Remote beta20 true fullscreen
+name: PiiWii Remote beta21 three display modes
 
 on:
   push:
-    branches: [piiwii-remote-phone-beta20-true-fullscreen]
+    branches: [piiwii-remote-phone-beta21-3-modes]
     paths:
       - '.github/workflows/piiwii-remote-beta16-fastremote-build.yml'
-      - 'piiwii-remote-beta19/**'
   workflow_dispatch:
 
 jobs:
@@ -21,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct beta20
+      - name: Reconstruct beta21
         shell: bash
         run: |
           set -euo pipefail
@@ -29,39 +28,120 @@ jobs:
             cat piiwii-remote-beta18-lan-src2/p00.b64 piiwii-remote-beta18-lan-src2/p01.b64 piiwii-remote-beta18-lan-src2/p02.b64
             cat piiwii-remote-beta18-p03fix/fix*.b64
             cat piiwii-remote-beta18-lan-src2/p04.b64 piiwii-remote-beta18-lan-src2/p05.b64 piiwii-remote-beta18-lan-src2/p06.b64 piiwii-remote-beta18-lan-src2/p07.b64 piiwii-remote-beta18-lan-src2/p08.b64
-          } | base64 -d > /tmp/beta20.tar.xz
-          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta20.tar.xz' | sha256sum -c -
-          mkdir -p /tmp/beta20
-          tar -xJf /tmp/beta20.tar.xz -C /tmp/beta20
-          RES=/tmp/beta20/remote/src/main/res/drawable-nodpi
+          } | base64 -d > /tmp/beta21.tar.xz
+          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta21.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/beta21
+          tar -xJf /tmp/beta21.tar.xz -C /tmp/beta21
+          RES=/tmp/beta21/remote/src/main/res/drawable-nodpi
           mkdir -p "$RES"
           for n in remote touchpad keyboard apps; do
             base64 -d "piiwii-remote-beta17-icons/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"
           done
-          cp piiwii-remote-beta19/PiiWiiTvRemoteView.kt /tmp/beta20/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
-          sed -i -e 's/versionCode = 48/versionCode = 50/' -e 's/versionName = "2.0.0-beta18"/versionName = "2.0.0-beta20"/' /tmp/beta20/remote/build.gradle.kts
-          MAIN=/tmp/beta20/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
-          python - "$MAIN" <<'PY'
+          cp piiwii-remote-beta19/PiiWiiTvRemoteView.kt /tmp/beta21/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          sed -i -e 's/versionCode = 48/versionCode = 51/' -e 's/versionName = "2.0.0-beta18"/versionName = "2.0.0-beta21"/' /tmp/beta21/remote/build.gradle.kts
+
+          MAIN=/tmp/beta21/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          VIEW=/tmp/beta21/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          python - "$MAIN" "$VIEW" <<'PY'
           from pathlib import Path
           import sys
-          p=Path(sys.argv[1]); s=p.read_text(encoding='utf-8')
-          anchor='''        if (selected?.type == DeviceType.WINDOWS_PC) {\n            val fastCommand = when (action) {'''
-          repl='''        if (selected?.type == DeviceType.WINDOWS_PC) {\n            if (action == "fullscreen") {\n                // F11 enlève réellement toute l’interface Chrome/Edge.\n                // On continue ensuite vers le REST pour que le lecteur remplisse aussi le viewport.\n                vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")\n            }\n            val fastCommand = when (action) {'''
-          if anchor not in s: raise SystemExit('Windows action anchor missing')
-          s=s.replace(anchor,repl,1)
-          old='''            if (action == "power") {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }'''
-          new='''            if (action == "power") {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n                // Laisse au navigateur le temps de prendre le focus, puis passe en vrai plein écran F11.\n                window.decorView.postDelayed({\n                    vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")\n                }, 700L)\n            }'''
-          if old not in s: raise SystemExit('power anchor missing')
-          s=s.replace(old,new,1)
-          p.write_text(s,encoding='utf-8')
+          main=Path(sys.argv[1]); s=main.read_text(encoding='utf-8')
+          field='    private lateinit var piiwiiTvClient: PiiWiiTvRemoteClient\n'
+          if field not in s: raise SystemExit('piiwiiTvClient field missing')
+          s=s.replace(field, field + '    private var piiwiiTvBrowserFullscreen = false\n', 1)
+          start=s.index('    private fun handlePiiWiiTvAction(action: String) {')
+          end=s.index('\n    private fun showPiiWiiTvPairing()', start)
+          fn='''    private fun handlePiiWiiTvAction(action: String) {
+              if (!piiwiiTvClient.isPaired) {
+                  showPiiWiiTvPairing()
+                  return
+              }
+              val selected = vm.selected.value
+              if (selected?.type == DeviceType.WINDOWS_PC) {
+                  val fastCommand = when (action) {
+                      "channel_up" -> RemoteCommand.PIIWII_TV_CHANNEL_UP
+                      "channel_down" -> RemoteCommand.PIIWII_TV_CHANNEL_DOWN
+                      "volume_up" -> RemoteCommand.PIIWII_TV_VOLUME_UP
+                      "volume_down" -> RemoteCommand.PIIWII_TV_VOLUME_DOWN
+                      "mute" -> RemoteCommand.PIIWII_TV_MUTE
+                      else -> null
+                  }
+                  if (fastCommand != null) {
+                      vm.sendCommand(fastCommand)
+                      return
+                  }
+                  when (action) {
+                      "power" -> {
+                          vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")
+                          if (!piiwiiTvBrowserFullscreen) {
+                              piiwiiTvBrowserFullscreen = true
+                              window.decorView.postDelayed({
+                                  vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
+                              }, 700L)
+                          }
+                      }
+                      "windowed" -> {
+                          if (piiwiiTvBrowserFullscreen) {
+                              vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
+                              piiwiiTvBrowserFullscreen = false
+                          }
+                      }
+                      "browser_fullscreen" -> {
+                          if (!piiwiiTvBrowserFullscreen) {
+                              vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
+                              piiwiiTvBrowserFullscreen = true
+                          }
+                      }
+                      "fullscreen" -> {
+                          if (!piiwiiTvBrowserFullscreen) {
+                              vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
+                              piiwiiTvBrowserFullscreen = true
+                          }
+                      }
+                  }
+              }
+              val restAction = if (action == "browser_fullscreen") "windowed" else action
+              piiwiiTvClient.send(restAction) { ok, message ->
+                  if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+              }
+          }
+'''
+          s=s[:start]+fn+s[end:]
+          main.write_text(s,encoding='utf-8')
+
+          view=Path(sys.argv[2]); v=view.read_text(encoding='utf-8')
+          old='''        body.addView(row(context,
+              button(context,"⛶","Plein écran", true){onAction("fullscreen")},
+              button(context,"▭","Petit écran"){onAction("windowed")},
+              button(context,"●","Enregistrer"){onAction("record")}
+          ))
+          UiKit.addGap(body, 8)
+          body.addView(section(context, "LECTURE")); UiKit.addGap(body, 4)
+'''
+          new='''        body.addView(section(context, "AFFICHAGE")); UiKit.addGap(body, 4)
+          body.addView(row(context,
+              button(context,"▭","Fenêtre"){onAction("windowed")},
+              button(context,"▱","Sans onglets"){onAction("browser_fullscreen")},
+              button(context,"⛶","Plein écran", true){onAction("fullscreen")}
+          ))
+          UiKit.addGap(body, 5)
+          body.addView(button(context,"●","Enregistrer"){onAction("record")}, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, UiKit.dp(context,58)).apply{ setMargins(UiKit.dp(context,3),0,UiKit.dp(context,3),0) })
+          UiKit.addGap(body, 8)
+          body.addView(section(context, "LECTURE")); UiKit.addGap(body, 4)
+'''
+          if old not in v: raise SystemExit('display row anchor missing')
+          v=v.replace(old,new,1)
+          view.write_text(v,encoding='utf-8')
           PY
-          grep -q 'versionCode = 50' /tmp/beta20/remote/build.gradle.kts
-          grep -q 'versionName = "2.0.0-beta20"' /tmp/beta20/remote/build.gradle.kts
-          grep -q 'action == "fullscreen"' "$MAIN"
-          grep -q 'RemoteCommand.KEYBOARD_KEY, "F11"' "$MAIN"
-          grep -q '700L' "$MAIN"
-          grep -q '"channel_up" -> RemoteCommand.PIIWII_TV_CHANNEL_UP' "$MAIN"
-          grep -q 'body.addView(section(context, "NAVIGATION"))' /tmp/beta20/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+
+          grep -q 'versionCode = 51' /tmp/beta21/remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta21"' /tmp/beta21/remote/build.gradle.kts
+          grep -q 'piiwiiTvBrowserFullscreen = false' "$MAIN"
+          grep -q '"browser_fullscreen"' "$MAIN"
+          grep -q 'RemoteCommand.PIIWII_TV_CHANNEL_UP' "$MAIN"
+          grep -q '"Fenêtre"' "$VIEW"
+          grep -q '"Sans onglets"' "$VIEW"
+          grep -q '"Plein écran"' "$VIEW"
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -83,7 +163,7 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build release APK
-        working-directory: /tmp/beta20
+        working-directory: /tmp/beta21
         run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
 
       - name: Validate and package
@@ -91,19 +171,19 @@ jobs:
         run: |
           set -euo pipefail
           OUT=/tmp/out; mkdir -p "$OUT"
-          RAW=/tmp/beta20/remote/build/outputs/apk/release/remote-release-unsigned.apk
-          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta20-ALIGNED-UNSIGNED.apk"
+          RAW=/tmp/beta21/remote/build/outputs/apk/release/remote-release-unsigned.apk
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta21-ALIGNED-UNSIGNED.apk"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='50' versionName='2.0.0-beta20'" "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='51' versionName='2.0.0-beta21'" "$OUT/BADGING.txt"
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
           sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-beta20-true-fullscreen
+          name: PiiWii-Remote-beta21-3-modes
           path: /tmp/out/*
           retention-days: 7
           if-no-files-found: error
