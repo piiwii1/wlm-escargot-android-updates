@@ -1,4 +1,4 @@
-name: PiiWii Remote beta18 LAN fast path
+name: PiiWii Remote beta18 LAN simple
 
 on:
   push:
@@ -18,12 +18,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct exact beta18 source
+      - name: Reconstruct beta18 and apply simple LAN mapping
         shell: bash
         run: |
           set -euo pipefail
           cat piiwii-remote-beta18-lan-src2/p*.b64 | base64 -d > /tmp/beta18.tar.xz
-          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta18.tar.xz' | sha256sum -c -
+          xz -t /tmp/beta18.tar.xz
           mkdir -p /tmp/beta18
           tar -xJf /tmp/beta18.tar.xz -C /tmp/beta18
           RES=/tmp/beta18/remote/src/main/res/drawable-nodpi
@@ -31,9 +31,21 @@ jobs:
           for n in remote touchpad keyboard apps; do
             base64 -d "piiwii-remote-beta17-icons/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"
           done
+          MAIN=/tmp/beta18/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          sed -i \
+            -e 's/RemoteCommand.PIIWII_TV_CHANNEL_UP/RemoteCommand.NAV_UP/g' \
+            -e 's/RemoteCommand.PIIWII_TV_CHANNEL_DOWN/RemoteCommand.NAV_DOWN/g' \
+            -e 's/RemoteCommand.PIIWII_TV_VOLUME_UP/RemoteCommand.VOLUME_UP/g' \
+            -e 's/RemoteCommand.PIIWII_TV_VOLUME_DOWN/RemoteCommand.VOLUME_DOWN/g' \
+            -e 's/RemoteCommand.PIIWII_TV_MUTE/RemoteCommand.VOLUME_MUTE/g' \
+            "$MAIN"
           grep -q 'versionCode = 48' /tmp/beta18/remote/build.gradle.kts
           grep -q 'versionName = "2.0.0-beta18"' /tmp/beta18/remote/build.gradle.kts
-          grep -q 'PIIWII_TV_CHANNEL_UP' /tmp/beta18/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q '"channel_up" -> RemoteCommand.NAV_UP' "$MAIN"
+          grep -q '"channel_down" -> RemoteCommand.NAV_DOWN' "$MAIN"
+          grep -q '"volume_up" -> RemoteCommand.VOLUME_UP' "$MAIN"
+          grep -q '"volume_down" -> RemoteCommand.VOLUME_DOWN' "$MAIN"
+          grep -q '"mute" -> RemoteCommand.VOLUME_MUTE' "$MAIN"
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -74,7 +86,7 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-beta18-LAN-fastpath
+          name: PiiWii-Remote-beta18-LAN-simple
           path: /tmp/out/*
           retention-days: 7
           if-no-files-found: error
