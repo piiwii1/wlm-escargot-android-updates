@@ -32,12 +32,31 @@ jobs:
           raw_parts=[]
           for p in parts:
               text=''.join(p.read_text().split())
-              text += '='*((4-len(text)%4)%4)
-              raw_parts.append(base64.b64decode(text, validate=True))
+              print(p.name, 'chars=', len(text), 'padding_positions=', [i for i,c in enumerate(text) if c=='='][:20])
+              segments=[]
+              start=0; i=0
+              while i < len(text):
+                  if text[i]=='=':
+                      j=i
+                      while j+1 < len(text) and text[j+1]=='=':
+                          j += 1
+                      segments.append(text[start:j+1])
+                      start=j+1
+                      i=j
+                  i += 1
+              if start < len(text): segments.append(text[start:])
+              if not segments: segments=[text]
+              for n,seg in enumerate(segments):
+                  if not seg: continue
+                  seg += '='*((4-len(seg)%4)%4)
+                  try:
+                      raw_parts.append(base64.b64decode(seg, validate=True))
+                  except Exception as e:
+                      raise SystemExit(f'{p.name} segment {n} len={len(seg)} decode error: {e}')
           raw=b''.join(raw_parts)
           out=Path('/tmp/remote-beta17.zip')
           out.write_bytes(raw)
-          print('zip bytes', len(raw))
+          print('zip bytes', len(raw), 'decoded segments', len(raw_parts))
           if not zipfile.is_zipfile(out): raise SystemExit('reconstructed source is not a ZIP')
           PY
           rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
