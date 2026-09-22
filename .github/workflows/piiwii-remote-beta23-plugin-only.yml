@@ -1,0 +1,137 @@
+name: PiiWii Remote beta23 - plugin only
+
+on:
+  push:
+    branches: [piiwii-remote-phone-beta23-plugin-only]
+    paths:
+      - '.github/workflows/piiwii-remote-beta23-plugin-only.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta23 from beta21 UI base
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            cat piiwii-remote-beta18-lan-src2/p00.b64 piiwii-remote-beta18-lan-src2/p01.b64 piiwii-remote-beta18-lan-src2/p02.b64
+            cat piiwii-remote-beta18-p03fix/fix*.b64
+            cat piiwii-remote-beta18-lan-src2/p04.b64 piiwii-remote-beta18-lan-src2/p05.b64 piiwii-remote-beta18-lan-src2/p06.b64 piiwii-remote-beta18-lan-src2/p07.b64 piiwii-remote-beta18-lan-src2/p08.b64
+          } | base64 -d > /tmp/beta23.tar.xz
+          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta23.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/beta23
+          tar -xJf /tmp/beta23.tar.xz -C /tmp/beta23
+          RES=/tmp/beta23/remote/src/main/res/drawable-nodpi
+          mkdir -p "$RES"
+          for n in remote touchpad keyboard apps; do
+            base64 -d "piiwii-remote-beta17-icons/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"
+          done
+          cp piiwii-remote-beta19/PiiWiiTvRemoteView.kt /tmp/beta23/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          cd /tmp/beta23
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-beta21/MainActivity.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-beta21/PiiWiiTvRemoteView.patch"
+
+          MAIN=remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          python - "$MAIN" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1])
+          s=p.read_text(encoding='utf-8')
+          start=s.index('    private fun handlePiiWiiTvAction(action: String) {')
+          end=s.index('\n    private fun showPiiWiiTvPairing()', start)
+          replacement='''    private fun handlePiiWiiTvAction(action: String) {
+        if (!piiwiiTvClient.isPaired) {
+            showPiiWiiTvPairing()
+            return
+        }
+
+        // Isolation stricte PiiWii TV : aucune touche clavier, aucun F11 et aucun volume Windows.
+        // Toutes les commandes TV sont envoyées au plugin via son canal distant dédié.
+        // Seul Power peut ouvrir la page TV si elle n'est pas déjà affichée.
+        val selected = vm.selected.value
+        if (selected?.type == DeviceType.WINDOWS_PC && action == "power") {
+            vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")
+        }
+
+        piiwiiTvClient.send(action) { ok, message ->
+            if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+'''
+          s=s[:start]+replacement+s[end:]
+          # L'état F11 de beta21 n'a plus de raison d'exister.
+          s=s.replace('    // Etat F11 supposé du navigateur, piloté uniquement par les boutons PiiWii TV.\n    private var piiwiiTvBrowserFullscreen = false\n','')
+          p.write_text(s,encoding='utf-8')
+          PY
+
+          sed -i -e 's/versionCode = 48/versionCode = 53/' -e 's/versionName = "2.0.0-beta18"/versionName = "2.0.0-beta23"/' remote/build.gradle.kts
+          grep -q 'versionCode = 53' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta23"' remote/build.gradle.kts
+          grep -q 'Sans onglets' remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          grep -q 'piiwiiTvClient.send(action)' "$MAIN"
+          python - "$MAIN" <<'PY'
+          from pathlib import Path
+          import sys
+          s=Path(sys.argv[1]).read_text(encoding='utf-8')
+          a=s.index('    private fun handlePiiWiiTvAction(action: String) {')
+          b=s.index('\n    private fun showPiiWiiTvPairing()', a)
+          block=s[a:b]
+          forbidden=['PIIWII_TV_CHANNEL_UP','PIIWII_TV_CHANNEL_DOWN','PIIWII_TV_VOLUME_UP','PIIWII_TV_VOLUME_DOWN','PIIWII_TV_MUTE','KEYBOARD_KEY','PIIWII_TV_BROWSER_F11']
+          bad=[x for x in forbidden if x in block]
+          if bad: raise SystemExit('Global Windows commands still in TV path: '+','.join(bad))
+          if 'piiwiiTvClient.send(action)' not in block: raise SystemExit('Plugin command transport missing')
+          PY
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android 35 packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        working-directory: /tmp/beta23
+        run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/out; mkdir -p "$OUT"
+          RAW=/tmp/beta23/remote/build/outputs/apk/release/remote-release-unsigned.apk
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta23-ALIGNED-UNSIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='53' versionName='2.0.0-beta23'" "$OUT/BADGING.txt"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+          cd /tmp/beta23
+          zip -qr "$OUT/PiiWii-Remote-2.0.0-beta23-SOURCES.zip" . -x '*/build/*' '.gradle/*'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-beta23-Plugin-Only
+          path: /tmp/out/*
+          retention-days: 7
+          if-no-files-found: error
