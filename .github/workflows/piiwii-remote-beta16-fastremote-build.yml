@@ -105,7 +105,7 @@ jobs:
                   if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
               }
           }
-'''
+          '''
           s=s[:start]+fn+s[end:]
           main.write_text(s,encoding='utf-8')
 
@@ -117,7 +117,7 @@ jobs:
           ))
           UiKit.addGap(body, 8)
           body.addView(section(context, "LECTURE")); UiKit.addGap(body, 4)
-'''
+          '''
           new='''        body.addView(section(context, "AFFICHAGE")); UiKit.addGap(body, 4)
           body.addView(row(context,
               button(context,"▭","Fenêtre"){onAction("windowed")},
@@ -128,7 +128,7 @@ jobs:
           body.addView(button(context,"●","Enregistrer"){onAction("record")}, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, UiKit.dp(context,58)).apply{ setMargins(UiKit.dp(context,3),0,UiKit.dp(context,3),0) })
           UiKit.addGap(body, 8)
           body.addView(section(context, "LECTURE")); UiKit.addGap(body, 4)
-'''
+          '''
           if old not in v: raise SystemExit('display row anchor missing')
           v=v.replace(old,new,1)
           view.write_text(v,encoding='utf-8')
