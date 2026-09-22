@@ -1,0 +1,20 @@
+--- a/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
++++ b/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+@@ -65,11 +65,14 @@
+             button(context,"♫","Radio"){onAction("radio")}
+         ))
+         UiKit.addGap(body, 5)
++        body.addView(section(context, "AFFICHAGE")); UiKit.addGap(body, 4)
+         body.addView(row(context,
+-            button(context,"⛶","Plein écran", true){onAction("fullscreen")},
+-            button(context,"▭","Petit écran"){onAction("windowed")},
+-            button(context,"●","Enregistrer"){onAction("record")}
++            button(context,"▭","Fenêtre"){onAction("windowed")},
++            button(context,"▱","Sans onglets"){onAction("browser_fullscreen")},
++            button(context,"⛶","Plein écran", true){onAction("fullscreen")}
+         ))
++        UiKit.addGap(body, 5)
++        body.addView(button(context,"●","Enregistrer"){onAction("record")}, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, UiKit.dp(context,58)).apply{ setMargins(UiKit.dp(context,3),0,UiKit.dp(context,3),0) })
+         UiKit.addGap(body, 8)
+         body.addView(section(context, "LECTURE")); UiKit.addGap(body, 4)
+         body.addView(row(context,
