@@ -14,13 +14,46 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Download validated beta15 source base
+      - name: Checkout archived source chunks
+        uses: actions/checkout@v4
+        with:
+          ref: 4f2389b48f741f501180f917b53358406141dc15
+          path: currentchunks
+      - name: Checkout previous chunk 03
+        uses: actions/checkout@v4
+        with:
+          ref: 0440e5af085e64c253890a0e3197dcc1c3b9f0e5
+          path: prevchunks
+
+      - name: Reconstruct exact validated beta15 source
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 --retry-delay 2 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-444c-820a-906f-971e61ba82dd/raw?se=2026-09-21T23%3A54%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=31edd7f5-5708-561c-8d14-cea81c5bb201&skoid=b5d2651b-fef3-4bb0-a03b-ca59cc22929b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A16%3A02Z&ske=2026-09-22T23%3A16%3A02Z&sks=b&skv=2026-02-06&sig=uSDQs2Ext4%2BfsI/TheddDWKpXQPCFOITBA1soNYMYmY%3D' -o /tmp/remote-beta15.zip
-          test -s /tmp/remote-beta15.zip
-          test "$(wc -c < /tmp/remote-beta15.zip)" -eq 64688
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib
+          cur=Path('currentchunks/piiwii-remote-beta15-temp')
+          prev=Path('prevchunks/piiwii-remote-beta15-temp')
+          parts=[(cur/f'rb15c.{i:02d}.b64').read_text().strip() for i in range(8)]
+          bad=prev.joinpath('rb15c.03.b64').read_text().strip()
+          target='7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed'
+          fixed=None
+          for i in range(len(bad)):
+              cand=bad[:i]+bad[i+1:]
+              text=''.join(parts[:3]+[cand]+parts[4:])
+              try:
+                  raw=base64.b64decode(text, validate=True)
+              except Exception:
+                  continue
+              if hashlib.sha256(raw).hexdigest()==target:
+                  fixed=cand
+                  Path('/tmp/remote-beta15.zip').write_bytes(raw)
+                  print('repaired chunk03 by deleting position', i, 'char', repr(bad[i]))
+                  break
+          if fixed is None:
+              raise SystemExit('Could not recover validated beta15 archive from historical chunks')
+          print('archive bytes', Path('/tmp/remote-beta15.zip').stat().st_size)
+          PY
           echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
           rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
           unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta17-src
@@ -96,8 +129,8 @@ jobs:
           grep -q "package: name='ch.piiwii.remote2' versionCode='47' versionName='2.0.0-beta17'" "$OUT/BADGING.txt"
           unzip -t "$APK" > "$OUT/ZIPTEST.txt"
           sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
-          (cd "$ROOT" && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" .)
-          sha256sum "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" > "$OUT/SHA256-SOURCES.txt"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
+          (cd "$ROOT" && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES-CI.zip" .)
 
       - uses: actions/upload-artifact@v4
         with:
