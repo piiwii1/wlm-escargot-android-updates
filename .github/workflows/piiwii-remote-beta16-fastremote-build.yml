@@ -1,4 +1,4 @@
-name: PiiWii Remote beta17 low latency
+name: PiiWii Remote beta18 LAN fast path
 
 on:
   push:
@@ -8,84 +8,92 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
       contents: read
     steps:
-      - name: Checkout archived source chunks
+      - name: Checkout full history
         uses: actions/checkout@v4
         with:
-          ref: 4f2389b48f741f501180f917b53358406141dc15
-          path: currentchunks
-      - name: Checkout previous chunk 03
-        uses: actions/checkout@v4
-        with:
-          ref: 0440e5af085e64c253890a0e3197dcc1c3b9f0e5
-          path: prevchunks
+          fetch-depth: 0
 
-      - name: Reconstruct exact validated beta15 source
+      - name: Recover intact historical beta15 source
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import base64, hashlib
-          cur=Path('currentchunks/piiwii-remote-beta15-temp')
-          prev=Path('prevchunks/piiwii-remote-beta15-temp')
-          parts=[(cur/f'rb15c.{i:02d}.b64').read_text().strip() for i in range(8)]
-          bad=prev.joinpath('rb15c.03.b64').read_text().strip()
+          import base64, hashlib, subprocess, zipfile
+          folder=Path('piiwii-remote-beta15-temp')
+          names=[f'rb15c.{i:02d}.b64' for i in range(8)]
           target='7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed'
-          fixed=None
-          for i in range(len(bad)):
-              cand=bad[:i]+bad[i+1:]
-              text=''.join(parts[:3]+[cand]+parts[4:])
+          def show(commit,name):
               try:
-                  raw=base64.b64decode(text, validate=True)
-              except Exception:
-                  continue
-              if hashlib.sha256(raw).hexdigest()==target:
-                  fixed=cand
-                  Path('/tmp/remote-beta15.zip').write_bytes(raw)
-                  print('repaired chunk03 by deleting position', i, 'char', repr(bad[i]))
+                  return subprocess.check_output(['git','show',f'{commit}:{folder/name}'],text=True).strip()
+              except subprocess.CalledProcessError:
+                  return None
+          commits=subprocess.check_output(['git','log','--all','--format=%H','--',str(folder)],text=True).split()
+          print('candidate commits',len(commits))
+          for commit in commits:
+              parts=[]
+              ok=True
+              for name in names:
+                  x=show(commit,name)
+                  if x is None:
+                      ok=False; break
+                  parts.append(''.join(x.split()))
+              if not ok: continue
+              text=''.join(parts)
+              try: raw=base64.b64decode(text,validate=True)
+              except Exception: continue
+              if hashlib.sha256(raw).hexdigest()==target and zipfile.is_zipfile(__import__('io').BytesIO(raw)):
+                  Path('/tmp/remote-base.zip').write_bytes(raw)
+                  print('recovered exact source from',commit)
                   break
-          if fixed is None:
-              raise SystemExit('Could not recover validated beta15 archive from historical chunks')
-          print('archive bytes', Path('/tmp/remote-beta15.zip').stat().st_size)
+          else:
+              raise SystemExit('No intact historical beta15 source archive found')
           PY
-          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
-          rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
-          unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta17-src
-          ROOT=/tmp/remote-beta17-src/remote_ci_text
+          rm -rf /tmp/remote-beta18-src && mkdir -p /tmp/remote-beta18-src
+          unzip -q /tmp/remote-base.zip -d /tmp/remote-beta18-src
+          ROOT=/tmp/remote-beta18-src/remote_ci_text
           test -f "$ROOT/remote/build.gradle.kts"
           echo "$ROOT" > /tmp/remote-root.txt
+          find "$ROOT" -maxdepth 3 -type d | sort | head -80
 
-      - name: Apply beta17 latency fix
+      - name: Apply beta18 LAN fast path
         shell: bash
         run: |
           set -euo pipefail
           ROOT="$(cat /tmp/remote-root.txt)"
-          sed -i 's/versionCode = 45/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
-          sed -i 's/versionName = "2.0.0-beta15"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
+          sed -i 's/versionCode = 45/versionCode = 48/' "$ROOT/remote/build.gradle.kts"
+          sed -i 's/versionName = "2.0.0-beta15"/versionName = "2.0.0-beta18"/' "$ROOT/remote/build.gradle.kts"
           python3 - <<'PY'
           from pathlib import Path
           root=Path(open('/tmp/remote-root.txt').read().strip())
-          p=root/'remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt'
+          # New local UDP commands
+          p=root/'remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt'
           s=p.read_text()
-          s=s.replace('import java.net.URL\n','import java.net.URL\nimport java.util.concurrent.Executors\n')
-          marker='    private val main = Handler(Looper.getMainLooper())\n'
-          insert='''    private val main = Handler(Looper.getMainLooper())\n    // Une seule file réseau conserve l’ordre exact des touches CH/VOL et évite les POST concurrents.\n    private val remoteExecutor = Executors.newSingleThreadExecutor { r ->\n        Thread(r, "PiiWiiTvRemote").apply { isDaemon = true }\n    }\n'''
-          if marker not in s: raise SystemExit('main handler marker missing')
-          s=s.replace(marker,insert,1)
-          old='''    fun send(action: String, callback: (Boolean, String) -> Unit = { _, _ -> }) {\n        if (!isPaired) { callback(false, "Associe d’abord PiiWii TV"); return }\n        Thread {\n            try {\n                val body = JSONObject().put("action", action).toString()\n                request(api("remote/command"), "POST", body, token)\n                main.post { callback(true, "Commande envoyée") }\n            } catch (e: Exception) {\n                main.post { callback(false, e.message ?: "PiiWii TV inaccessible") }\n            }\n        }.start()\n    }\n'''
-          new='''    fun send(action: String, callback: (Boolean, String) -> Unit = { _, _ -> }) {\n        if (!isPaired) { callback(false, "Associe d’abord PiiWii TV"); return }\n        remoteExecutor.execute {\n            try {\n                val body = JSONObject().put("action", action).toString()\n                request(api("remote/command"), "POST", body, token)\n                main.post { callback(true, "Commande envoyée") }\n            } catch (e: Exception) {\n                main.post { callback(false, e.message ?: "PiiWii TV inaccessible") }\n            }\n        }\n    }\n'''
-          if old not in s: raise SystemExit('send block missing')
+          s=s.replace('VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,','VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,\n    PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,')
+          p.write_text(s)
+          # Allow on Windows transport
+          p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt'
+          s=p.read_text()
+          marker='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.POINTER_MOVE'
+          repl='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_CHANNEL_UP, RemoteCommand.PIIWII_TV_CHANNEL_DOWN,\n            RemoteCommand.PIIWII_TV_VOLUME_UP, RemoteCommand.PIIWII_TV_VOLUME_DOWN, RemoteCommand.PIIWII_TV_MUTE, RemoteCommand.POINTER_MOVE'
+          if marker not in s: raise SystemExit('Windows allowlist marker missing')
+          p.write_text(s.replace(marker,repl,1))
+          # Route CH/VOL/MUTE through selected Windows PC over local UDP; HTTP remains fallback.
+          p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt'
+          s=p.read_text()
+          old='''        if (action == "power") {\n            val selected = vm.selected.value\n            if (selected?.type == DeviceType.WINDOWS_PC) {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n'''
+          new='''        val selected = vm.selected.value\n        if (selected?.type == DeviceType.WINDOWS_PC) {\n            val fastCommand = when (action) {\n                "channel_up" -> RemoteCommand.PIIWII_TV_CHANNEL_UP\n                "channel_down" -> RemoteCommand.PIIWII_TV_CHANNEL_DOWN\n                "volume_up" -> RemoteCommand.PIIWII_TV_VOLUME_UP\n                "volume_down" -> RemoteCommand.PIIWII_TV_VOLUME_DOWN\n                "mute" -> RemoteCommand.PIIWII_TV_MUTE\n                else -> null\n            }\n            if (fastCommand != null) {\n                vm.sendCommand(fastCommand)\n                return\n            }\n            if (action == "power") {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n'''
+          if old not in s: raise SystemExit('PiiWii TV action block missing')
           p.write_text(s.replace(old,new,1))
           PY
-          grep -q 'versionCode = 47' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta17"' "$ROOT/remote/build.gradle.kts"
-          grep -q 'remoteExecutor.execute' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt"
+          grep -q 'versionCode = 48' "$ROOT/remote/build.gradle.kts"
+          grep -q 'PIIWII_TV_CHANNEL_UP' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
 
       - uses: actions/setup-java@v4
         with:
@@ -103,11 +111,10 @@ jobs:
       - name: Gradle 8.9
         shell: bash
         run: |
-          set -euo pipefail
           curl -fL --retry 5 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
           unzip -q /tmp/gradle.zip -d /tmp
 
-      - name: Test and build
+      - name: Build APK
         shell: bash
         run: |
           set -euo pipefail
@@ -115,26 +122,22 @@ jobs:
           cd "$ROOT"
           /tmp/gradle-8.9/bin/gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
 
-      - name: Validate and package
+      - name: Package APK
         shell: bash
         run: |
           set -euo pipefail
           ROOT="$(cat /tmp/remote-root.txt)"
           OUT=/tmp/delivery; mkdir -p "$OUT"
           RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
-          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta17-ALIGNED-UNSIGNED.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta18-LAN-ALIGNED-UNSIGNED.apk"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='47' versionName='2.0.0-beta17'" "$OUT/BADGING.txt"
-          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
-          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='48' versionName='2.0.0-beta18'" "$OUT/BADGING.txt"
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
-          (cd "$ROOT" && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES-CI.zip" .)
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-beta17-low-latency
+          name: PiiWii-Remote-beta18-LAN-fastpath
           path: /tmp/delivery/*
           retention-days: 7
-          if-no-files-found: error
