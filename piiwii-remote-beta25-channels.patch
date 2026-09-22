@@ -1,0 +1,287 @@
+diff -ruN beta24_orig/remote/build.gradle.kts beta24_src/remote/build.gradle.kts
+--- beta24_orig/remote/build.gradle.kts	2026-09-22 19:25:10.000000000 +0000
++++ beta24_src/remote/build.gradle.kts	2026-09-22 19:40:20.170473588 +0000
+@@ -14,8 +14,8 @@
+         applicationId = "ch.piiwii.remote2"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 54
+-        versionName = "2.0.0-beta24"
++        versionCode = 55
++        versionName = "2.0.0-beta25"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+@@ -43,6 +43,8 @@
+     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
++    implementation("io.coil-kt:coil:2.7.0")
++    implementation("io.coil-kt:coil-svg:2.7.0")
+ 
+     testImplementation("junit:junit:4.13.2")
+ }
+diff -ruN beta24_orig/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt beta24_src/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+--- beta24_orig/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt	2026-09-22 18:59:18.000000000 +0000
++++ beta24_src/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt	2026-09-22 19:40:20.169903310 +0000
+@@ -1,17 +1,35 @@
+ package ch.piiwii.remote2.ui
+ 
++import android.content.ClipData
+ import android.content.Context
+ import android.graphics.Typeface
++import android.os.Handler
++import android.os.Looper
++import android.view.DragEvent
+ import android.view.Gravity
+ import android.view.View
++import android.widget.FrameLayout
+ import android.widget.GridLayout
+ import android.widget.ImageView
+ import android.widget.LinearLayout
+ import android.widget.ScrollView
+ import android.widget.TextView
+ import ch.piiwii.remote2.R
++import coil.ImageLoader
++import coil.decode.SvgDecoder
++import coil.request.ImageRequest
++import org.json.JSONArray
++import org.json.JSONObject
++import java.net.HttpURLConnection
++import java.net.URL
+ 
+ object PiiWiiTvRemoteView {
++    private data class TvChannel(val id: String, val name: String, val logo: String)
++    private const val CHANNEL_PREFS = "piiwii_tv_channel_grid_v1"
++    private const val CHANNEL_ORDER = "order"
++    private val main = Handler(Looper.getMainLooper())
++    @Volatile private var loader: ImageLoader? = null
++
+     fun create(context: Context, paired: Boolean, siteUrl: String, onPair: () -> Unit, onAction: (String) -> Unit): View {
+         val body = LinearLayout(context).apply {
+             orientation = LinearLayout.VERTICAL
+@@ -49,10 +67,22 @@
+             button(context,"🔇","Muet"){onAction("mute")},
+             button(context,"VOL+","Volume +"){onAction("volume_up")}
+         ))
+-        UiKit.addGap(body, 8)
++
++        UiKit.addGap(body, 10)
++        addChannelGrid(context, body, siteUrl, onAction)
++
++        UiKit.addGap(body, 10)
+         body.addView(section(context, "NAVIGATION")); UiKit.addGap(body, 4)
+-        val pad = GridLayout(context).apply { columnCount=3; rowCount=3 }
+-        fun nav(g:String,l:String,a:String,r:Int,c:Int){ pad.addView(button(context,g,l, a=="nav_ok"){onAction(a)}, GridLayout.LayoutParams(GridLayout.spec(r),GridLayout.spec(c)).apply{ width=0; height=UiKit.dp(context,52); setMargins(UiKit.dp(context,3),UiKit.dp(context,2),UiKit.dp(context,3),UiKit.dp(context,2)) }) }
++        val pad = GridLayout(context).apply { columnCount=3; rowCount=3; useDefaultMargins = false }
++        fun nav(g:String,l:String,a:String,r:Int,c:Int){
++            pad.addView(
++                button(context,g,l, a=="nav_ok"){onAction(a)},
++                GridLayout.LayoutParams(GridLayout.spec(r), GridLayout.spec(c, 1f)).apply{
++                    width=0; height=UiKit.dp(context,52)
++                    setMargins(UiKit.dp(context,3),UiKit.dp(context,2),UiKit.dp(context,3),UiKit.dp(context,2))
++                }
++            )
++        }
+         nav("⌂","Accueil","home",0,0); nav("▲","Haut","nav_up",0,1); nav("↩","Retour","back",0,2)
+         nav("◀","Gauche","nav_left",1,0); nav("OK","OK","nav_ok",1,1); nav("▶","Droite","nav_right",1,2)
+         nav("⚙","Réglages","settings",2,0); nav("▼","Bas","nav_down",2,1); nav("TV","Direct","direct",2,2)
+@@ -83,6 +113,198 @@
+         return ScrollView(context).apply { isFillViewport=true; addView(body) }
+     }
+ 
++    private fun addChannelGrid(context: Context, body: LinearLayout, siteUrl: String, onAction: (String) -> Unit) {
++        val header = LinearLayout(context).apply {
++            orientation = LinearLayout.HORIZONTAL
++            gravity = Gravity.CENTER_VERTICAL
++        }
++        header.addView(section(context, "CHAÎNES"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
++        var editMode = false
++        val edit = smallButton(context, "Réorganiser") {}
++        header.addView(edit)
++        body.addView(header)
++        UiKit.addGap(body, 3)
++        val hint = UiKit.secondary(context, "Touchez un logo pour zapper · Réorganiser puis faites un appui long pour déplacer.", 11f)
++        body.addView(hint)
++        UiKit.addGap(body, 5)
++
++        val state = mutableListOf<TvChannel>()
++        val grid = GridLayout(context).apply { columnCount = 3; useDefaultMargins = false }
++        val loading = UiKit.secondary(context, "Chargement des chaînes…", 12f)
++        body.addView(loading)
++        body.addView(grid, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
++
++        fun saveOrder() {
++            val arr = JSONArray()
++            state.forEach { arr.put(it.id) }
++            context.getSharedPreferences(CHANNEL_PREFS, Context.MODE_PRIVATE).edit().putString(CHANNEL_ORDER, arr.toString()).apply()
++        }
++
++        fun render() {
++            grid.removeAllViews()
++            state.forEachIndexed { index, ch ->
++                val card = channelCard(context, ch, editMode) {
++                    if (!editMode) onAction("channel:${ch.id}")
++                }
++                card.tag = ch.id
++                if (editMode) {
++                    card.setOnLongClickListener {
++                        val data = ClipData.newPlainText("piiwii-channel", ch.id)
++                        it.startDragAndDrop(data, View.DragShadowBuilder(it), ch.id, 0)
++                        true
++                    }
++                }
++                grid.addView(card, GridLayout.LayoutParams(GridLayout.spec(index / 3), GridLayout.spec(index % 3, 1f)).apply {
++                    width = 0
++                    height = UiKit.dp(context, 96)
++                    setMargins(UiKit.dp(context,3), UiKit.dp(context,3), UiKit.dp(context,3), UiKit.dp(context,3))
++                })
++            }
++        }
++
++        grid.setOnDragListener { _, event ->
++            when (event.action) {
++                DragEvent.ACTION_DRAG_STARTED -> editMode && event.localState is String
++                DragEvent.ACTION_DRAG_ENTERED, DragEvent.ACTION_DRAG_LOCATION -> true
++                DragEvent.ACTION_DROP -> {
++                    val sourceId = event.localState as? String ?: return@setOnDragListener false
++                    val from = state.indexOfFirst { it.id == sourceId }
++                    if (from < 0) return@setOnDragListener false
++                    var target = state.lastIndex
++                    for (i in 0 until grid.childCount) {
++                        val child = grid.getChildAt(i)
++                        if (event.x >= child.left && event.x <= child.right && event.y >= child.top && event.y <= child.bottom) {
++                            target = i
++                            break
++                        }
++                    }
++                    if (target != from && target in state.indices) {
++                        val moved = state.removeAt(from)
++                        val adjusted = if (from < target) target - 1 else target
++                        state.add(adjusted.coerceIn(0, state.size), moved)
++                        saveOrder()
++                        render()
++                    }
++                    true
++                }
++                DragEvent.ACTION_DRAG_ENDED -> true
++                else -> false
++            }
++        }
++
++        edit.setOnClickListener {
++            editMode = !editMode
++            edit.text = if (editMode) "Terminer" else "Réorganiser"
++            hint.text = if (editMode) "Appui long sur un logo, puis déplacez-le à la position voulue." else "Touchez un logo pour zapper · Réorganiser puis faites un appui long pour déplacer."
++            render()
++        }
++
++        loadChannels(context, siteUrl) { channels ->
++            state.clear()
++            state.addAll(applySavedOrder(context, channels))
++            loading.visibility = if (state.isEmpty()) View.VISIBLE else View.GONE
++            loading.text = if (state.isEmpty()) "Aucune chaîne disponible." else ""
++            render()
++        }
++    }
++
++    private fun applySavedOrder(context: Context, channels: List<TvChannel>): List<TvChannel> {
++        val saved = context.getSharedPreferences(CHANNEL_PREFS, Context.MODE_PRIVATE).getString(CHANNEL_ORDER, "").orEmpty()
++        if (saved.isBlank()) return channels
++        return try {
++            val arr = JSONArray(saved)
++            val byId = channels.associateBy { it.id }.toMutableMap()
++            val out = mutableListOf<TvChannel>()
++            for (i in 0 until arr.length()) byId.remove(arr.optString(i))?.let(out::add)
++            out.addAll(channels.filter { byId.containsKey(it.id) })
++            out
++        } catch (_: Exception) { channels }
++    }
++
++    private fun loadChannels(context: Context, siteUrl: String, done: (List<TvChannel>) -> Unit) {
++        Thread {
++            val result = mutableListOf<TvChannel>()
++            try {
++                val url = siteUrl.trimEnd('/') + "/wp-json/geektv/v1/channels"
++                val conn = (URL(url).openConnection() as HttpURLConnection).apply {
++                    requestMethod = "GET"
++                    connectTimeout = 5000
++                    readTimeout = 7000
++                    setRequestProperty("Accept", "application/json")
++                }
++                val text = conn.inputStream.bufferedReader().use { it.readText() }
++                conn.disconnect()
++                val arr = JSONObject(text).optJSONArray("channels") ?: JSONArray()
++                for (i in 0 until arr.length()) {
++                    val row = arr.optJSONObject(i) ?: continue
++                    val id = row.optString("id").trim()
++                    if (id.isBlank()) continue
++                    val name = row.optString("name").trim().ifBlank { id }
++                    val logo = row.optString("logo").trim()
++                    result.add(TvChannel(id, name, logo))
++                }
++            } catch (_: Exception) { }
++            main.post { done(result) }
++        }.apply { isDaemon = true; name = "PiiWiiTvChannels" }.start()
++    }
++
++    private fun channelCard(c: Context, ch: TvChannel, editMode: Boolean, click: () -> Unit): View {
++        val wrap = LinearLayout(c).apply {
++            orientation = LinearLayout.VERTICAL
++            gravity = Gravity.CENTER
++            background = UiKit.interactive(c, 14, if (editMode) UiKit.SURFACE_PRESSED else UiKit.SURFACE_ALT)
++            setPadding(UiKit.dp(c,6), UiKit.dp(c,5), UiKit.dp(c,6), UiKit.dp(c,5))
++            isClickable = true
++            isFocusable = true
++            contentDescription = if (editMode) "Déplacer ${ch.name}" else "Regarder ${ch.name}"
++            setOnClickListener { performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY); click() }
++        }
++        val logoBox = FrameLayout(c)
++        val fallback = TextView(c).apply {
++            text = ch.name.take(4).uppercase()
++            gravity = Gravity.CENTER
++            textSize = 13f
++            setTypeface(typeface, Typeface.BOLD)
++            setTextColor(UiKit.ACCENT)
++        }
++        val image = ImageView(c).apply {
++            scaleType = ImageView.ScaleType.FIT_CENTER
++            adjustViewBounds = true
++            visibility = View.INVISIBLE
++        }
++        logoBox.addView(fallback, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
++        logoBox.addView(image, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
++        wrap.addView(logoBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
++        wrap.addView(TextView(c).apply {
++            text = if (editMode) "↕ ${ch.name}" else ch.name
++            gravity = Gravity.CENTER
++            textSize = 10.5f
++            maxLines = 1
++            setTextColor(UiKit.TEXT)
++        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
++
++        if (ch.logo.isNotBlank()) {
++            val req = ImageRequest.Builder(c)
++                .data(ch.logo)
++                .target(
++                    onSuccess = { d -> image.setImageDrawable(d); image.visibility = View.VISIBLE; fallback.visibility = View.GONE },
++                    onError = { image.visibility = View.INVISIBLE; fallback.visibility = View.VISIBLE }
++                )
++                .build()
++            imageLoader(c).enqueue(req)
++        }
++        return wrap
++    }
++
++    private fun imageLoader(c: Context): ImageLoader {
++        loader?.let { return it }
++        return synchronized(this) {
++            loader ?: ImageLoader.Builder(c.applicationContext)
++                .components { add(SvgDecoder.Factory()) }
++                .build().also { loader = it }
++        }
++    }
++
+     private fun section(c: Context, t:String)=TextView(c).apply{ text=t; textSize=11f; letterSpacing=.08f; setTextColor(UiKit.TEXT_SECONDARY); setTypeface(typeface,Typeface.BOLD) }
+     private fun row(c:Context,vararg views:View)=LinearLayout(c).apply{ orientation=LinearLayout.HORIZONTAL; views.forEach{ addView(it, LinearLayout.LayoutParams(0,UiKit.dp(c,58),1f).apply{setMargins(UiKit.dp(c,3),0,UiKit.dp(c,3),0)}) } }
+     private fun button(c:Context,g:String,l:String,em:Boolean=false,click:()->Unit)=LinearLayout(c).apply{
