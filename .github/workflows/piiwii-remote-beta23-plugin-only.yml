@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reconstruct beta23 from beta21 UI base
+      - name: Reconstruct beta23 and isolate PiiWii TV controls
         shell: bash
         run: |
           set -euo pipefail
@@ -45,33 +45,34 @@ jobs:
           python - "$MAIN" <<'PY'
           from pathlib import Path
           import sys
-          p=Path(sys.argv[1])
-          s=p.read_text(encoding='utf-8')
-          start=s.index('    private fun handlePiiWiiTvAction(action: String) {')
-          end=s.index('\n    private fun showPiiWiiTvPairing()', start)
-          replacement='''    private fun handlePiiWiiTvAction(action: String) {
-        if (!piiwiiTvClient.isPaired) {
-            showPiiWiiTvPairing()
-            return
-        }
-
-        // Isolation stricte PiiWii TV : aucune touche clavier, aucun F11 et aucun volume Windows.
-        // Toutes les commandes TV sont envoyées au plugin via son canal distant dédié.
-        // Seul Power peut ouvrir la page TV si elle n'est pas déjà affichée.
-        val selected = vm.selected.value
-        if (selected?.type == DeviceType.WINDOWS_PC && action == "power") {
-            vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")
-        }
-
-        piiwiiTvClient.send(action) { ok, message ->
-            if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        }
-    }
-'''
-          s=s[:start]+replacement+s[end:]
-          # L'état F11 de beta21 n'a plus de raison d'exister.
-          s=s.replace('    // Etat F11 supposé du navigateur, piloté uniquement par les boutons PiiWii TV.\n    private var piiwiiTvBrowserFullscreen = false\n','')
-          p.write_text(s,encoding='utf-8')
+          p = Path(sys.argv[1])
+          s = p.read_text(encoding='utf-8')
+          start = s.index('    private fun handlePiiWiiTvAction(action: String) {')
+          end = s.index('\n    private fun showPiiWiiTvPairing()', start)
+          lines = [
+              '    private fun handlePiiWiiTvAction(action: String) {',
+              '        if (!piiwiiTvClient.isPaired) {',
+              '            showPiiWiiTvPairing()',
+              '            return',
+              '        }',
+              '',
+              '        // Isolation stricte : aucune touche clavier, aucun F11, aucun volume Windows.',
+              '        // Toutes les commandes TV sont envoyees au plugin PiiWii TV.',
+              '        val selected = vm.selected.value',
+              '        if (selected?.type == DeviceType.WINDOWS_PC && action == "power") {',
+              '            vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")',
+              '        }',
+              '',
+              '        piiwiiTvClient.send(action) { ok, message ->',
+              '            if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()',
+              '        }',
+              '    }',
+              ''
+          ]
+          replacement = '\n'.join(lines)
+          s = s[:start] + replacement + s[end:]
+          s = s.replace('    // Etat F11 supposé du navigateur, piloté uniquement par les boutons PiiWii TV.\n    private var piiwiiTvBrowserFullscreen = false\n', '')
+          p.write_text(s, encoding='utf-8')
           PY
 
           sed -i -e 's/versionCode = 48/versionCode = 53/' -e 's/versionName = "2.0.0-beta18"/versionName = "2.0.0-beta23"/' remote/build.gradle.kts
@@ -82,14 +83,16 @@ jobs:
           python - "$MAIN" <<'PY'
           from pathlib import Path
           import sys
-          s=Path(sys.argv[1]).read_text(encoding='utf-8')
-          a=s.index('    private fun handlePiiWiiTvAction(action: String) {')
-          b=s.index('\n    private fun showPiiWiiTvPairing()', a)
-          block=s[a:b]
-          forbidden=['PIIWII_TV_CHANNEL_UP','PIIWII_TV_CHANNEL_DOWN','PIIWII_TV_VOLUME_UP','PIIWII_TV_VOLUME_DOWN','PIIWII_TV_MUTE','KEYBOARD_KEY','PIIWII_TV_BROWSER_F11']
-          bad=[x for x in forbidden if x in block]
-          if bad: raise SystemExit('Global Windows commands still in TV path: '+','.join(bad))
-          if 'piiwiiTvClient.send(action)' not in block: raise SystemExit('Plugin command transport missing')
+          s = Path(sys.argv[1]).read_text(encoding='utf-8')
+          a = s.index('    private fun handlePiiWiiTvAction(action: String) {')
+          b = s.index('\n    private fun showPiiWiiTvPairing()', a)
+          block = s[a:b]
+          forbidden = ['PIIWII_TV_CHANNEL_UP','PIIWII_TV_CHANNEL_DOWN','PIIWII_TV_VOLUME_UP','PIIWII_TV_VOLUME_DOWN','PIIWII_TV_MUTE','KEYBOARD_KEY','PIIWII_TV_BROWSER_F11']
+          bad = [x for x in forbidden if x in block]
+          if bad:
+              raise SystemExit('Global Windows commands still in TV path: ' + ','.join(bad))
+          if 'piiwiiTvClient.send(action)' not in block:
+              raise SystemExit('Plugin command transport missing')
           PY
 
       - uses: actions/setup-java@v4
