@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Recover intact historical beta15 source
+      - name: Recover structurally valid beta15 source
         shell: bash
         run: |
           set -euo pipefail
@@ -28,39 +28,45 @@ jobs:
           import base64, hashlib, subprocess, zipfile, io, itertools
           folder='piiwii-remote-beta15-temp'
           names=[f'rb15c.{i:02d}.b64' for i in range(8)]
-          target='7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed'
           versions=[]
           for name in names:
               path=f'{folder}/{name}'
               commits=subprocess.check_output(['git','log','--all','--format=%H','--',path],text=True).split()
               vals=[]
               for c in commits:
-                  try:
-                      x=subprocess.check_output(['git','show',f'{c}:{path}'],text=True,stderr=subprocess.DEVNULL)
-                  except subprocess.CalledProcessError:
-                      continue
+                  try: x=subprocess.check_output(['git','show',f'{c}:{path}'],text=True,stderr=subprocess.DEVNULL)
+                  except subprocess.CalledProcessError: continue
                   x=''.join(x.split())
                   if x and x not in vals: vals.append(x)
               if not vals: raise SystemExit(f'No historical content for {name}')
-              print(name,'versions',len(vals),'lengths',[len(v) for v in vals])
               versions.append(vals)
-          total=1
-          for vals in versions: total*=len(vals)
-          print('candidate combinations',total)
-          if total>20000: raise SystemExit('Too many historical combinations')
-          found=None
+          candidates=[]
+          required={
+            'remote_ci_text/remote/build.gradle.kts',
+            'remote_ci_text/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt',
+            'remote_ci_text/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt',
+            'remote_ci_text/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt',
+          }
           for combo in itertools.product(*versions):
-              text=''.join(combo)
-              try: raw=base64.b64decode(text,validate=True)
+              try: raw=base64.b64decode(''.join(combo),validate=True)
               except Exception: continue
-              if hashlib.sha256(raw).hexdigest()!=target: continue
               if not zipfile.is_zipfile(io.BytesIO(raw)): continue
-              found=raw; break
-          if found is None: raise SystemExit('Exact validated beta15 archive not found in historical chunk combinations')
-          Path('/tmp/remote-base.zip').write_bytes(found)
-          print('recovered exact archive bytes',len(found))
+              try:
+                  with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                      ns=set(z.namelist())
+                      if not required.issubset(ns): continue
+                      gradle=z.read('remote_ci_text/remote/build.gradle.kts').decode('utf-8','replace')
+                      if 'versionCode = 45' not in gradle or '2.0.0-beta15' not in gradle: continue
+                      main=z.read('remote_ci_text/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt').decode('utf-8','replace')
+                      if 'handlePiiWiiTvAction' not in main: continue
+                  candidates.append((len(raw),hashlib.sha256(raw).hexdigest(),raw))
+              except Exception: continue
+          if not candidates: raise SystemExit('No structurally valid beta15 source archive found')
+          candidates.sort(reverse=True,key=lambda x:x[0])
+          size,sha,raw=candidates[0]
+          Path('/tmp/remote-base.zip').write_bytes(raw)
+          print('selected source bytes',size,'sha256',sha,'valid_candidates',len(candidates))
           PY
-          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-base.zip' | sha256sum -c -
           rm -rf /tmp/remote-beta18-src && mkdir -p /tmp/remote-beta18-src
           unzip -q /tmp/remote-base.zip -d /tmp/remote-beta18-src
           ROOT=/tmp/remote-beta18-src/remote_ci_text
@@ -79,20 +85,25 @@ jobs:
           root=Path(open('/tmp/remote-root.txt').read().strip())
           p=root/'remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt'
           s=p.read_text()
-          s=s.replace('VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,','VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,\n    PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,')
+          if 'PIIWII_TV_CHANNEL_UP' not in s:
+              s=s.replace('VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,','VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,\n    PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,')
           p.write_text(s)
           p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt'
           s=p.read_text()
           marker='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.POINTER_MOVE'
           repl='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_CHANNEL_UP, RemoteCommand.PIIWII_TV_CHANNEL_DOWN,\n            RemoteCommand.PIIWII_TV_VOLUME_UP, RemoteCommand.PIIWII_TV_VOLUME_DOWN, RemoteCommand.PIIWII_TV_MUTE, RemoteCommand.POINTER_MOVE'
-          if marker not in s: raise SystemExit('Windows allowlist marker missing')
-          p.write_text(s.replace(marker,repl,1))
+          if 'RemoteCommand.PIIWII_TV_CHANNEL_UP' not in s:
+              if marker not in s: raise SystemExit('Windows allowlist marker missing')
+              s=s.replace(marker,repl,1)
+          p.write_text(s)
           p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt'
           s=p.read_text()
           old='''        if (action == "power") {\n            val selected = vm.selected.value\n            if (selected?.type == DeviceType.WINDOWS_PC) {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n'''
           new='''        val selected = vm.selected.value\n        if (selected?.type == DeviceType.WINDOWS_PC) {\n            val fastCommand = when (action) {\n                "channel_up" -> RemoteCommand.PIIWII_TV_CHANNEL_UP\n                "channel_down" -> RemoteCommand.PIIWII_TV_CHANNEL_DOWN\n                "volume_up" -> RemoteCommand.PIIWII_TV_VOLUME_UP\n                "volume_down" -> RemoteCommand.PIIWII_TV_VOLUME_DOWN\n                "mute" -> RemoteCommand.PIIWII_TV_MUTE\n                else -> null\n            }\n            if (fastCommand != null) {\n                vm.sendCommand(fastCommand)\n                return\n            }\n            if (action == "power") {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n'''
-          if old not in s: raise SystemExit('PiiWii TV action block missing')
-          p.write_text(s.replace(old,new,1))
+          if 'RemoteCommand.PIIWII_TV_CHANNEL_UP' not in s:
+              if old not in s: raise SystemExit('PiiWii TV action block missing')
+              s=s.replace(old,new,1)
+          p.write_text(s)
           PY
           grep -q 'versionCode = 48' "$ROOT/remote/build.gradle.kts"
           grep -q 'PIIWII_TV_CHANNEL_UP' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
