@@ -1,0 +1,206 @@
+name: PiiWii Remote Phone beta16 nav fix
+
+on:
+  push:
+    branches: [piiwii-remote-phone-beta16-navfix]
+    paths:
+      - 'piiwii-remote-phone-beta16-navfix/**'
+      - '.github/workflows/piiwii-remote-phone-beta16-navfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta14 exact validated navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh /tmp/src
+          ROOT=/tmp/src/piiwii-remote
+          for v in 3 4 5 6 7 8; do
+            base64 -d piiwii-remote-phone-beta${v}/phone-beta${v}.patch.xz.b64 > /tmp/p.patch.xz
+            xz -dc /tmp/p.patch.xz > /tmp/p.patch
+            (cd "$ROOT" && patch -p1 < /tmp/p.patch)
+          done
+          base64 -d piiwii-remote-phone-beta9/phone-beta9.patch.xz.b64 > /tmp/p9.patch.xz
+          xz -dc /tmp/p9.patch.xz > /tmp/p9.patch
+          (cd "$ROOT" && patch -p1 < /tmp/p9.patch)
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-fix1.patch")
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta9/phone-beta9-space.patch")
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-phone-beta10-memory/phone-beta10-memory.patch")
+
+          python3 - "$ROOT" <<'PY'
+          from pathlib import Path
+          import re, sys
+          root = Path(sys.argv[1])
+
+          p = root / 'remote/build.gradle.kts'
+          s = p.read_text()
+          s = s.replace('versionCode = 40','versionCode = 44',1)
+          s = s.replace('versionName = "2.0.0-beta10"','versionName = "2.0.0-beta14"',1)
+          p.write_text(s)
+
+          p = root / 'remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt'
+          s = p.read_text()
+          if 'import android.widget.ImageView\n' not in s:
+              s = s.replace('import android.widget.FrameLayout\n','import android.widget.FrameLayout\nimport android.widget.ImageView\n',1)
+          if 'import ch.piiwii.remote2.R\n' not in s:
+              s = s.replace('import android.widget.ViewFlipper\n','import android.widget.ViewFlipper\nimport ch.piiwii.remote2.R\n',1)
+
+          s = s.replace('addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 70)))',
+                        'addView(bottomBar(), LayoutParams(LayoutParams.MATCH_PARENT, UiKit.dp(context, 88)))',1)
+
+          settings_pattern = re.compile(r'        addView\(TextView\(context\)\.apply \{\s*\n\s*text = "⚙"\s*\n.*?contentDescription = "Paramètres".*?\n\s*\}, LayoutParams\(UiKit\.dp\(context, 52\), UiKit\.dp\(context, 52\)\)\.apply \{\s*\n\s*marginStart = UiKit\.dp\(context, 8\)\s*\n\s*\}\)', re.S)
+          new_settings='''        addView(ImageView(context).apply {
+              setImageResource(R.drawable.ic_settings_custom)
+              adjustViewBounds = true
+              scaleType = ImageView.ScaleType.FIT_CENTER
+              setPadding(UiKit.dp(context, 2), UiKit.dp(context, 2), UiKit.dp(context, 2), UiKit.dp(context, 2))
+              isClickable = true
+              isFocusable = true
+              contentDescription = "Paramètres"
+              background = null
+              setOnClickListener { settingsClick?.invoke() }
+          }, LayoutParams(UiKit.dp(context, 48), UiKit.dp(context, 48)).apply {
+              marginStart = UiKit.dp(context, 8)
+          })'''
+          s,c=settings_pattern.subn(new_settings,s,count=1)
+          assert c==1, 'settings block not replaced'
+
+          nav_pattern=re.compile(r'                addView\(TextView\(context\)\.apply \{\s*\n\s*text = section\.glyph\s*\n\s*textSize = 21f\s*\n\s*gravity = Gravity\.CENTER\s*\n\s*\}\)\s*\n\s*addView\(TextView\(context\)\.apply \{\s*\n\s*text = section\.label\s*\n\s*textSize = 10f\s*\n\s*gravity = Gravity\.CENTER\s*\n\s*maxLines = 1\s*\n\s*\}\)')
+          new_nav='''                addView(ImageView(context).apply {
+                      setImageResource(when (section) {
+                          RemoteSection.REMOTE, RemoteSection.NAVIGATION -> R.drawable.ic_remote_custom
+                          RemoteSection.TOUCHPAD -> R.drawable.ic_touchpad_custom
+                          RemoteSection.KEYBOARD, RemoteSection.KEYBOARD_ADVANCED -> R.drawable.ic_keyboard_custom
+                          RemoteSection.APPS -> R.drawable.ic_apps_custom
+                      })
+                      adjustViewBounds = true
+                      scaleType = ImageView.ScaleType.FIT_CENTER
+                      contentDescription = section.label
+                  }, LayoutParams(UiKit.dp(context, 64), UiKit.dp(context, 64)))'''
+          s,c=nav_pattern.subn(new_nav,s,count=1)
+          assert c==1, 'bottom nav blocks not replaced'
+
+          state_pattern = re.compile(
+              r'\s*view\.background = UiKit\.rounded\(if \(active\) UiKit\.SURFACE_ALT else UiKit\.SURFACE, 14, context\)\s*\n'
+              r'\s*for \(i in 0 until view\.childCount\) \{\s*\n'
+              r'\s*\(view\.getChildAt\(i\) as\? TextView\)\?\.setTextColor\(if \(active\) UiKit\.ACCENT else UiKit\.TEXT_SECONDARY\)\s*\n'
+              r'\s*\}', re.S)
+          replacement='''
+            view.background = null
+            for (i in 0 until view.childCount) {
+                (view.getChildAt(i) as? ImageView)?.alpha = if (active) 1f else 0.84f
+            }'''
+          s,c=state_pattern.subn(replacement,s,count=1)
+          assert c==1, 'nav state block not replaced'
+          p.write_text(s)
+          PY
+
+          RES="$ROOT/remote/src/main/res/drawable-nodpi"
+          mkdir -p "$RES"
+          # Exact validated historical icons.
+          for n in remote touchpad keyboard apps settings; do
+            curl -fsSL "https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/piiwii-remote-v2-phone-beta10-icons/piiwii-remote-phone-beta10/icon-assets/ic_${n}.png" -o "$RES/ic_${n}_custom.png"
+            test -s "$RES/ic_${n}_custom.png"
+          done
+
+      - name: Add PiiWii TV without changing historical navigation icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/src/piiwii-remote
+          base64 -d piiwii-remote-phone-beta16-navfix/tv-functional.patch.xz.b64 > /tmp/tv.patch.xz
+          xz -dc /tmp/tv.patch.xz > /tmp/tv.patch
+          (cd "$ROOT" && patch -p1 < /tmp/tv.patch)
+
+          python3 - "$ROOT" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1])
+          p=root/'remote/build.gradle.kts'
+          s=p.read_text()
+          s=s.replace('versionCode = 44','versionCode = 46',1)
+          s=s.replace('versionName = "2.0.0-beta14"','versionName = "2.0.0-beta16"',1)
+          p.write_text(s)
+          PY
+
+          rm -f "$ROOT/remote/src/main/res/drawable-nodpi/ic_piiwii_tv_custom.png"
+          mkdir -p "$ROOT/remote/src/main/res/drawable"
+          cat > "$ROOT/remote/src/main/res/drawable/ic_piiwii_tv_custom.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="64dp" android:height="64dp"
+              android:viewportWidth="256" android:viewportHeight="256">
+              <path android:pathData="M99,69 L75,31" android:strokeColor="#8797AD" android:strokeWidth="7" android:strokeLineCap="round"/>
+              <path android:pathData="M157,69 L181,31" android:strokeColor="#8797AD" android:strokeWidth="7" android:strokeLineCap="round"/>
+              <path android:pathData="M48,69 C36,69 27,79 27,91 L27,190 C27,202 36,211 48,211 L208,211 C220,211 229,202 229,190 L229,91 C229,79 220,69 208,69 Z" android:fillColor="#3A4658" android:strokeColor="#98A9BF" android:strokeWidth="4"/>
+              <path android:pathData="M57,91 C50,91 45,97 45,104 L45,168 C45,175 50,181 57,181 L199,181 C206,181 211,175 211,168 L211,104 C211,97 206,91 199,91 Z" android:fillColor="#0A2540" android:strokeColor="#139CFF" android:strokeWidth="5"/>
+              <path android:pathData="M111,111 L111,161 L156,136 Z" android:fillColor="#F3F7FB"/>
+              <path android:pathData="M194,190 m-5,0 a5,5 0,1 0,10 0 a5,5 0,1 0,-10 0" android:fillColor="#169FFF"/>
+              <path android:pathData="M67,211 L91,211 L84,226 L61,226 Z" android:fillColor="#394454" android:strokeColor="#8595AA" android:strokeWidth="3"/>
+              <path android:pathData="M165,211 L189,211 L195,226 L172,226 Z" android:fillColor="#394454" android:strokeColor="#8595AA" android:strokeWidth="3"/>
+          </vector>
+          XML
+
+          # Guardrails: historical bar stays exactly the beta14 design.
+          grep -q 'versionCode = 46' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta16"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'UiKit.dp(context, 64)' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'view.background = null' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          ! grep -q 'text = section.label' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          grep -q 'RemoteSection.PIIWII_TV -> R.drawable.ic_piiwii_tv_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
+          for n in remote touchpad keyboard apps settings; do test -s "$ROOT/remote/src/main/res/drawable-nodpi/ic_${n}_custom.png"; done
+          test -s "$ROOT/remote/src/main/res/drawable/ic_piiwii_tv_custom.xml"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        shell: bash
+        run: |
+          echo 'ANDROID_HOME=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          echo 'ANDROID_SDK_ROOT=/usr/local/lib/android/sdk' >> "$GITHUB_ENV"
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unit tests and release build
+        working-directory: /tmp/src/piiwii-remote
+        run: gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package beta16
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/src/piiwii-remote
+          OUT=/tmp/out
+          mkdir -p "$OUT"
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta16-ALIGNED-UNSIGNED.apk"
+          "$ZIPALIGN" -f 4 "$RAW" "$APK"
+          "$ZIPALIGN" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$AAPT" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='46' versionName='2.0.0-beta16'" "$OUT/BADGING.txt"
+          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar "$OUT/apksigner.jar"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Phone-2.0.0-beta16-UNSIGNED
+          path: /tmp/out/*
+          retention-days: 7
+          if-no-files-found: error
