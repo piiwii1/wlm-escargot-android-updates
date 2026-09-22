@@ -14,59 +14,58 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout current correction assets
+      - name: Checkout beta17 correction assets
         uses: actions/checkout@v4
         with:
           path: current
 
-      - name: Checkout historical beta15 source snapshot
-        uses: actions/checkout@v4
-        with:
-          ref: 4f2389b48f741f501180f917b53358406141dc15
-          path: base
-
-      - name: Reconstruct beta15 source
+      - name: Reconstruct beta17 source snapshot
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import base64
-          parts=sorted(Path('base/piiwii-remote-beta15-temp').glob('rb15c.*.b64'))
+          import base64, zipfile
+          parts=sorted(Path('current/piiwii-remote-beta17-source').glob('src.*.b64'))
           print('parts:', [p.name for p in parts])
-          if not parts: raise SystemExit('missing historical beta15 chunks')
+          if not parts: raise SystemExit('missing beta17 source chunks')
           text=''.join(''.join(p.read_text().split()) for p in parts)
           text += '='*((4-len(text)%4)%4)
           raw=base64.b64decode(text, validate=True)
-          Path('/tmp/remote-beta15.zip').write_bytes(raw)
+          out=Path('/tmp/remote-beta17.zip')
+          out.write_bytes(raw)
           print('zip bytes', len(raw))
+          if not zipfile.is_zipfile(out): raise SystemExit('reconstructed source is not a ZIP')
           PY
-          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
           rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
-          unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta17-src
-          ROOT=/tmp/remote-beta17-src/remote_ci_text
+          unzip -q /tmp/remote-beta17.zip -d /tmp/remote-beta17-src
+          ROOT="$(dirname "$(find /tmp/remote-beta17-src -type f -path '*/remote/build.gradle.kts' -print -quit)")"
+          ROOT="${ROOT%/remote}"
+          test -n "$ROOT"
           test -f "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionCode = 45' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta15"' "$ROOT/remote/build.gradle.kts"
+          echo "$ROOT" > /tmp/remote-root.txt
 
-      - name: Restore original bottom icons and bump beta17
+      - name: Restore original bottom icons and set beta17 version
         shell: bash
         run: |
           set -euo pipefail
-          ROOT=/tmp/remote-beta17-src/remote_ci_text
+          ROOT="$(cat /tmp/remote-root.txt)"
           DRAW="$ROOT/remote/src/main/res/drawable-nodpi"
+          mkdir -p "$DRAW"
           base64 -d current/piiwii-remote-beta17-icons/ic_remote_custom.png.b64 > "$DRAW/ic_remote_custom.png"
           base64 -d current/piiwii-remote-beta17-icons/ic_touchpad_custom.png.b64 > "$DRAW/ic_touchpad_custom.png"
           base64 -d current/piiwii-remote-beta17-icons/ic_keyboard_custom.png.b64 > "$DRAW/ic_keyboard_custom.png"
           base64 -d current/piiwii-remote-beta17-icons/ic_apps_custom.png.b64 > "$DRAW/ic_apps_custom.png"
-          sed -i 's/versionCode = 45/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
-          sed -i 's/versionName = "2.0.0-beta15"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
+          sed -Ei 's/versionCode = (45|46|47)/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
+          sed -Ei 's/versionName = "2\.0\.0-beta(15|16|17)"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 47' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta17"' "$ROOT/remote/build.gradle.kts"
           python3 - <<'PY'
           from pathlib import Path
           import struct
-          root=Path('/tmp/remote-beta17-src/remote_ci_text/remote/src/main/res/drawable-nodpi')
+          root=Path(open('/tmp/remote-root.txt').read().strip())/'remote/src/main/res/drawable-nodpi'
           for n in ['ic_remote_custom.png','ic_touchpad_custom.png','ic_keyboard_custom.png','ic_apps_custom.png']:
-              d=(root/n).read_bytes(); w,h=struct.unpack('>II',d[16:24]); assert (w,h)==(48,48),(n,w,h)
+              d=(root/n).read_bytes(); assert d[:8]==b'\x89PNG\r\n\x1a\n'; w,h=struct.unpack('>II',d[16:24]); assert (w,h)==(48,48),(n,w,h)
           PY
           grep -q 'R.drawable.ic_piiwii_tv_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
 
@@ -90,14 +89,18 @@ jobs:
           unzip -q /tmp/gradle.zip -d /tmp
 
       - name: Test and build
-        working-directory: /tmp/remote-beta17-src/remote_ci_text
-        run: /tmp/gradle-8.9/bin/gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(cat /tmp/remote-root.txt)"
+          cd "$ROOT"
+          /tmp/gradle-8.9/bin/gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
 
       - name: Validate and package
         shell: bash
         run: |
           set -euo pipefail
-          ROOT=/tmp/remote-beta17-src/remote_ci_text
+          ROOT="$(cat /tmp/remote-root.txt)"
           OUT=/tmp/delivery; mkdir -p "$OUT"
           RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
           APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta17-ALIGNED-UNSIGNED.apk"
