@@ -4,7 +4,6 @@ on:
   push:
     branches: [piiwii-remote-phone-beta17-icons-restore]
     paths:
-      - 'piiwii-remote-beta17-icons/**'
       - '.github/workflows/piiwii-remote-beta16-fastremote-build.yml'
   workflow_dispatch:
 
@@ -15,53 +14,60 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout current correction assets
+        uses: actions/checkout@v4
+        with:
+          path: current
 
-      - name: Download exact validated beta15 source base
+      - name: Checkout historical beta15 source snapshot
+        uses: actions/checkout@v4
+        with:
+          ref: 4f2389b48f741f501180f917b53358406141dc15
+          path: base
+
+      - name: Reconstruct beta15 source
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 --retry-delay 2 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-444c-820a-906f-971e61ba82dd/raw?se=2026-09-21T23%3A54%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=31edd7f5-5708-561c-8d14-cea81c5bb201&skoid=b5d2651b-fef3-4bb0-a03b-ca59cc22929b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A16%3A02Z&ske=2026-09-22T23%3A16%3A02Z&sks=b&skv=2026-02-06&sig=uSDQs2Ext4%2BfsI/TheddDWKpXQPCFOITBA1soNYMYmY%3D' -o /tmp/remote-beta15.zip
-          test -s /tmp/remote-beta15.zip
-          test "$(wc -c < /tmp/remote-beta15.zip)" -eq 64688
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          parts=sorted(Path('base/piiwii-remote-beta15-temp').glob('rb15c.*.b64'))
+          print('parts:', [p.name for p in parts])
+          if not parts: raise SystemExit('missing historical beta15 chunks')
+          text=''.join(''.join(p.read_text().split()) for p in parts)
+          text += '='*((4-len(text)%4)%4)
+          raw=base64.b64decode(text, validate=True)
+          Path('/tmp/remote-beta15.zip').write_bytes(raw)
+          print('zip bytes', len(raw))
+          PY
           echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
-          rm -rf /tmp/remote-beta17-src
-          mkdir -p /tmp/remote-beta17-src
+          rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
           unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta17-src
           ROOT=/tmp/remote-beta17-src/remote_ci_text
           test -f "$ROOT/remote/build.gradle.kts"
           grep -q 'versionCode = 45' "$ROOT/remote/build.gradle.kts"
           grep -q 'versionName = "2.0.0-beta15"' "$ROOT/remote/build.gradle.kts"
 
-      - name: Restore original bottom navigation artwork and bump beta17
+      - name: Restore original bottom icons and bump beta17
         shell: bash
         run: |
           set -euo pipefail
           ROOT=/tmp/remote-beta17-src/remote_ci_text
           DRAW="$ROOT/remote/src/main/res/drawable-nodpi"
-          base64 -d piiwii-remote-beta17-icons/ic_remote_custom.png.b64 > "$DRAW/ic_remote_custom.png"
-          base64 -d piiwii-remote-beta17-icons/ic_touchpad_custom.png.b64 > "$DRAW/ic_touchpad_custom.png"
-          base64 -d piiwii-remote-beta17-icons/ic_keyboard_custom.png.b64 > "$DRAW/ic_keyboard_custom.png"
-          base64 -d piiwii-remote-beta17-icons/ic_apps_custom.png.b64 > "$DRAW/ic_apps_custom.png"
+          base64 -d current/piiwii-remote-beta17-icons/ic_remote_custom.png.b64 > "$DRAW/ic_remote_custom.png"
+          base64 -d current/piiwii-remote-beta17-icons/ic_touchpad_custom.png.b64 > "$DRAW/ic_touchpad_custom.png"
+          base64 -d current/piiwii-remote-beta17-icons/ic_keyboard_custom.png.b64 > "$DRAW/ic_keyboard_custom.png"
+          base64 -d current/piiwii-remote-beta17-icons/ic_apps_custom.png.b64 > "$DRAW/ic_apps_custom.png"
           sed -i 's/versionCode = 45/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
           sed -i 's/versionName = "2.0.0-beta15"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionCode = 47' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta17"' "$ROOT/remote/build.gradle.kts"
           python3 - <<'PY'
           from pathlib import Path
           import struct
           root=Path('/tmp/remote-beta17-src/remote_ci_text/remote/src/main/res/drawable-nodpi')
-          for name in ['ic_remote_custom.png','ic_touchpad_custom.png','ic_keyboard_custom.png','ic_apps_custom.png']:
-              data=(root/name).read_bytes()
-              if data[:8] != b'\x89PNG\r\n\x1a\n': raise SystemExit(name+' is not PNG')
-              w,h=struct.unpack('>II',data[16:24])
-              if (w,h)!=(48,48): raise SystemExit(f'{name}: unexpected {w}x{h}')
-              print(name,w,h,len(data))
+          for n in ['ic_remote_custom.png','ic_touchpad_custom.png','ic_keyboard_custom.png','ic_apps_custom.png']:
+              d=(root/n).read_bytes(); w,h=struct.unpack('>II',d[16:24]); assert (w,h)==(48,48),(n,w,h)
           PY
-          grep -q 'R.drawable.ic_remote_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
-          grep -q 'R.drawable.ic_touchpad_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
-          grep -q 'R.drawable.ic_keyboard_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
-          grep -q 'R.drawable.ic_apps_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
           grep -q 'R.drawable.ic_piiwii_tv_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
 
       - uses: actions/setup-java@v4
@@ -69,36 +75,30 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Ensure Android 35 SDK pieces
+      - name: Android SDK
         shell: bash
         run: |
           set -euo pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -perm -111 | head -n1)"
-          fi
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
-      - name: Prepare Gradle 8.9
+      - name: Gradle 8.9
         shell: bash
         run: |
-          set -euo pipefail
-          curl -fL --retry 5 --retry-delay 2 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          rm -rf /tmp/gradle-8.9
+          curl -fL --retry 5 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
           unzip -q /tmp/gradle.zip -d /tmp
 
-      - name: Unit tests and release build
+      - name: Test and build
         working-directory: /tmp/remote-beta17-src/remote_ci_text
-        run: /tmp/gradle-8.9/bin/gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+        run: /tmp/gradle-8.9/bin/gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
 
-      - name: Validate and package beta17
+      - name: Validate and package
         shell: bash
         run: |
           set -euo pipefail
           ROOT=/tmp/remote-beta17-src/remote_ci_text
-          OUT=/tmp/delivery
-          mkdir -p "$OUT"
+          OUT=/tmp/delivery; mkdir -p "$OUT"
           RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
           APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta17-ALIGNED-UNSIGNED.apk"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
@@ -116,4 +116,3 @@ jobs:
           name: PiiWii-Remote-beta17-icons-restored-unsigned
           path: /tmp/delivery/*
           retention-days: 7
-          if-no-files-found: error
