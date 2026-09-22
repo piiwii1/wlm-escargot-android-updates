@@ -1,0 +1,128 @@
+name: PiiWii Remote Windows beta8 - PiiWii TV LAN
+
+on:
+  push:
+    branches: [piiwii-remote-windows-beta8-piiwii-tv-use-this]
+    paths:
+      - '.github/workflows/piiwii-remote-windows-beta8-piiwii-tv.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct beta7 and add PiiWii TV commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="$(cygpath -u "$RUNNER_TEMP")"
+          bash piiwii-remote-v2-lot12/reconstruct-lot12.sh "$BASE/piiwii-beta8-src"
+          ROOT="$BASE/piiwii-beta8-src/piiwii-remote"
+          base64 -d piiwii-remote-v2-windows-beta4/beta4.patch.xz.b64 | xz -d > "$BASE/beta4.patch"
+          (cd "$ROOT" && patch -p1 < "$BASE/beta4.patch")
+          mkdir -p "$ROOT/windows-agent/installer"
+          cp piiwii-remote-v2-windows-beta4/PiiWiiRemoteAgent.iss "$ROOT/windows-agent/installer/"
+          base64 -d piiwii-remote-v2-windows-beta5/beta5.patch.xz.b64 | xz -d > "$BASE/beta5.patch"
+          (cd "$ROOT" && patch --binary -p2 < "$BASE/beta5.patch")
+          base64 -d piiwii-remote-v2-windows-beta6/windows-beta6.patch.xz.b64 | xz -d > "$BASE/beta6.patch"
+          (cd "$ROOT" && patch --binary -p1 < "$BASE/beta6.patch")
+          python - "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp" <<'PY2'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]); s=p.read_text(encoding='utf-8')
+          old='PiiWii Remote Agent\\n2.0.0-beta5\\n'; new='PiiWii Remote Agent\\n2.0.0-beta6\\n'
+          if old not in s: raise SystemExit('beta6 baseline not found')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY2
+          python - "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp" "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc" "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss" <<'PY3'
+          from pathlib import Path
+          import sys
+          for name in sys.argv[1:]:
+              p=Path(name); s=p.read_text(encoding='utf-8-sig').replace('\r\n','\n').replace('\r','\n'); p.write_text(s,encoding='utf-8',newline='\n')
+          PY3
+          (cd "$ROOT" && patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-v2-windows-beta7/windows-beta7-normalized.patch")
+          python - "$ROOT/windows-agent/src/PiiWiiRemoteAgent.cpp" "$ROOT/windows-agent/src/PiiWiiRemoteAgent.rc" "$ROOT/windows-agent/installer/PiiWiiRemoteAgent.iss" <<'PY4'
+          from pathlib import Path
+          import sys
+          cpp, rc, iss = map(Path, sys.argv[1:4])
+          s=cpp.read_text(encoding='utf-8')
+          s=s.replace('2.0.0-beta7','2.0.0-beta8')
+          needle='    const WORD vk = keyboardVirtualKeyForCommand(command);\n'
+          block='''    // PiiWii TV : touches virtuelles réservées, sans action sur le volume/navigation Windows.\n    if (command == "PIIWII_TV_CHANNEL_DOWN") return sendVirtualKey(VK_F13);\n    if (command == "PIIWII_TV_CHANNEL_UP") return sendVirtualKey(VK_F14);\n    if (command == "PIIWII_TV_VOLUME_DOWN") return sendVirtualKey(VK_F15);\n    if (command == "PIIWII_TV_VOLUME_UP") return sendVirtualKey(VK_F16);\n    if (command == "PIIWII_TV_MUTE") return sendVirtualKey(VK_F17);\n'''
+          if needle not in s: raise SystemExit('executeRemoteCommand insertion point missing')
+          s=s.replace(needle,block+needle,1)
+          cpp.write_text(s,encoding='utf-8')
+          r=rc.read_text(encoding='utf-8').replace('2,0,0,14','2,0,0,15').replace('2.0.0-beta7','2.0.0-beta8')
+          rc.write_text(r,encoding='utf-8')
+          i=iss.read_text(encoding='utf-8').replace('2.0.0-beta7','2.0.0-beta8').replace('2.0.0.14','2.0.0.15')
+          iss.write_text(i,encoding='utf-8')
+          PY4
+
+      - name: Static audit
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta8-src\piiwii-remote\windows-agent'
+          $cpp=Get-Content (Join-Path $root 'src\PiiWiiRemoteAgent.cpp') -Raw -Encoding UTF8
+          foreach($needle in @('2.0.0-beta8','PIIWII_TV_CHANNEL_DOWN','VK_F13','PIIWII_TV_CHANNEL_UP','VK_F14','PIIWII_TV_VOLUME_DOWN','VK_F15','PIIWII_TV_VOLUME_UP','VK_F16','PIIWII_TV_MUTE','VK_F17','VOICE_START','KEYBOARD_KEY')){ if(-not $cpp.Contains($needle)){throw "Missing: $needle"} }
+          $iss=Get-Content (Join-Path $root 'installer\PiiWiiRemoteAgent.iss') -Raw -Encoding UTF8
+          if(-not $iss.Contains('2.0.0-beta8') -or -not $iss.Contains('VersionInfoProductVersion=2.0.0.15')){throw 'Installer beta8 version missing'}
+          'STATIC BETA8 PIIWII TV AUDIT: OK'
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile Agent beta8
+        shell: cmd
+        working-directory: ${{ runner.temp }}\piiwii-beta8-src\piiwii-remote\windows-agent
+        run: |
+          if not exist build mkdir build
+          rc /nologo /fo build\PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /utf-8 /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp build\PiiWiiRemoteAgent.res gdi32.lib user32.lib advapi32.lib PowrProf.lib bcrypt.lib shell32.lib winmm.lib /link /SUBSYSTEM:WINDOWS /OUT:build\PiiWii-Remote-Agent-2.0.0-beta8.exe
+
+      - name: Validate Agent beta8
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta8-src\piiwii-remote\windows-agent'
+          $exe=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta8.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Agent self-test failed: $($p.ExitCode)"}
+          $r=Start-Process -FilePath $exe -ArgumentList '--reopen-self-test' -Wait -PassThru
+          if($r.ExitCode -ne 0){throw "Reopen self-test failed: $($r.ExitCode)"}
+          $v=(Get-Item $exe).VersionInfo
+          if($v.ProductVersion -notlike '2.0.0-beta8*'){throw "Bad ProductVersion: $($v.ProductVersion)"}
+
+      - name: Build beta8 installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta8-src\piiwii-remote\windows-agent'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not(Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          & $iscc (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          if($LASTEXITCODE -ne 0){throw "Inno Setup failed: $LASTEXITCODE"}
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta8.exe'
+          if(-not(Test-Path $setup)){throw 'Setup missing'}
+
+      - name: Package beta8
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'piiwii-beta8-src\piiwii-remote\windows-agent'
+          $out=Join-Path $env:RUNNER_TEMP 'piiwii-beta8-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta8.exe') $out
+          Copy-Item (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta8.exe') $out
+          Compress-Archive -Path (Join-Path $root 'src'),(Join-Path $root 'installer') -DestinationPath (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta8-Sources.zip') -Force
+          @('PIIWII REMOTE WINDOWS 2.0.0-beta8','Dedicated PiiWii TV LAN commands: CH-/CH+/VOL-/VOL+/MUTE','Mapped only to virtual F13-F17 keys','No Windows global volume command used for PiiWii TV','beta7 keyboard + voice features preserved','Agent self-test + reopen self-test: OK') | Set-Content -Encoding UTF8 (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta8-AUDIT.txt')
+          Get-ChildItem $out -File | ForEach-Object {"$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"} | Set-Content -Encoding ascii (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta8-SHA256.txt')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-2.0.0-beta8-PiiWii-TV
+          path: ${{ runner.temp }}\piiwii-beta8-out\*
+          retention-days: 7
+          if-no-files-found: error
