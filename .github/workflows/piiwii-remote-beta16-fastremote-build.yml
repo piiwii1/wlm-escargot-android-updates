@@ -1,4 +1,4 @@
-name: PiiWii Remote beta17 restore original navigation icons
+name: PiiWii Remote Android 35 signing tool
 
 on:
   push:
@@ -8,136 +8,26 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  export-apksigner:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
+    timeout-minutes: 10
     steps:
-      - name: Checkout beta17 correction assets
-        uses: actions/checkout@v4
-        with:
-          path: current
-
-      - name: Reconstruct beta17 source snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64, zipfile
-          parts=sorted(Path('current/piiwii-remote-beta17-source').glob('src.*.b64'))
-          print('parts:', [p.name for p in parts])
-          if not parts: raise SystemExit('missing beta17 source chunks')
-          raw_parts=[]
-          for p in parts:
-              text=''.join(p.read_text().split())
-              print(p.name, 'chars=', len(text), 'padding_positions=', [i for i,c in enumerate(text) if c=='='][:20])
-              segments=[]
-              start=0; i=0
-              while i < len(text):
-                  if text[i]=='=':
-                      j=i
-                      while j+1 < len(text) and text[j+1]=='=':
-                          j += 1
-                      segments.append(text[start:j+1])
-                      start=j+1
-                      i=j
-                  i += 1
-              if start < len(text): segments.append(text[start:])
-              if not segments: segments=[text]
-              for n,seg in enumerate(segments):
-                  if not seg: continue
-                  seg += '='*((4-len(seg)%4)%4)
-                  try:
-                      raw_parts.append(base64.b64decode(seg, validate=True))
-                  except Exception as e:
-                      raise SystemExit(f'{p.name} segment {n} len={len(seg)} decode error: {e}')
-          raw=b''.join(raw_parts)
-          out=Path('/tmp/remote-beta17.zip')
-          out.write_bytes(raw)
-          print('zip bytes', len(raw), 'decoded segments', len(raw_parts))
-          if not zipfile.is_zipfile(out): raise SystemExit('reconstructed source is not a ZIP')
-          PY
-          rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
-          unzip -q /tmp/remote-beta17.zip -d /tmp/remote-beta17-src
-          BUILD_FILE="$(find /tmp/remote-beta17-src -type f -path '*/remote/build.gradle.kts' -print -quit)"
-          test -n "$BUILD_FILE"
-          ROOT="${BUILD_FILE%/remote/build.gradle.kts}"
-          test -f "$ROOT/remote/build.gradle.kts"
-          echo "$ROOT" > /tmp/remote-root.txt
-
-      - name: Restore original bottom icons and set beta17 version
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$(cat /tmp/remote-root.txt)"
-          DRAW="$ROOT/remote/src/main/res/drawable-nodpi"
-          mkdir -p "$DRAW"
-          base64 -d current/piiwii-remote-beta17-icons/ic_remote_custom.png.b64 > "$DRAW/ic_remote_custom.png"
-          base64 -d current/piiwii-remote-beta17-icons/ic_touchpad_custom.png.b64 > "$DRAW/ic_touchpad_custom.png"
-          base64 -d current/piiwii-remote-beta17-icons/ic_keyboard_custom.png.b64 > "$DRAW/ic_keyboard_custom.png"
-          base64 -d current/piiwii-remote-beta17-icons/ic_apps_custom.png.b64 > "$DRAW/ic_apps_custom.png"
-          sed -Ei 's/versionCode = (45|46|47)/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
-          sed -Ei 's/versionName = "2\.0\.0-beta(15|16|17)"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionCode = 47' "$ROOT/remote/build.gradle.kts"
-          grep -q 'versionName = "2.0.0-beta17"' "$ROOT/remote/build.gradle.kts"
-          python3 - <<'PY'
-          from pathlib import Path
-          import struct
-          root=Path(open('/tmp/remote-root.txt').read().strip())/'remote/src/main/res/drawable-nodpi'
-          for n in ['ic_remote_custom.png','ic_touchpad_custom.png','ic_keyboard_custom.png','ic_apps_custom.png']:
-              d=(root/n).read_bytes(); assert d[:8]==b'\x89PNG\r\n\x1a\n'; w,h=struct.unpack('>II',d[16:24]); assert (w,h)==(48,48),(n,w,h)
-          PY
-          grep -q 'R.drawable.ic_piiwii_tv_custom' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainShellView.kt"
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Android SDK
+      - name: Install Android Build Tools 35
         shell: bash
         run: |
           set -euo pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-
-      - name: Gradle 8.9
-        shell: bash
-        run: |
-          curl -fL --retry 5 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          unzip -q /tmp/gradle.zip -d /tmp
-
-      - name: Test and build
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$(cat /tmp/remote-root.txt)"
-          cd "$ROOT"
-          /tmp/gradle-8.9/bin/gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
-
-      - name: Validate and package
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$(cat /tmp/remote-root.txt)"
-          OUT=/tmp/delivery; mkdir -p "$OUT"
-          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
-          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta17-ALIGNED-UNSIGNED.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='47' versionName='2.0.0-beta17'" "$OUT/BADGING.txt"
-          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
-          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
-          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
-          (cd "$ROOT" && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" .)
-          sha256sum "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" > "$OUT/SHA256-SOURCES.txt"
-
+          "$SDKMANAGER" "build-tools;35.0.0"
+          mkdir -p /tmp/apksigner-tool
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-tool/apksigner.jar
+          sha256sum /tmp/apksigner-tool/apksigner.jar > /tmp/apksigner-tool/SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-beta17-icons-restored-unsigned
-          path: /tmp/delivery/*
-          retention-days: 7
+          name: android-35-apksigner
+          path: /tmp/apksigner-tool/*
+          retention-days: 1
