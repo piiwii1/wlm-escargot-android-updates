@@ -29,9 +29,12 @@ jobs:
           parts=sorted(Path('current/piiwii-remote-beta17-source').glob('src.*.b64'))
           print('parts:', [p.name for p in parts])
           if not parts: raise SystemExit('missing beta17 source chunks')
-          text=''.join(''.join(p.read_text().split()) for p in parts)
-          text += '='*((4-len(text)%4)%4)
-          raw=base64.b64decode(text, validate=True)
+          raw_parts=[]
+          for p in parts:
+              text=''.join(p.read_text().split())
+              text += '='*((4-len(text)%4)%4)
+              raw_parts.append(base64.b64decode(text, validate=True))
+          raw=b''.join(raw_parts)
           out=Path('/tmp/remote-beta17.zip')
           out.write_bytes(raw)
           print('zip bytes', len(raw))
@@ -39,9 +42,9 @@ jobs:
           PY
           rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
           unzip -q /tmp/remote-beta17.zip -d /tmp/remote-beta17-src
-          ROOT="$(dirname "$(find /tmp/remote-beta17-src -type f -path '*/remote/build.gradle.kts' -print -quit)")"
-          ROOT="${ROOT%/remote}"
-          test -n "$ROOT"
+          BUILD_FILE="$(find /tmp/remote-beta17-src -type f -path '*/remote/build.gradle.kts' -print -quit)"
+          test -n "$BUILD_FILE"
+          ROOT="${BUILD_FILE%/remote/build.gradle.kts}"
           test -f "$ROOT/remote/build.gradle.kts"
           echo "$ROOT" > /tmp/remote-root.txt
 
