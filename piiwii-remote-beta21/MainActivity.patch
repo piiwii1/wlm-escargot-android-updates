@@ -1,0 +1,58 @@
+--- a/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
++++ b/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+@@ -46,6 +46,8 @@
+     private val vm: MainViewModel by viewModels()
+     private lateinit var shell: MainShellView
+     private lateinit var piiwiiTvClient: PiiWiiTvRemoteClient
++    // Etat F11 supposé du navigateur, piloté uniquement par les boutons PiiWii TV.
++    private var piiwiiTvBrowserFullscreen = false
+     private val microphonePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+         Toast.makeText(
+             this,
+@@ -136,11 +138,43 @@
+                 vm.sendCommand(fastCommand)
+                 return
+             }
+-            if (action == "power") {
+-                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\n${piiwiiTvClient.pageUrl(true)}")
++
++            when (action) {
++                "power" -> {
++                    vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\n${piiwiiTvClient.pageUrl(true)}")
++                    if (!piiwiiTvBrowserFullscreen) {
++                        piiwiiTvBrowserFullscreen = true
++                        // Laisse Chrome/Edge prendre le focus avant F11.
++                        window.decorView.postDelayed({
++                            vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
++                        }, 700L)
++                    }
++                }
++                "windowed" -> {
++                    if (piiwiiTvBrowserFullscreen) {
++                        vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
++                        piiwiiTvBrowserFullscreen = false
++                    }
++                }
++                "browser_fullscreen" -> {
++                    if (!piiwiiTvBrowserFullscreen) {
++                        vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
++                        piiwiiTvBrowserFullscreen = true
++                    }
++                }
++                "fullscreen" -> {
++                    if (!piiwiiTvBrowserFullscreen) {
++                        vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")
++                        piiwiiTvBrowserFullscreen = true
++                    }
++                }
+             }
+         }
+-        piiwiiTvClient.send(action) { ok, message ->
++
++        // Le mode "Sans onglets" garde volontairement le lecteur miniature :
++        // côté PiiWii TV il utilise donc la même commande que "Fenêtre".
++        val restAction = if (action == "browser_fullscreen") "windowed" else action
++        piiwiiTvClient.send(restAction) { ok, message ->
+             if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+         }
+     }
