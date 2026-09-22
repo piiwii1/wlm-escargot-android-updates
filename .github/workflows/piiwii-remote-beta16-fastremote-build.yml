@@ -1,8 +1,8 @@
-name: PiiWii Remote beta19 PiiWii TV LAN
+name: PiiWii Remote beta20 true fullscreen
 
 on:
   push:
-    branches: [piiwii-remote-phone-beta19-piiwii-tv-final]
+    branches: [piiwii-remote-phone-beta20-true-fullscreen]
     paths:
       - '.github/workflows/piiwii-remote-beta16-fastremote-build.yml'
       - 'piiwii-remote-beta19/**'
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct beta19
+      - name: Reconstruct beta20
         shell: bash
         run: |
           set -euo pipefail
@@ -29,27 +29,39 @@ jobs:
             cat piiwii-remote-beta18-lan-src2/p00.b64 piiwii-remote-beta18-lan-src2/p01.b64 piiwii-remote-beta18-lan-src2/p02.b64
             cat piiwii-remote-beta18-p03fix/fix*.b64
             cat piiwii-remote-beta18-lan-src2/p04.b64 piiwii-remote-beta18-lan-src2/p05.b64 piiwii-remote-beta18-lan-src2/p06.b64 piiwii-remote-beta18-lan-src2/p07.b64 piiwii-remote-beta18-lan-src2/p08.b64
-          } | base64 -d > /tmp/beta19.tar.xz
-          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta19.tar.xz' | sha256sum -c -
-          xz -t /tmp/beta19.tar.xz
-          mkdir -p /tmp/beta19
-          tar -xJf /tmp/beta19.tar.xz -C /tmp/beta19
-          RES=/tmp/beta19/remote/src/main/res/drawable-nodpi
+          } | base64 -d > /tmp/beta20.tar.xz
+          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta20.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/beta20
+          tar -xJf /tmp/beta20.tar.xz -C /tmp/beta20
+          RES=/tmp/beta20/remote/src/main/res/drawable-nodpi
           mkdir -p "$RES"
           for n in remote touchpad keyboard apps; do
             base64 -d "piiwii-remote-beta17-icons/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"
           done
-          cp piiwii-remote-beta19/PiiWiiTvRemoteView.kt /tmp/beta19/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
-          sed -i -e 's/versionCode = 48/versionCode = 49/' -e 's/versionName = "2.0.0-beta18"/versionName = "2.0.0-beta19"/' /tmp/beta19/remote/build.gradle.kts
-          MAIN=/tmp/beta19/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
-          grep -q 'versionCode = 49' /tmp/beta19/remote/build.gradle.kts
-          grep -q 'versionName = "2.0.0-beta19"' /tmp/beta19/remote/build.gradle.kts
+          cp piiwii-remote-beta19/PiiWiiTvRemoteView.kt /tmp/beta20/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          sed -i -e 's/versionCode = 48/versionCode = 50/' -e 's/versionName = "2.0.0-beta18"/versionName = "2.0.0-beta20"/' /tmp/beta20/remote/build.gradle.kts
+          MAIN=/tmp/beta20/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          python - "$MAIN" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]); s=p.read_text(encoding='utf-8')
+          anchor='''        if (selected?.type == DeviceType.WINDOWS_PC) {\n            val fastCommand = when (action) {'''
+          repl='''        if (selected?.type == DeviceType.WINDOWS_PC) {\n            if (action == "fullscreen") {\n                // F11 enlève réellement toute l’interface Chrome/Edge.\n                // On continue ensuite vers le REST pour que le lecteur remplisse aussi le viewport.\n                vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")\n            }\n            val fastCommand = when (action) {'''
+          if anchor not in s: raise SystemExit('Windows action anchor missing')
+          s=s.replace(anchor,repl,1)
+          old='''            if (action == "power") {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }'''
+          new='''            if (action == "power") {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n                // Laisse au navigateur le temps de prendre le focus, puis passe en vrai plein écran F11.\n                window.decorView.postDelayed({\n                    vm.sendCommand(RemoteCommand.KEYBOARD_KEY, "F11")\n                }, 700L)\n            }'''
+          if old not in s: raise SystemExit('power anchor missing')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          grep -q 'versionCode = 50' /tmp/beta20/remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta20"' /tmp/beta20/remote/build.gradle.kts
+          grep -q 'action == "fullscreen"' "$MAIN"
+          grep -q 'RemoteCommand.KEYBOARD_KEY, "F11"' "$MAIN"
+          grep -q '700L' "$MAIN"
           grep -q '"channel_up" -> RemoteCommand.PIIWII_TV_CHANNEL_UP' "$MAIN"
-          grep -q '"channel_down" -> RemoteCommand.PIIWII_TV_CHANNEL_DOWN' "$MAIN"
-          grep -q '"volume_up" -> RemoteCommand.PIIWII_TV_VOLUME_UP' "$MAIN"
-          grep -q '"volume_down" -> RemoteCommand.PIIWII_TV_VOLUME_DOWN' "$MAIN"
-          grep -q '"mute" -> RemoteCommand.PIIWII_TV_MUTE' "$MAIN"
-          grep -q 'body.addView(section(context, "NAVIGATION"))' /tmp/beta19/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          grep -q 'body.addView(section(context, "NAVIGATION"))' /tmp/beta20/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -62,10 +74,8 @@ jobs:
         run: |
           set -euo pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
-          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
       - name: Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -73,7 +83,7 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build release APK
-        working-directory: /tmp/beta19
+        working-directory: /tmp/beta20
         run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
 
       - name: Validate and package
@@ -81,20 +91,19 @@ jobs:
         run: |
           set -euo pipefail
           OUT=/tmp/out; mkdir -p "$OUT"
-          RAW=/tmp/beta19/remote/build/outputs/apk/release/remote-release-unsigned.apk
-          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta19-ALIGNED-UNSIGNED.apk"
-          test -s "$RAW"
+          RAW=/tmp/beta20/remote/build/outputs/apk/release/remote-release-unsigned.apk
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta20-ALIGNED-UNSIGNED.apk"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
-          grep -q "package: name='ch.piiwii.remote2' versionCode='49' versionName='2.0.0-beta19'" "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='50' versionName='2.0.0-beta20'" "$OUT/BADGING.txt"
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
           sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Remote-beta19-PiiWii-TV-LAN
+          name: PiiWii-Remote-beta20-true-fullscreen
           path: /tmp/out/*
           retention-days: 7
           if-no-files-found: error
