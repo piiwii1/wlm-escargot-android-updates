@@ -1,0 +1,94 @@
+name: PiiWii Remote beta25 channel grid
+
+on:
+  push:
+    branches: [piiwii-remote-beta25-channel-grid]
+    paths:
+      - '.github/workflows/piiwii-remote-beta25-channel-grid.yml'
+      - 'piiwii-remote-beta25-channels.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download beta24 source artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
+            'https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/actions/artifacts/10715227244/zip' -o /tmp/beta24-artifact.zip
+          mkdir -p /tmp/beta24-art /tmp/beta25
+          unzip -q /tmp/beta24-artifact.zip -d /tmp/beta24-art
+          test -f /tmp/beta24-art/PiiWii-Remote-2.0.0-beta24-SOURCES.zip
+          unzip -q /tmp/beta24-art/PiiWii-Remote-2.0.0-beta24-SOURCES.zip -d /tmp/beta25
+
+      - name: Apply channel grid
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/beta25
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-beta25-channels.patch"
+          grep -q 'versionCode = 55' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta25"' remote/build.gradle.kts
+          VIEW=remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          grep -q 'CHAÎNES' "$VIEW"
+          grep -q 'Réorganiser' "$VIEW"
+          grep -q 'startDragAndDrop' "$VIEW"
+          grep -q 'onAction("channel:' "$VIEW"
+          grep -q '/wp-json/geektv/v1/channels' "$VIEW"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android 35 packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build beta25
+        working-directory: /tmp/beta25
+        run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/beta25-out; mkdir -p "$OUT"
+          RAW=/tmp/beta25/remote/build/outputs/apk/release/remote-release-unsigned.apk
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta25-ALIGNED-UNSIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='55' versionName='2.0.0-beta25'" "$OUT/BADGING.txt"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
+          cd /tmp/beta25 && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta25-SOURCES.zip" . -x '*/build/*' '.gradle/*'
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-beta25-Channel-Grid
+          path: /tmp/beta25-out/*
+          retention-days: 7
+          if-no-files-found: error
