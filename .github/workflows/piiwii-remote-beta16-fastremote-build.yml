@@ -1,4 +1,4 @@
-name: PiiWii Remote Android 35 signing tool
+name: PiiWii Remote beta17 low latency
 
 on:
   push:
@@ -8,26 +8,100 @@ on:
   workflow_dispatch:
 
 jobs:
-  export-apksigner:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
+    permissions:
+      contents: read
     steps:
+      - name: Download validated beta15 source base
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 2 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-444c-820a-906f-971e61ba82dd/raw?se=2026-09-21T23%3A54%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=31edd7f5-5708-561c-8d14-cea81c5bb201&skoid=b5d2651b-fef3-4bb0-a03b-ca59cc22929b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A16%3A02Z&ske=2026-09-22T23%3A16%3A02Z&sks=b&skv=2026-02-06&sig=uSDQs2Ext4%2BfsI/TheddDWKpXQPCFOITBA1soNYMYmY%3D' -o /tmp/remote-beta15.zip
+          test -s /tmp/remote-beta15.zip
+          test "$(wc -c < /tmp/remote-beta15.zip)" -eq 64688
+          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
+          rm -rf /tmp/remote-beta17-src && mkdir -p /tmp/remote-beta17-src
+          unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta17-src
+          ROOT=/tmp/remote-beta17-src/remote_ci_text
+          test -f "$ROOT/remote/build.gradle.kts"
+          echo "$ROOT" > /tmp/remote-root.txt
+
+      - name: Apply beta17 latency fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(cat /tmp/remote-root.txt)"
+          sed -i 's/versionCode = 45/versionCode = 47/' "$ROOT/remote/build.gradle.kts"
+          sed -i 's/versionName = "2.0.0-beta15"/versionName = "2.0.0-beta17"/' "$ROOT/remote/build.gradle.kts"
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path(open('/tmp/remote-root.txt').read().strip())
+          p=root/'remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt'
+          s=p.read_text()
+          s=s.replace('import java.net.URL\n','import java.net.URL\nimport java.util.concurrent.Executors\n')
+          marker='    private val main = Handler(Looper.getMainLooper())\n'
+          insert='''    private val main = Handler(Looper.getMainLooper())\n    // Une seule file réseau conserve l’ordre exact des touches CH/VOL et évite les POST concurrents.\n    private val remoteExecutor = Executors.newSingleThreadExecutor { r ->\n        Thread(r, "PiiWiiTvRemote").apply { isDaemon = true }\n    }\n'''
+          if marker not in s: raise SystemExit('main handler marker missing')
+          s=s.replace(marker,insert,1)
+          old='''    fun send(action: String, callback: (Boolean, String) -> Unit = { _, _ -> }) {\n        if (!isPaired) { callback(false, "Associe d’abord PiiWii TV"); return }\n        Thread {\n            try {\n                val body = JSONObject().put("action", action).toString()\n                request(api("remote/command"), "POST", body, token)\n                main.post { callback(true, "Commande envoyée") }\n            } catch (e: Exception) {\n                main.post { callback(false, e.message ?: "PiiWii TV inaccessible") }\n            }\n        }.start()\n    }\n'''
+          new='''    fun send(action: String, callback: (Boolean, String) -> Unit = { _, _ -> }) {\n        if (!isPaired) { callback(false, "Associe d’abord PiiWii TV"); return }\n        remoteExecutor.execute {\n            try {\n                val body = JSONObject().put("action", action).toString()\n                request(api("remote/command"), "POST", body, token)\n                main.post { callback(true, "Commande envoyée") }\n            } catch (e: Exception) {\n                main.post { callback(false, e.message ?: "PiiWii TV inaccessible") }\n            }\n        }\n    }\n'''
+          if old not in s: raise SystemExit('send block missing')
+          p.write_text(s.replace(old,new,1))
+          PY
+          grep -q 'versionCode = 47' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta17"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'remoteExecutor.execute' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Android Build Tools 35
+
+      - name: Android SDK
         shell: bash
         run: |
           set -euo pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "build-tools;35.0.0"
-          mkdir -p /tmp/apksigner-tool
-          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-tool/apksigner.jar
-          sha256sum /tmp/apksigner-tool/apksigner.jar > /tmp/apksigner-tool/SHA256.txt
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Gradle 8.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+
+      - name: Test and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(cat /tmp/remote-root.txt)"
+          cd "$ROOT"
+          /tmp/gradle-8.9/bin/gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(cat /tmp/remote-root.txt)"
+          OUT=/tmp/delivery; mkdir -p "$OUT"
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta17-ALIGNED-UNSIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='47' versionName='2.0.0-beta17'" "$OUT/BADGING.txt"
+          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+          (cd "$ROOT" && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" .)
+          sha256sum "$OUT/PiiWii-Remote-2.0.0-beta17-SOURCES.zip" > "$OUT/SHA256-SOURCES.txt"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: android-35-apksigner
-          path: /tmp/apksigner-tool/*
-          retention-days: 1
+          name: PiiWii-Remote-beta17-low-latency
+          path: /tmp/delivery/*
+          retention-days: 7
+          if-no-files-found: error
