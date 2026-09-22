@@ -21,10 +21,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : > /tmp/remote-beta15.zip
-          for f in piiwii-remote-beta15-temp/rb15c.*.b64; do
-            base64 -d "$f" >> /tmp/remote-beta15.zip
-          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          files=sorted(Path('piiwii-remote-beta15-temp').glob('rb15c.*.b64'))
+          if not files:
+              raise SystemExit('beta15 chunks missing')
+          text=''.join(''.join(p.read_text().split()) for p in files)
+          text += '=' * ((4 - len(text) % 4) % 4)
+          Path('/tmp/remote-beta15.zip').write_bytes(base64.b64decode(text, validate=False))
+          PY
           test -s /tmp/remote-beta15.zip
           echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
           rm -rf /tmp/remote-beta16-src
