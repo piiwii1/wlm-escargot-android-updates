@@ -5,6 +5,7 @@ on:
     branches: [piiwii-remote-phone-beta17-icons-restore]
     paths:
       - '.github/workflows/piiwii-remote-beta16-fastremote-build.yml'
+      - 'piiwii-remote-beta18-lan-src2/**'
   workflow_dispatch:
 
 jobs:
@@ -14,143 +15,66 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout full history
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Recover structurally valid beta15 source
+      - name: Reconstruct exact beta18 source
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64, hashlib, subprocess, zipfile, io, itertools
-          folder='piiwii-remote-beta15-temp'
-          names=[f'rb15c.{i:02d}.b64' for i in range(8)]
-          versions=[]
-          for name in names:
-              path=f'{folder}/{name}'
-              commits=subprocess.check_output(['git','log','--all','--format=%H','--',path],text=True).split()
-              vals=[]
-              for c in commits:
-                  try: x=subprocess.check_output(['git','show',f'{c}:{path}'],text=True,stderr=subprocess.DEVNULL)
-                  except subprocess.CalledProcessError: continue
-                  x=''.join(x.split())
-                  if x and x not in vals: vals.append(x)
-              if not vals: raise SystemExit(f'No historical content for {name}')
-              versions.append(vals)
-          candidates=[]
-          required={
-            'remote_ci_text/remote/build.gradle.kts',
-            'remote_ci_text/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt',
-            'remote_ci_text/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt',
-            'remote_ci_text/remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt',
-          }
-          for combo in itertools.product(*versions):
-              try: raw=base64.b64decode(''.join(combo),validate=True)
-              except Exception: continue
-              if not zipfile.is_zipfile(io.BytesIO(raw)): continue
-              try:
-                  with zipfile.ZipFile(io.BytesIO(raw)) as z:
-                      ns=set(z.namelist())
-                      if not required.issubset(ns): continue
-                      gradle=z.read('remote_ci_text/remote/build.gradle.kts').decode('utf-8','replace')
-                      if 'versionCode = 45' not in gradle or '2.0.0-beta15' not in gradle: continue
-                      main=z.read('remote_ci_text/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt').decode('utf-8','replace')
-                      if 'handlePiiWiiTvAction' not in main: continue
-                  candidates.append((len(raw),hashlib.sha256(raw).hexdigest(),raw))
-              except Exception: continue
-          if not candidates: raise SystemExit('No structurally valid beta15 source archive found')
-          candidates.sort(reverse=True,key=lambda x:x[0])
-          size,sha,raw=candidates[0]
-          Path('/tmp/remote-base.zip').write_bytes(raw)
-          print('selected source bytes',size,'sha256',sha,'valid_candidates',len(candidates))
-          PY
-          rm -rf /tmp/remote-beta18-src && mkdir -p /tmp/remote-beta18-src
-          unzip -q /tmp/remote-base.zip -d /tmp/remote-beta18-src
-          ROOT=/tmp/remote-beta18-src/remote_ci_text
-          test -f "$ROOT/remote/build.gradle.kts"
-          echo "$ROOT" > /tmp/remote-root.txt
+          cat piiwii-remote-beta18-lan-src2/p*.b64 | base64 -d > /tmp/beta18.tar.xz
+          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta18.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/beta18
+          tar -xJf /tmp/beta18.tar.xz -C /tmp/beta18
+          RES=/tmp/beta18/remote/src/main/res/drawable-nodpi
+          mkdir -p "$RES"
+          for n in remote touchpad keyboard apps; do
+            base64 -d "piiwii-remote-beta17-icons/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"
+          done
+          grep -q 'versionCode = 48' /tmp/beta18/remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta18"' /tmp/beta18/remote/build.gradle.kts
+          grep -q 'PIIWII_TV_CHANNEL_UP' /tmp/beta18/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
 
-      - name: Apply beta18 LAN fast path
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$(cat /tmp/remote-root.txt)"
-          sed -i 's/versionCode = 45/versionCode = 48/' "$ROOT/remote/build.gradle.kts"
-          sed -i 's/versionName = "2.0.0-beta15"/versionName = "2.0.0-beta18"/' "$ROOT/remote/build.gradle.kts"
-          python3 - <<'PY'
-          from pathlib import Path
-          root=Path(open('/tmp/remote-root.txt').read().strip())
-          p=root/'remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt'
-          s=p.read_text()
-          if 'PIIWII_TV_CHANNEL_UP' not in s:
-              s=s.replace('VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,','VOLUME_UP, VOLUME_DOWN, VOLUME_MUTE,\n    PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,')
-          p.write_text(s)
-          p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt'
-          s=p.read_text()
-          marker='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.POINTER_MOVE'
-          repl='RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_CHANNEL_UP, RemoteCommand.PIIWII_TV_CHANNEL_DOWN,\n            RemoteCommand.PIIWII_TV_VOLUME_UP, RemoteCommand.PIIWII_TV_VOLUME_DOWN, RemoteCommand.PIIWII_TV_MUTE, RemoteCommand.POINTER_MOVE'
-          if 'RemoteCommand.PIIWII_TV_CHANNEL_UP' not in s:
-              if marker not in s: raise SystemExit('Windows allowlist marker missing')
-              s=s.replace(marker,repl,1)
-          p.write_text(s)
-          p=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt'
-          s=p.read_text()
-          old='''        if (action == "power") {\n            val selected = vm.selected.value\n            if (selected?.type == DeviceType.WINDOWS_PC) {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n'''
-          new='''        val selected = vm.selected.value\n        if (selected?.type == DeviceType.WINDOWS_PC) {\n            val fastCommand = when (action) {\n                "channel_up" -> RemoteCommand.PIIWII_TV_CHANNEL_UP\n                "channel_down" -> RemoteCommand.PIIWII_TV_CHANNEL_DOWN\n                "volume_up" -> RemoteCommand.PIIWII_TV_VOLUME_UP\n                "volume_down" -> RemoteCommand.PIIWII_TV_VOLUME_DOWN\n                "mute" -> RemoteCommand.PIIWII_TV_MUTE\n                else -> null\n            }\n            if (fastCommand != null) {\n                vm.sendCommand(fastCommand)\n                return\n            }\n            if (action == "power") {\n                vm.sendCommand(RemoteCommand.APP_CUSTOM, "URL\\n${piiwiiTvClient.pageUrl(true)}")\n            }\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n'''
-          if 'RemoteCommand.PIIWII_TV_CHANNEL_UP' not in s:
-              if old not in s: raise SystemExit('PiiWii TV action block missing')
-              s=s.replace(old,new,1)
-          p.write_text(s)
-          PY
-          grep -q 'versionCode = 48' "$ROOT/remote/build.gradle.kts"
-          grep -q 'PIIWII_TV_CHANNEL_UP' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt"
-
-      - uses: actions/setup-java@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+        uses: android-actions/setup-android@v3
+
+      - name: Android 35 packages
+        run: sdkmanager 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
 
       - name: Gradle 8.9
-        shell: bash
-        run: |
-          curl -fL --retry 5 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          unzip -q /tmp/gradle.zip -d /tmp
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
-      - name: Build APK
+      - name: Build release APK
+        working-directory: /tmp/beta18
+        run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package
         shell: bash
         run: |
           set -euo pipefail
-          ROOT="$(cat /tmp/remote-root.txt)"
-          cd "$ROOT"
-          /tmp/gradle-8.9/bin/gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
-
-      - name: Package APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$(cat /tmp/remote-root.txt)"
-          OUT=/tmp/delivery; mkdir -p "$OUT"
-          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          OUT=/tmp/out; mkdir -p "$OUT"
+          RAW=/tmp/beta18/remote/build/outputs/apk/release/remote-release-unsigned.apk
           APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta18-LAN-ALIGNED-UNSIGNED.apk"
+          test -s "$RAW"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
           grep -q "package: name='ch.piiwii.remote2' versionCode='48' versionName='2.0.0-beta18'" "$OUT/BADGING.txt"
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
           sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload
+        uses: actions/upload-artifact@v4
         with:
           name: PiiWii-Remote-beta18-LAN-fastpath
-          path: /tmp/delivery/*
+          path: /tmp/out/*
           retention-days: 7
+          if-no-files-found: error
