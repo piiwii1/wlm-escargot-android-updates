@@ -1,0 +1,324 @@
+name: PiiWii TV desktop stack beta24
+
+on:
+  push:
+    branches: [piiwii-tv-desktop-app-beta24]
+    paths:
+      - '.github/workflows/piiwii-tv-desktop-stack-beta24.yml'
+      - 'piiwii-tv-desktop/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish PiiWii TV
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:GITHUB_WORKSPACE 'piiwii-tv-desktop'
+          $pub=Join-Path $root 'publish'
+          dotnet publish (Join-Path $root 'PiiWiiTV.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o $pub
+          if($LASTEXITCODE -ne 0){throw 'dotnet publish failed'}
+          if(-not(Test-Path (Join-Path $pub 'PiiWiiTV.exe'))){throw 'PiiWiiTV.exe missing'}
+      - name: Bundle WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:GITHUB_WORKSPACE 'piiwii-tv-desktop'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile (Join-Path $root 'MicrosoftEdgeWebview2Setup.exe') -UseBasicParsing
+          if((Get-Item (Join-Path $root 'MicrosoftEdgeWebview2Setup.exe')).Length -lt 100000){throw 'WebView2 bootstrapper invalid'}
+      - name: Build PiiWii TV installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:GITHUB_WORKSPACE 'piiwii-tv-desktop'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not(Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          & $iscc (Join-Path $root 'installer.iss')
+          if($LASTEXITCODE -ne 0){throw 'Inno Setup failed'}
+          $setup=Join-Path $root 'output\PiiWii-TV-Setup-1.0.0.exe'
+          if(-not(Test-Path $setup)){throw 'PiiWii TV setup missing'}
+      - name: Package desktop app
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:GITHUB_WORKSPACE 'piiwii-tv-desktop'
+          $out=Join-Path $env:RUNNER_TEMP 'piiwii-tv-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'output\PiiWii-TV-Setup-1.0.0.exe') $out
+          Compress-Archive -Path (Join-Path $root 'publish\*') -DestinationPath (Join-Path $out 'PiiWii-TV-1.0.0-PORTABLE.zip') -Force
+          @(
+            'PiiWii TV Windows 1.0.0',
+            'Standalone WebView2 application - no browser tabs',
+            'Receives local commands through WM_COPYDATA signature PTW1',
+            'windowed = normal app window',
+            'browser_fullscreen = maximized app window',
+            'fullscreen/power = borderless fullscreen app window'
+          ) | Set-Content -Encoding UTF8 (Join-Path $out 'PiiWii-TV-1.0.0-VALIDATION.txt')
+          Get-ChildItem $out -File | ForEach-Object {"$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"} | Set-Content -Encoding ascii (Join-Path $out 'SHA256.txt')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-TV-Windows-1.0.0
+          path: ${{ runner.temp }}\piiwii-tv-out\*
+          retention-days: 7
+          if-no-files-found: error
+
+  agent:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download beta9 source artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip=Join-Path $env:RUNNER_TEMP 'beta9-artifact.zip'
+          $headers=@{Authorization="Bearer $env:GH_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+          Invoke-WebRequest -Uri 'https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/actions/artifacts/10713502284/zip' -Headers $headers -OutFile $zip -MaximumRedirection 5
+          $art=Join-Path $env:RUNNER_TEMP 'beta9-art'; Expand-Archive $zip $art -Force
+          $srczip=Join-Path $art 'PiiWii-Remote-Windows-2.0.0-beta9-Sources.zip'
+          if(-not(Test-Path $srczip)){throw 'beta9 source zip missing'}
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'; Expand-Archive $srczip $root -Force
+      - name: Patch Agent beta10 for PiiWii TV app IPC
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+          root=Path(os.environ['RUNNER_TEMP'])/'beta10'
+          cpp=root/'src'/'PiiWiiRemoteAgent.cpp'
+          s=cpp.read_text(encoding='utf-8')
+          s=s.replace('2.0.0-beta9','2.0.0-beta10')
+          if '#include <set>' not in s:
+              s=s.replace('#include <memory>','#include <memory>\n#include <set>')
+          anchor='static bool executeRemoteCommand(const std::string& command, const std::string& payload) {'
+          block=r'''
+static bool isPiiWiiTvAppAction(const std::string& action) {
+    static const std::set<std::string> allowed = {
+        "power", "direct", "channel_up", "channel_down", "volume_up", "volume_down", "mute",
+        "play_pause", "seek_back", "seek_forward", "record", "guide", "recordings", "radio",
+        "settings", "home", "nav_up", "nav_down", "nav_left", "nav_right", "nav_ok", "back",
+        "fullscreen", "browser_fullscreen", "windowed"
+    };
+    return allowed.find(action) != allowed.end();
+}
+
+static BOOL CALLBACK findPiiWiiTvAppWindowProc(HWND hwnd, LPARAM param) {
+    auto* result = reinterpret_cast<HWND*>(param);
+    if (!result || !IsWindow(hwnd)) return TRUE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (!pid) return TRUE;
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) return TRUE;
+    wchar_t path[MAX_PATH * 4]{};
+    DWORD size = static_cast<DWORD>(std::size(path));
+    const BOOL ok = QueryFullProcessImageNameW(process, 0, path, &size);
+    CloseHandle(process);
+    if (!ok || size == 0) return TRUE;
+    std::wstring exe(path, size);
+    const auto slash = exe.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) exe = exe.substr(slash + 1);
+    std::transform(exe.begin(), exe.end(), exe.begin(), ::towlower);
+    if (exe != L"piiwiitv.exe") return TRUE;
+    *result = hwnd;
+    return FALSE;
+}
+
+static HWND findPiiWiiTvAppWindow() {
+    HWND target = nullptr;
+    EnumWindows(findPiiWiiTvAppWindowProc, reinterpret_cast<LPARAM>(&target));
+    return target;
+}
+
+static bool sendPiiWiiTvAppAction(const std::string& action) {
+    if (!isPiiWiiTvAppAction(action)) return false;
+    HWND target = findPiiWiiTvAppWindow();
+    if (!target) {
+        const std::wstring exe = readRegString(HKEY_CURRENT_USER, L"Software\\PiiWii\\PiiWiiTV", L"InstallPath");
+        if (exe.empty() || GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+        const std::wstring params = L"--action=" + utf8ToWide(action);
+        HINSTANCE launched = ShellExecuteW(nullptr, L"open", exe.c_str(), params.c_str(), nullptr, SW_SHOWNORMAL);
+        return reinterpret_cast<INT_PTR>(launched) > 32;
+    }
+    std::string body = action;
+    body.push_back('\0');
+    COPYDATASTRUCT cds{};
+    cds.dwData = static_cast<ULONG_PTR>(0x50545731);
+    cds.cbData = static_cast<DWORD>(body.size());
+    cds.lpData = body.data();
+    DWORD_PTR result = 0;
+    return SendMessageTimeoutW(target, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&cds), SMTO_ABORTIFHUNG | SMTO_BLOCK, 1500, &result) != 0;
+}
+
+'''
+          if anchor not in s: raise SystemExit('executeRemoteCommand anchor missing')
+          s=s.replace(anchor,block+anchor,1)
+          old=r'''    // PiiWii TV : touches virtuelles réservées, sans action sur le volume/navigation Windows.
+    if (command == "PIIWII_TV_CHANNEL_DOWN") return sendVirtualKey(VK_F13);
+    if (command == "PIIWII_TV_CHANNEL_UP") return sendVirtualKey(VK_F14);
+    if (command == "PIIWII_TV_VOLUME_DOWN") return sendVirtualKey(VK_F15);
+    if (command == "PIIWII_TV_VOLUME_UP") return sendVirtualKey(VK_F16);
+    if (command == "PIIWII_TV_MUTE") return sendVirtualKey(VK_F17);
+    if (command == "PIIWII_TV_BROWSER_F11") return sendPiiWiiTvBrowserF11();
+'''
+          new=r'''    // PiiWii TV : application dédiée uniquement. Aucun clavier/volume global Windows.
+    if (command == "PIIWII_TV_APP_ACTION") return sendPiiWiiTvAppAction(payload);
+    if (command == "PIIWII_TV_CHANNEL_DOWN") return sendPiiWiiTvAppAction("channel_down");
+    if (command == "PIIWII_TV_CHANNEL_UP") return sendPiiWiiTvAppAction("channel_up");
+    if (command == "PIIWII_TV_VOLUME_DOWN") return sendPiiWiiTvAppAction("volume_down");
+    if (command == "PIIWII_TV_VOLUME_UP") return sendPiiWiiTvAppAction("volume_up");
+    if (command == "PIIWII_TV_MUTE") return sendPiiWiiTvAppAction("mute");
+    if (command == "PIIWII_TV_BROWSER_F11") return sendPiiWiiTvAppAction("browser_fullscreen");
+'''
+          if old not in s: raise SystemExit('beta9 TV mapping missing')
+          s=s.replace(old,new,1)
+          cpp.write_text(s,encoding='utf-8')
+          rc=root/'src'/'PiiWiiRemoteAgent.rc'
+          rc.write_text(rc.read_text(encoding='utf-8').replace('2,0,0,16','2,0,0,17').replace('2.0.0-beta9','2.0.0-beta10'),encoding='utf-8')
+          iss=root/'installer'/'PiiWiiRemoteAgent.iss'
+          t=iss.read_text(encoding='utf-8').replace('2.0.0-beta9','2.0.0-beta10').replace('2.0.0.16','2.0.0.17')
+          iss.write_text(t,encoding='utf-8')
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Compile Agent beta10
+        shell: cmd
+        working-directory: ${{ runner.temp }}\beta10
+        run: |
+          if not exist build mkdir build
+          rc /nologo /fo build\PiiWiiRemoteAgent.res src\PiiWiiRemoteAgent.rc
+          cl /nologo /utf-8 /std:c++17 /EHsc /W4 /DUNICODE /D_UNICODE /DWIN32 /D_WINDOWS /O2 src\PiiWiiRemoteAgent.cpp build\PiiWiiRemoteAgent.res gdi32.lib user32.lib advapi32.lib PowrProf.lib bcrypt.lib shell32.lib winmm.lib /link /SUBSYSTEM:WINDOWS /OUT:build\PiiWii-Remote-Agent-2.0.0-beta10.exe
+      - name: Validate Agent beta10
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'
+          $exe=Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta10.exe'
+          $p=Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if($p.ExitCode -ne 0){throw "Agent self-test failed: $($p.ExitCode)"}
+          $src=Get-Content (Join-Path $root 'src\PiiWiiRemoteAgent.cpp') -Raw -Encoding UTF8
+          foreach($needle in @('PIIWII_TV_APP_ACTION','sendPiiWiiTvAppAction','WM_COPYDATA','piiwiitv.exe')){if(-not $src.Contains($needle)){throw "Missing $needle"}}
+          foreach($forbidden in @('PIIWII_TV_CHANNEL_DOWN") return sendVirtualKey','PIIWII_TV_VOLUME_UP") return sendVirtualKey','PIIWII_TV_MUTE") return sendVirtualKey')){if($src.Contains($forbidden)){throw "Global TV key remains: $forbidden"}}
+      - name: Build Agent beta10 installer
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if(-not(Test-Path $iscc)){ choco install innosetup --no-progress -y }
+          & $iscc (Join-Path $root 'installer\PiiWiiRemoteAgent.iss')
+          if($LASTEXITCODE -ne 0){throw 'Inno Setup failed'}
+          $setup=Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta10.exe'
+          if(-not(Test-Path $setup)){throw 'beta10 setup missing'}
+      - name: Package Agent beta10
+        shell: pwsh
+        run: |
+          $root=Join-Path $env:RUNNER_TEMP 'beta10'; $out=Join-Path $env:RUNNER_TEMP 'beta10-out'; New-Item -ItemType Directory -Force $out|Out-Null
+          Copy-Item (Join-Path $root 'build\PiiWii-Remote-Agent-2.0.0-beta10.exe') $out
+          Copy-Item (Join-Path $root 'installer\output\PiiWii-Remote-Setup-2.0.0-beta10.exe') $out
+          Compress-Archive -Path (Join-Path $root 'src'),(Join-Path $root 'installer') -DestinationPath (Join-Path $out 'PiiWii-Remote-Windows-2.0.0-beta10-Sources.zip') -Force
+          Get-ChildItem $out -File | ForEach-Object {"$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $($_.Name)"} | Set-Content -Encoding ascii (Join-Path $out 'SHA256.txt')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-Windows-beta10-App-IPC
+          path: ${{ runner.temp }}\beta10-out\*
+          retention-days: 7
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct beta24
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            cat piiwii-remote-beta18-lan-src2/p00.b64 piiwii-remote-beta18-lan-src2/p01.b64 piiwii-remote-beta18-lan-src2/p02.b64
+            cat piiwii-remote-beta18-p03fix/fix*.b64
+            cat piiwii-remote-beta18-lan-src2/p04.b64 piiwii-remote-beta18-lan-src2/p05.b64 piiwii-remote-beta18-lan-src2/p06.b64 piiwii-remote-beta18-lan-src2/p07.b64 piiwii-remote-beta18-lan-src2/p08.b64
+          } | base64 -d > /tmp/beta24.tar.xz
+          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta24.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/beta24
+          tar -xJf /tmp/beta24.tar.xz -C /tmp/beta24
+          RES=/tmp/beta24/remote/src/main/res/drawable-nodpi; mkdir -p "$RES"
+          for n in remote touchpad keyboard apps; do base64 -d "piiwii-remote-beta17-icons/ic_${n}_custom.png.b64" > "$RES/ic_${n}_custom.png"; done
+          cp piiwii-remote-beta19/PiiWiiTvRemoteView.kt /tmp/beta24/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt
+          cd /tmp/beta24
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-beta21/MainActivity.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-beta21/PiiWiiTvRemoteView.patch"
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('/tmp/beta24')
+          cmd=root/'remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt'
+          s=cmd.read_text()
+          s=s.replace('PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,','PIIWII_TV_APP_ACTION, PIIWII_TV_CHANNEL_UP, PIIWII_TV_CHANNEL_DOWN, PIIWII_TV_VOLUME_UP, PIIWII_TV_VOLUME_DOWN, PIIWII_TV_MUTE,')
+          cmd.write_text(s)
+          vm=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainViewModel.kt'
+          s=vm.read_text()
+          s=s.replace('RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_CHANNEL_UP,','RemoteCommand.VOLUME_DOWN, RemoteCommand.VOLUME_MUTE, RemoteCommand.PIIWII_TV_APP_ACTION, RemoteCommand.PIIWII_TV_CHANNEL_UP,')
+          vm.write_text(s)
+          main=root/'remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt'
+          s=main.read_text()
+          a=s.index('    private fun handlePiiWiiTvAction(action: String) {')
+          b=s.index('\n    private fun showPiiWiiTvPairing()',a)
+          replacement='''    private fun handlePiiWiiTvAction(action: String) {\n        val selected = vm.selected.value\n        if (selected?.type == DeviceType.WINDOWS_PC) {\n            vm.sendCommand(RemoteCommand.PIIWII_TV_APP_ACTION, action)\n            return\n        }\n        if (!piiwiiTvClient.isPaired) {\n            showPiiWiiTvPairing()\n            return\n        }\n        piiwiiTvClient.send(action) { ok, message ->\n            if (!ok) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()\n        }\n    }\n'''
+          s=s[:a]+replacement+s[b:]
+          s=s.replace('    // Etat F11 supposé du navigateur, piloté uniquement par les boutons PiiWii TV.\n    private var piiwiiTvBrowserFullscreen = false\n','')
+          main.write_text(s)
+          gradle=root/'remote/build.gradle.kts'
+          g=gradle.read_text()
+          g=re.sub(r'versionCode\s*=\s*\d+','versionCode = 54',g,count=1)
+          g=re.sub(r'versionName\s*=\s*"[^"]+"','versionName = "2.0.0-beta24"',g,count=1)
+          gradle.write_text(g)
+          PY
+          grep -q 'PIIWII_TV_APP_ACTION' remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt
+          grep -q 'vm.sendCommand(RemoteCommand.PIIWII_TV_APP_ACTION, action)' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'versionCode = 54' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta24"' remote/build.gradle.kts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android 35 packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build beta24
+        working-directory: /tmp/beta24
+        run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
+      - name: Validate and package beta24
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/beta24-out; mkdir -p "$OUT"
+          RAW=/tmp/beta24/remote/build/outputs/apk/release/remote-release-unsigned.apk
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta24-ALIGNED-UNSIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='54' versionName='2.0.0-beta24'" "$OUT/BADGING.txt"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
+          cd /tmp/beta24 && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta24-SOURCES.zip" . -x '*/build/*' '.gradle/*'
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-beta24-App-IPC
+          path: /tmp/beta24-out/*
+          retention-days: 7
+          if-no-files-found: error
