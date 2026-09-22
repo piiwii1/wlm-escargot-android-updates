@@ -1,0 +1,98 @@
+name: PiiWii Remote beta16 fast remote build
+
+on:
+  push:
+    branches: [piiwii-remote-phone-beta16-fastremote]
+    paths:
+      - 'piiwii-remote-phone-beta16-fastremote/**'
+      - '.github/workflows/piiwii-remote-beta16-fastremote-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download exact beta15 source base
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 2 'https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-444c-820a-906f-971e61ba82dd/raw?se=2026-09-21T23%3A54%3A59Z&sp=r&sv=2026-02-06&sr=b&scid=31edd7f5-5708-561c-8d14-cea81c5bb201&skoid=b5d2651b-fef3-4bb0-a03b-ca59cc22929b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-21T23%3A16%3A02Z&ske=2026-09-22T23%3A16%3A02Z&sks=b&skv=2026-02-06&sig=uSDQs2Ext4%2BfsI/TheddDWKpXQPCFOITBA1soNYMYmY%3D' -o /tmp/remote-beta15.zip
+          test -s /tmp/remote-beta15.zip
+          echo '7427ac4f4e6a95f6bfb9660fd6c4ea117c4fe24d4aa30370aa0b6cb9649c90ed  /tmp/remote-beta15.zip' | sha256sum -c -
+          rm -rf /tmp/remote-beta16-src
+          mkdir -p /tmp/remote-beta16-src
+          unzip -q /tmp/remote-beta15.zip -d /tmp/remote-beta16-src
+          ROOT=/tmp/remote-beta16-src/remote_ci_text
+          test -f "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionCode = 45' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta15"' "$ROOT/remote/build.gradle.kts"
+
+      - name: Apply beta16 responsiveness and complete TV remote patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/remote-beta16-src/remote_ci_text
+          base64 -d piiwii-remote-phone-beta16-fastremote/beta16.patch.xz.b64 > /tmp/beta16.patch.xz
+          xz -dc /tmp/beta16.patch.xz > /tmp/beta16.patch
+          (cd "$ROOT" && patch -p1 < /tmp/beta16.patch)
+          grep -q 'versionCode = 46' "$ROOT/remote/build.gradle.kts"
+          grep -q 'versionName = "2.0.0-beta16"' "$ROOT/remote/build.gradle.kts"
+          grep -q 'ON / OFF' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt"
+          grep -q 'onAction("recordings")' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteView.kt"
+          grep -q 'fun power(callback:' "$ROOT/remote/src/main/java/ch/piiwii/remote2/ui/PiiWiiTvRemoteClient.kt"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Ensure Android 35 SDK pieces
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -perm -111 | head -n1)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Prepare Gradle 8.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-delay 2 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+
+      - name: Unit tests and release build
+        working-directory: /tmp/remote-beta16-src/remote_ci_text
+        run: /tmp/gradle-8.9/bin/gradle --no-daemon --stacktrace :remote:testDebugUnitTest :remote:assembleRelease
+
+      - name: Validate and package beta16
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/remote-beta16-src/remote_ci_text
+          OUT=/tmp/delivery
+          mkdir -p "$OUT"
+          RAW="$ROOT/remote/build/outputs/apk/release/remote-release-unsigned.apk"
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta16-ALIGNED-UNSIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='46' versionName='2.0.0-beta16'" "$OUT/BADGING.txt"
+          unzip -t "$APK" > "$OUT/ZIPTEST.txt"
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-beta16-fastremote-unsigned
+          path: /tmp/delivery/*
+          retention-days: 7
+          if-no-files-found: error
