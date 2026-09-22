@@ -1,0 +1,83 @@
+name: PiiWii Remote beta24 app IPC
+
+on:
+  push:
+    branches: [piiwii-tv-desktop-app-beta24]
+    paths:
+      - '.github/workflows/piiwii-remote-beta24-app-ipc.yml'
+      - 'piiwii-remote-beta24-app-ipc.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download beta23 source artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
+            'https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/actions/artifacts/10713837952/zip' -o /tmp/beta23-artifact.zip
+          mkdir -p /tmp/beta23-art
+          unzip -q /tmp/beta23-artifact.zip -d /tmp/beta23-art
+          test -f /tmp/beta23-art/PiiWii-Remote-2.0.0-beta23-SOURCES.zip
+          mkdir -p /tmp/beta24
+          unzip -q /tmp/beta23-art/PiiWii-Remote-2.0.0-beta23-SOURCES.zip -d /tmp/beta24
+      - name: Apply beta24 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/beta24
+          patch -p1 < "$GITHUB_WORKSPACE/piiwii-remote-beta24-app-ipc.patch"
+          grep -q 'PIIWII_TV_APP_ACTION' remote/src/main/java/ch/piiwii/remote2/protocol/RemoteCommand.kt
+          grep -q 'vm.sendCommand(RemoteCommand.PIIWII_TV_APP_ACTION, action)' remote/src/main/java/ch/piiwii/remote2/ui/MainActivity.kt
+          grep -q 'versionCode = 54' remote/build.gradle.kts
+          grep -q 'versionName = "2.0.0-beta24"' remote/build.gradle.kts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android 35 packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build beta24
+        working-directory: /tmp/beta24
+        run: gradle --no-daemon :remote:testDebugUnitTest :remote:assembleRelease
+      - name: Validate and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/tmp/beta24-out; mkdir -p "$OUT"
+          RAW=/tmp/beta24/remote/build/outputs/apk/release/remote-release-unsigned.apk
+          APK="$OUT/PiiWii-Remote-Phone-2.0.0-beta24-ALIGNED-UNSIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$RAW" "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK" > "$OUT/ZIPALIGN.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" > "$OUT/BADGING.txt"
+          grep -q "package: name='ch.piiwii.remote2' versionCode='54' versionName='2.0.0-beta24'" "$OUT/BADGING.txt"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/apksigner.jar"
+          cd /tmp/beta24 && zip -qr "$OUT/PiiWii-Remote-2.0.0-beta24-SOURCES.zip" . -x '*/build/*' '.gradle/*'
+          sha256sum "$APK" > "$OUT/SHA256-UNSIGNED.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Remote-beta24-App-IPC
+          path: /tmp/beta24-out/*
+          retention-days: 7
+          if-no-files-found: error
