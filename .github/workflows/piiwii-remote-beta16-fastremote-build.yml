@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/piiwii-remote-beta16-fastremote-build.yml'
       - 'piiwii-remote-beta18-lan-src2/**'
+      - 'piiwii-remote-beta18-p03fix/**'
   workflow_dispatch:
 
 jobs:
@@ -22,7 +23,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat piiwii-remote-beta18-lan-src2/p*.b64 | base64 -d > /tmp/beta18.tar.xz
+          {
+            cat piiwii-remote-beta18-lan-src2/p00.b64 piiwii-remote-beta18-lan-src2/p01.b64 piiwii-remote-beta18-lan-src2/p02.b64
+            cat piiwii-remote-beta18-p03fix/fix*.b64
+            cat piiwii-remote-beta18-lan-src2/p04.b64 piiwii-remote-beta18-lan-src2/p05.b64 piiwii-remote-beta18-lan-src2/p06.b64 piiwii-remote-beta18-lan-src2/p07.b64 piiwii-remote-beta18-lan-src2/p08.b64
+          } | base64 -d > /tmp/beta18.tar.xz
+          echo '25de2feff4a0a60badea14c5bde6e840ea8bb7cac0bd57e584d36021450fd1f5  /tmp/beta18.tar.xz' | sha256sum -c -
           xz -t /tmp/beta18.tar.xz
           mkdir -p /tmp/beta18
           tar -xJf /tmp/beta18.tar.xz -C /tmp/beta18
