@@ -1,0 +1,40 @@
+name: Android SDK Toolchain Export Temp 2
+
+on:
+  push:
+    branches: [ android-toolchain-export-temp-20260923 ]
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate and package preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "SDK=$SDK"
+          BT="$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -1)"
+          PLATFORM="$(find "$SDK/platforms" -mindepth 1 -maxdepth 1 -type d -name 'android-*' -printf '%f\n' | sort -V | tail -1)"
+          echo "BT=$BT PLATFORM=$PLATFORM"
+          test -x "$SDK/build-tools/$BT/aapt2"
+          test -x "$SDK/build-tools/$BT/d8"
+          test -x "$SDK/build-tools/$BT/apksigner"
+          test -x "$SDK/build-tools/$BT/zipalign"
+          test -f "$SDK/platforms/$PLATFORM/android.jar"
+          mkdir -p "/tmp/piiwii-android-sdk/build-tools/$BT" "/tmp/piiwii-android-sdk/platforms/$PLATFORM"
+          cp -a "$SDK/build-tools/$BT/." "/tmp/piiwii-android-sdk/build-tools/$BT/"
+          cp "$SDK/platforms/$PLATFORM/android.jar" "/tmp/piiwii-android-sdk/platforms/$PLATFORM/android.jar"
+          tar -C /tmp -czf /tmp/piiwii-android-sdk-toolchain.tar.gz piiwii-android-sdk
+          sha256sum /tmp/piiwii-android-sdk-toolchain.tar.gz > /tmp/piiwii-android-sdk-toolchain.sha256
+      - name: Upload SDK subset
+        uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-android-sdk-toolchain
+          path: |
+            /tmp/piiwii-android-sdk-toolchain.tar.gz
+            /tmp/piiwii-android-sdk-toolchain.sha256
+          retention-days: 1
