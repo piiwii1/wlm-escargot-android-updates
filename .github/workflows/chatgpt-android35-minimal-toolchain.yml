@@ -1,0 +1,116 @@
+name: ChatGPT Android 35 Minimal Toolchain
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/chatgpt-android35-minimal-toolchain.yml' ]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GRADLE_USER_HOME: /tmp/piiwii-gradle-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install exact Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/cmdline-tools/16.0/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Warm only beta26 dependency graph in isolated cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$GRADLE_USER_HOME" /tmp/warm
+          mkdir -p "$GRADLE_USER_HOME" /tmp/warm/remote/src/main/res/values /tmp/warm/remote/src/main/java/ch/piiwii/remote2
+          cat > /tmp/warm/settings.gradle.kts <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = "PiiWiiRemoteWarm"
+          include(":remote")
+          EOF
+          cat > /tmp/warm/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+          }
+          EOF
+          cat > /tmp/warm/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          EOF
+          cat > /tmp/warm/remote/build.gradle.kts <<'EOF'
+          plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+          android {
+              namespace = "ch.piiwii.remote2"
+              compileSdk = 35
+              defaultConfig { applicationId = "ch.piiwii.remote2"; minSdk = 26; targetSdk = 35; versionCode = 56; versionName = "2.0.0-beta26"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; buildConfigField("String", "PIIWII_TV_API", "\"https://piiwii.info/wp-json/piiwii-tv/v1\"") }
+              buildFeatures { buildConfig = true }
+              buildTypes { getByName("release") { isMinifyEnabled = false } }
+              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.15.0")
+              implementation("androidx.activity:activity-ktx:1.10.1")
+              implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+              implementation("io.coil-kt:coil:2.7.0")
+              implementation("io.coil-kt:coil-svg:2.7.0")
+              testImplementation("junit:junit:4.13.2")
+          }
+          EOF
+          cat > /tmp/warm/remote/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"/></manifest>
+          EOF
+          cat > /tmp/warm/remote/src/main/res/values/styles.xml <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"/></resources>
+          EOF
+          cat > /tmp/warm/remote/src/main/java/ch/piiwii/remote2/MainActivity.kt <<'EOF'
+          package ch.piiwii.remote2
+          class MainActivity
+          EOF
+          cd /tmp/warm
+          gradle --no-daemon --stacktrace :remote:assembleRelease :remote:testDebugUnitTest
+          rm -rf "$GRADLE_USER_HOME/daemon" "$GRADLE_USER_HOME/workers" "$GRADLE_USER_HOME/notifications" "$GRADLE_USER_HOME/caches"/*/fileHashes "$GRADLE_USER_HOME/caches"/*/fileContent || true
+      - name: Pack minimal offline toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/min/sdk/platforms /tmp/min/sdk/build-tools /tmp/min/gradle
+          cp -a "$ANDROID_HOME/platforms/android-35" /tmp/min/sdk/platforms/
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/min/sdk/build-tools/
+          cp -a "$ANDROID_HOME/licenses" /tmp/min/sdk/ || true
+          GRADLE_BIN="$(readlink -f "$(command -v gradle)")"
+          GRADLE_ROOT="$(dirname "$(dirname "$GRADLE_BIN")")"
+          cp -a "$GRADLE_ROOT" /tmp/min/gradle/gradle-8.9
+          cp -a "$GRADLE_USER_HOME" /tmp/min/gradle-home
+          tar -C /tmp/min -czf /tmp/piiwii-remote-beta26-min-toolchain.tgz .
+          sha256sum /tmp/piiwii-remote-beta26-min-toolchain.tgz > /tmp/piiwii-remote-beta26-min-toolchain.sha256
+          du -sh /tmp/min /tmp/piiwii-remote-beta26-min-toolchain.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-remote-beta26-min-toolchain
+          path: |
+            /tmp/piiwii-remote-beta26-min-toolchain.tgz
+            /tmp/piiwii-remote-beta26-min-toolchain.sha256
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
