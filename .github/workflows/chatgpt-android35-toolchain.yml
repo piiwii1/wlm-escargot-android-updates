@@ -1,0 +1,100 @@
+name: ChatGPT Android 35 Toolchain Export
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/chatgpt-android35-toolchain.yml' ]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Warm exact PiiWii Remote dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/warm && mkdir -p /tmp/warm/app/src/main/java/ch/piiwii/warm
+          cat > /tmp/warm/settings.gradle.kts <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = "Warm"
+          include(":app")
+          EOF
+          cat > /tmp/warm/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+          }
+          EOF
+          cat > /tmp/warm/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          EOF
+          cat > /tmp/warm/app/build.gradle.kts <<'EOF'
+          plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+          android {
+              namespace = "ch.piiwii.warm"
+              compileSdk = 35
+              defaultConfig { applicationId = "ch.piiwii.warm"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "1" }
+              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.15.0")
+              implementation("androidx.activity:activity-ktx:1.10.1")
+              implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+              implementation("io.coil-kt:coil:2.7.0")
+              implementation("io.coil-kt:coil-svg:2.7.0")
+              testImplementation("junit:junit:4.13.2")
+          }
+          EOF
+          cat > /tmp/warm/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"/></manifest>
+          EOF
+          mkdir -p /tmp/warm/app/src/main/res/values
+          cat > /tmp/warm/app/src/main/res/values/styles.xml <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"/></resources>
+          EOF
+          cd /tmp/warm
+          gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Pack offline toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/toolchain/sdk /tmp/toolchain/gradle-cache /tmp/toolchain/gradle-dist
+          cp -a "$ANDROID_HOME/platforms/android-35" /tmp/toolchain/sdk/
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/toolchain/sdk/
+          cp -a "$ANDROID_HOME/platform-tools" /tmp/toolchain/sdk/
+          cp -a "$ANDROID_HOME/licenses" /tmp/toolchain/sdk/ || true
+          GRADLE_BIN="$(readlink -f "$(command -v gradle)")"
+          GRADLE_ROOT="$(dirname "$(dirname "$GRADLE_BIN")")"
+          cp -a "$GRADLE_ROOT" /tmp/toolchain/gradle-dist/gradle-8.9
+          cp -a "$HOME/.gradle/caches" /tmp/toolchain/gradle-cache/
+          cp -a "$HOME/.gradle/native" /tmp/toolchain/gradle-cache/ || true
+          tar -C /tmp/toolchain -czf /tmp/android35-offline-toolchain.tgz .
+          sha256sum /tmp/android35-offline-toolchain.tgz > /tmp/android35-offline-toolchain.sha256
+          ls -lh /tmp/android35-offline-toolchain.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android35-offline-toolchain
+          path: |
+            /tmp/android35-offline-toolchain.tgz
+            /tmp/android35-offline-toolchain.sha256
+          retention-days: 1
+          if-no-files-found: error
