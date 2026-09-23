@@ -1,0 +1,44 @@
+name: Android SDK Toolchain Export Temp
+
+on:
+  push:
+    branches:
+      - android-toolchain-export-temp-20260923
+    paths:
+      - '.github/workflows/android-toolchain-export-temp-20260923.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install exact SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Package SDK build subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/piiwii-android-sdk/build-tools /tmp/piiwii-android-sdk/platforms
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/piiwii-android-sdk/build-tools/
+          cp -a "$ANDROID_HOME/platforms/android-35" /tmp/piiwii-android-sdk/platforms/
+          tar -C /tmp -czf /tmp/piiwii-android-sdk35-buildtools35.tar.gz piiwii-android-sdk
+          sha256sum /tmp/piiwii-android-sdk35-buildtools35.tar.gz > /tmp/piiwii-android-sdk35-buildtools35.sha256
+      - name: Upload SDK subset
+        uses: actions/upload-artifact@v4
+        with:
+          name: piiwii-android-sdk35-buildtools35
+          path: |
+            /tmp/piiwii-android-sdk35-buildtools35.tar.gz
+            /tmp/piiwii-android-sdk35-buildtools35.sha256
+          retention-days: 1
+          if-no-files-found: error
