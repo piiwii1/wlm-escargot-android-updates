@@ -18,7 +18,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d cartes-mobile-ci/source.b64 > /tmp/cartes-mobile.zip
+          cat cartes-mobile-ci/parts/part-* > /tmp/source.b64
+          test "$(wc -c < /tmp/source.b64)" -eq 28520
+          echo '17ebf63a2851aed9d7588823da8797a19792a4160688b379d442300a687f6aab  /tmp/source.b64' | sha256sum -c -
+          base64 -d /tmp/source.b64 > /tmp/cartes-mobile.zip
           echo 'fb17bef51ebd4d50804baf1c711d0bfca56cf96a37433ed7cfc8557365752600  /tmp/cartes-mobile.zip' | sha256sum -c -
           rm -rf /tmp/cartes-mobile
           mkdir -p /tmp/cartes-mobile
