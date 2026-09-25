@@ -1,0 +1,5 @@
+Expected parser cases:
+CHF 160'000'000 -> 160000000 -> 160 millions
+CHF 160 000 000 -> 160000000 -> 160 millions
+CHF 160000000 -> 160000000 -> 160 millions
+Trailing draw numbers must not be concatenated.
