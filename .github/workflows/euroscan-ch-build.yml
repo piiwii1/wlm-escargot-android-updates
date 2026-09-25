@@ -34,14 +34,14 @@ jobs:
       - name: Prepare delivery
         run: |
           mkdir -p delivery
-          cp euroscan-ch/app/build/outputs/apk/debug/app-debug.apk delivery/EuroScan-CH-1.1.0.apk
-          zip -qr delivery/EuroScan-CH-1.1.0-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' -x 'euroscan-ch/.gradle/*'
-          printf 'versionName=1.1.0\nversionCode=2\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
-          sha256sum delivery/EuroScan-CH-1.1.0.apk | tee delivery/APK-SHA256.txt
-          sha256sum delivery/EuroScan-CH-1.1.0-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
+          cp euroscan-ch/app/build/outputs/apk/debug/app-debug.apk delivery/EuroScan-CH-1.2.0.apk
+          zip -qr delivery/EuroScan-CH-1.2.0-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' -x 'euroscan-ch/.gradle/*'
+          printf 'versionName=1.2.0\nversionCode=3\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
+          sha256sum delivery/EuroScan-CH-1.2.0.apk | tee delivery/APK-SHA256.txt
+          sha256sum delivery/EuroScan-CH-1.2.0-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: EuroScan-CH-1.1.0-DELIVERY
+          name: EuroScan-CH-1.2.0-DELIVERY
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
