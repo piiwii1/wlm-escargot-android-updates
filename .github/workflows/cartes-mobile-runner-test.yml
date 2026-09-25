@@ -21,11 +21,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat cartes-mobile-ci/parts/part-* > /tmp/source.b64
-          test "$(wc -c < /tmp/source.b64)" -eq 28520
-          echo '17ebf63a2851aed9d7588823da8797a19792a4160688b379d442300a687f6aab  /tmp/source.b64' | sha256sum -c -
+          cp cartes-mobile-ci/source-020.b64 /tmp/source.b64
+          test "$(wc -c < /tmp/source.b64)" -eq 31828
+          echo '5e9e0a72a4ab90e7b871fc670d3ea50518baac99e4c8c6b46beee32c115e0212  /tmp/source.b64' | sha256sum -c -
           base64 -d /tmp/source.b64 > /tmp/cartes-mobile.zip
-          echo 'fb17bef51ebd4d50804baf1c711d0bfca56cf96a37433ed7cfc8557365752600  /tmp/cartes-mobile.zip' | sha256sum -c -
+          echo '51bd63cf41b125d3c787ca06672136e89a0338bc260df7abb7377478154f8641  /tmp/cartes-mobile.zip' | sha256sum -c -
           rm -rf /tmp/cartes-mobile
           mkdir -p /tmp/cartes-mobile
           unzip -q /tmp/cartes-mobile.zip -d /tmp/cartes-mobile
@@ -62,17 +62,17 @@ jobs:
           PROJ=/tmp/cartes-mobile/cartes-mobile-public-src
           gradle -p "$PROJ" --no-daemon --stacktrace :app:assembleRelease
           mkdir -p ci-output
-          cp "$PROJ/app/build/outputs/apk/release/app-release-unsigned.apk" ci-output/Cartes-Organizer-Mobile-0.1.0-unsigned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 ci-output/Cartes-Organizer-Mobile-0.1.0-unsigned.apk ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk > ci-output/zipalign-verify.txt
+          cp "$PROJ/app/build/outputs/apk/release/app-release-unsigned.apk" ci-output/Cartes-Organizer-Mobile-0.2.0-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 ci-output/Cartes-Organizer-Mobile-0.2.0-unsigned.apk ci-output/Cartes-Organizer-Mobile-0.2.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ci-output/Cartes-Organizer-Mobile-0.2.0-aligned-unsigned.apk > ci-output/zipalign-verify.txt
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" ci-output/apksigner.jar
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk > ci-output/metadata.txt
-          sha256sum ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk > ci-output/unsigned-SHA256.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ci-output/Cartes-Organizer-Mobile-0.2.0-aligned-unsigned.apk > ci-output/metadata.txt
+          sha256sum ci-output/Cartes-Organizer-Mobile-0.2.0-aligned-unsigned.apk > ci-output/unsigned-SHA256.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Cartes-Organizer-Mobile-0.1.0-signing-input
+          name: Cartes-Organizer-Mobile-0.2.0-signing-input
           path: ci-output/
           retention-days: 7
           if-no-files-found: error
