@@ -47,13 +47,15 @@ jobs:
           yes | "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null || true
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+          test -f "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar"
 
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Build release APK
+      - name: Build and align release APK
         shell: bash
         run: |
           set -euo pipefail
@@ -61,13 +63,16 @@ jobs:
           gradle -p "$PROJ" --no-daemon --stacktrace :app:assembleRelease
           mkdir -p ci-output
           cp "$PROJ/app/build/outputs/apk/release/app-release-unsigned.apk" ci-output/Cartes-Organizer-Mobile-0.1.0-unsigned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ci-output/Cartes-Organizer-Mobile-0.1.0-unsigned.apk > ci-output/metadata.txt
-          sha256sum ci-output/Cartes-Organizer-Mobile-0.1.0-unsigned.apk > ci-output/unsigned-SHA256.txt
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 ci-output/Cartes-Organizer-Mobile-0.1.0-unsigned.apk ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk > ci-output/zipalign-verify.txt
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" ci-output/apksigner.jar
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk > ci-output/metadata.txt
+          sha256sum ci-output/Cartes-Organizer-Mobile-0.1.0-aligned-unsigned.apk > ci-output/unsigned-SHA256.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Cartes-Organizer-Mobile-0.1.0-unsigned
+          name: Cartes-Organizer-Mobile-0.1.0-signing-input
           path: ci-output/
           retention-days: 7
           if-no-files-found: error
