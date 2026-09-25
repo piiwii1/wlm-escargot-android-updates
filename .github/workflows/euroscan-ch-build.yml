@@ -3,7 +3,7 @@ on:
   push:
     branches: [ euroscan-build-100 ]
     paths:
-      - 'euroscan-ch/**'
+      - 'euroscan-ch-1.0.1-src.zip'
       - '.github/workflows/euroscan-ch-build.yml'
   workflow_dispatch:
 jobs:
@@ -28,20 +28,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Restore EuroScan CH 1.0.1 sources
+        run: |
+          rm -rf euroscan-ch
+          unzip -q euroscan-ch-1.0.1-src.zip
       - name: Build APK
         working-directory: euroscan-ch
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Prepare delivery
         run: |
           mkdir -p delivery
-          cp euroscan-ch/app/build/outputs/apk/debug/app-debug.apk delivery/EuroScan-CH-1.0.0.apk
-          zip -qr delivery/EuroScan-CH-1.0.0-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' -x 'euroscan-ch/.gradle/*'
-          printf 'versionName=1.0.0\nversionCode=1\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
-          sha256sum delivery/EuroScan-CH-1.0.0.apk | tee delivery/APK-SHA256.txt
-          sha256sum delivery/EuroScan-CH-1.0.0-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
+          cp euroscan-ch/app/build/outputs/apk/debug/app-debug.apk delivery/EuroScan-CH-1.0.1.apk
+          cp euroscan-ch-1.0.1-src.zip delivery/EuroScan-CH-1.0.1-SOURCES.zip
+          printf 'versionName=1.0.1\nversionCode=2\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
+          sha256sum delivery/EuroScan-CH-1.0.1.apk | tee delivery/APK-SHA256.txt
+          sha256sum delivery/EuroScan-CH-1.0.1-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: EuroScan-CH-1.0.0-DELIVERY
+          name: EuroScan-CH-1.0.1-DELIVERY
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
