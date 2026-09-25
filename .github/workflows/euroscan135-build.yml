@@ -55,8 +55,7 @@ jobs:
       - name: Apply 1.3.5 redesign
         run: |
           set -euo pipefail
-          cat .ci/euroscan135/patch135.part* | base64 -d | gzip -dc > /tmp/patch135.py
-          python3 /tmp/patch135.py
+          gzip -dc .ci/euroscan135/changes.patch.gz | (cd euroscan-ch && patch -p1)
       - name: Apply 1.3.6 replacements
         run: |
           set -euo pipefail
