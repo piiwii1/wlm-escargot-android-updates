@@ -1,0 +1,35 @@
+name: Export Android 35 Signing Tools
+on:
+  push:
+    branches: [ euroscan-build-110 ]
+    paths: [ '.github/workflows/export-android-sign-tools.yml' ]
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android SDK 35
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+      - name: Prepare tools
+        run: |
+          mkdir -p tools/lib64
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" tools/apksigner.jar
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" tools/zipalign
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib64/libc++.so" tools/lib64/libc++.so
+          chmod +x tools/zipalign
+          sha256sum tools/apksigner.jar tools/zipalign tools/lib64/libc++.so > tools/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Android-35-Signing-Tools
+          path: tools
+          retention-days: 2
+          if-no-files-found: error
