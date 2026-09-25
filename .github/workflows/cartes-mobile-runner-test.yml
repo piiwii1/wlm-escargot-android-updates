@@ -1,0 +1,14 @@
+name: Cartes Mobile Runner Test
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/cartes-mobile-runner-test.yml'
+      - 'cartes-mobile-ci/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo runner-ok
