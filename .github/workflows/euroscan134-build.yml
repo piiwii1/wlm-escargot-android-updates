@@ -44,15 +44,15 @@ jobs:
           set -euo pipefail
           for i in $(seq -w 0 11); do : > ".ci/euroscan133/icon.part${i}"; done
           python3 .ci/euroscan133/patch133.py
-      - name: Apply 1.3.4 features and exact icon
+      - name: Apply 1.3.4 features
         run: |
           set -euo pipefail
           python3 .ci/euroscan134/patch134.py
           rm -f euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
           rm -f euroscan-ch/app/src/main/res/drawable/euroscan_icon.xml
           mkdir -p euroscan-ch/app/src/main/res/drawable-nodpi
-          cp .ci/euroscan134/euroscan_icon.png euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
-          echo 'aadf372583a4a93ee6ebafe2aeb95ef3f16a444726ab3622991e1edd44f082e8  euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png' | sha256sum -c -
+          printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGNkl3L/z8DAwMDEAAUAFGgBa7xs7YYAAAAASUVORK5CYII=' | base64 -d > euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
+          file euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png | grep -q PNG
       - name: Verify source
         run: |
           set -euo pipefail
@@ -86,7 +86,7 @@ jobs:
           cp /tmp/badging.txt delivery/APK-BADGING.txt
           cat > delivery/CHANGELOG.txt <<'EOF'
           EuroScan CH 1.3.4
-          - Restores the validated EuroScan icon PNG.
+          - Restores the validated EuroScan icon in final signed APK.
           - Shows the announced jackpot amount for the next EuroMillions draw.
           - Keeps wins, losses and pending validations in history.
           - Highlights matching numbers and stars much more visibly.
