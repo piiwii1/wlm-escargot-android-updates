@@ -44,7 +44,8 @@ jobs:
           set -euo pipefail
           for i in $(seq -w 0 11); do : > ".ci/euroscan133/icon.part${i}"; done
           python3 .ci/euroscan133/patch133.py
-          cp .ci/euroscan133/euroscan_icon.png euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
+          rm -f euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
+          convert .ci/euroscan133/euroscan_icon.png -define webp:lossless=true euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.webp
       - name: Verify source
         run: |
           set -euo pipefail
@@ -54,8 +55,9 @@ jobs:
           grep -q 'stableFrames>=2' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java
           grep -q 'countLotteryNumbers' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/TicketParser.java
           grep -q '@drawable/euroscan_icon' euroscan-ch/app/src/main/AndroidManifest.xml
-          test -s euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
-          file euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png | grep -q PNG
+          test ! -e euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
+          test -s euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.webp
+          file euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.webp | grep -qi 'Web/P'
       - name: Build release
         working-directory: euroscan-ch
         run: gradle --no-daemon --stacktrace assembleRelease
