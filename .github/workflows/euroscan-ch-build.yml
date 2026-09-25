@@ -42,16 +42,20 @@ jobs:
           grep -q "launchable-activity: name='ch.piiwii.euroscan.MainActivity'" /tmp/badging.txt
       - name: Prepare unsigned delivery
         run: |
-          mkdir -p delivery
+          mkdir -p delivery/tools/lib64
           cp euroscan-ch/app/build/outputs/apk/release/app-release-unsigned.apk delivery/EuroScan-CH-1.2.1-UNSIGNED.apk
           cp /tmp/badging.txt delivery/APK-BADGING.txt
           zip -qr delivery/EuroScan-CH-1.2.1-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' -x 'euroscan-ch/.gradle/*'
           printf 'versionName=1.2.1\nversionCode=4\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
           sha256sum delivery/EuroScan-CH-1.2.1-UNSIGNED.apk > delivery/UNSIGNED-SHA256.txt
           sha256sum delivery/EuroScan-CH-1.2.1-SOURCES.zip > delivery/SOURCES-SHA256.txt
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" delivery/tools/apksigner.jar
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" delivery/tools/zipalign
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib64/libc++.so" delivery/tools/lib64/libc++.so
+          chmod +x delivery/tools/zipalign
       - uses: actions/upload-artifact@v4
         with:
-          name: EuroScan-CH-1.2.1-UNSIGNED
+          name: EuroScan-CH-1.2.1-UNSIGNED-WITH-TOOLS
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
