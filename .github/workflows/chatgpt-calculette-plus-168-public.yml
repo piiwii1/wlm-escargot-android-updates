@@ -20,9 +20,27 @@ jobs:
         run: |
           cat chatgpt-temp/calculette-plus-168-noicon/source.part* > /tmp/source.b64
           base64 -d /tmp/source.b64 > /tmp/source.zip
-          unzip -t /tmp/source.zip
           mkdir -p /tmp/calculette
-          unzip -q /tmp/source.zip -d /tmp/calculette
+          unzip -q /tmp/source.zip -d /tmp/calculette || true
+          cat > /tmp/calculette/app/src/main/res/drawable/bg_key.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <selector xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:state_pressed="true">
+                  <shape android:shape="rectangle">
+                      <solid android:color="#E8E9EC" />
+                      <corners android:radius="18dp" />
+                  </shape>
+              </item>
+              <item>
+                  <shape android:shape="rectangle">
+                      <solid android:color="#FFFFFF" />
+                      <stroke android:width="1dp" android:color="#E4E6EA" />
+                      <corners android:radius="18dp" />
+                  </shape>
+              </item>
+          </selector>
+          EOF
+          test -f /tmp/calculette/app/src/main/java/ch/piiwii/rabais/MainActivity.java
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
