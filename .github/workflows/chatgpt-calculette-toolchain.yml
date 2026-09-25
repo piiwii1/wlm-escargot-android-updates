@@ -1,0 +1,89 @@
+name: ChatGPT Calculette Android Toolchain
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/chatgpt-calculette-toolchain.yml' ]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GRADLE_USER_HOME: /tmp/calculette-gradle-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Warm Calculette exact Java build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$GRADLE_USER_HOME" /tmp/warmcalc
+          mkdir -p "$GRADLE_USER_HOME" /tmp/warmcalc/app/src/main/java/ch/piiwii/rabais /tmp/warmcalc/app/src/main/res/values
+          cat > /tmp/warmcalc/settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name='WarmCalc'
+          include ':app'
+          EOF
+          cat > /tmp/warmcalc/build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.7.3' apply false }
+          EOF
+          cat > /tmp/warmcalc/app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android { namespace 'ch.piiwii.rabais'; compileSdk 35; defaultConfig { applicationId 'ch.piiwii.rabaisexpress'; minSdk 24; targetSdk 35; versionCode 20; versionName '1.6.8' }; buildTypes { release { minifyEnabled false } } }
+          EOF
+          cat > /tmp/warmcalc/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"/><uses-sdk android:minSdkVersion="24"/></manifest>
+          EOF
+          cat > /tmp/warmcalc/app/src/main/res/values/styles.xml <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"/></resources>
+          EOF
+          cat > /tmp/warmcalc/app/src/main/java/ch/piiwii/rabais/Dummy.java <<'EOF'
+          package ch.piiwii.rabais; public class Dummy {}
+          EOF
+          cd /tmp/warmcalc
+          gradle --no-daemon --stacktrace :app:assembleRelease
+          rm -rf "$GRADLE_USER_HOME/daemon" "$GRADLE_USER_HOME/workers" "$GRADLE_USER_HOME/notifications" "$GRADLE_USER_HOME/caches"/*/fileHashes "$GRADLE_USER_HOME/caches"/*/fileContent || true
+      - name: Package compact offline toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/calc-toolchain/sdk/platforms /tmp/calc-toolchain/sdk/build-tools /tmp/calc-toolchain/gradle
+          cp -a "$ANDROID_HOME/platforms/android-35" /tmp/calc-toolchain/sdk/platforms/
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/calc-toolchain/sdk/build-tools/
+          cp -a "$ANDROID_HOME/licenses" /tmp/calc-toolchain/sdk/ || true
+          GRADLE_BIN="$(readlink -f "$(command -v gradle)")"
+          GRADLE_ROOT="$(dirname "$(dirname "$GRADLE_BIN")")"
+          cp -a "$GRADLE_ROOT" /tmp/calc-toolchain/gradle/gradle-8.9
+          cp -a "$GRADLE_USER_HOME" /tmp/calc-toolchain/gradle-home
+          tar -C /tmp/calc-toolchain -czf /tmp/calculette-android35-toolchain.tgz .
+          sha256sum /tmp/calculette-android35-toolchain.tgz > /tmp/calculette-android35-toolchain.sha256
+          ls -lh /tmp/calculette-android35-toolchain.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calculette-android35-toolchain
+          path: |
+            /tmp/calculette-android35-toolchain.tgz
+            /tmp/calculette-android35-toolchain.sha256
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
