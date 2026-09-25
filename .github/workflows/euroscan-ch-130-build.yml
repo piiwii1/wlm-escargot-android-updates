@@ -34,18 +34,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Verify and restore exact EuroScan 1.3.0 source
+      - name: Restore exact EuroScan 1.3.0 source
         run: |
           set -euo pipefail
           cd .ci/euroscan130
-          echo 'd2435698dba3b5b1eddb3467a725cd51bf7e57dfcdc66624b7cf7a35b205d207  payload.part00' | sha256sum -c -
-          echo '12604e5a87e5a16451d086f43f72f521f9e51d6f4e544d36b8add5505633a0cf  payload.part01' | sha256sum -c -
-          echo 'ff1b8e04785c92f566e3f61c590665b608370c7eefca141c3febb504c7d14577  payload.part02' | sha256sum -c -
-          echo '1d66fd1ca83bfa81b33b46634ef1c244281cc5fb62ef80816fc6e7c225e056b5  payload.part03' | sha256sum -c -
-          echo '9fb03e8e5a3d5a12eb9ac250a667e41f07cddf76d951e8d9f9a202d40d5299a9  payload.part04a' | sha256sum -c -
-          echo 'f0bc0ade9a16e0c77f15d1e951cb5330a611e93d17c2322b28b7924dc49e3b4e  payload.part04b' | sha256sum -c -
-          echo '906bdb36ac55686cd95fe6d92dd2d5df20553f0160065957aeee8bb80dbf207c  payload.part04c' | sha256sum -c -
-          cat payload.part00 payload.part01 payload.part02 payload.part03 payload.part04a payload.part04b payload.part04c | base64 -d > /tmp/euroscan130.zip
+          test -f payload.part00
+          test -f payload.part01
+          test -f payload.part02
+          test -f payload.part03
+          test -f payload.part04a
+          test -f payload.part04b1
+          test -f payload.part04b2
+          test -f payload.part04c
+          cat payload.part00 payload.part01 payload.part02 payload.part03 payload.part04a payload.part04b1 payload.part04b2 payload.part04c | base64 -d > /tmp/euroscan130.zip
           echo '88a4ae5c43d7852a68861a953f916ef3f32b2faf8956bfefaaa28f18178f53dd  /tmp/euroscan130.zip' | sha256sum -c -
           cd "$GITHUB_WORKSPACE"
           rm -rf euroscan-ch
@@ -53,6 +54,37 @@ jobs:
           test -f euroscan-ch/app/build.gradle
           grep -q 'versionCode 5' euroscan-ch/app/build.gradle
           grep -q "versionName '1.3.0'" euroscan-ch/app/build.gradle
+
+      - name: Harden Android status and navigation safe areas
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main = Path('euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java')
+          s = main.read_text()
+          anchor = '''        getWindow().setStatusBarColor(BG);\n        getWindow().setNavigationBarColor(BG);\n'''
+          patch = '''        getWindow().setStatusBarColor(BG);\n        getWindow().setNavigationBarColor(BG);\n        // Samsung / Android 15: draw edge-to-edge only when we also apply the real system insets.\n        if (Build.VERSION.SDK_INT >= 30) {\n            getWindow().setDecorFitsSystemWindows(false);\n        }\n'''
+          if 'setDecorFitsSystemWindows(false)' not in s:
+              if anchor not in s:
+                  raise SystemExit('MainActivity system-bar anchor not found')
+              s = s.replace(anchor, patch, 1)
+          main.write_text(s)
+
+          scanner = Path('euroscan-ch/app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java')
+          s = scanner.read_text()
+          anchor = '''        getWindow().setStatusBarColor(Color.rgb(5, 18, 39));\n        getWindow().setNavigationBarColor(Color.rgb(5, 18, 39));\n'''
+          patch = '''        getWindow().setStatusBarColor(Color.rgb(5, 18, 39));\n        getWindow().setNavigationBarColor(Color.rgb(5, 18, 39));\n        // Scanner also uses the real status-bar/cutout/navigation insets.\n        if (Build.VERSION.SDK_INT >= 30) {\n            getWindow().setDecorFitsSystemWindows(false);\n        }\n'''
+          if 'setDecorFitsSystemWindows(false)' not in s:
+              if anchor not in s:
+                  raise SystemExit('ScannerActivity system-bar anchor not found')
+              s = s.replace(anchor, patch, 1)
+          scanner.write_text(s)
+          PY
+          grep -q 'setDecorFitsSystemWindows(false)' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
+          grep -q 'setDecorFitsSystemWindows(false)' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java
+          grep -q 'WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout()' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
+          grep -q 'WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout()' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java
 
       - name: Build unsigned release
         working-directory: euroscan-ch
