@@ -44,7 +44,7 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          yes | "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null
+          yes | "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null || true
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
