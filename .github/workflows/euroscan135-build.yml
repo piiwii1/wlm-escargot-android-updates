@@ -1,7 +1,7 @@
 name: EuroScan CH 1.3.5 build
 on:
   push:
-    branches: [euroscan-build-135]
+    branches: [euroscan-build-135-final]
     paths:
       - '.ci/euroscan135/**'
       - '.github/workflows/euroscan135-build.yml'
@@ -55,12 +55,7 @@ jobs:
       - name: Apply 1.3.5 redesign
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('.ci/euroscan135/patch135.py')
-          p.write_text(p.read_bytes().decode('utf-8', errors='ignore'), encoding='utf-8')
-          PY
-          python3 .ci/euroscan135/patch135.py
+          gzip -dc .ci/euroscan135/changes.patch.gz | (cd euroscan-ch && patch -p1)
       - name: Verify source
         run: |
           set -euo pipefail
@@ -69,11 +64,11 @@ jobs:
           grep -q '"Historique"' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
           grep -q '"Profil"' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
           grep -q 'Montant joué (CHF)' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
-          grep -q 'TOTAL PERTES' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
-          grep -q 'historyPlayedRow' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
-          grep -q 'jackpotText' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
-          grep -q 'totalConfirmedLosses' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/HistoryStore.java
-          grep -q 'playedGrids' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/HistoryStore.java
+          grep -q 'Pertes nettes' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
+          grep -q 'historyNumberRow' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
+          grep -q 'formatJackpot' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
+          grep -q 'totalLosses' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/HistoryStore.java
+          grep -q 'gridsJson' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/HistoryStore.java
           grep -q 'extractStake' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/TicketParser.java
           ! grep -q 'shortcutTile("⚗", "Mode test"' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
           ! grep -q 'shortcutTile("▥", "Résultats"' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
@@ -97,16 +92,16 @@ jobs:
           cp /tmp/badging.txt delivery/APK-BADGING.txt
           cat > delivery/CHANGELOG.txt <<'EOF'
           EuroScan CH 1.3.5
-          - Results tab becomes History.
+          - Results navigation becomes History.
           - Adds Profile tab.
-          - History cards show draw numbers, played grids and circled matches.
-          - Stores stake, gain, structured played/draw numbers for new controls.
-          - Adds total gains, total losses and total played at bottom of history.
+          - History cards show official draw, played grids, stars and circled matches.
+          - Scanner OCR can extract the CHF stake; manual stake remains editable.
+          - Adds total played, total gains and net losses.
           - Adds explicit Scanner ticket and Home actions inside History.
           - Home removes gains summary, Results shortcut and Test mode.
           - Manual entry becomes full-width.
           - Jackpot card redesigned and rounded to whole millions.
-          - Preserves scanner improvements and validated icon integration path.
+          - Preserves scanner improvements from 1.3.3.
           EOF
           printf 'versionName=1.3.5\nversionCode=10\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
           sha256sum delivery/EuroScan-CH-1.3.5-UNSIGNED.apk delivery/EuroScan-CH-1.3.5-SOURCES.zip > delivery/SHA256.txt
