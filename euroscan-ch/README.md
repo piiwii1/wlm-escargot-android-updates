@@ -1,2 +1,19 @@
-# EuroScan CH 1.0.0
-Android EuroMillions ticket checker for Switzerland. OCR scan, manual verification, draw lookup, CHF prizes when exact Swiss data is available, explicit estimates otherwise, local history.
+# EuroScan CH 1.1.0
+
+Application Android de contrôle de tickets EuroMillions pour la Suisse romande.
+
+## 1.1.0
+- Scanner photo OCR
+- Import d'une photo depuis le téléphone
+- Vérification/correction manuelle avant contrôle
+- Résultats EuroMillions par date
+- Contrôle SWISS WIN associé aux 5 numéros de chaque grille
+- Cotes CHF exactes quand elles sont récupérables avec certitude
+- Aucun montant estimé ajouté au total
+- Historique local
+
+Version: 1.1.0
+VersionCode: 2
+Package: ch.piiwii.euroscan
+
+EuroScan CH est un outil informatif indépendant. Le ticket original et la validation de la Loterie Romande font foi.
