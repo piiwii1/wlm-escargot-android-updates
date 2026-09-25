@@ -31,20 +31,30 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore exact EuroScan 1.3.2 source
+      - name: Restore proven EuroScan 1.3.0 source
         run: |
           set -euo pipefail
-          cat .ci/euroscan132/payload.partaa .ci/euroscan132/payload.partab | base64 -d > /tmp/euroscan132.zip
-          echo '4a1b138bcdc01998f7b854a073cca74c0a123cd712f40c7b0b5e52486b8f3d16  /tmp/euroscan132.zip' | sha256sum -c -
+          cd .ci/euroscan130
+          cat payload.part00 payload.part01 payload.part02 payload.part03 payload.part04full | base64 -d > /tmp/euroscan130.zip
+          echo '88a4ae5c43d7852a68861a953f916ef3f32b2faf8956bfefaaa28f18178f53dd  /tmp/euroscan130.zip' | sha256sum -c -
+          cd "$GITHUB_WORKSPACE"
           rm -rf euroscan-ch
-          unzip -q /tmp/euroscan132.zip
-          grep -q 'versionCode 7' euroscan-ch/app/build.gradle
-          grep -q "versionName '1.3.2'" euroscan-ch/app/build.gradle
+          unzip -q /tmp/euroscan130.zip
+          grep -q 'versionCode 5' euroscan-ch/app/build.gradle
+          grep -q "versionName '1.3.0'" euroscan-ch/app/build.gradle
+
+      - name: Apply exact 1.3.2 patch
+        run: |
+          set -euo pipefail
+          python3 .ci/euroscan132/patch132.py
 
       - name: Verify persistent bottom navigation source
         run: |
           set -euo pipefail
           MAIN='euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java'
+          SCANNER='euroscan-ch/app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java'
+          grep -q 'versionCode 7' euroscan-ch/app/build.gradle
+          grep -q "versionName '1.3.2'" euroscan-ch/app/build.gradle
           grep -q 'bottomNav(activeNav)' "$MAIN"
           grep -q 'bottomNav("home")' "$MAIN"
           grep -q 'page("Résultats", "Dernier tirage EuroMillions disponible.", "results")' "$MAIN"
@@ -53,6 +63,9 @@ jobs:
           grep -q 'navItem("⌗", "Scanner"' "$MAIN"
           grep -q 'navItem("▥", "Résultats"' "$MAIN"
           if grep -q 'navItem("⚙", "Réglages"' "$MAIN"; then exit 1; fi
+          grep -q 'Démarrage de secours actif' "$MAIN"
+          if grep -q 'setDecorFitsSystemWindows(false)' "$MAIN"; then exit 1; fi
+          if grep -q 'setDecorFitsSystemWindows(false)' "$SCANNER"; then exit 1; fi
 
       - name: Build unsigned release
         working-directory: euroscan-ch
