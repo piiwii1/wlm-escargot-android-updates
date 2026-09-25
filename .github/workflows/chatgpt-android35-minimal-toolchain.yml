@@ -114,3 +114,5 @@ jobs:
           retention-days: 1
           compression-level: 0
           if-no-files-found: error
+
+# retrigger Calculette+ TV 1.6.8 — 2026-09-25
