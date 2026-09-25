@@ -23,131 +23,32 @@ jobs:
           java-version: '17'
       - name: Install Android SDK 35
         run: |
-          set -euo pipefail
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Apply 1.2.1 startup hotfix
+      - name: Apply 1.2.1 hotfix
         working-directory: euroscan-ch
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p=Path('app/build.gradle')
-          s=p.read_text()
-          s=s.replace('versionCode 3','versionCode 4').replace("versionName '1.2.0'","versionName '1.2.1'")
-          p.write_text(s)
-
-          p=Path('app/src/main/java/ch/piiwii/euroscan/MainActivity.java')
-          s=p.read_text()
-          s=s.replace('EUROSCAN CH  ·  v1.2.0','EUROSCAN CH  ·  v1.2.1')
-          old_on='''    @Override
-              public void onCreate(Bundle b) {
-                  super.onCreate(b);
-                  history = new HistoryStore(this);
-                  configureSystemBars();
-                  home();
-              }'''
-          new_on='''    @Override
-              public void onCreate(Bundle b) {
-                  super.onCreate(b);
-                  configureSystemBars();
-                  try {
-                      history = new HistoryStore(this);
-                      home();
-                  } catch (Throwable startupError) {
-                      showSafeHome(startupError);
-                  }
-              }'''
-          if old_on not in s: raise SystemExit('onCreate block not found')
-          s=s.replace(old_on,new_on)
-          start=s.index('    private void configureSystemBars() {')
-          end=s.index('\n    private void page(', start)
-          replacement='''    private void configureSystemBars() {
-                  getWindow().setStatusBarColor(DEEP);
-                  getWindow().setNavigationBarColor(BG);
-                  if (Build.VERSION.SDK_INT >= 26) {
-                      getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-                  }
-              }
-
-              private void showSafeHome(Throwable error) {
-                  LinearLayout safe = new LinearLayout(this);
-                  safe.setOrientation(LinearLayout.VERTICAL);
-                  safe.setPadding(dp(20), dp(20), dp(20), dp(24));
-                  safe.setBackgroundColor(BG);
-                  safe.addView(txt("EuroScan CH", 27, PURPLE, true));
-                  safe.addView(gap(8));
-                  safe.addView(txt("Mode de démarrage sécurisé", 16, TEXT, true));
-                  safe.addView(gap(8));
-                  safe.addView(txt("L'interface principale a rencontré un problème, mais l'application reste ouverte.", 14, MUTED, false));
-                  safe.addView(gap(18));
-                  Button scan = btn("Ouvrir le scanner", PURPLE, Color.WHITE);
-                  Button manual = secondary("Saisie manuelle");
-                  safe.addView(scan, new LinearLayout.LayoutParams(-1, dp(58)));
-                  safe.addView(gap(10));
-                  safe.addView(manual, new LinearLayout.LayoutParams(-1, dp(54)));
-                  safe.addView(gap(14));
-                  safe.addView(txt("Diagnostic : " + error.getClass().getSimpleName(), 11, Color.GRAY, false));
-                  setContentView(safe);
-                  scan.setOnClickListener(v -> startLiveScanner());
-                  manual.setOnClickListener(v -> editor(new TicketParser.ParsedTicket(), "Saisie manuelle"));
-              }
-'''
-          s=s[:start]+replacement+s[end:]
-          s=s.replace('''        setContentView(sc);
-                  applySafeInsets(root);''','''        root.setPadding(dp(18), dp(18), dp(18), dp(30));
-                  setContentView(sc);''')
-          if '    private void applySafeInsets(View v) {' in s:
-              a=s.index('    private void applySafeInsets(View v) {')
-              b=s.index('\n    private void home() {',a)
-              s=s[:a]+'''    private void applySafeInsets(View v) {
-                  v.setPadding(dp(18), dp(18), dp(18), dp(30));
-              }\n'''+s[b:]
-          p.write_text(s)
-
-          p=Path('app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java')
-          s=p.read_text()
-          s=s.replace('''        getWindow().setStatusBarColor(Color.BLACK);
-                  getWindow().setNavigationBarColor(Color.BLACK);
-                  if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
-                  buildUi();''','''        getWindow().setStatusBarColor(Color.BLACK);
-                  getWindow().setNavigationBarColor(Color.BLACK);
-                  buildUi();''')
-          s=s.replace('''        setContentView(root);
-                  applySafeInsets(root, topLp, bottomLp);''','''        setContentView(root);''')
-          marker='    private void applySafeInsets(View root, FrameLayout.LayoutParams topLp, FrameLayout.LayoutParams bottomLp) {'
-          if marker in s:
-              a=s.index(marker)
-              b=s.index('\n    @Override\n    public void onRequestPermissionsResult',a)
-              s=s[:a]+s[b:]
-          p.write_text(s)
-
-          Path('README.md').write_text('# EuroScan CH 1.2.1\n\nCorrectif de démarrage sûr. Signature finale appliquée hors du dépôt public.\n')
-          PY
+        run: python3 hotfix_121.py
       - name: Build unsigned release
         working-directory: euroscan-ch
         run: gradle --no-daemon --stacktrace assembleRelease
       - name: Verify package metadata
         run: |
-          set -euo pipefail
           APK='euroscan-ch/app/build/outputs/apk/release/app-release-unsigned.apk'
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
           grep -q "package: name='ch.piiwii.euroscan' versionCode='4' versionName='1.2.1'" /tmp/badging.txt
           grep -q "launchable-activity: name='ch.piiwii.euroscan.MainActivity'" /tmp/badging.txt
       - name: Prepare unsigned delivery
         run: |
-          set -euo pipefail
           mkdir -p delivery
           cp euroscan-ch/app/build/outputs/apk/release/app-release-unsigned.apk delivery/EuroScan-CH-1.2.1-UNSIGNED.apk
           cp /tmp/badging.txt delivery/APK-BADGING.txt
           zip -qr delivery/EuroScan-CH-1.2.1-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' -x 'euroscan-ch/.gradle/*'
           printf 'versionName=1.2.1\nversionCode=4\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
-          sha256sum delivery/EuroScan-CH-1.2.1-UNSIGNED.apk | tee delivery/UNSIGNED-SHA256.txt
-          sha256sum delivery/EuroScan-CH-1.2.1-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
+          sha256sum delivery/EuroScan-CH-1.2.1-UNSIGNED.apk > delivery/UNSIGNED-SHA256.txt
+          sha256sum delivery/EuroScan-CH-1.2.1-SOURCES.zip > delivery/SOURCES-SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
           name: EuroScan-CH-1.2.1-UNSIGNED
