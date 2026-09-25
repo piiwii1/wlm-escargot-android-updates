@@ -1,0 +1,31 @@
+name: EuroScan Export Android Apksigner
+on:
+  push:
+    branches: [ euroscan-build-100 ]
+    paths:
+      - '.github/workflows/euroscan-export-apksigner.yml'
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android build tools 35
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0'
+      - name: Export official apksigner
+        run: |
+          mkdir -p export
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" export/apksigner-35.0.0.jar
+          sha256sum export/apksigner-35.0.0.jar > export/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Android-Apksigner-35.0.0
+          path: export/*
+          retention-days: 1
+          if-no-files-found: error
