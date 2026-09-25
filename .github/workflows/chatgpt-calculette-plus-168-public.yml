@@ -1,0 +1,67 @@
+name: ChatGPT Calculette Plus 1.6.8 Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'chatgpt-temp/calculette-plus-168-noicon/**'
+      - '.github/workflows/chatgpt-calculette-plus-168-public.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild source archive
+        run: |
+          cat chatgpt-temp/calculette-plus-168-noicon/source.part* > /tmp/source.b64
+          base64 -d /tmp/source.b64 > /tmp/source.zip
+          unzip -t /tmp/source.zip
+          mkdir -p /tmp/calculette
+          unzip -q /tmp/source.zip -d /tmp/calculette
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: yes | sdkmanager --licenses >/dev/null || true; sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build release APK
+        working-directory: /tmp/calculette
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Package build result and signing tools
+        run: |
+          mkdir -p /tmp/delivery/build-tools/lib
+          cp /tmp/calculette/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/delivery/
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/delivery/build-tools/
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" /tmp/delivery/build-tools/
+          cp "$ANDROID_HOME/build-tools/35.0.0/aapt2" /tmp/delivery/build-tools/
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/delivery/build-tools/lib/
+          chmod +x /tmp/delivery/build-tools/apksigner /tmp/delivery/build-tools/zipalign /tmp/delivery/build-tools/aapt2
+          sha256sum /tmp/delivery/app-release-unsigned.apk > /tmp/delivery/unsigned-SHA256.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree /tmp/delivery/app-release-unsigned.apk --file AndroidManifest.xml > /tmp/delivery/manifest-dump.txt || true
+          grep -E "applicationId|versionCode|versionName" /tmp/calculette/app/build.gradle > /tmp/delivery/build-info.txt
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calculette-Plus-1.6.8-TV-UNSIGNED
+          path: /tmp/delivery
+          retention-days: 1
+          if-no-files-found: error
