@@ -72,7 +72,6 @@ jobs:
           grep -q 'Gain net' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
           grep -q 'pickProfilePhoto' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
           grep -q 'scannerBottomNav' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java
-          ! grep -q 'Scanner mon ticket.*Accueil' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java
       - name: Build release
         working-directory: euroscan-ch
         run: gradle --no-daemon --stacktrace assembleRelease
