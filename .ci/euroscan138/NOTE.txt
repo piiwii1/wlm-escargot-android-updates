@@ -1,0 +1,1 @@
+Only jackpot parser is changed from 1.3.7.
