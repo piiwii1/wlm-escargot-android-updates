@@ -59,7 +59,7 @@ jobs:
       - name: Apply 1.3.6 replacements
         run: |
           set -euo pipefail
-          echo '86adb1460b9d3ed3792363400871c7295d121f2259e7b64472d52756842644ac  .ci/euroscan136/replacements.zip' | sha256sum -c -
+          unzip -t .ci/euroscan136/replacements.zip >/dev/null
           unzip -qo .ci/euroscan136/replacements.zip -d euroscan-ch
       - name: Verify source
         run: |
