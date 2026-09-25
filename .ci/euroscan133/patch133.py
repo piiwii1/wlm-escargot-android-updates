@@ -12,7 +12,7 @@ import java.text.*;import java.util.*;import java.util.regex.*;
 public final class TicketParser{
  public static class ParsedTicket{public String date;public final List<TicketGrid> grids=new ArrayList<>();}
  static final Pattern DATE=Pattern.compile("(?<!\\d)([0-3]?\\d)[./-]([01]?\\d)[./-](20\\d{2}|\\d{2})(?!\\d)"),NUMBER=Pattern.compile("(?<!\\d)(\\d{1,2})(?!\\d)");
- public static ParsedTicket parse(String text){ParsedTicket o=new ParsedTicket();if(text==null)return o;String z=text.replace('\\r','\\n').replace('•',' ').replace('|',' ');Matcher d=DATE.matcher(z);if(d.find()){String y=d.group(3);if(y.length()==2)y="20"+y;o.date=normalizeDate(d.group(1)+"."+d.group(2)+"."+y);}Set<String> seen=new LinkedHashSet<>();String[] l=z.split("\\n+");for(String x:l)add(ints(x),o,seen);for(int i=0;i<l.length;i++){String b=l[i];for(int j=i+1;j<l.length&&j<=i+2;j++){b+=" "+l[j];add(ints(b),o,seen);}}if(o.grids.isEmpty()){String q=DATE.matcher(z).replaceAll(" ").replaceAll("(?i)CHF\\s*\\d+(?:[.,]\\d{1,2})?"," ");List<Integer>a=ints(q);for(int i=0;i+6<a.size()&&o.grids.size()<20;i++){TicketGrid g=from(a.subList(i,Math.min(a.size(),i+9)));if(g!=null&&seen.add(g.compact()))o.grids.add(g);}}return o;}
+ public static ParsedTicket parse(String text){ParsedTicket o=new ParsedTicket();if(text==null)return o;String z=text.replace('\r','\n').replace('•',' ').replace('|',' ');Matcher d=DATE.matcher(z);if(d.find()){String y=d.group(3);if(y.length()==2)y="20"+y;o.date=normalizeDate(d.group(1)+"."+d.group(2)+"."+y);}Set<String> seen=new LinkedHashSet<>();String[] l=z.split("\\n+");for(String x:l)add(ints(x),o,seen);for(int i=0;i<l.length;i++){String b=l[i];for(int j=i+1;j<l.length&&j<=i+2;j++){b+=" "+l[j];add(ints(b),o,seen);}}if(o.grids.isEmpty()){String q=DATE.matcher(z).replaceAll(" ").replaceAll("(?i)CHF\\s*\\d+(?:[.,]\\d{1,2})?"," ");List<Integer>a=ints(q);for(int i=0;i+6<a.size()&&o.grids.size()<20;i++){TicketGrid g=from(a.subList(i,Math.min(a.size(),i+9)));if(g!=null&&seen.add(g.compact()))o.grids.add(g);}}return o;}
  public static int countLotteryNumbers(String t){int c=0;for(int v:ints(t==null?"":t))if(v>=1&&v<=50)c++;return c;}
  static void add(List<Integer>v,ParsedTicket o,Set<String>s){for(int i=0;i+6<v.size()&&o.grids.size()<20;i++){TicketGrid g=from(v.subList(i,Math.min(v.size(),i+9)));if(g!=null&&s.add(g.compact()))o.grids.add(g);}}
  static List<Integer>ints(String s){List<Integer>r=new ArrayList<>();Matcher m=NUMBER.matcher(s);while(m.find())try{r.add(Integer.parseInt(m.group(1)));}catch(Exception e){}return r;}
@@ -40,7 +40,7 @@ new=r'''    private void evaluate(String text) {
 
 '''
 s=s[:a]+new+s[b:]; f.write_text(s)
-# icon
+# icon placeholder; workflow replaces it with native vector resource
 parts=''.join((Path('.ci/euroscan133')/f'icon.part{i:02d}').read_text() for i in range(12))
 out=p/'app/src/main/res/drawable-nodpi/euroscan_icon.png';out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(base64.b64decode(parts))
 print('1.3.3 patched')
