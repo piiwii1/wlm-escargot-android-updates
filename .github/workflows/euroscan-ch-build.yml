@@ -1,0 +1,42 @@
+name: EuroScan CH APK Build
+on:
+  push:
+    branches: [ euroscan-build-100 ]
+    paths:
+      - 'euroscan-ch/**'
+      - '.github/workflows/euroscan-ch-build.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        working-directory: euroscan-ch
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Prepare delivery
+        run: |
+          mkdir -p delivery
+          cp euroscan-ch/app/build/outputs/apk/debug/app-debug.apk delivery/EuroScan-CH-1.0.0.apk
+          zip -qr delivery/EuroScan-CH-1.0.0-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' -x 'euroscan-ch/.gradle/*'
+          printf 'versionName=1.0.0\nversionCode=1\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
+          sha256sum delivery/EuroScan-CH-1.0.0.apk | tee delivery/APK-SHA256.txt
+          sha256sum delivery/EuroScan-CH-1.0.0-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EuroScan-CH-1.0.0-DELIVERY
+          path: delivery/*
+          retention-days: 7
+          if-no-files-found: error
