@@ -39,21 +39,44 @@ jobs:
           unzip -q /tmp/euroscan130.zip
       - name: Apply 1.3.2 persistent navigation
         run: python3 .ci/euroscan132/patch132.py
-      - name: Apply 1.3.3 scanner and icon
+      - name: Apply 1.3.3 scanner and native icon
         run: |
           set -euo pipefail
           for i in $(seq -w 0 11); do : > ".ci/euroscan133/icon.part${i}"; done
           python3 .ci/euroscan133/patch133.py
           rm -f euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
-          python3 -m pip install --quiet pillow
-          python3 - <<'PY'
-          from PIL import Image
-          src='.ci/euroscan133/euroscan_icon.png'
-          dst='euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.webp'
-          im=Image.open(src).convert('RGBA')
-          im.save(dst,'WEBP',lossless=True,quality=100,method=6)
-          print('WebP icon:', im.size)
-          PY
+          mkdir -p euroscan-ch/app/src/main/res/drawable
+          cat > euroscan-ch/app/src/main/res/drawable/euroscan_icon.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <!-- transparent outside -->
+              <path android:fillColor="#071A47" android:strokeColor="#3E69FF" android:strokeWidth="2"
+                    android:pathData="M22,4 H86 C96,4 104,12 104,22 V86 C104,96 96,104 86,104 H22 C12,104 4,96 4,86 V22 C4,12 12,4 22,4 Z"/>
+              <path android:fillColor="#0C2D72" android:fillAlpha="0.75"
+                    android:pathData="M23,8 H85 C93,8 100,15 100,23 V85 C100,93 93,100 85,100 H23 C15,100 8,93 8,85 V23 C8,15 15,8 23,8 Z"/>
+              <!-- lottery ticket -->
+              <path android:fillColor="#FFF9EE" android:strokeColor="#F4C766" android:strokeWidth="1.2"
+                    android:pathData="M35,30 L78,36 L73,82 L30,75 Z"/>
+              <!-- ticket star -->
+              <path android:fillColor="#17356E"
+                    android:pathData="M54,38 L56.6,45.2 L64,45.4 L58.1,49.9 L60.2,57 L54,52.9 L47.8,57 L49.9,49.9 L44,45.4 L51.4,45.2 Z"/>
+              <!-- ticket rows -->
+              <path android:fillColor="#25345A" android:pathData="M39,60 H44 V65 H39 Z M47,60 H52 V65 H47 Z M55,60 H60 V65 H55 Z M63,60 H68 V65 H63 Z M38,68 H43 V73 H38 Z M46,68 H51 V73 H46 Z M54,68 H59 V73 H54 Z M62,68 H67 V73 H62 Z"/>
+              <!-- scan corners -->
+              <path android:fillColor="#FFD052" android:pathData="M25,27 H42 V31 H29 V43 H25 Z M68,27 H85 V43 H81 V31 H68 Z M25,69 H29 V81 H42 V85 H25 Z M81,69 H85 V85 H68 V81 H81 Z"/>
+              <!-- foreground blue lottery ball -->
+              <path android:fillColor="#0B2C74" android:strokeColor="#F4B93E" android:strokeWidth="2"
+                    android:pathData="M18,57 C18,44 28,35 41,35 C54,35 64,45 64,58 C64,71 54,81 41,81 C28,81 18,70 18,57 Z"/>
+              <path android:fillColor="#FFD052"
+                    android:pathData="M41,43 L44.4,52.2 L54,52.6 L46.4,58.4 L49,68 L41,62.6 L33,68 L35.6,58.4 L28,52.6 L37.6,52.2 Z"/>
+              <!-- Swiss badge -->
+              <path android:fillColor="#E7192D" android:strokeColor="#FF5A66" android:strokeWidth="1"
+                    android:pathData="M76,13 H94 C98,13 101,16 101,20 V38 C101,42 98,45 94,45 H76 C72,45 69,42 69,38 V20 C69,16 72,13 76,13 Z"/>
+              <path android:fillColor="#FFFFFF" android:pathData="M82,19 H88 V26 H95 V32 H88 V39 H82 V32 H75 V26 H82 Z"/>
+          </vector>
+          XML
       - name: Verify source
         run: |
           set -euo pipefail
@@ -63,9 +86,9 @@ jobs:
           grep -q 'stableFrames>=2' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/ScannerActivity.java
           grep -q 'countLotteryNumbers' euroscan-ch/app/src/main/java/ch/piiwii/euroscan/TicketParser.java
           grep -q '@drawable/euroscan_icon' euroscan-ch/app/src/main/AndroidManifest.xml
-          test ! -e euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.png
-          test -s euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.webp
-          file euroscan-ch/app/src/main/res/drawable-nodpi/euroscan_icon.webp | grep -qi 'Web/P'
+          test -s euroscan-ch/app/src/main/res/drawable/euroscan_icon.xml
+          grep -q '#E7192D' euroscan-ch/app/src/main/res/drawable/euroscan_icon.xml
+          grep -q '#FFD052' euroscan-ch/app/src/main/res/drawable/euroscan_icon.xml
       - name: Build release
         working-directory: euroscan-ch
         run: gradle --no-daemon --stacktrace assembleRelease
