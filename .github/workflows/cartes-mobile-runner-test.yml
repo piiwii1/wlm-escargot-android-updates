@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp cartes-mobile-ci/source-020.b64 /tmp/source.b64
+          cat cartes-mobile-ci/parts/part-* > /tmp/source.b64
           test "$(wc -c < /tmp/source.b64)" -eq 31828
           echo '5e9e0a72a4ab90e7b871fc670d3ea50518baac99e4c8c6b46beee32c115e0212  /tmp/source.b64' | sha256sum -c -
           base64 -d /tmp/source.b64 > /tmp/cartes-mobile.zip
