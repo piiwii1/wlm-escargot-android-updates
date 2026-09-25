@@ -1,9 +1,9 @@
 name: EuroScan CH APK Build
 on:
   push:
-    branches: [ euroscan-build-100 ]
+    branches: [ euroscan-build-110 ]
     paths:
-      - '.ci/euroscan/**'
+      - 'euroscan-ch/**'
       - '.github/workflows/euroscan-ch-build.yml'
   workflow_dispatch:
 jobs:
@@ -28,28 +28,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Restore verified EuroScan CH 1.0.1 sources
-        run: |
-          cat .ci/euroscan/chunk*.b64 > /tmp/euroscan-src.b64
-          base64 -d /tmp/euroscan-src.b64 > /tmp/euroscan-ch-1.0.1-src.zip
-          echo '997b4f5878f93abbd9d785b0344996ac16d073d32c94425f23e44ea2ba8dfeb9  /tmp/euroscan-ch-1.0.1-src.zip' | sha256sum -c -
-          unzip -t /tmp/euroscan-ch-1.0.1-src.zip
-          rm -rf euroscan-ch
-          unzip -q /tmp/euroscan-ch-1.0.1-src.zip
       - name: Build APK
         working-directory: euroscan-ch
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Prepare delivery
         run: |
           mkdir -p delivery
-          cp euroscan-ch/app/build/outputs/apk/debug/app-debug.apk delivery/EuroScan-CH-1.0.1.apk
-          cp /tmp/euroscan-ch-1.0.1-src.zip delivery/EuroScan-CH-1.0.1-SOURCES.zip
-          printf 'versionName=1.0.1\nversionCode=2\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
-          sha256sum delivery/EuroScan-CH-1.0.1.apk | tee delivery/APK-SHA256.txt
-          sha256sum delivery/EuroScan-CH-1.0.1-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
+          cp euroscan-ch/app/build/outputs/apk/debug/app-debug.apk delivery/EuroScan-CH-1.1.0.apk
+          zip -qr delivery/EuroScan-CH-1.1.0-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' -x 'euroscan-ch/.gradle/*'
+          printf 'versionName=1.1.0\nversionCode=2\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
+          sha256sum delivery/EuroScan-CH-1.1.0.apk | tee delivery/APK-SHA256.txt
+          sha256sum delivery/EuroScan-CH-1.1.0-SOURCES.zip | tee delivery/SOURCES-SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: EuroScan-CH-1.0.1-DELIVERY
+          name: EuroScan-CH-1.1.0-DELIVERY
           path: delivery/*
           retention-days: 7
           if-no-files-found: error
