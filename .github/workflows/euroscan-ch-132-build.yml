@@ -1,0 +1,86 @@
+name: EuroScan CH 1.3.2 Build
+
+on:
+  push:
+    branches: [ euroscan-build-132 ]
+    paths:
+      - '.ci/euroscan132/**'
+      - '.github/workflows/euroscan-ch-132-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore exact EuroScan 1.3.2 source
+        run: |
+          set -euo pipefail
+          cat .ci/euroscan132/payload.partaa .ci/euroscan132/payload.partab | base64 -d > /tmp/euroscan132.zip
+          echo '4a1b138bcdc01998f7b854a073cca74c0a123cd712f40c7b0b5e52486b8f3d16  /tmp/euroscan132.zip' | sha256sum -c -
+          rm -rf euroscan-ch
+          unzip -q /tmp/euroscan132.zip
+          grep -q 'versionCode 7' euroscan-ch/app/build.gradle
+          grep -q "versionName '1.3.2'" euroscan-ch/app/build.gradle
+
+      - name: Verify persistent bottom navigation source
+        run: |
+          set -euo pipefail
+          MAIN='euroscan-ch/app/src/main/java/ch/piiwii/euroscan/MainActivity.java'
+          grep -q 'bottomNav(activeNav)' "$MAIN"
+          grep -q 'bottomNav("home")' "$MAIN"
+          grep -q 'page("Résultats", "Dernier tirage EuroMillions disponible.", "results")' "$MAIN"
+          grep -q 'page("Résultat du ticket", "Tirage " + d.date + " · comparaison terminée.", "results")' "$MAIN"
+          grep -q 'navItem("⌂", "Accueil"' "$MAIN"
+          grep -q 'navItem("⌗", "Scanner"' "$MAIN"
+          grep -q 'navItem("▥", "Résultats"' "$MAIN"
+          if grep -q 'navItem("⚙", "Réglages"' "$MAIN"; then exit 1; fi
+
+      - name: Build unsigned release
+        working-directory: euroscan-ch
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Verify package metadata
+        run: |
+          set -euo pipefail
+          APK='euroscan-ch/app/build/outputs/apk/release/app-release-unsigned.apk'
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.piiwii.euroscan' versionCode='7' versionName='1.3.2'" /tmp/badging.txt
+          grep -q "launchable-activity: name='ch.piiwii.euroscan.MainActivity'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK"
+
+      - name: Prepare unsigned delivery
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          cp euroscan-ch/app/build/outputs/apk/release/app-release-unsigned.apk delivery/EuroScan-CH-1.3.2-UNSIGNED.apk
+          zip -qr delivery/EuroScan-CH-1.3.2-SOURCES.zip euroscan-ch -x 'euroscan-ch/app/build/*' 'euroscan-ch/.gradle/*'
+          cp /tmp/badging.txt delivery/APK-BADGING.txt
+          printf 'versionName=1.3.2\nversionCode=7\npackage=ch.piiwii.euroscan\n' > delivery/VERSION.txt
+          sha256sum delivery/EuroScan-CH-1.3.2-UNSIGNED.apk > delivery/UNSIGNED-SHA256.txt
+          sha256sum delivery/EuroScan-CH-1.3.2-SOURCES.zip > delivery/SOURCES-SHA256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EuroScan-CH-1.3.2-UNSIGNED
+          path: delivery/*
+          retention-days: 7
+          if-no-files-found: error
