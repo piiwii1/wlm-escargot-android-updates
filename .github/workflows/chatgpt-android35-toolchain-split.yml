@@ -97,3 +97,5 @@ jobs:
             /tmp/toolchain.part-02
             /tmp/android35-offline-toolchain.sha256
           retention-days: 1
+
+# retrigger Calculette+ TV 1.6.8 split export — 2026-09-25
