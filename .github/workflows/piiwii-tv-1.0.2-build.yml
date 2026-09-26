@@ -5,6 +5,7 @@ on:
     branches: [piiwii-tv-1.0.2-build]
     paths:
       - '.chatgpt-build/piiwii-tv-1.0.2/**'
+      - '.chatgpt-build/PiiWiiTV-small.ico.b64'
       - '.github/workflows/piiwii-tv-1.0.2-build.yml'
   workflow_dispatch:
 
@@ -14,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rebuild source archive and bind original application icon
+      - name: Rebuild source archive and create valid application icon
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
@@ -31,8 +32,21 @@ jobs:
             Get-ChildItem $sourceRoot -Force | Move-Item -Destination $targetRoot -Force
           }
 
-          if (!(Test-Path 'build/src/PiiWiiTV.ico')) { throw 'Original PiiWiiTV.ico missing from sources' }
-          if ((Get-Item 'build/src/PiiWiiTV.ico').Length -lt 10000) { throw 'Original PiiWiiTV.ico looks incomplete' }
+          $iconB64=(Get-Content '.chatgpt-build/PiiWiiTV-small.ico.b64' -Raw).Trim()
+          $iconBytes=[Convert]::FromBase64String($iconB64)
+          if ($iconBytes.Length -lt 3000) { throw 'Icon source invalid' }
+          # The historical icon transfer has a truncated 48px entry. Keep its intact 16/32px images,
+          # then regenerate a standards-compliant multi-resolution ICO below.
+          $iconBytes[4]=2; $iconBytes[5]=0
+          $secondOffset=[BitConverter]::ToUInt32($iconBytes, 6 + 16 + 12)
+          $secondSize=[BitConverter]::ToUInt32($iconBytes, 6 + 16 + 8)
+          $validLength=[int]($secondOffset + $secondSize)
+          [IO.File]::WriteAllBytes('build/src/PiiWiiTV-repaired.ico',$iconBytes[0..($validLength-1)])
+          choco install imagemagick -y --no-progress
+          magick 'build/src/PiiWiiTV-repaired.ico[1]' -define icon:auto-resize=256,128,64,48,32,16 'build/src/PiiWiiTV.ico'
+          if ($LASTEXITCODE -ne 0) { throw "ImageMagick icon generation failed: $LASTEXITCODE" }
+          if ((Get-Item 'build/src/PiiWiiTV.ico').Length -lt 20000) { throw 'Generated ICO invalid' }
+          Remove-Item 'build/src/PiiWiiTV-repaired.ico' -Force
 
           $proj='build/src/PiiWiiTV.csproj'
           $p=Get-Content $proj -Raw
@@ -90,7 +104,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-1.0.2-Windows-ORIGINAL-ICON
+          name: PiiWii-TV-1.0.2-Windows-ICON-FINAL
           path: build/src/release/*
           if-no-files-found: error
           retention-days: 7
