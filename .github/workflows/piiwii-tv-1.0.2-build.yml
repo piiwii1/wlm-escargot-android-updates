@@ -57,12 +57,9 @@ jobs:
             $p=$p.Replace('<RuntimeIdentifier>win-x64</RuntimeIdentifier>', "<RuntimeIdentifier>win-x64</RuntimeIdentifier>`r`n    <ApplicationIcon>PiiWiiTV.ico</ApplicationIcon>")
           }
           if ($p -notmatch 'CopyToOutputDirectory') {
-            $itemGroup=@'
-  <ItemGroup>
-    <None Include="PiiWiiTV.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
-  </ItemGroup>
-'@
-            $p=$p.Replace('</Project>', $itemGroup + "`r`n</Project>")
+            $nl=[Environment]::NewLine
+            $itemGroup='  <ItemGroup>'+$nl+'    <None Include="PiiWiiTV.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />'+$nl+'  </ItemGroup>'
+            $p=$p.Replace('</Project>', $itemGroup + $nl + '</Project>')
           }
           Set-Content $proj $p -Encoding utf8
 
@@ -72,7 +69,7 @@ jobs:
           $newLine='Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, "PiiWiiTV.ico"));'
           $f=$f.Replace($oldLine,$newLine)
           if ($f -notmatch 'new System.Drawing.Icon\(System.IO.Path.Combine') {
-            $f=$f.Replace('Text = AppInfo.ProductName;', 'Text = AppInfo.ProductName;' + "`r`n        " + $newLine)
+            $f=$f.Replace('Text = AppInfo.ProductName;', 'Text = AppInfo.ProductName;' + [Environment]::NewLine + '        ' + $newLine)
           }
           Set-Content $form $f -Encoding utf8
 
