@@ -1,0 +1,44 @@
+name: Chatou Voice APK Build
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'chatou-voice-build/**'
+      - '.github/workflows/chatou-voice-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Restore sources
+        run: |
+          mkdir -p work
+          base64 -d chatou-voice-build/sources.b64 > work/sources.zip
+          unzip -q work/sources.zip -d work
+      - name: Build APK
+        working-directory: work/chatou-voice
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Package
+        run: |
+          mkdir -p deliverables
+          cp work/chatou-voice/app/build/outputs/apk/debug/app-debug.apk deliverables/Chatou-Voice-0.1.0.apk
+          sha256sum deliverables/Chatou-Voice-0.1.0.apk > deliverables/SHA256.txt
+          cp work/sources.zip deliverables/Chatou-Voice-0.1.0-SOURCES.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chatou-Voice-0.1.0
+          path: deliverables/
+          if-no-files-found: error
