@@ -29,8 +29,7 @@ jobs:
           New-Item -ItemType Directory -Force build/src | Out-Null
           Expand-Archive 'previous/PiiWii-TV-Windows-1.0.4-SOURCES.zip' 'build/src' -Force
 
-          $pngB64=(Get-Content '.chatgpt-build/piiwii-tv-1.0.5-icon-master/logo-master.png.b64' -Raw).Trim()
-          [IO.File]::WriteAllBytes('build/src/Logo-TV-master.png',[Convert]::FromBase64String($pngB64))
+          Copy-Item '.chatgpt-build/piiwii-tv-1.0.5-icon-master/logo-master.png' 'build/src/Logo-TV-master.png' -Force
           $pngHash=(Get-FileHash 'build/src/Logo-TV-master.png' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($pngHash -ne '52cc8df76d2765b577ef361312b76a9a85b268c798a1be2f90594866cbdb7774') { throw "Master PNG changed: $pngHash" }
 
@@ -86,7 +85,6 @@ jobs:
           if ($null -eq $embedded) { throw 'PiiWiiTV.exe has no embedded icon' }
           $embedded.ToBitmap().Save((Join-Path (Resolve-Path '.\publish').Path 'EXE-ICON-CHECK.png'),[System.Drawing.Imaging.ImageFormat]::Png)
           $embedded.Dispose()
-          magick '.\publish\EXE-ICON-CHECK.png' -resize 256x256 '.\publish\EXE-ICON-CHECK-256.png'
 
       - name: Prepare installer dependencies
         shell: pwsh
