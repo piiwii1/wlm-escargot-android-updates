@@ -23,20 +23,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Restore sources
-        run: |
-          mkdir -p work
-          base64 -d chatou-voice-build/sources.b64 > work/sources.zip
-          unzip -q work/sources.zip -d work
       - name: Build APK
-        working-directory: work/chatou-voice
+        working-directory: chatou-voice-build/project
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Package
         run: |
           mkdir -p deliverables
-          cp work/chatou-voice/app/build/outputs/apk/debug/app-debug.apk deliverables/Chatou-Voice-0.1.0.apk
+          cp chatou-voice-build/project/app/build/outputs/apk/debug/app-debug.apk deliverables/Chatou-Voice-0.1.0.apk
           sha256sum deliverables/Chatou-Voice-0.1.0.apk > deliverables/SHA256.txt
-          cp work/sources.zip deliverables/Chatou-Voice-0.1.0-SOURCES.zip
+          cd chatou-voice-build/project && zip -qr ../../../deliverables/Chatou-Voice-0.1.0-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
           name: Chatou-Voice-0.1.0
