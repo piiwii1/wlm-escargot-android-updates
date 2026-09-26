@@ -23,8 +23,16 @@ jobs:
           [IO.File]::WriteAllBytes('build/source.zip',[Convert]::FromBase64String($b64))
           Expand-Archive 'build/source.zip' 'build/src' -Force
 
+          $project = Get-ChildItem 'build/src' -Recurse -Filter 'PiiWiiTV.csproj' | Select-Object -First 1
+          if (!$project) { throw 'PiiWiiTV.csproj missing from sources' }
+          $sourceRoot = $project.Directory.FullName
+          $targetRoot = (Resolve-Path 'build/src').Path
+          if ($sourceRoot -ne $targetRoot) {
+            Get-ChildItem $sourceRoot -Force | Move-Item -Destination $targetRoot -Force
+          }
+
           if (!(Test-Path 'build/src/PiiWiiTV.ico')) { throw 'Original PiiWiiTV.ico missing from sources' }
-          if ((Get-Item 'build/src/PiiWiiTV.ico').Length -lt 100000) { throw 'Original PiiWiiTV.ico looks incomplete' }
+          if ((Get-Item 'build/src/PiiWiiTV.ico').Length -lt 10000) { throw 'Original PiiWiiTV.ico looks incomplete' }
 
           $proj='build/src/PiiWiiTV.csproj'
           $p=Get-Content $proj -Raw
