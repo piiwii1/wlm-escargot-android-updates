@@ -1,0 +1,70 @@
+name: PiiWii TV 1.0.2 Windows Build
+
+on:
+  push:
+    branches: [piiwii-tv-1.0.2-build]
+    paths:
+      - '.chatgpt-build/piiwii-tv-1.0.2/**'
+      - '.github/workflows/piiwii-tv-1.0.2-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild source archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          $parts=1..5 | ForEach-Object { Get-Content ".chatgpt-build/piiwii-tv-1.0.2/chunk$_.txt" -Raw }
+          $b64=($parts -join '')
+          [IO.File]::WriteAllBytes('build/source.zip',[Convert]::FromBase64String($b64))
+          Expand-Archive 'build/source.zip' 'build/src' -Force
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish self-contained Windows x64
+        shell: pwsh
+        working-directory: build/src
+        run: |
+          dotnet restore .\PiiWiiTV.csproj
+          dotnet publish .\PiiWiiTV.csproj -c Release -r win-x64 --self-contained true -o .\publish
+          if (!(Test-Path '.\publish\PiiWiiTV.exe')) { throw 'PiiWiiTV.exe missing' }
+          $v=(Get-Item '.\publish\PiiWiiTV.exe').VersionInfo.FileVersion
+          if ($v -ne '1.0.2.0') { throw "Bad EXE version: $v" }
+
+      - name: Prepare installer dependencies
+        shell: pwsh
+        working-directory: build/src
+        run: |
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'MicrosoftEdgeWebview2Setup.exe'
+          if ((Get-Item 'MicrosoftEdgeWebview2Setup.exe').Length -lt 1000000) { throw 'Invalid WebView2 bootstrapper' }
+          choco install innosetup -y --no-progress
+
+      - name: Build release package
+        shell: pwsh
+        working-directory: build/src
+        run: |
+          $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (!(Test-Path $iscc)) { throw 'ISCC.exe missing' }
+          & $iscc '/DMyAppVersion=1.0.2' '.\installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Inno failed: $LASTEXITCODE" }
+          New-Item -ItemType Directory -Force '.\release' | Out-Null
+          Copy-Item '.\output\PiiWii-TV-Setup-1.0.2.exe' '.\release\PiiWii-TV-Setup-1.0.2.exe'
+          Compress-Archive '.\publish\*' '.\release\PiiWii-TV-1.0.2-PORTABLE.zip' -CompressionLevel Optimal
+          Compress-Archive @('Program.cs','MainForm.cs','NativeBridge.cs','AppCommands.cs','AppInfo.cs','AppLogger.cs','PiiWiiTV.csproj','Directory.Build.props','installer.iss') '.\release\PiiWii-TV-Windows-1.0.2-SOURCES.zip' -CompressionLevel Optimal
+          $files=Get-ChildItem '.\release' -File | Sort-Object Name
+          $lines=foreach($f in $files){$h=(Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); "$h  $($f.Name)"}
+          $lines | Set-Content '.\release\SHA256SUMS.txt' -Encoding ascii
+          Get-Content '.\release\SHA256SUMS.txt'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-TV-1.0.2-Windows
+          path: build/src/release/*
+          if-no-files-found: error
+          retention-days: 7
