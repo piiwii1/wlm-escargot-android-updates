@@ -1,4 +1,4 @@
-name: PiiWii TV 1.0.2 Windows Build
+name: PiiWii TV 1.0.3 Windows Build
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rebuild source archive and create valid application icon
+      - name: Rebuild source archive and create canonical application icon
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
@@ -32,35 +32,54 @@ jobs:
             Get-ChildItem $sourceRoot -Force | Move-Item -Destination $targetRoot -Force
           }
 
+          # Recreate one standards-compliant ICO from the same image currently rendering correctly in the taskbar.
           $iconB64=(Get-Content '.chatgpt-build/PiiWiiTV-small.ico.b64' -Raw).Trim()
           $iconBytes=[Convert]::FromBase64String($iconB64)
           if ($iconBytes.Length -lt 3000) { throw 'Icon source invalid' }
-          # The historical icon transfer has a truncated 48px entry. Keep its intact 16/32px images,
-          # then regenerate a standards-compliant multi-resolution ICO below.
           $iconBytes[4]=2; $iconBytes[5]=0
           $secondOffset=[BitConverter]::ToUInt32($iconBytes, 6 + 16 + 12)
           $secondSize=[BitConverter]::ToUInt32($iconBytes, 6 + 16 + 8)
           $validLength=[int]($secondOffset + $secondSize)
           [IO.File]::WriteAllBytes('build/src/PiiWiiTV-repaired.ico',$iconBytes[0..($validLength-1)])
           choco install imagemagick -y --no-progress
-          magick 'build/src/PiiWiiTV-repaired.ico[1]' -define icon:auto-resize=256,128,64,48,32,16 'build/src/PiiWiiTV.ico'
+          magick 'build/src/PiiWiiTV-repaired.ico[1]' -define icon:auto-resize=256,128,64,48,40,32,24,20,16 'build/src/PiiWiiTV.ico'
           if ($LASTEXITCODE -ne 0) { throw "ImageMagick icon generation failed: $LASTEXITCODE" }
           if ((Get-Item 'build/src/PiiWiiTV.ico').Length -lt 20000) { throw 'Generated ICO invalid' }
           Remove-Item 'build/src/PiiWiiTV-repaired.ico' -Force
+
+          # Version 1.0.3: distinct build so Explorer does not keep reusing the 1.0.2 icon cache.
+          $props='build/src/Directory.Build.props'
+          $d=Get-Content $props -Raw
+          $d=$d.Replace('<PiiWiiVersion>1.0.2</PiiWiiVersion>','<PiiWiiVersion>1.0.3</PiiWiiVersion>')
+          Set-Content $props $d -Encoding utf8
 
           $proj='build/src/PiiWiiTV.csproj'
           $p=Get-Content $proj -Raw
           if ($p -notmatch '<ApplicationIcon>PiiWiiTV.ico</ApplicationIcon>') {
             $p=$p.Replace('<RuntimeIdentifier>win-x64</RuntimeIdentifier>', "<RuntimeIdentifier>win-x64</RuntimeIdentifier>`r`n    <ApplicationIcon>PiiWiiTV.ico</ApplicationIcon>")
-            Set-Content $proj $p -Encoding utf8
           }
+          if ($p -notmatch 'CopyToOutputDirectory') {
+            $p=$p.Replace('</Project>', "  <ItemGroup>`r`n    <None Include=\"PiiWiiTV.ico\" CopyToOutputDirectory=\"PreserveNewest\" CopyToPublishDirectory=\"Always\" />`r`n  </ItemGroup>`r`n</Project>")
+          }
+          Set-Content $proj $p -Encoding utf8
 
+          # Force the exact same ICO for the Form window instead of asking Windows to extract/choose one from the EXE.
           $form='build/src/MainForm.cs'
           $f=Get-Content $form -Raw
-          if ($f -notmatch 'ExtractAssociatedIcon') {
-            $f=$f.Replace('Text = AppInfo.ProductName;', "Text = AppInfo.ProductName;`r`n        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;")
-            Set-Content $form $f -Encoding utf8
+          $f=$f.Replace('Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;', 'Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, "PiiWiiTV.ico"));')
+          if ($f -notmatch 'new System.Drawing.Icon\(System.IO.Path.Combine') {
+            $f=$f.Replace('Text = AppInfo.ProductName;', 'Text = AppInfo.ProductName;' + "`r`n        Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, \"PiiWiiTV.ico\"));")
           }
+          Set-Content $form $f -Encoding utf8
+
+          $iss='build/src/installer.iss'
+          $i=Get-Content $iss -Raw
+          $i=$i.Replace('#define MyAppVersion "1.0.2"','#define MyAppVersion "1.0.3"')
+          # Force shortcuts to use the EXE icon resource explicitly.
+          if ($i -match '\[Icons\]') {
+            $i=$i -replace 'Filename: "\{app\}\\PiiWiiTV\.exe"', 'Filename: "{app}\\PiiWiiTV.exe"; IconFilename: "{app}\\PiiWiiTV.exe"'
+          }
+          Set-Content $iss $i -Encoding utf8
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -73,9 +92,14 @@ jobs:
           dotnet restore .\PiiWiiTV.csproj
           dotnet publish .\PiiWiiTV.csproj -c Release -r win-x64 --self-contained true -o .\publish
           if (!(Test-Path '.\publish\PiiWiiTV.exe')) { throw 'PiiWiiTV.exe missing' }
+          if (!(Test-Path '.\publish\PiiWiiTV.ico')) { throw 'PiiWiiTV.ico missing from publish output' }
           $v=(Get-Item '.\publish\PiiWiiTV.exe').VersionInfo.FileVersion
-          if ($v -ne '1.0.2.0') { throw "Bad EXE version: $v" }
+          if ($v -ne '1.0.3.0') { throw "Bad EXE version: $v" }
           if ((Get-Item '.\publish\PiiWiiTV.exe').Length -lt 100000) { throw 'Invalid EXE' }
+          Add-Type -AssemblyName System.Drawing
+          $embedded=[System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path '.\publish\PiiWiiTV.exe'))
+          if ($null -eq $embedded) { throw 'EXE has no extractable embedded icon' }
+          $embedded.Dispose()
 
       - name: Prepare installer dependencies
         shell: pwsh
@@ -91,12 +115,12 @@ jobs:
         run: |
           $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           if (!(Test-Path $iscc)) { throw 'ISCC.exe missing' }
-          & $iscc '/DMyAppVersion=1.0.2' '.\installer.iss'
+          & $iscc '/DMyAppVersion=1.0.3' '.\installer.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno failed: $LASTEXITCODE" }
           New-Item -ItemType Directory -Force '.\release' | Out-Null
-          Copy-Item '.\output\PiiWii-TV-Setup-1.0.2.exe' '.\release\PiiWii-TV-Setup-1.0.2.exe'
-          Compress-Archive '.\publish\*' '.\release\PiiWii-TV-1.0.2-PORTABLE.zip' -CompressionLevel Optimal
-          Compress-Archive @('Program.cs','MainForm.cs','NativeBridge.cs','AppCommands.cs','AppInfo.cs','AppLogger.cs','PiiWiiTV.csproj','Directory.Build.props','installer.iss','PiiWiiTV.ico') '.\release\PiiWii-TV-Windows-1.0.2-SOURCES.zip' -CompressionLevel Optimal
+          Copy-Item '.\output\PiiWii-TV-Setup-1.0.3.exe' '.\release\PiiWii-TV-Setup-1.0.3.exe'
+          Compress-Archive '.\publish\*' '.\release\PiiWii-TV-1.0.3-PORTABLE.zip' -CompressionLevel Optimal
+          Compress-Archive @('Program.cs','MainForm.cs','NativeBridge.cs','AppCommands.cs','AppInfo.cs','AppLogger.cs','PiiWiiTV.csproj','Directory.Build.props','installer.iss','PiiWiiTV.ico') '.\release\PiiWii-TV-Windows-1.0.3-SOURCES.zip' -CompressionLevel Optimal
           $files=Get-ChildItem '.\release' -File | Sort-Object Name
           $lines=foreach($f in $files){$h=(Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); "$h  $($f.Name)"}
           $lines | Set-Content '.\release\SHA256SUMS.txt' -Encoding ascii
@@ -104,7 +128,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-1.0.2-Windows-ICON-FINAL
+          name: PiiWii-TV-1.0.3-Windows-UNIFIED-ICON
           path: build/src/release/*
           if-no-files-found: error
           retention-days: 7
