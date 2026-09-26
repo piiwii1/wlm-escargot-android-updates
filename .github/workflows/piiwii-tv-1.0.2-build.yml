@@ -29,7 +29,13 @@ jobs:
           New-Item -ItemType Directory -Force build/src | Out-Null
           Expand-Archive 'previous/PiiWii-TV-Windows-1.0.4-SOURCES.zip' 'build/src' -Force
 
-          $masterB64=(Get-Content '.chatgpt-build/piiwii-tv-1.0.5-icon-master/logo-tv-master.png.b64' -Raw).Trim()
+          $c1=(Get-Content '.chatgpt-build/piiwii-tv-1.0.5-icon-master/master1.b64' -Raw).Trim()
+          $c2=(Get-Content '.chatgpt-build/piiwii-tv-1.0.5-icon-master/master2.b64' -Raw).Trim()
+          $c3=(Get-Content '.chatgpt-build/piiwii-tv-1.0.5-icon-master/master3.b64' -Raw).Trim()
+          if ((Get-FileHash '.chatgpt-build/piiwii-tv-1.0.5-icon-master/master1.b64' -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'f6657a496531c3c371acf6b7e56579aa336e713e280a0e6871968f9562ea0ba4') { throw 'Master chunk 1 corrupt' }
+          if ((Get-FileHash '.chatgpt-build/piiwii-tv-1.0.5-icon-master/master2.b64' -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'bc6fb7948a96c61e590ee90e59abb21b6c04b91d037928543a06e0e92e930a11') { throw 'Master chunk 2 corrupt' }
+          if ((Get-FileHash '.chatgpt-build/piiwii-tv-1.0.5-icon-master/master3.b64' -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9a1c8bddfb1b1e643151cc5721784ad02b49f8b89c0040de865434b5b49184af') { throw 'Master chunk 3 corrupt' }
+          $masterB64=$c1+$c2+$c3
           [IO.File]::WriteAllBytes('build/src/Logo-TV-master.png',[Convert]::FromBase64String($masterB64))
           $pngHash=(Get-FileHash 'build/src/Logo-TV-master.png' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($pngHash -ne '70d48d90cc0e7aee5b204f072829dafcb60286391e0fc2a1a274bc96d10e9067') { throw "Master PNG changed or corrupt: $pngHash" }
