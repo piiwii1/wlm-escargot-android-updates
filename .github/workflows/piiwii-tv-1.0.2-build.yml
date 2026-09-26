@@ -1,9 +1,10 @@
-name: PiiWii TV 1.0.4 Windows Build
+name: PiiWii TV 1.0.5 Windows Build
 
 on:
   push:
-    branches: [piiwii-tv-1.0.2-build]
+    branches: [piiwii-tv-1.0.5-icon-master]
     paths:
+      - '.chatgpt-build/piiwii-tv-1.0.5-icon-master/**'
       - '.github/workflows/piiwii-tv-1.0.2-build.yml'
   workflow_dispatch:
 
@@ -13,27 +14,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download exact 1.0.3 source package
+      - name: Download exact 1.0.4 source package
         uses: actions/download-artifact@v4
         with:
-          name: PiiWii-TV-1.0.3-Windows-UNIFIED-ICON
+          name: PiiWii-TV-1.0.4-Windows-CANONICAL-ICON
           path: previous
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: piiwii1/wlm-escargot-android-updates
-          run-id: 36257735049
+          run-id: 36258259734
 
-      - name: Prepare 1.0.4 sources without changing the icon
+      - name: Prepare exact user logo and 1.0.5 sources
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build/src | Out-Null
-          Expand-Archive 'previous/PiiWii-TV-Windows-1.0.3-SOURCES.zip' 'build/src' -Force
-          if (!(Test-Path 'build/src/PiiWiiTV.ico')) { throw 'PiiWiiTV.ico missing' }
-          $iconHash=(Get-FileHash 'build/src/PiiWiiTV.ico' -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($iconHash -ne 'e23d72363884b76f21771efd4ef1908f0d6e22ac2f46d663744daf3f04ade38b') { throw "Unexpected icon hash: $iconHash" }
+          Expand-Archive 'previous/PiiWii-TV-Windows-1.0.4-SOURCES.zip' 'build/src' -Force
+
+          $pngB64=(Get-Content '.chatgpt-build/piiwii-tv-1.0.5-icon-master/logo-master.png.b64' -Raw).Trim()
+          [IO.File]::WriteAllBytes('build/src/Logo-TV-master.png',[Convert]::FromBase64String($pngB64))
+          $pngHash=(Get-FileHash 'build/src/Logo-TV-master.png' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($pngHash -ne '52cc8df76d2765b577ef361312b76a9a85b268c798a1be2f90594866cbdb7774') { throw "Master PNG changed: $pngHash" }
+
+          choco install imagemagick -y --no-progress
+          magick 'build/src/Logo-TV-master.png' -background none -define icon:auto-resize=256,128,64,48,40,32,24,20,16 'build/src/PiiWiiTV.ico'
+          if ($LASTEXITCODE -ne 0) { throw "ICO generation failed: $LASTEXITCODE" }
+          if ((Get-Item 'build/src/PiiWiiTV.ico').Length -lt 10000) { throw 'Generated ICO invalid' }
 
           $props='build/src/Directory.Build.props'
           $d=Get-Content $props -Raw
-          $d=$d.Replace('<PiiWiiVersion>1.0.3</PiiWiiVersion>','<PiiWiiVersion>1.0.4</PiiWiiVersion>')
+          $d=$d.Replace('<PiiWiiVersion>1.0.4</PiiWiiVersion>','<PiiWiiVersion>1.0.5</PiiWiiVersion>')
           Set-Content $props $d -Encoding utf8
 
           $proj='build/src/PiiWiiTV.csproj'
@@ -43,11 +51,17 @@ jobs:
 
           $form='build/src/MainForm.cs'
           $f=Get-Content $form -Raw
-          if ($f -notmatch 'new System.Drawing.Icon\(System.IO.Path.Combine\(AppContext.BaseDirectory, "PiiWiiTV.ico"\)\)') { throw 'Main window not bound to canonical PiiWiiTV.ico' }
+          if ($f -notmatch 'new System.Drawing.Icon\(System.IO.Path.Combine\(AppContext.BaseDirectory, "PiiWiiTV.ico"\)\)') { throw 'Main window not bound to PiiWiiTV.ico' }
 
           $iss='build/src/installer.iss'
           $i=Get-Content $iss -Raw
-          $i=$i.Replace('#define MyAppVersion "1.0.3"','#define MyAppVersion "1.0.4"')
+          $i=$i.Replace('#define MyAppVersion "1.0.4"','#define MyAppVersion "1.0.5"')
+          if ($i -notmatch '(?m)^SetupIconFile=') {
+            $i=$i -replace '(?m)^(AppPublisher=.*)$', "$1`r`nSetupIconFile=PiiWiiTV.ico"
+          } else {
+            $i=$i -replace '(?m)^SetupIconFile=.*$', 'SetupIconFile=PiiWiiTV.ico'
+          }
+          if ($i -notmatch '(?m)^SetupIconFile=PiiWiiTV\.ico$') { throw 'Installer icon not bound to PiiWiiTV.ico' }
           Set-Content $iss $i -Encoding utf8
 
       - uses: actions/setup-dotnet@v4
@@ -63,13 +77,16 @@ jobs:
           if (!(Test-Path '.\publish\PiiWiiTV.exe')) { throw 'PiiWiiTV.exe missing' }
           if (!(Test-Path '.\publish\PiiWiiTV.ico')) { throw 'PiiWiiTV.ico missing from publish output' }
           $v=(Get-Item '.\publish\PiiWiiTV.exe').VersionInfo.FileVersion
-          if ($v -ne '1.0.4.0') { throw "Bad EXE version: $v" }
-          $publishedIconHash=(Get-FileHash '.\publish\PiiWiiTV.ico' -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($publishedIconHash -ne 'e23d72363884b76f21771efd4ef1908f0d6e22ac2f46d663744daf3f04ade38b') { throw "Published icon changed: $publishedIconHash" }
+          if ($v -ne '1.0.5.0') { throw "Bad EXE version: $v" }
+          $src=(Get-FileHash '.\PiiWiiTV.ico' -Algorithm SHA256).Hash.ToLowerInvariant()
+          $pub=(Get-FileHash '.\publish\PiiWiiTV.ico' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($src -ne $pub) { throw "Published ICO differs from source: $src != $pub" }
           Add-Type -AssemblyName System.Drawing
           $embedded=[System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path '.\publish\PiiWiiTV.exe'))
-          if ($null -eq $embedded) { throw 'EXE has no extractable embedded icon' }
+          if ($null -eq $embedded) { throw 'PiiWiiTV.exe has no embedded icon' }
+          $embedded.ToBitmap().Save((Join-Path (Resolve-Path '.\publish').Path 'EXE-ICON-CHECK.png'),[System.Drawing.Imaging.ImageFormat]::Png)
           $embedded.Dispose()
+          magick '.\publish\EXE-ICON-CHECK.png' -resize 256x256 '.\publish\EXE-ICON-CHECK-256.png'
 
       - name: Prepare installer dependencies
         shell: pwsh
@@ -79,18 +96,29 @@ jobs:
           if ((Get-Item 'MicrosoftEdgeWebview2Setup.exe').Length -lt 1000000) { throw 'Invalid WebView2 bootstrapper' }
           choco install innosetup -y --no-progress
 
-      - name: Build release package
+      - name: Build release package and verify installer icon
         shell: pwsh
         working-directory: build/src
         run: |
           $iscc='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           if (!(Test-Path $iscc)) { throw 'ISCC.exe missing' }
-          & $iscc '/DMyAppVersion=1.0.4' '.\installer.iss'
+          & $iscc '/DMyAppVersion=1.0.5' '.\installer.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno failed: $LASTEXITCODE" }
+          if (!(Test-Path '.\output\PiiWii-TV-Setup-1.0.5.exe')) { throw 'Installer missing' }
+
+          Add-Type -AssemblyName System.Drawing
+          $setupIcon=[System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path '.\output\PiiWii-TV-Setup-1.0.5.exe'))
+          if ($null -eq $setupIcon) { throw 'Installer has no embedded icon' }
+          $setupIcon.ToBitmap().Save((Join-Path (Resolve-Path '.\output').Path 'SETUP-ICON-CHECK.png'),[System.Drawing.Imaging.ImageFormat]::Png)
+          $setupIcon.Dispose()
+
           New-Item -ItemType Directory -Force '.\release' | Out-Null
-          Copy-Item '.\output\PiiWii-TV-Setup-1.0.4.exe' '.\release\PiiWii-TV-Setup-1.0.4.exe'
-          Compress-Archive '.\publish\*' '.\release\PiiWii-TV-1.0.4-PORTABLE.zip' -CompressionLevel Optimal
-          Compress-Archive @('Program.cs','MainForm.cs','NativeBridge.cs','AppCommands.cs','AppInfo.cs','AppLogger.cs','PiiWiiTV.csproj','Directory.Build.props','installer.iss','PiiWiiTV.ico') '.\release\PiiWii-TV-Windows-1.0.4-SOURCES.zip' -CompressionLevel Optimal
+          Copy-Item '.\output\PiiWii-TV-Setup-1.0.5.exe' '.\release\PiiWii-TV-Setup-1.0.5.exe'
+          Copy-Item '.\publish\EXE-ICON-CHECK.png' '.\release\EXE-ICON-CHECK.png'
+          Copy-Item '.\output\SETUP-ICON-CHECK.png' '.\release\SETUP-ICON-CHECK.png'
+          Copy-Item '.\Logo-TV-master.png' '.\release\LOGO-MASTER-CHECK.png'
+          Compress-Archive '.\publish\*' '.\release\PiiWii-TV-1.0.5-PORTABLE.zip' -CompressionLevel Optimal
+          Compress-Archive @('Program.cs','MainForm.cs','NativeBridge.cs','AppCommands.cs','AppInfo.cs','AppLogger.cs','PiiWiiTV.csproj','Directory.Build.props','installer.iss','PiiWiiTV.ico','Logo-TV-master.png') '.\release\PiiWii-TV-Windows-1.0.5-SOURCES.zip' -CompressionLevel Optimal
           $files=Get-ChildItem '.\release' -File | Sort-Object Name
           $lines=foreach($f in $files){$h=(Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); "$h  $($f.Name)"}
           $lines | Set-Content '.\release\SHA256SUMS.txt' -Encoding ascii
@@ -98,7 +126,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-1.0.4-Windows-CANONICAL-ICON
+          name: PiiWii-TV-1.0.5-Windows-USER-ICON
           path: build/src/release/*
           if-no-files-found: error
           retention-days: 7
