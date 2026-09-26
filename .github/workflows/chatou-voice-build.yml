@@ -39,7 +39,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 deliverables/Chatou-Voice-0.1.0.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs deliverables/Chatou-Voice-0.1.0.apk | tee deliverables/APK-VERIFY.txt
           sha256sum deliverables/Chatou-Voice-0.1.0.apk | tee deliverables/SHA256.txt
-          cd chatou-voice-build/project && zip -qr ../../../deliverables/Chatou-Voice-0.1.0-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          cd chatou-voice-build/project && zip -qr ../../deliverables/Chatou-Voice-0.1.0-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
           name: Chatou-Voice-0.1.0
