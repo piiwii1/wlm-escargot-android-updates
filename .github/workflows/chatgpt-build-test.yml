@@ -1,0 +1,15 @@
+name: ChatGPT Public Runner Test
+on:
+  push:
+    branches: [chatgpt-build-test-20260926]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo OK > runner-ok.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runner-ok
+          path: runner-ok.txt
+          retention-days: 1
