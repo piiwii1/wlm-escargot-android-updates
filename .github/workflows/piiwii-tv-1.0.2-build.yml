@@ -32,7 +32,6 @@ jobs:
             Get-ChildItem $sourceRoot -Force | Move-Item -Destination $targetRoot -Force
           }
 
-          # Recreate one standards-compliant ICO from the same image currently rendering correctly in the taskbar.
           $iconB64=(Get-Content '.chatgpt-build/PiiWiiTV-small.ico.b64' -Raw).Trim()
           $iconBytes=[Convert]::FromBase64String($iconB64)
           if ($iconBytes.Length -lt 3000) { throw 'Icon source invalid' }
@@ -47,7 +46,6 @@ jobs:
           if ((Get-Item 'build/src/PiiWiiTV.ico').Length -lt 20000) { throw 'Generated ICO invalid' }
           Remove-Item 'build/src/PiiWiiTV-repaired.ico' -Force
 
-          # Version 1.0.3: distinct build so Explorer does not keep reusing the 1.0.2 icon cache.
           $props='build/src/Directory.Build.props'
           $d=Get-Content $props -Raw
           $d=$d.Replace('<PiiWiiVersion>1.0.2</PiiWiiVersion>','<PiiWiiVersion>1.0.3</PiiWiiVersion>')
@@ -59,25 +57,30 @@ jobs:
             $p=$p.Replace('<RuntimeIdentifier>win-x64</RuntimeIdentifier>', "<RuntimeIdentifier>win-x64</RuntimeIdentifier>`r`n    <ApplicationIcon>PiiWiiTV.ico</ApplicationIcon>")
           }
           if ($p -notmatch 'CopyToOutputDirectory') {
-            $p=$p.Replace('</Project>', "  <ItemGroup>`r`n    <None Include=\"PiiWiiTV.ico\" CopyToOutputDirectory=\"PreserveNewest\" CopyToPublishDirectory=\"Always\" />`r`n  </ItemGroup>`r`n</Project>")
+            $itemGroup=@'
+  <ItemGroup>
+    <None Include="PiiWiiTV.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+'@
+            $p=$p.Replace('</Project>', $itemGroup + "`r`n</Project>")
           }
           Set-Content $proj $p -Encoding utf8
 
-          # Force the exact same ICO for the Form window instead of asking Windows to extract/choose one from the EXE.
           $form='build/src/MainForm.cs'
           $f=Get-Content $form -Raw
-          $f=$f.Replace('Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;', 'Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, "PiiWiiTV.ico"));')
+          $oldLine='Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon;'
+          $newLine='Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, "PiiWiiTV.ico"));'
+          $f=$f.Replace($oldLine,$newLine)
           if ($f -notmatch 'new System.Drawing.Icon\(System.IO.Path.Combine') {
-            $f=$f.Replace('Text = AppInfo.ProductName;', 'Text = AppInfo.ProductName;' + "`r`n        Icon = new System.Drawing.Icon(System.IO.Path.Combine(AppContext.BaseDirectory, \"PiiWiiTV.ico\"));")
+            $f=$f.Replace('Text = AppInfo.ProductName;', 'Text = AppInfo.ProductName;' + "`r`n        " + $newLine)
           }
           Set-Content $form $f -Encoding utf8
 
           $iss='build/src/installer.iss'
           $i=Get-Content $iss -Raw
           $i=$i.Replace('#define MyAppVersion "1.0.2"','#define MyAppVersion "1.0.3"')
-          # Force shortcuts to use the EXE icon resource explicitly.
           if ($i -match '\[Icons\]') {
-            $i=$i -replace 'Filename: "\{app\}\\PiiWiiTV\.exe"', 'Filename: "{app}\\PiiWiiTV.exe"; IconFilename: "{app}\\PiiWiiTV.exe"'
+            $i=$i -replace 'Filename: "\{app\}\\PiiWiiTV\.exe"', 'Filename: "{app}\PiiWiiTV.exe"; IconFilename: "{app}\PiiWiiTV.exe"'
           }
           Set-Content $iss $i -Encoding utf8
 
