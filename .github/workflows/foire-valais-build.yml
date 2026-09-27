@@ -23,6 +23,13 @@ jobs:
         run: |
           set -euo pipefail
           cat foire-valais-app/patches/Foire-1.4.0.tgz.b64.part-* | base64 -d | tar -xzf - -C foire-valais-app
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('foire-valais-app/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java')
+          s=p.read_text()
+          s=s.replace("b.append(line).append('\n');", "b.append(line).append('\\n');")
+          p.write_text(s)
+          PY
           grep -q 'versionCode = 5' foire-valais-app/app/build.gradle.kts
           grep -q 'versionName = "1.4.0"' foire-valais-app/app/build.gradle.kts
       - name: Install Android SDK 35
