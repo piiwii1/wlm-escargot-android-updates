@@ -18,6 +18,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Apply 1.1.0 source and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d foire-valais-app/patches/MainActivity-1.1.0.java.gz.b64 | gzip -d > foire-valais-app/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          sed -i 's/versionCode = 1/versionCode = 2/' foire-valais-app/app/build.gradle.kts
+          sed -i 's/versionName = "1.0.0"/versionName = "1.1.0"/' foire-valais-app/app/build.gradle.kts
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -31,14 +38,14 @@ jobs:
       - name: Prepare deliverables
         run: |
           mkdir -p deliverables
-          cp foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.0.0-UNSIGNED.apk
+          cp foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.1.0-UNSIGNED.apk
           keytool -genkeypair -v -keystore /tmp/foire-release.jks -storepass changeit -keypass changeit -alias foire -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=PiiWii Foire du Valais,O=PiiWii,C=CH"
-          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner sign --ks /tmp/foire-release.jks --ks-pass pass:changeit --key-pass pass:changeit --out deliverables/Foire-du-Valais-2026-1.0.0.apk deliverables/Foire-du-Valais-2026-1.0.0-UNSIGNED.apk
-          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose deliverables/Foire-du-Valais-2026-1.0.0.apk
-          sha256sum deliverables/Foire-du-Valais-2026-1.0.0.apk > deliverables/SHA256.txt
-          cd foire-valais-app && zip -qr ../deliverables/Foire-du-Valais-2026-1.0.0-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner sign --ks /tmp/foire-release.jks --ks-pass pass:changeit --key-pass pass:changeit --out deliverables/Foire-du-Valais-2026-1.1.0.apk deliverables/Foire-du-Valais-2026-1.1.0-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose deliverables/Foire-du-Valais-2026-1.1.0.apk
+          sha256sum deliverables/Foire-du-Valais-2026-1.1.0.apk > deliverables/SHA256.txt
+          cd foire-valais-app && zip -qr ../deliverables/Foire-du-Valais-2026-1.1.0-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.0.0
+          name: Foire-du-Valais-2026-1.1.0
           path: deliverables/*
           retention-days: 7
