@@ -1,0 +1,31 @@
+name: Foire APK Signing Tool
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/foire-apksig-tool.yml' ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Build apksig-go tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/agusibrahim/apksig-go.git /tmp/apksig-go
+          cd /tmp/apksig-go
+          go build -o /tmp/apksign ./cmd/apksign
+          go build -o /tmp/apksigverify ./cmd/apksigverify
+          chmod +x /tmp/apksign /tmp/apksigverify
+          /tmp/apksign -h >/tmp/apksign-help.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foire-apksig-tools-linux-amd64
+          path: |
+            /tmp/apksign
+            /tmp/apksigverify
+            /tmp/apksign-help.txt
+          retention-days: 1
