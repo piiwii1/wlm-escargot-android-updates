@@ -20,7 +20,6 @@ jobs:
           set -euo pipefail
           mkdir -p build-piiwii-documents-020/work
           cat build-piiwii-documents-020/chunks/00 build-piiwii-documents-020/chunks/01 build-piiwii-documents-020/chunks/02 build-piiwii-documents-020/chunks/03 build-piiwii-documents-020/chunks/04 build-piiwii-documents-020/chunks/05 > build-piiwii-documents-020/source.b64
-          echo '6d37c515522fda2925dd30c6b914b5f827f166c6f3c079bc63adbd9a5833d6d0  build-piiwii-documents-020/source.b64' | sha256sum -c -
           base64 -d build-piiwii-documents-020/source.b64 > build-piiwii-documents-020/source.zip
           echo 'e08a27fe01d6f23787e4ac7b0588781ed5088726c2a406f1a504c8c0db8d4df8  build-piiwii-documents-020/source.zip' | sha256sum -c -
           unzip -t build-piiwii-documents-020/source.zip
