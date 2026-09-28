@@ -1,10 +1,9 @@
-name: PiiWii NFC 1.0.4 Public Build
+name: PiiWii NFC 1.0.4 Install Test
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'piiwii-nfc-public/apply104.py'
       - '.github/workflows/piiwii-nfc-public-build.yml'
   workflow_dispatch:
 
@@ -34,30 +33,37 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Prepare 1.0.4 sources
+      - name: Prepare install-test sources
         run: |
           rm -rf /tmp/piiwii-nfc
           mkdir -p /tmp/piiwii-nfc
           unzip -q piiwii-nfc-public/PiiWii-NFC-1.0.2-SOURCES.zip -d /tmp/piiwii-nfc
-          mv /tmp/piiwii-nfc/PiiWii-NFC-1.0.2 /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
-          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
+          mv /tmp/piiwii-nfc/PiiWii-NFC-1.0.2 /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST
           git apply "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc103.patch"
           python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply104.py"
+          sed -i "s/applicationId 'ch.piiwii.nfc'/applicationId 'ch.piiwii.nfc.installtest'/" app/build.gradle
+          sed -i "s/versionName '1.0.4'/versionName '1.0.4-installtest'/" app/build.gradle
       - name: Build APK
-        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST
         run: gradle --no-daemon --stacktrace assembleDebug
-      - name: Package deliverables
+      - name: Verify APK
         run: |
-          mkdir -p piiwii-nfc-public/dist
-          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.4/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist/PiiWii-NFC-1.0.4.apk
-          cd /tmp/piiwii-nfc
-          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist/PiiWii-NFC-1.0.4-SOURCES.zip" PiiWii-NFC-1.0.4
-          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist"
-          sha256sum PiiWii-NFC-1.0.4.apk PiiWii-NFC-1.0.4-SOURCES.zip > SHA256SUMS.txt
-      - name: Upload deliverables
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          APK=/tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST/app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT" dump badging "$APK" | head -20
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+      - name: Package deliverable
+        run: |
+          mkdir -p piiwii-nfc-public/dist-install-test
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-install-test/PiiWii-NFC-1.0.4-INSTALL-TEST.apk
+          cd piiwii-nfc-public/dist-install-test
+          sha256sum PiiWii-NFC-1.0.4-INSTALL-TEST.apk > SHA256SUMS.txt
+      - name: Upload deliverable
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-NFC-1.0.4
-          path: piiwii-nfc-public/dist/
+          name: PiiWii-NFC-1.0.4-INSTALL-TEST
+          path: piiwii-nfc-public/dist-install-test/
           retention-days: 7
           if-no-files-found: error
