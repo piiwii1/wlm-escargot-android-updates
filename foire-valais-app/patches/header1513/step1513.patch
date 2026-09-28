@@ -1,6 +1,6 @@
-diff -ruN '--exclude=header_2026.webp' base1512/app/build.gradle.kts work1513/app/build.gradle.kts
+diff -ruN '--exclude=fdv_logo_official.xml' base1512/app/build.gradle.kts work1513safe/app/build.gradle.kts
 --- base1512/app/build.gradle.kts	2026-09-28 21:26:53.000000000 +0000
-+++ work1513/app/build.gradle.kts	2026-09-28 22:25:52.038385921 +0000
++++ work1513safe/app/build.gradle.kts	2026-09-28 22:31:38.436524280 +0000
 @@ -7,8 +7,8 @@
          applicationId = "ch.piiwii.foirevalais"
          minSdk = 26
@@ -12,22 +12,69 @@ diff -ruN '--exclude=header_2026.webp' base1512/app/build.gradle.kts work1513/ap
      }
      buildTypes { getByName("release") { isMinifyEnabled = false } }
      compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-diff -ruN '--exclude=header_2026.webp' base1512/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java work1513/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+diff -ruN '--exclude=fdv_logo_official.xml' base1512/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java work1513safe/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
 --- base1512/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 21:26:53.000000000 +0000
-+++ work1513/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 22:25:52.038236236 +0000
-@@ -207,7 +207,10 @@
++++ work1513safe/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 22:31:38.436380283 +0000
+@@ -30,6 +30,9 @@
+ 
+ public class MainActivity extends Activity {
+     static final String PROGRAMME_URL="https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/main/foire-valais-app/programme-2026.json";
++    static final String FAIR_EDITION="66e édition";
++    static final String FAIR_DATES="2–11 octobre 2026";
++    static final String FAIR_CITY="Martigny";
+     static final int PURPLE=Color.rgb(15,24,43), PINK=Color.rgb(232,14,35), GOLD=Color.rgb(247,198,65);
+     static final int BRAND_DARK=Color.rgb(177,0,23), BRAND_SOFT=Color.rgb(255,239,242);
+     static final int BG=Color.rgb(249,249,251), MUTED=Color.rgb(105,112,128), GREEN=Color.rgb(25,125,78), ORANGE=Color.rgb(178,108,0);
+@@ -207,7 +210,13 @@
              });
          }
  
 -        HeaderBrandView head=new HeaderBrandView(this);
-+        ImageView head=new ImageView(this);
-+        head.setImageResource(R.drawable.header_2026);
-+        head.setScaleType(ImageView.ScaleType.CENTER_CROP);
-+        head.setAdjustViewBounds(false);
++        FrameLayout head=new FrameLayout(this);
++        head.addView(new PopcornHeaderView(this),new FrameLayout.LayoutParams(-1,-1));
++        LinearLayout heroCard=new LinearLayout(this); heroCard.setOrientation(LinearLayout.VERTICAL); heroCard.setPadding(dp(14),dp(8),dp(14),dp(8)); heroCard.setBackground(round(0xF7FFFFFF,18));
++        ImageView officialLogo=new ImageView(this); officialLogo.setImageResource(R.drawable.fdv_logo_official); officialLogo.setScaleType(ImageView.ScaleType.FIT_CENTER); officialLogo.setAdjustViewBounds(true);
++        heroCard.addView(officialLogo,new LinearLayout.LayoutParams(-1,dp(73)));
++        TextView heroMeta=txt(FAIR_EDITION+"  •  "+FAIR_DATES+"  •  "+FAIR_CITY,11,PURPLE,true); heroMeta.setGravity(Gravity.CENTER); heroCard.addView(heroMeta);
++        FrameLayout.LayoutParams heroLp=new FrameLayout.LayoutParams(-1,dp(112)); heroLp.gravity=Gravity.TOP; heroLp.setMargins(dp(14),dp(12),dp(14),0); head.addView(heroCard,heroLp);
          root.addView(head,new LinearLayout.LayoutParams(-1,dp(170)));
  
          title=txt("",24,PURPLE,true); title.setPadding(dp(16),dp(14),dp(16),0); root.addView(title);
-@@ -829,7 +832,7 @@
+@@ -448,6 +457,33 @@
+     Event findByName(String part){for(Event e:events)if(e.name.toLowerCase(Locale.ROOT).contains(part.toLowerCase(Locale.ROOT)))return e;return null;}
+ 
+ 
++    class PopcornHeaderView extends View{
++        Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
++        Paint stroke=new Paint(Paint.ANTI_ALIAS_FLAG);
++        PopcornHeaderView(Context c){super(c);stroke.setStyle(Paint.Style.STROKE);stroke.setStrokeWidth(dp(5));stroke.setStrokeJoin(Paint.Join.ROUND);stroke.setColor(0xFF242321);}
++        @Override protected void onDraw(Canvas c){
++            super.onDraw(c); float w=getWidth(),h=getHeight();
++            p.setStyle(Paint.Style.FILL); p.setColor(0xFFF20D1A); c.drawRect(0,0,w,h,p);
++            drawPop(c,w*.12f,h*.68f,dp(54));
++            drawPop(c,w*.40f,h*.82f,dp(78));
++            drawPop(c,w*.76f,h*.58f,dp(46));
++            drawPop(c,w*.94f,h*.80f,dp(25));
++            p.setColor(0xFF242321);
++            c.save(); c.rotate(-18,w*.12f,h*.25f); c.drawRect(w*.08f,h*.20f,w*.15f,h*.24f,p); c.drawRect(w*.16f,h*.18f,w*.23f,h*.22f,p); c.restore();
++        }
++        void drawPop(Canvas c,float cx,float cy,float r){
++            p.setColor(0xFFF7F1D9);
++            float rr=r*.55f;
++            float[][] pts={{0,-.46f},{.42f,-.22f},{.48f,.20f},{.16f,.48f},{-.28f,.42f},{-.48f,.08f},{-.34f,-.30f}};
++            for(float[] q:pts)c.drawCircle(cx+q[0]*r,cy+q[1]*r,rr,p);
++            c.drawCircle(cx,cy,r*.58f,p);
++            for(float[] q:pts)c.drawCircle(cx+q[0]*r,cy+q[1]*r,rr,stroke);
++            c.drawCircle(cx,cy,r*.58f,stroke);
++            p.setColor(0xFFF4A300);
++            Path x=new Path(); x.moveTo(cx-r*.16f,cy-r*.10f); x.lineTo(cx+r*.12f,cy-r*.20f); x.lineTo(cx+r*.23f,cy+r*.05f); x.lineTo(cx,cy+r*.20f); x.close(); c.drawPath(x,p); c.drawPath(x,stroke);
++        }
++    }
++
+     class HeaderBrandView extends View{
+         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+         Path path=new Path();
+@@ -829,7 +865,7 @@
          settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
  
          settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
@@ -36,7 +83,7 @@ diff -ruN '--exclude=header_2026.webp' base1512/app/src/main/java/ch/piiwii/foir
      }
  
      void settingsHero(){
-@@ -940,7 +943,7 @@
+@@ -940,7 +976,7 @@
          TextView sync=actionButton("↻ Mettre à jour le programme");sync.setOnClickListener(v->refreshRemoteProgramme(true));content.addView(sync,margin(0,7,0,5));
          TextView src=actionButton("Ouvrir le site officiel");src.setOnClickListener(v->openUrl("https://foireduvalais.ch/fr"));content.addView(src,margin(0,5,0,5));
          TextView notif=actionButton("Réglages notifications Android");notif.setOnClickListener(v->openNotificationSettings());content.addView(notif,margin(0,5,0,10));
