@@ -35,7 +35,9 @@ jobs:
 
       - name: Apply 0.4.0 changes
         shell: bash
-        run: python3 build-piiwii-documents-040/apply.py
+        run: |
+          python3 build-piiwii-documents-040/fix_apply.py
+          python3 build-piiwii-documents-040/apply.py
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -72,6 +74,7 @@ jobs:
           cp README.md CHANGELOG.md PACK-REPRISE/
           cp ../../.github/workflows/piiwii-documents-040-build.yml PACK-REPRISE/
           cp ../../build-piiwii-documents-040/apply.py PACK-REPRISE/
+          cp ../../build-piiwii-documents-040/fix_apply.py PACK-REPRISE/
           zip -qr dist/PiiWii-Documents-0.4.0-PACK-REPRISE.zip PACK-REPRISE
           cd dist
           sha256sum PiiWii-Documents-Setup-0.4.0.exe PiiWii-Documents-0.4.0-PORTABLE.exe PiiWii-Documents-0.4.0-SOURCES.zip PiiWii-Documents-0.4.0-PACK-REPRISE.zip > PiiWii-Documents-0.4.0-SHA256SUMS.txt
