@@ -1,0 +1,359 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 98366ba..3224393 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,6 +1,12 @@
+ # Changelog
+ 
+-## 1.0.2 — 2026-09-28
++## 1.0.3 — 2026-09-28
++- Anti-double-scan pour éviter les lectures/écritures déclenchées deux fois trop rapidement.
++- État NFC visible en permanence et rafraîchi au retour dans l’application.
++- Brouillon et type d’écriture conservés entre deux ouvertures.
++- Estimation de la taille NDEF avant écriture.
++- Bouton d’annulation pour les modes écriture, copie et effacement.
++- Décodage plus clair des liens téléphone, e-mail et SMS.
+ - Ajout de l’écriture NFC téléphone (`tel:`), e-mail (`mailto:`) et SMS (`sms:`).
+ - Ajout d’un bouton d’accès direct aux réglages NFC Android.
+ - Ajout d’un bouton pour vider l’historique avec confirmation.
+diff --git a/README.md b/README.md
+index b807139..2451f64 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# PiiWii NFC 1.0.2
++# PiiWii NFC 1.0.3
+ 
+ Application Android NFC locale, sans serveur.
+ 
+@@ -17,8 +17,8 @@ Application Android NFC locale, sans serveur.
+ PiiWii NFC ne contourne aucune authentification et ne clone pas l'UID matériel d'une carte. La fonction Copier reproduit uniquement le contenu NDEF réinscriptible compatible Android.
+ 
+ ## Version
+-- versionName: 1.0.2
+-- versionCode: 3
++- versionName: 1.0.3
++- versionCode: 4
+ - package: ch.piiwii.nfc
+ - minSdk: 24
+ - targetSdk: 35
+diff --git a/app/build.gradle b/app/build.gradle
+index 1ff6107..f852c88 100644
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -10,8 +10,8 @@ android {
+         applicationId 'ch.piiwii.nfc'
+         minSdk 24
+         targetSdk 35
+-        versionCode 3
+-        versionName '1.0.2'
++        versionCode 4
++        versionName '1.0.3'
+     }
+ 
+     buildTypes {
+diff --git a/app/src/main/java/ch/piiwii/nfc/MainActivity.java b/app/src/main/java/ch/piiwii/nfc/MainActivity.java
+index 598c596..2a99dfa 100644
+--- a/app/src/main/java/ch/piiwii/nfc/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/nfc/MainActivity.java
+@@ -13,12 +13,15 @@ import android.nfc.tech.Ndef;
+ import android.nfc.tech.NdefFormatable;
+ import android.os.Bundle;
+ import android.provider.Settings;
++import android.text.Editable;
+ import android.text.TextUtils;
++import android.text.TextWatcher;
+ import android.view.View;
+ import android.widget.Button;
+ import android.widget.EditText;
+ import android.widget.RadioButton;
+ import android.widget.TextView;
++import android.widget.RadioGroup;
+ import android.widget.Toast;
+ 
+ import java.io.ByteArrayOutputStream;
+@@ -41,14 +44,22 @@ public class MainActivity extends Activity {
+     private byte[] copySourceUid;
+ 
+     private TextView statusText;
++    private TextView nfcStateText;
+     private TextView tagInfoText;
+     private TextView historyText;
++    private TextView payloadSizeText;
+     private EditText payloadInput;
++    private Button cancelButton;
++    private RadioGroup typeGroup;
+     private RadioButton typeUrl;
+     private RadioButton typePhone;
+     private RadioButton typeEmail;
+     private RadioButton typeSms;
+     private SharedPreferences prefs;
++    private SharedPreferences draftPrefs;
++    private long lastTagTimeMs = 0L;
++    private String lastTagUid = "";
++    private static final long TAG_DEBOUNCE_MS = 1200L;
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+@@ -56,14 +67,19 @@ public class MainActivity extends Activity {
+         setContentView(R.layout.activity_main);
+ 
+         statusText = findViewById(R.id.statusText);
++        nfcStateText = findViewById(R.id.nfcStateText);
+         tagInfoText = findViewById(R.id.tagInfoText);
+         historyText = findViewById(R.id.historyText);
++        payloadSizeText = findViewById(R.id.payloadSizeText);
+         payloadInput = findViewById(R.id.payloadInput);
++        cancelButton = findViewById(R.id.cancelButton);
++        typeGroup = findViewById(R.id.typeGroup);
+         typeUrl = findViewById(R.id.typeUrl);
+         typePhone = findViewById(R.id.typePhone);
+         typeEmail = findViewById(R.id.typeEmail);
+         typeSms = findViewById(R.id.typeSms);
+         prefs = getSharedPreferences("history", MODE_PRIVATE);
++        draftPrefs = getSharedPreferences("draft", MODE_PRIVATE);
+ 
+         Button readButton = findViewById(R.id.readButton);
+         Button writeButton = findViewById(R.id.writeButton);
+@@ -72,6 +88,23 @@ public class MainActivity extends Activity {
+         Button nfcSettingsButton = findViewById(R.id.nfcSettingsButton);
+         Button clearHistoryButton = findViewById(R.id.clearHistoryButton);
+ 
++        payloadInput.setText(draftPrefs.getString("payload", ""));
++        int savedType = draftPrefs.getInt("type", R.id.typeText);
++        typeGroup.check(savedType);
++        payloadInput.addTextChangedListener(new TextWatcher() {
++            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
++            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
++                draftPrefs.edit().putString("payload", s.toString()).apply();
++                updatePayloadSize();
++            }
++            @Override public void afterTextChanged(Editable s) { }
++        });
++        typeGroup.setOnCheckedChangeListener((group, checkedId) -> {
++            draftPrefs.edit().putInt("type", checkedId).apply();
++            updatePayloadSize();
++        });
++        cancelButton.setOnClickListener(v -> cancelOperation());
++
+         readButton.setOnClickListener(v -> setMode(Mode.READ, "Mode lecture : approche un tag NFC."));
+         writeButton.setOnClickListener(v -> prepareWrite());
+         copyButton.setOnClickListener(v -> {
+@@ -112,6 +145,9 @@ public class MainActivity extends Activity {
+         }
+ 
+         renderHistory();
++        updatePayloadSize();
++        updateNfcState();
++        updateCancelVisibility();
+     }
+ 
+     private void prepareWrite() {
+@@ -126,11 +162,54 @@ public class MainActivity extends Activity {
+     private void setMode(Mode newMode, String message) {
+         mode = newMode;
+         statusText.setText(message);
++        updateCancelVisibility();
++    }
++
++    private void cancelOperation() {
++        copyBuffer = null;
++        copySourceUid = null;
++        mode = Mode.READ;
++        statusText.setText("Opération annulée. Mode lecture actif.");
++        updateCancelVisibility();
++    }
++
++    private void updateCancelVisibility() {
++        if (cancelButton != null) {
++            cancelButton.setVisibility(mode == Mode.READ ? View.GONE : View.VISIBLE);
++        }
++    }
++
++    private void updateNfcState() {
++        if (nfcStateText == null) return;
++        if (nfcAdapter == null) {
++            nfcStateText.setText("🔴 NFC indisponible sur cet appareil");
++        } else if (!nfcAdapter.isEnabled()) {
++            nfcStateText.setText("🟠 NFC désactivé — ouvre les réglages NFC");
++        } else {
++            nfcStateText.setText("🟢 NFC actif — prêt à détecter un tag");
++        }
++    }
++
++    private void updatePayloadSize() {
++        if (payloadSizeText == null || payloadInput == null) return;
++        String value = payloadInput.getText().toString().trim();
++        if (value.isEmpty()) {
++            payloadSizeText.setText("Taille estimée : 0 octet");
++            return;
++        }
++        try {
++            NdefMessage message = buildCurrentMessage(value);
++            int bytes = message.toByteArray().length;
++            payloadSizeText.setText("Taille NDEF estimée : " + bytes + " octet" + (bytes > 1 ? "s" : ""));
++        } catch (Exception e) {
++            payloadSizeText.setText("Taille NDEF : impossible à estimer");
++        }
+     }
+ 
+     @Override
+     protected void onResume() {
+         super.onResume();
++        updateNfcState();
+         if (nfcAdapter != null && nfcAdapter.isEnabled()) {
+             nfcAdapter.enableForegroundDispatch(this, pendingIntent, null, null);
+         }
+@@ -155,6 +234,14 @@ public class MainActivity extends Activity {
+         Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+         if (tag == null) return;
+ 
++        String uid = toHex(tag.getId());
++        long now = System.currentTimeMillis();
++        if (uid.equals(lastTagUid) && now - lastTagTimeMs < TAG_DEBOUNCE_MS) {
++            return;
++        }
++        lastTagUid = uid;
++        lastTagTimeMs = now;
++
+         renderTagInfo(tag);
+         switch (mode) {
+             case READ:
+@@ -243,22 +330,12 @@ public class MainActivity extends Activity {
+ 
+     private void writeCurrentInput(Tag tag) {
+         String value = payloadInput.getText().toString().trim();
+-        NdefMessage message;
+-        if (typeUrl.isChecked()) {
+-            message = createUriMessage(value);
+-        } else if (typePhone.isChecked()) {
+-            message = createUriMessage(normalizePhone(value));
+-        } else if (typeEmail.isChecked()) {
+-            message = createUriMessage(normalizeEmail(value));
+-        } else if (typeSms.isChecked()) {
+-            message = createUriMessage(normalizeSms(value));
+-        } else {
+-            message = createTextMessage(value);
+-        }
++        NdefMessage message = buildCurrentMessage(value);
+         if (writeMessage(tag, message)) {
+             statusText.setText("Écriture réussie.");
+             addHistory("Écriture", toHex(tag.getId()), summarize(value));
+             mode = Mode.READ;
++            updateCancelVisibility();
+         }
+     }
+ 
+@@ -302,6 +379,7 @@ public class MainActivity extends Activity {
+             copyBuffer = null;
+             copySourceUid = null;
+             mode = Mode.READ;
++            updateCancelVisibility();
+         }
+     }
+ 
+@@ -313,6 +391,7 @@ public class MainActivity extends Activity {
+             statusText.setText("Tag effacé.");
+             addHistory("Effacement", toHex(tag.getId()), "NDEF vidé");
+             mode = Mode.READ;
++            updateCancelVisibility();
+         }
+     }
+ 
+@@ -358,6 +437,21 @@ public class MainActivity extends Activity {
+         return false;
+     }
+ 
++
++    private NdefMessage buildCurrentMessage(String value) {
++        if (typeUrl.isChecked()) {
++            return createUriMessage(value);
++        } else if (typePhone.isChecked()) {
++            return createUriMessage(normalizePhone(value));
++        } else if (typeEmail.isChecked()) {
++            return createUriMessage(normalizeEmail(value));
++        } else if (typeSms.isChecked()) {
++            return createUriMessage(normalizeSms(value));
++        } else {
++            return createTextMessage(value);
++        }
++    }
++
+     private String normalizePhone(String value) {
+         String v = value.trim();
+         return v.startsWith("tel:") ? v : "tel:" + v;
+@@ -415,7 +509,11 @@ public class MainActivity extends Activity {
+                 return start <= payload.length ? "Texte : " + new String(payload, start, payload.length - start, cs) : "Texte : (illisible)";
+             }
+             if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_URI)) {
+-                return "URL : " + r.toUri();
++                String uri = String.valueOf(r.toUri());
++                if (uri.startsWith("tel:")) return "Téléphone : " + uri.substring(4);
++                if (uri.startsWith("mailto:")) return "E-mail : " + uri.substring(7);
++                if (uri.startsWith("sms:") || uri.startsWith("smsto:")) return "SMS : " + uri.substring(uri.indexOf(':') + 1);
++                return "URL : " + uri;
+             }
+             if (r.getTnf() == NdefRecord.TNF_MIME_MEDIA) {
+                 return "MIME " + new String(r.getType(), StandardCharsets.US_ASCII) + " : " + r.getPayload().length + " octets";
+diff --git a/app/src/main/res/layout/activity_main.xml b/app/src/main/res/layout/activity_main.xml
+index 561f562..e8ed2ac 100644
+--- a/app/src/main/res/layout/activity_main.xml
++++ b/app/src/main/res/layout/activity_main.xml
+@@ -28,6 +28,17 @@
+             android:textColor="@color/muted"
+             android:textSize="15sp" />
+ 
++        <TextView
++            android:id="@+id/nfcStateText"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="10dp"
++            android:background="@color/panel"
++            android:padding="12dp"
++            android:text="État NFC : vérification…"
++            android:textColor="@color/text"
++            android:textSize="14sp" />
++
+         <Button
+             android:id="@+id/nfcSettingsButton"
+             android:layout_width="match_parent"
+@@ -81,6 +92,14 @@
+                 android:text="EFFACER" />
+         </LinearLayout>
+ 
++        <Button
++            android:id="@+id/cancelButton"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="10dp"
++            android:text="ANNULER L’OPÉRATION"
++            android:visibility="gone" />
++
+         <TextView
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+@@ -140,6 +159,15 @@
+             android:textColor="@color/text"
+             android:textColorHint="@color/muted" />
+ 
++        <TextView
++            android:id="@+id/payloadSizeText"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="6dp"
++            android:text="Taille estimée : 0 octet"
++            android:textColor="@color/muted"
++            android:textSize="12sp" />
++
+         <TextView
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+@@ -198,7 +226,7 @@
+             android:layout_height="wrap_content"
+             android:layout_marginTop="20dp"
+             android:paddingBottom="24dp"
+-            android:text="PiiWii NFC 1.0.2 • Copie NDEF uniquement. Les UID matériels et protections cryptographiques ne sont pas clonés."
++            android:text="PiiWii NFC 1.0.3 • Copie NDEF uniquement. Les UID matériels et protections cryptographiques ne sont pas clonés."
+             android:textColor="@color/muted"
+             android:textSize="12sp" />
+ 
