@@ -37,7 +37,8 @@ jobs:
         run: |
           rm -rf piwii-nfc/work
           mkdir -p piwii-nfc/work
-          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/piiwii-nfc/source2.b64" | base64 -d > piwii-nfc/source.zip
+          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/piiwii-nfc/source.zip" -o piwii-nfc/source.zip
+          unzip -t piwii-nfc/source.zip
           unzip -q -o piwii-nfc/source.zip -d piwii-nfc/work
       - name: Build
         working-directory: piwii-nfc/work/PiiWii-NFC-1.0.2
