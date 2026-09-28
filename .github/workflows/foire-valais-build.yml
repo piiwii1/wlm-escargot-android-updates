@@ -56,24 +56,23 @@ jobs:
           cd foire-valais-app
           patch -p1 < patches/etape6a/step6a.patch
           sed -i 's/Version 1\.5\.4/Version 1.5.5/g; s/versionCode 10/versionCode 11/g' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'versionCode = 11' app/build.gradle.kts
-          grep -q 'versionName = "1.5.5"' app/build.gradle.kts
-          grep -q 'key.startsWith("delay")' app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java
-          ! grep -q 'key.startsWith("fav")' app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java
-      - name: Apply 1.5.6 step 6B custom reminders
+      - name: Apply step 6B custom reminders
         shell: bash
         run: |
           set -euo pipefail
           cd foire-valais-app
           patch -p1 < patches/etape6b/step6b.patch
-          grep -q 'versionCode = 12' app/build.gradle.kts
-          grep -q 'versionName = "1.5.6"' app/build.gradle.kts
-          grep -q 'Personnalisé…' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'showCustomAlert' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'applyAlertDelay' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'val<1||val>1440' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          ! grep -q 'prefs.getInt("delay"+e.id,fav?15:-1)' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'Version 1.5.6' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+      - name: Apply 1.5.7 improved navigation icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd foire-valais-app
+          patch -p1 < patches/etape-icons/step-icons.patch
+          grep -q 'versionCode = 13' app/build.gradle.kts
+          grep -q 'versionName = "1.5.7"' app/build.gradle.kts
+          grep -q 'class NavIconView extends View' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          grep -q 'addNav("Accueil",0)' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          ! grep -q 'addNav("⌂' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -89,13 +88,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p deliverables/sign-tools/lib
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.6-ETAPE6B-ALIGNED-UNSIGNED.apk
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.6-ETAPE6B-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.7-ICONS-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.7-ICONS-ALIGNED-UNSIGNED.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd foire-valais-app
-          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.6-ETAPE6B-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.7-ICONS-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.5.6-ETAPE6B-aligned
+          name: Foire-du-Valais-2026-1.5.7-ICONS-aligned
           path: deliverables/*
           retention-days: 7
