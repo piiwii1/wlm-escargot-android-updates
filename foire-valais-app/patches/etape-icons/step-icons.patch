@@ -1,0 +1,127 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 12
+-        versionName = "1.5.6"
++        versionCode = 13
++        versionName = "1.5.7"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -232,23 +232,19 @@
+ 
+         scroll=new ScrollView(this); scroll.setFillViewport(true); content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(12),dp(2),dp(12),dp(20)); scroll.addView(content); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+ 
+-        nav=new LinearLayout(this); nav.setGravity(Gravity.CENTER); nav.setPadding(dp(4),dp(4),dp(4),dp(4)); nav.setBackgroundColor(darkMode()?0xFF181B23:Color.WHITE);
+-        addNav("⌂\nAccueil",0); addNav("▣\nProgramme",1); addNav("⌕\nRecherche",2); addNav("♡\nFavoris",3); addNav("⚙\nRéglages",4);
+-        root.addView(nav,new LinearLayout.LayoutParams(-1,dp(68)));
++        nav=new LinearLayout(this); nav.setGravity(Gravity.CENTER); nav.setPadding(dp(2),0,dp(2),0); nav.setBackgroundColor(darkMode()?0xFF181B23:Color.WHITE);
++        addNav("Accueil",0); addNav("Programme",1); addNav("Recherche",2); addNav("Favoris",3); addNav("Réglages",4);
++        root.addView(nav,new LinearLayout.LayoutParams(-1,dp(72)));
+         setContentView(root);
+     }
+ 
+     void addNav(String label,int idx){
+-        TextView v=txt(label,11,idx==screen?PINK:MUTED,idx==screen); v.setGravity(Gravity.CENTER);
+-        v.setOnClickListener(x->{screen=idx; if(idx==0)showHome(); else if(idx==1)showProgram(); else if(idx==2)showSearch(); else if(idx==3)showChoices(); else showSettings();});
+-        nav.addView(v,new LinearLayout.LayoutParams(0,-1,1));
++        NavItemView item=new NavItemView(this,idx,label);
++        item.setOnClickListener(x->{screen=idx; if(idx==0)showHome(); else if(idx==1)showProgram(); else if(idx==2)showSearch(); else if(idx==3)showChoices(); else showSettings();});
++        nav.addView(item,new LinearLayout.LayoutParams(0,-1,1));
+     }
+     void refreshNav(){
+-        for(int i=0;i<nav.getChildCount();i++){
+-            TextView v=(TextView)nav.getChildAt(i); boolean a=i==screen;
+-            v.setTextColor(a?PINK:MUTED); v.setTypeface(Typeface.DEFAULT,a?Typeface.BOLD:Typeface.NORMAL);
+-            v.setBackground(round(a?BRAND_SOFT:Color.TRANSPARENT,16));
+-        }
++        for(int i=0;i<nav.getChildCount();i++)((NavItemView)nav.getChildAt(i)).setActive(i==screen);
+     }
+ 
+     void clear(String t,String st,boolean dayTabs,boolean zoneTabs,boolean searchVisible){
+@@ -833,7 +829,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.6","Foire du Valais 2026 · versionCode 12",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.6 · versionCode 12\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.7","Foire du Valais 2026 · versionCode 13",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.7 · versionCode 13\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -944,7 +940,7 @@
+         TextView sync=actionButton("↻ Mettre à jour le programme");sync.setOnClickListener(v->refreshRemoteProgramme(true));content.addView(sync,margin(0,7,0,5));
+         TextView src=actionButton("Ouvrir le site officiel");src.setOnClickListener(v->openUrl("https://foireduvalais.ch/fr"));content.addView(src,margin(0,5,0,5));
+         TextView notif=actionButton("Réglages notifications Android");notif.setOnClickListener(v->openNotificationSettings());content.addView(notif,margin(0,5,0,10));
+-        info("Version 1.5.6 · versionCode 12\nProgramme hors connexion + mise à jour distante · rappels restaurés après redémarrage/mise à jour · même signature Android que la 1.3.0.");
++        info("Version 1.5.7 · versionCode 13\nProgramme hors connexion + mise à jour distante · rappels restaurés après redémarrage/mise à jour · même signature Android que la 1.3.0.");
+     }
+ 
+     void eventCard(Event e){
+@@ -1170,6 +1166,62 @@
+     int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
+     int dp(float v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
+ 
++
++    class NavItemView extends LinearLayout {
++        final NavIconView icon; final TextView label; final View indicator; final int index;
++        NavItemView(Context c,int index,String text){
++            super(c); this.index=index; setOrientation(VERTICAL); setGravity(Gravity.CENTER_HORIZONTAL); setPadding(dp(2),0,dp(2),dp(2));
++            indicator=new View(c); indicator.setBackground(round(Color.TRANSPARENT,3));
++            LinearLayout.LayoutParams ilp=new LinearLayout.LayoutParams(dp(34),dp(3)); ilp.setMargins(0,0,0,dp(3)); addView(indicator,ilp);
++            icon=new NavIconView(c,index); addView(icon,new LinearLayout.LayoutParams(dp(30),dp(30)));
++            label=txt(text,11,MUTED,false); label.setGravity(Gravity.CENTER);
++            LinearLayout.LayoutParams tlp=new LinearLayout.LayoutParams(-1,0,1); tlp.setMargins(0,dp(1),0,0); addView(label,tlp);
++            setActive(index==screen);
++        }
++        void setActive(boolean active){
++            int inactive=darkMode()?0xFFBAC4D8:0xFF63718E;
++            label.setTextColor(active?PINK:inactive);
++            label.setTypeface(Typeface.DEFAULT,active?Typeface.BOLD:Typeface.NORMAL);
++            indicator.setBackground(round(active?PINK:Color.TRANSPARENT,3));
++            icon.setActive(active);
++        }
++    }
++
++    class NavIconView extends View {
++        final int index; boolean active; final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG); final Path path=new Path();
++        NavIconView(Context c,int index){super(c);this.index=index;setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
++        void setActive(boolean a){active=a;invalidate();}
++        int navy(){return darkMode()?0xFFDDE5F4:0xFF13264A;}
++        int blue(){return darkMode()?0xFF70B8FF:0xFF2F7DEB;}
++        int red(){return active?PINK:0xFFF06B7D;}
++        float u(){return getWidth()/30f;}
++        void stroke(int color,float width){p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);p.setStrokeWidth(width*u());p.setColor(color);}
++        void fill(int color){p.setStyle(Paint.Style.FILL);p.setColor(color);}
++        @Override protected void onDraw(Canvas c){super.onDraw(c); if(getWidth()==0)return; switch(index){case 0:drawHome(c);break;case 1:drawCalendar(c);break;case 2:drawSearch(c);break;case 3:drawHeart(c);break;default:drawGear(c);}}
++        void drawHome(Canvas c){
++            float k=u(); path.reset(); path.moveTo(5*k,14*k); path.lineTo(15*k,5*k); path.lineTo(25*k,14*k); stroke(navy(),3.1f); c.drawPath(path,p);
++            path.reset(); path.moveTo(8*k,13*k); path.lineTo(15*k,7*k); path.lineTo(22*k,13*k); path.lineTo(22*k,24*k); path.lineTo(17*k,24*k); path.lineTo(17*k,18*k); path.lineTo(13*k,18*k); path.lineTo(13*k,24*k); path.lineTo(8*k,24*k); path.close(); fill(active?PINK:(darkMode()?0xFF7887A6:0xFF6F7F9E)); c.drawPath(path,p);
++        }
++        void drawCalendar(Canvas c){
++            float k=u(); RectF r=new RectF(5*k,7*k,25*k,25*k); stroke(navy(),2.6f); c.drawRoundRect(r,3*k,3*k,p);
++            stroke(navy(),2.6f); c.drawLine(10*k,4*k,10*k,9*k,p); c.drawLine(20*k,4*k,20*k,9*k,p); c.drawLine(5*k,12*k,25*k,12*k,p);
++            fill(0xFFBFD6F3); c.drawRoundRect(new RectF(9*k,15*k,13*k,19*k),1*k,1*k,p); c.drawRoundRect(new RectF(15*k,15*k,19*k,19*k),1*k,1*k,p); c.drawRoundRect(new RectF(9*k,20*k,13*k,24*k),1*k,1*k,p);
++            fill(active?PINK:0xFFF06B7D); c.drawRoundRect(new RectF(20*k,15*k,24*k,19*k),1*k,1*k,p);
++        }
++        void drawSearch(Canvas c){
++            float k=u(); stroke(navy(),3f); c.drawCircle(13*k,13*k,7.5f*k,p); stroke(blue(),2.2f); RectF a=new RectF(8*k,8*k,18*k,18*k); c.drawArc(a,205,95,false,p); stroke(active?PINK:blue(),4f); c.drawLine(19*k,19*k,25*k,25*k,p);
++        }
++        void drawHeart(Canvas c){
++            float k=u(); path.reset(); path.moveTo(15*k,25*k); path.cubicTo(13*k,23*k,5*k,18*k,5*k,11*k); path.cubicTo(5*k,6*k,11*k,4*k,15*k,9*k); path.cubicTo(19*k,4*k,25*k,6*k,25*k,11*k); path.cubicTo(25*k,18*k,17*k,23*k,15*k,25*k); path.close(); fill(red()); c.drawPath(path,p); stroke(navy(),2.4f); c.drawPath(path,p);
++            fill(0x66FFFFFF); c.drawCircle(10.5f*k,10*k,2*k,p);
++        }
++        void drawGear(Canvas c){
++            float k=u(),cx=15*k,cy=15*k; path.reset(); int teeth=8; double step=Math.PI*2/(teeth*2);
++            for(int i=0;i<teeth*2;i++){double a=-Math.PI/2+i*step; float rr=(i%2==0?11.5f:8.8f)*k; float x=cx+(float)Math.cos(a)*rr,y=cy+(float)Math.sin(a)*rr; if(i==0)path.moveTo(x,y);else path.lineTo(x,y);} path.close(); stroke(navy(),2.6f); c.drawPath(path,p);
++            stroke(active?PINK:blue(),2.8f); c.drawCircle(cx,cy,4.2f*k,p);
++        }
++    }
++
+     static class Event{int id,day;String name,start,end,place,zone,category,desc,sourceUrl;boolean verified;Event(int id,int day,String start,String end,String name,String place,String zone,String category,String desc,boolean verified,String sourceUrl){this.id=id;this.day=day;this.start=start;this.end=end;this.name=name;this.place=place;this.zone=zone;this.category=category;this.desc=desc;this.verified=verified;this.sourceUrl=sourceUrl;}}
+     static class Announced{String zone,name,note;Announced(String zone,String name,String note){this.zone=zone;this.name=name;this.note=note;}}
+ }
