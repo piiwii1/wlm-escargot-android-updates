@@ -61,6 +61,7 @@ jobs:
           mkdir -p build-piiwii-documents-020/work/dist
           cp build-piiwii-documents-020/work/installer-publish/PiiWii-Documents-Setup-0.2.0.exe build-piiwii-documents-020/work/dist/
           cp build-piiwii-documents-020/work/publish/PiiWii.Documents.exe build-piiwii-documents-020/work/dist/PiiWii-Documents-0.2.0-PORTABLE.exe
+          rm -rf build-piiwii-documents-020/work/src/PiiWii.Documents.Installer/payload
           cd build-piiwii-documents-020/work
           zip -qr dist/PiiWii-Documents-0.2.0-SOURCES.zip src README.md CHANGELOG.md
           mkdir -p PACK-REPRISE
