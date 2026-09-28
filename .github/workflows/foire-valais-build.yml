@@ -47,19 +47,18 @@ jobs:
       - name: Build release APK
         working-directory: foire-valais-app
         run: gradle --no-daemon :app:assembleRelease
-      - name: Prepare deliverables
+      - name: Prepare aligned deliverables
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p deliverables/sign-tools/lib
-          cp foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.2-ETAPE3-UNSIGNED.apk
-          cp /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner deliverables/sign-tools/apksigner
-          cp /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign deliverables/sign-tools/zipalign
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.2-ETAPE3-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.2-ETAPE3-ALIGNED-UNSIGNED.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd foire-valais-app
           zip -qr ../deliverables/Foire-du-Valais-2026-1.5.2-ETAPE3-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.5.2-ETAPE3-unsigned
+          name: Foire-du-Valais-2026-1.5.2-ETAPE3-aligned
           path: deliverables/*
           retention-days: 7
