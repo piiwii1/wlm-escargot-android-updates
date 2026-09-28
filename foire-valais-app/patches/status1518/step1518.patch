@@ -1,0 +1,48 @@
+diff -ruN '--exclude=.gradle' '--exclude=build' /mnt/data/foire_1518_src/app/build.gradle.kts /mnt/data/foire_1518_mod/app/build.gradle.kts
+--- a/app/build.gradle.kts	2026-09-28 23:19:57.000000000 +0000
++++ b/app/build.gradle.kts	2026-09-28 23:23:58.612979374 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 23
+-        versionName = "1.5.17"
++        versionCode = 24
++        versionName = "1.5.18"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN '--exclude=.gradle' '--exclude=build' /mnt/data/foire_1518_src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java /mnt/data/foire_1518_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 23:19:57.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 23:24:13.162108354 +0000
+@@ -59,7 +59,8 @@
+         w.setStatusBarColor(PURPLE);
+         w.setNavigationBarColor(Color.WHITE);
+         if(Build.VERSION.SDK_INT>=30) w.setDecorFitsSystemWindows(false);
+-        if(Build.VERSION.SDK_INT>=26) w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
++        if(Build.VERSION.SDK_INT>=26) w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
++        else if(Build.VERSION.SDK_INT>=23) w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+         prefs=getSharedPreferences("foire",MODE_PRIVATE);
+         selectedDay=Math.max(0,Math.min(9,prefs.getInt("lastDay",0)));
+         selectedZone=Math.max(0,Math.min(zones.length-1,prefs.getInt("lastZone",0)));
+@@ -849,7 +850,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.17","Foire du Valais 2026 · versionCode 23",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.17 · versionCode 23\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.18","Foire du Valais 2026 · versionCode 24",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.18 · versionCode 24\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+diff -ruN '--exclude=.gradle' '--exclude=build' /mnt/data/foire_1518_src/app/src/main/res/values/styles.xml /mnt/data/foire_1518_mod/app/src/main/res/values/styles.xml
+--- a/app/src/main/res/values/styles.xml	2026-09-28 23:19:57.000000000 +0000
++++ b/app/src/main/res/values/styles.xml	2026-09-28 23:23:58.613118394 +0000
+@@ -1,7 +1,7 @@
+ <resources>
+ <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+     <item name="android:fontFamily">sans</item>
+-    <item name="android:windowLightStatusBar">false</item>
++    <item name="android:windowLightStatusBar">true</item>
+     <item name="android:statusBarColor">#24143B</item>
+     <item name="android:navigationBarColor">#FFFFFF</item>
+     <item name="android:colorAccent">#D71968</item>
