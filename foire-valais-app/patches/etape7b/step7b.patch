@@ -1,0 +1,70 @@
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -5,6 +5,9 @@
+ import android.content.*;
+ import android.content.pm.PackageManager;
+ import android.graphics.Color;
++import android.graphics.Bitmap;
++import android.graphics.BitmapFactory;
++import android.graphics.Rect;
+ import android.graphics.Typeface;
+ import android.graphics.Canvas;
+ import android.graphics.Paint;
+@@ -456,7 +459,12 @@
+     class HeaderBrandView extends View{
+         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+         Path path=new Path();
+-        HeaderBrandView(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
++        Bitmap officialLogo;
++        HeaderBrandView(Context c){
++            super(c);
++            setLayerType(View.LAYER_TYPE_SOFTWARE,null);
++            officialLogo=BitmapFactory.decodeResource(getResources(),R.drawable.fdv_logo_official);
++        }
+         @Override protected void onDraw(Canvas c){
+             super.onDraw(c);float w=getWidth(),h=getHeight();
+             // Base red and concentric graphic motif.
+@@ -484,13 +492,23 @@
+             p.setColor(Color.WHITE);for(int r=0;r<5;r++)for(int col=0;col<2;col++)c.drawCircle(w-dp(18)+dp((col-.5f)*7),dp(21+r*8),dp(2),p);
+             p.setTextSize(dp(11));p.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));c.save();c.rotate(-90,w-dp(10),h-dp(18));c.drawText("FOIRE DU VALAIS",w-dp(10),h-dp(18),p);c.restore();
+ 
+-            // 2026 wordmark.
+-            p.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));p.setColor(Color.WHITE);p.setTextSize(dp(24));
+-            c.drawText("FOIRE DU",dp(20),dp(52),p);c.drawText("VALAIS",dp(20),dp(82),p);
+-            float dotsX=dp(126);for(int r=0;r<5;r++)for(int col=0;col<2;col++)c.drawCircle(dotsX+dp(col*7),dp(63+r*6),dp(2),p);
+-            p.setTextSize(dp(25));c.drawText("2026",dp(145),dp(82),p);
+-            p.setTextSize(dp(12));p.setColor(0xFFFFF0F2);c.drawText("MARTIGNY EXPO  •  2–11 OCTOBRE 2026",dp(20),dp(114),p);
+-            p.setTextSize(dp(10));p.setColor(0xFFFFCDD3);c.drawText("66e édition  ·  Programme, favoris et alertes",dp(20),dp(139),p);
++            // Exact official logo supplied by the user. Keep it unmodified and preserve its ratio.
++            if(officialLogo!=null){
++                float panelLeft=dp(12), panelTop=dp(12), panelRight=Math.min(w*.69f,w-dp(62)), panelBottom=dp(88);
++                p.setColor(0xF7FFFFFF); c.drawRoundRect(panelLeft,panelTop,panelRight,panelBottom,dp(14),dp(14),p);
++                float maxW=panelRight-panelLeft-dp(16), maxH=panelBottom-panelTop-dp(16);
++                float ratio=(float)officialLogo.getWidth()/officialLogo.getHeight();
++                float drawW=maxW, drawH=drawW/ratio;
++                if(drawH>maxH){drawH=maxH;drawW=drawH*ratio;}
++                float lx=panelLeft+(panelRight-panelLeft-drawW)/2f, ly=panelTop+(panelBottom-panelTop-drawH)/2f;
++                Rect src=new Rect(0,0,officialLogo.getWidth(),officialLogo.getHeight());
++                RectF dst=new RectF(lx,ly,lx+drawW,ly+drawH);
++                c.drawBitmap(officialLogo,src,dst,p);
++            }
++            p.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));p.setColor(Color.WHITE);p.setTextSize(dp(25));
++            c.drawText("2026",dp(20),dp(116),p);
++            p.setTextSize(dp(12));p.setColor(0xFFFFF0F2);c.drawText("MARTIGNY EXPO  •  2–11 OCTOBRE 2026",dp(20),dp(139),p);
++            p.setTextSize(dp(10));p.setColor(0xFFFFCDD3);c.drawText("66e édition  ·  Programme, favoris et alertes",dp(20),dp(159),p);
+         }
+     }
+ 
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 14
+-        versionName = "1.5.8"
++        versionCode = 15
++        versionName = "1.5.9"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
