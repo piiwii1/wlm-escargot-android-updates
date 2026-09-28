@@ -21,9 +21,11 @@ jobs:
           base64 -d build-piiwii-documents-050/source.b64 > build-piiwii-documents-050/source.zip
           unzip -q -o build-piiwii-documents-050/source.zip -d build-piiwii-documents-050/work || [ $? -eq 1 ]
           rm -rf build-piiwii-documents-050/work/src/*/bin build-piiwii-documents-050/work/src/*/obj build-piiwii-documents-050/work/src/PiiWii.Documents.Installer/payload
+          mkdir -p build-piiwii-documents-040
+          ln -s ../build-piiwii-documents-050/work build-piiwii-documents-040/work
           python3 build-piiwii-documents-040/fix_apply.py || true
           python3 build-piiwii-documents-040/apply.py
-          rm -rf build-piiwii-documents-040/work
+          rm build-piiwii-documents-040/work
       - name: Apply 0.5.0 ergonomics
         run: python3 build-piiwii-documents-050/apply.py
       - uses: actions/setup-dotnet@v4
