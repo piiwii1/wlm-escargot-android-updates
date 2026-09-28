@@ -53,10 +53,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat foire-valais-app/patches/etape6/chunk-* | base64 -d | tar -xzf - -C foire-valais-app
-          grep -q 'versionCode = 11' foire-valais-app/app/build.gradle.kts
-          grep -q 'versionName = "1.5.5"' foire-valais-app/app/build.gradle.kts
-          ! grep -q 'Version 1\.5\.1' foire-valais-app/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          base64 -d foire-valais-app/patches/etape6/patch.b64 | gunzip > /tmp/step6.patch
+          cd foire-valais-app
+          patch -p1 < /tmp/step6.patch
+          grep -q 'versionCode = 11' app/build.gradle.kts
+          grep -q 'versionName = "1.5.5"' app/build.gradle.kts
+          ! grep -q 'Version 1\.5\.1' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
