@@ -4,7 +4,7 @@ on:
   push:
     branches: [piiwii-tv-1.0.2-build]
     paths:
-      - '.chatgpt-build/PiiWiiTV-master-1.0.5.ico.b64'
+      - '.chatgpt-build/PiiWiiTV-master-1.0.5.ico'
       - '.github/workflows/piiwii-tv-1.0.2-build.yml'
   workflow_dispatch:
 
@@ -28,9 +28,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force build/src | Out-Null
           Expand-Archive 'previous/PiiWii-TV-Windows-1.0.4-SOURCES.zip' 'build/src' -Force
-
-          $masterB64=(Get-Content '.chatgpt-build/PiiWiiTV-master-1.0.5.ico.b64' -Raw).Trim()
-          [IO.File]::WriteAllBytes('build/src/PiiWiiTV.ico',[Convert]::FromBase64String($masterB64))
+          Copy-Item '.chatgpt-build/PiiWiiTV-master-1.0.5.ico' 'build/src/PiiWiiTV.ico' -Force
           $masterHash=(Get-FileHash 'build/src/PiiWiiTV.ico' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($masterHash -ne 'f7c065901c2c99e5c1150f9cabeae050b5dc3be483c0d9cc7a85226c7d90ef83') { throw "Wrong master icon hash: $masterHash" }
 
@@ -75,7 +73,6 @@ jobs:
           if ($v -ne '1.0.5.0') { throw "Bad EXE version: $v" }
           $publishedIconHash=(Get-FileHash '.\publish\PiiWiiTV.ico' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($publishedIconHash -ne 'f7c065901c2c99e5c1150f9cabeae050b5dc3be483c0d9cc7a85226c7d90ef83') { throw "Published icon changed: $publishedIconHash" }
-
           Add-Type -AssemblyName System.Drawing
           $appIcon=[System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path '.\publish\PiiWiiTV.exe'))
           if ($null -eq $appIcon) { throw 'EXE has no extractable embedded icon' }
@@ -100,7 +97,6 @@ jobs:
           & $iscc '/DMyAppVersion=1.0.5' '.\installer.iss'
           if ($LASTEXITCODE -ne 0) { throw "Inno failed: $LASTEXITCODE" }
           if (!(Test-Path '.\output\PiiWii-TV-Setup-1.0.5.exe')) { throw 'Installer missing' }
-
           Add-Type -AssemblyName System.Drawing
           $setupIcon=[System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path '.\output\PiiWii-TV-Setup-1.0.5.exe'))
           if ($null -eq $setupIcon) { throw 'Installer has no extractable embedded icon' }
