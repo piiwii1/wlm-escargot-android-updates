@@ -1,5 +1,9 @@
 name: Foire du Valais Android Build
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/foire-valais-build.yml'
   workflow_dispatch:
 jobs:
   build:
@@ -13,6 +17,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Apply 1.5.0 step 1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat foire-valais-app/patches/etape1/chunk-* | base64 -d | tar -xzf - -C foire-valais-app
+          grep -q 'versionCode = 6' foire-valais-app/app/build.gradle.kts
+          grep -q 'versionName = "1.5.0"' foire-valais-app/app/build.gradle.kts
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
