@@ -6,7 +6,8 @@ root = Path('/tmp/piiwii-nfc/PiiWii-NFC-1.0.5')
 p = root / 'app/build.gradle'
 s = p.read_text()
 s = s.replace("versionCode 5", "versionCode 6")
-s = s.replace("versionName '1.0.4'", "versionName '1.0.5'")np = p.write_text(s)
+s = s.replace("versionName '1.0.4'", "versionName '1.0.5'")
+p.write_text(s)
 
 # README
 p = root / 'README.md'
