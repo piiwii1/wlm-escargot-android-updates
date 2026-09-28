@@ -37,7 +37,6 @@ jobs:
           dotnet restore build-piiwii-documents/work/src/PiiWii.Documents/PiiWii.Documents.csproj -r win-x64
           dotnet publish build-piiwii-documents/work/src/PiiWii.Documents/PiiWii.Documents.csproj -c Release -r win-x64 --self-contained true -o build-piiwii-documents/work/publish
           test -f build-piiwii-documents/work/publish/PiiWii.Documents.exe
-          ls -lah build-piiwii-documents/work/publish
 
       - name: Build installer
         shell: bash
@@ -48,7 +47,6 @@ jobs:
           dotnet restore build-piiwii-documents/work/src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj -r win-x64
           dotnet publish build-piiwii-documents/work/src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj -c Release -r win-x64 --self-contained true -o build-piiwii-documents/work/installer-publish
           test -f build-piiwii-documents/work/installer-publish/PiiWii-Documents-Setup-0.1.0.exe
-          ls -lah build-piiwii-documents/work/installer-publish
 
       - name: Package deliverables
         shell: bash
@@ -58,6 +56,7 @@ jobs:
           cp build-piiwii-documents/work/installer-publish/PiiWii-Documents-Setup-0.1.0.exe build-piiwii-documents/work/dist/
           cp build-piiwii-documents/work/publish/PiiWii.Documents.exe build-piiwii-documents/work/dist/PiiWii-Documents-0.1.0-PORTABLE.exe
           cd build-piiwii-documents/work
+          find src -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
           zip -qr dist/PiiWii-Documents-0.1.0-SOURCES.zip src installer README.md CHANGELOG.md
           mkdir -p PACK-REPRISE
           cp README.md CHANGELOG.md PACK-REPRISE/
@@ -68,8 +67,22 @@ jobs:
           sha256sum PiiWii-Documents-Setup-0.1.0.exe PiiWii-Documents-0.1.0-PORTABLE.exe PiiWii-Documents-0.1.0-SOURCES.zip PiiWii-Documents-0.1.0-PACK-REPRISE.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Windows binaries
+        uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Documents-0.1.0
-          path: build-piiwii-documents/work/dist/*
+          name: PiiWii-Documents-0.1.0-BINARIES
+          path: |
+            build-piiwii-documents/work/dist/PiiWii-Documents-Setup-0.1.0.exe
+            build-piiwii-documents/work/dist/PiiWii-Documents-0.1.0-PORTABLE.exe
+            build-piiwii-documents/work/dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Upload sources and recovery
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Documents-0.1.0-SOURCEPACK
+          path: |
+            build-piiwii-documents/work/dist/PiiWii-Documents-0.1.0-SOURCES.zip
+            build-piiwii-documents/work/dist/PiiWii-Documents-0.1.0-PACK-REPRISE.zip
+            build-piiwii-documents/work/dist/SHA256SUMS.txt
           if-no-files-found: error
