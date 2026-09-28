@@ -36,31 +36,33 @@ jobs:
           python3 build-piiwii-documents-0120/apply.py
           python3 build-piiwii-documents-0130/apply.py
           for v in 040 050 060 070 080 090 0100 0110 0120 0130; do rm build-piiwii-documents-$v/work; done
-      - name: Apply 0.14.0 security overlay
+      - name: Apply 0.14.0 reliability and bridge upgrade
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d build-piiwii-documents-0140/overlay.b64 > build-piiwii-documents-0140/overlay.tar.gz
-          tar -xzf build-piiwii-documents-0140/overlay.tar.gz -C build-piiwii-documents-0140/work
+          python3 build-piiwii-documents-0140/apply.py
+          python3 build-piiwii-documents-0140/harden.py
           cat > build-piiwii-documents-0140/work/README.md <<'EOF'
           # PiiWii Documents 0.14.0
-          Version sécurité/pont/sauvegardes : sauvegardes SQLite réelles, sessions du pont limitées, révocation, résultats ChatGPT validés par session et import de paquets PiiWii préparés par ChatGPT.
+          Version fiabilité et assistant : sauvegardes SQLite réelles, pont local limité par permissions et portée, sessions ChatGPT autorisées et import de PiiWii Import Packs.
           EOF
           cat > build-piiwii-documents-0140/work/CHANGELOG.md <<'EOF'
           # Changelog
 
           ## 0.14.0
-          - Sauvegarde SQLite cohérente avant migration et sauvegarde quotidienne avec rotation.
-          - Sauvegarde manuelle et accès au dossier Backups depuis l'interface.
-          - Pont local toujours lié à 127.0.0.1, version corrigée et permissions vérifiées route par route.
-          - Sessions du pont limitées à un document, un lot, une catégorie ou la bibliothèque.
+          - Sauvegarde SQLite cohérente avant migration, import, paquet ChatGPT et application de résultats assistant.
+          - Sauvegarde quotidienne avec rotation des 10 dernières sauvegardes.
+          - Sauvegarde manuelle et ouverture du dossier Backups depuis l'interface.
+          - Pont local toujours lié à 127.0.0.1, version corrigée en 0.14.0.
+          - Permissions du pont vérifiées route par route : lecture et recherche uniquement.
+          - Portée d'appairage limitée au lot courant ou document courant quand disponible.
           - Révocation de toutes les sessions du pont depuis l'interface.
-          - Route de classement autorisée seulement avec permission classify et dans la portée de session.
-          - Export assistant v2 avec session temporaire et liste blanche d'identifiants.
+          - Export assistant v2 avec session temporaire, lot et liste blanche d'identifiants.
           - Prévisualisation des modifications ChatGPT avant application.
-          - Un résultat assistant ne peut plus modifier un document hors du lot autorisé.
+          - Un résultat assistant ne peut plus modifier un document hors de la session autorisée.
           - Import d'un ZIP PiiWii préparé par ChatGPT avec manifest.json, contrôle de chemin et SHA-256.
-          - Originaux conservés, doublons exacts ignorés, OCR local exécuté lors de l'import du paquet.
+          - Aucune commande système, aucun PowerShell/CMD et aucune écriture via le pont HTTP.
+          - Compatibilité avec les documents et bases des versions précédentes.
           EOF
       - uses: actions/setup-dotnet@v4
         with:
@@ -92,7 +94,7 @@ jobs:
           cd $W
           zip -qr dist/PiiWii-Documents-0.14.0-SOURCES.zip src README.md CHANGELOG.md -x 'src/*/bin/*' 'src/*/obj/*' 'src/PiiWii.Documents.Installer/payload/*'
           cp README.md CHANGELOG.md PACK-REPRISE/
-          cp ../../build-piiwii-documents-0140/overlay.b64 PACK-REPRISE/
+          cp ../../build-piiwii-documents-0140/apply.py ../../build-piiwii-documents-0140/harden.py PACK-REPRISE/
           zip -qr dist/PiiWii-Documents-0.14.0-PACK-REPRISE.zip PACK-REPRISE
           cd dist
           sha256sum PiiWii-Documents-Setup-0.14.0.exe PiiWii-Documents-0.14.0-PORTABLE.exe PiiWii-Documents-0.14.0-SOURCES.zip PiiWii-Documents-0.14.0-PACK-REPRISE.zip > PiiWii-Documents-0.14.0-SHA256SUMS.txt
