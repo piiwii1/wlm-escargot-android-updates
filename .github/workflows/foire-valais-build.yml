@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d foire-valais-app/patches/etape6/patch.b64 | gunzip > /tmp/step6.patch
+          cat foire-valais-app/patches/etape6/part-* | base64 -d | gunzip > /tmp/step6.patch
           cd foire-valais-app
           patch -p3 < /tmp/step6.patch
           grep -q 'versionCode = 11' app/build.gradle.kts
