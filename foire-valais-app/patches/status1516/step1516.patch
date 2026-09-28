@@ -1,0 +1,35 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 20
+-        versionName = "1.5.14"
++        versionCode = 22
++        versionName = "1.5.16"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -849,7 +849,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.14","Foire du Valais 2026 · versionCode 20",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.14 · versionCode 20\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.16","Foire du Valais 2026 · versionCode 22",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.16 · versionCode 22\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+--- a/app/src/main/res/values/styles.xml
++++ b/app/src/main/res/values/styles.xml
+@@ -1,7 +1,7 @@
+ <resources>
+ <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+     <item name="android:fontFamily">sans</item>
+-    <item name="android:windowLightStatusBar">false</item>
++    <item name="android:windowLightStatusBar">true</item>
+     <item name="android:statusBarColor">#24143B</item>
+     <item name="android:navigationBarColor">#FFFFFF</item>
+     <item name="android:colorAccent">#D71968</item>
