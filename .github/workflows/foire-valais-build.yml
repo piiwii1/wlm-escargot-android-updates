@@ -1,4 +1,4 @@
-# audit-patch-verified-v2
+# audit-patch-verified-v3
 name: Foire du Valais Android Build
 on:
   push:
@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           base64 -d foire-valais-app/patches/etape6/chunk-00 | gunzip > /tmp/step6.patch
           cd foire-valais-app
-          patch -p3 < /tmp/step6.patch
+          patch -p4 < /tmp/step6.patch
           grep -q 'versionCode = 11' app/build.gradle.kts
           grep -q 'versionName = "1.5.5"' app/build.gradle.kts
           grep -q 'Personnalisé…' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
