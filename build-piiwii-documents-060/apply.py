@@ -7,7 +7,7 @@ def rw(path,pairs):
             raise SystemExit(f'Missing expected text in {path}: {a[:80]}')
         s=s.replace(a,b)
     p.write_text(s)
-rw(Path('src/PiiWii.Documents/PiiWii.Documents.csproj'), [('0.5.0','0.6.0'),('0.5.0.0','0.6.0.0')])
+rw(Path('src/PiiWii.Documents/PiiWii.Documents.csproj'), [('0.5.0','0.6.0')])
 rw(Path('src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj'), [('0.5.0','0.6.0')])
 rw(Path('src/PiiWii.Documents.Installer/Program.cs'), [('0.5.0','0.6.0')])
 p=root/'src/PiiWii.Documents/MainForm.cs'; s=p.read_text()
