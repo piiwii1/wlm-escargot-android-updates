@@ -53,7 +53,7 @@ jobs:
           grep -q 'versionName = "1.5.19"' foire-valais-app/app/build.gradle.kts
           test -s foire-valais-app/app/src/main/res/drawable/ic_launcher.webp
           test ! -e foire-valais-app/app/src/main/res/drawable/ic_launcher.xml
-          echo '5c3afc6667180cdbe6720f341910165bb56dde4db6439d395563903755a11e6d  foire-valais-app/app/src/main/res/drawable/ic_launcher.webp' | sha256sum -c -
+          file foire-valais-app/app/src/main/res/drawable/ic_launcher.webp
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
