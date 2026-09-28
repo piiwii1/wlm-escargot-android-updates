@@ -38,8 +38,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p deliverables
+          mkdir -p deliverables/sign-tools/lib
           cp foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.0-ETAPE1-UNSIGNED.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner deliverables/sign-tools/apksigner
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign deliverables/sign-tools/zipalign
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd foire-valais-app
           zip -qr ../deliverables/Foire-du-Valais-2026-1.5.0-ETAPE1-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
