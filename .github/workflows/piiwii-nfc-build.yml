@@ -20,13 +20,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android platform
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
       - name: Extract
         run: |
+          rm -rf piwii-nfc/work
           mkdir -p piwii-nfc/work
           base64 -d piwii-nfc/source.b64 > piwii-nfc/source.zip
           unzip -q -o piwii-nfc/source.zip -d piwii-nfc/work
@@ -35,6 +39,7 @@ jobs:
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Package
         run: |
+          rm -rf piwii-nfc/dist
           mkdir -p piwii-nfc/dist
           cp piwii-nfc/work/PiiWii-NFC-1.0.2/app/build/outputs/apk/debug/app-debug.apk piwii-nfc/dist/PiiWii-NFC-1.0.2.apk
           cp piwii-nfc/source.zip piwii-nfc/dist/PiiWii-NFC-1.0.2-SOURCES.zip
