@@ -41,8 +41,7 @@ jobs:
           cat foire-valais-app/patches/etape4/chunk-* | base64 -d | gunzip > /tmp/step4.patch
           cd foire-valais-app
           patch -p1 < /tmp/step4.patch
-          grep -q 'versionCode = 9' app/build.gradle.kts
-      - name: Apply 1.5.4 step 5 visual fidelity
+      - name: Apply step 5 visual fidelity
         shell: bash
         run: |
           set -euo pipefail
@@ -50,9 +49,14 @@ jobs:
           cd foire-valais-app
           patch -p1 < /tmp/step5.patch
           sed -i 's/Version 1\.5\.1 · versionCode 7/Version 1.5.4 · versionCode 10/g' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'versionCode = 10' app/build.gradle.kts
-          grep -q 'versionName = "1.5.4"' app/build.gradle.kts
-          ! grep -q 'Version 1\.5\.1' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+      - name: Apply 1.5.5 step 6 consolidation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat foire-valais-app/patches/etape6/chunk-* | base64 -d | tar -xzf - -C foire-valais-app
+          grep -q 'versionCode = 11' foire-valais-app/app/build.gradle.kts
+          grep -q 'versionName = "1.5.5"' foire-valais-app/app/build.gradle.kts
+          ! grep -q 'Version 1\.5\.1' foire-valais-app/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -68,13 +72,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p deliverables/sign-tools/lib
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.4-ETAPE5-ALIGNED-UNSIGNED.apk
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.4-ETAPE5-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6-ALIGNED-UNSIGNED.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd foire-valais-app
-          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.4-ETAPE5-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.5.4-ETAPE5-aligned
+          name: Foire-du-Valais-2026-1.5.5-ETAPE6-aligned
           path: deliverables/*
           retention-days: 7
