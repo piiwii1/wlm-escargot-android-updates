@@ -1,0 +1,129 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 18
+-        versionName = "1.5.12"
++        versionCode = 20
++        versionName = "1.5.14"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -5,6 +5,8 @@
+ import android.content.*;
+ import android.content.pm.PackageManager;
+ import android.graphics.Color;
++import android.graphics.Bitmap;
++import android.graphics.BitmapFactory;
+ import android.graphics.Typeface;
+ import android.graphics.Canvas;
+ import android.graphics.Paint;
+@@ -450,42 +452,60 @@
+ 
+     class HeaderBrandView extends View{
+         Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+-        Path path=new Path();
+-        HeaderBrandView(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
++        Bitmap poster;
++        HeaderBrandView(Context c){
++            super(c);
++            setLayerType(View.LAYER_TYPE_SOFTWARE,null);
++            poster=BitmapFactory.decodeResource(getResources(),R.drawable.fdv_header_2026);
++        }
+         @Override protected void onDraw(Canvas c){
+-            super.onDraw(c);float w=getWidth(),h=getHeight();
+-            // Base red and concentric graphic motif.
+-            p.setStyle(Paint.Style.FILL);p.setColor(0xFFE80E23);c.drawRect(0,0,w,h,p);
+-            float cx=w*.18f,cy=h*.40f;
+-            int[] rings={0x18FFFFFF,0x24FFFFFF,0x18FFFFFF,0x22FFFFFF};
+-            for(int i=4;i>=1;i--){p.setColor(rings[4-i]);c.drawCircle(cx,cy,dp(31*i),p);}
+-            p.setColor(0xFFE80E23);c.drawCircle(cx,cy,dp(58),p);
+-
+-            // Blue evening sky on the right.
+-            p.setColor(0xFF17345C);c.drawRect(w*.52f,0,w,h,p);
+-            p.setColor(0xFF254C80);path.reset();path.moveTo(w*.52f,0);path.lineTo(w,0);path.lineTo(w,h*.40f);path.lineTo(w*.62f,h*.62f);path.close();c.drawPath(path,p);
+-            // Mountains.
+-            p.setColor(0xFF142844);path.reset();path.moveTo(w*.45f,h*.72f);path.lineTo(w*.58f,h*.38f);path.lineTo(w*.66f,h*.66f);path.lineTo(w*.74f,h*.29f);path.lineTo(w*.91f,h*.76f);path.lineTo(w,h*.60f);path.lineTo(w,h);path.lineTo(w*.45f,h);path.close();c.drawPath(path,p);
+-            p.setColor(0xFF243E60);path.reset();path.moveTo(w*.52f,h*.72f);path.lineTo(w*.60f,h*.47f);path.lineTo(w*.66f,h*.68f);path.lineTo(w*.74f,h*.39f);path.lineTo(w*.83f,h*.73f);path.close();c.drawPath(path,p);
+-
+-            // Ferris wheel.
+-            float fx=w*.78f,fy=h*.53f,fr=dp(48);
+-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(0xFFFFAD39);c.drawCircle(fx,fy,fr,p);
+-            for(int i=0;i<16;i++){double a=i*Math.PI/8;float x=(float)(fx+Math.cos(a)*fr),y=(float)(fy+Math.sin(a)*fr);c.drawLine(fx,fy,x,y,p);c.drawCircle(x,y,dp(2.4f),p);}
+-            p.setStrokeWidth(dp(4));c.drawLine(fx,fy+fr,fx-dp(22),h,p);c.drawLine(fx,fy+fr,fx+dp(22),h,p);p.setStyle(Paint.Style.FILL);p.setColor(0xFFFFD16A);c.drawCircle(fx,fy,dp(5),p);
+-
+-            // Vertical official-style banner.
+-            p.setColor(0xFFCF001B);c.drawRect(w-dp(37),0,w,h,p);
+-            p.setColor(Color.WHITE);for(int r=0;r<5;r++)for(int col=0;col<2;col++)c.drawCircle(w-dp(18)+dp((col-.5f)*7),dp(21+r*8),dp(2),p);
+-            p.setTextSize(dp(11));p.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));c.save();c.rotate(-90,w-dp(10),h-dp(18));c.drawText("FOIRE DU VALAIS",w-dp(10),h-dp(18),p);c.restore();
+-
+-            // 2026 wordmark.
+-            p.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));p.setColor(Color.WHITE);p.setTextSize(dp(24));
+-            c.drawText("FOIRE DU",dp(20),dp(52),p);c.drawText("VALAIS",dp(20),dp(82),p);
+-            float dotsX=dp(126);for(int r=0;r<5;r++)for(int col=0;col<2;col++)c.drawCircle(dotsX+dp(col*7),dp(63+r*6),dp(2),p);
+-            p.setTextSize(dp(25));c.drawText("2026",dp(145),dp(82),p);
+-            p.setTextSize(dp(12));p.setColor(0xFFFFF0F2);c.drawText("MARTIGNY EXPO  •  2–11 OCTOBRE 2026",dp(20),dp(114),p);
+-            p.setTextSize(dp(10));p.setColor(0xFFFFCDD3);c.drawText("66e édition  ·  Programme, favoris et alertes",dp(20),dp(139),p);
++            super.onDraw(c);
++            float w=getWidth(),h=getHeight();
++            p.setStyle(Paint.Style.FILL);
++            p.setColor(0xFFE80E23);
++            c.drawRect(0,0,w,h,p);
++
++            // H1: official 2026 popcorn visual only. No status-bar code is changed here.
++            if(poster!=null && poster.getWidth()>0 && poster.getHeight()>0){
++                float left=w*.43f;
++                float dw=w-left;
++                float srcRatio=(float)poster.getWidth()/poster.getHeight();
++                float dstRatio=dw/h;
++                android.graphics.Rect src=new android.graphics.Rect(0,0,poster.getWidth(),poster.getHeight());
++                if(srcRatio>dstRatio){
++                    int wanted=Math.round(poster.getHeight()*dstRatio);
++                    int x=(poster.getWidth()-wanted)/2;
++                    src.set(x,0,x+wanted,poster.getHeight());
++                }else{
++                    int wanted=Math.round(poster.getWidth()/dstRatio);
++                    int y=(poster.getHeight()-wanted)/2;
++                    src.set(0,y,poster.getWidth(),y+wanted);
++                }
++                RectF dst=new RectF(left,0,w,h);
++                p.setAlpha(255);
++                c.drawBitmap(poster,src,dst,p);
++                p.setAlpha(255);
++            }
++
++            // Red veil connects the text area with the official poster without hiding it.
++            android.graphics.LinearGradient veil=new android.graphics.LinearGradient(
++                    w*.30f,0,w*.72f,0,
++                    new int[]{0xFFE80E23,0xF2E80E23,0x22E80E23},
++                    new float[]{0f,.45f,1f},android.graphics.Shader.TileMode.CLAMP);
++            p.setShader(veil); c.drawRect(w*.28f,0,w*.76f,h,p); p.setShader(null);
++
++            p.setColor(Color.WHITE);
++            p.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));
++            p.setTextSize(dp(23));
++            c.drawText("FOIRE DU",dp(18),dp(46),p);
++            c.drawText("VALAIS 2026",dp(18),dp(75),p);
++
++            p.setTextSize(dp(12));
++            p.setColor(0xFFFFF3F4);
++            c.drawText("66e ÉDITION",dp(18),dp(106),p);
++            p.setTextSize(dp(11));
++            c.drawText("2 → 11 OCTOBRE 2026",dp(18),dp(128),p);
++            c.drawText("MARTIGNY",dp(18),dp(148),p);
+         }
+     }
+ 
+@@ -829,7 +849,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.12","Foire du Valais 2026 · versionCode 18",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.12 · versionCode 18\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.14","Foire du Valais 2026 · versionCode 20",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.14 · versionCode 20\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
