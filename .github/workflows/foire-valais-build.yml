@@ -79,6 +79,20 @@ jobs:
           grep -q 'APPEARANCE_LIGHT_STATUS_BARS' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
           ! grep -q 'class FairYearConfig' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
           ! test -e app/src/main/res/drawable-nodpi/fdv_hero_2026.webp
+      - name: Apply 1.5.9 step 7B official logo only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd foire-valais-app
+          mkdir -p app/src/main/res/drawable-nodpi
+          base64 -d patches/etape7b/fdv_logo_official.webp.b64 > app/src/main/res/drawable-nodpi/fdv_logo_official.webp
+          patch -p1 < patches/etape7b/step7b.patch
+          grep -q 'versionCode = 15' app/build.gradle.kts
+          grep -q 'versionName = "1.5.9"' app/build.gradle.kts
+          grep -q 'BitmapFactory.decodeResource(getResources(),R.drawable.fdv_logo_official)' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          test -s app/src/main/res/drawable-nodpi/fdv_logo_official.webp
+          ! test -e app/src/main/res/drawable-nodpi/fdv_hero_2026.webp
+          ! grep -q 'class FairYearConfig' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -94,13 +108,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p deliverables/sign-tools/lib
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.8-ETAPE7A-ALIGNED-UNSIGNED.apk
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.8-ETAPE7A-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.9-ETAPE7B-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.9-ETAPE7B-ALIGNED-UNSIGNED.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd foire-valais-app
-          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.8-ETAPE7A-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.9-ETAPE7B-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.5.8-ETAPE7A-aligned
+          name: Foire-du-Valais-2026-1.5.9-ETAPE7B-aligned
           path: deliverables/*
           retention-days: 7
