@@ -21,8 +21,16 @@ jobs:
           mkdir -p build-piiwii-documents-020/work
           cat build-piiwii-documents-020/chunks/00 build-piiwii-documents-020/chunks/01 build-piiwii-documents-020/chunks/02 build-piiwii-documents-020/chunks/03 build-piiwii-documents-020/chunks/04 build-piiwii-documents-020/chunks/05 > build-piiwii-documents-020/source.b64
           base64 -d build-piiwii-documents-020/source.b64 > build-piiwii-documents-020/source.zip
+          set +e
           unzip -t build-piiwii-documents-020/source.zip
+          rc=$?
+          set -e
+          if [ "$rc" -gt 1 ]; then exit "$rc"; fi
+          set +e
           unzip -q -o build-piiwii-documents-020/source.zip -d build-piiwii-documents-020/work
+          rc=$?
+          set -e
+          if [ "$rc" -gt 1 ]; then exit "$rc"; fi
 
       - uses: actions/setup-dotnet@v4
         with:
