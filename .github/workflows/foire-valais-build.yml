@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat foire-valais-app/patches/etape2/chunk-* | base64 -d | tar -xzf - -C foire-valais-app
+          cat foire-valais-app/patches/etape2c/chunk-* | base64 -d | tar -xzf - -C foire-valais-app
           grep -q 'versionCode = 7' foire-valais-app/app/build.gradle.kts
           grep -q 'versionName = "1.5.1"' foire-valais-app/app/build.gradle.kts
       - name: Install Android SDK 35
