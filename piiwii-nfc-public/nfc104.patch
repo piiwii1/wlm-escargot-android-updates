@@ -1,0 +1,302 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 3224393..4e1db73 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -19,3 +19,9 @@
+ - Indicateur de compatibilité de copie du contenu.
+ - Détection des tags formatables NDEF.
+ - Empêche d'utiliser accidentellement le tag source comme tag cible pendant une copie.
++
++## 1.0.4
++- Export du dernier message NDEF vers un fichier .ndef.
++- Import d'un fichier .ndef puis écriture directe sur un tag cible.
++- Réutilisation du dernier contenu lu dans l'éditeur.
++- Garde-fou de taille (1 Mo) lors de l'import.
+diff --git a/README.md b/README.md
+index 2451f64..631e204 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# PiiWii NFC 1.0.3
++# PiiWii NFC 1.0.4
+ 
+ Application Android NFC locale, sans serveur.
+ 
+@@ -17,8 +17,8 @@ Application Android NFC locale, sans serveur.
+ PiiWii NFC ne contourne aucune authentification et ne clone pas l'UID matériel d'une carte. La fonction Copier reproduit uniquement le contenu NDEF réinscriptible compatible Android.
+ 
+ ## Version
+-- versionName: 1.0.3
+-- versionCode: 4
++- versionName: 1.0.4
++- versionCode: 5
+ - package: ch.piiwii.nfc
+ - minSdk: 24
+ - targetSdk: 35
+diff --git a/app/build.gradle b/app/build.gradle
+index f852c88..7eccc58 100644
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -10,8 +10,8 @@ android {
+         applicationId 'ch.piiwii.nfc'
+         minSdk 24
+         targetSdk 35
+-        versionCode 4
+-        versionName '1.0.3'
++        versionCode 5
++        versionName '1.0.4'
+     }
+ 
+     buildTypes {
+diff --git a/app/src/main/java/ch/piiwii/nfc/MainActivity.java b/app/src/main/java/ch/piiwii/nfc/MainActivity.java
+index 2a99dfa..82d6929 100644
+--- a/app/src/main/java/ch/piiwii/nfc/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/nfc/MainActivity.java
+@@ -4,6 +4,7 @@ import android.app.Activity;
+ import android.app.AlertDialog;
+ import android.app.PendingIntent;
+ import android.content.Intent;
++import android.net.Uri;
+ import android.content.SharedPreferences;
+ import android.nfc.NdefMessage;
+ import android.nfc.NdefRecord;
+@@ -25,6 +26,8 @@ import android.widget.RadioGroup;
+ import android.widget.Toast;
+ 
+ import java.io.ByteArrayOutputStream;
++import java.io.InputStream;
++import java.io.OutputStream;
+ import java.nio.charset.Charset;
+ import java.nio.charset.StandardCharsets;
+ import java.text.DateFormat;
+@@ -42,6 +45,10 @@ public class MainActivity extends Activity {
+     private Mode mode = Mode.READ;
+     private NdefMessage copyBuffer;
+     private byte[] copySourceUid;
++    private NdefMessage lastReadMessage;
++    private String lastReadUid = "";
++    private static final int REQUEST_EXPORT_NDEF = 4101;
++    private static final int REQUEST_IMPORT_NDEF = 4102;
+ 
+     private TextView statusText;
+     private TextView nfcStateText;
+@@ -87,6 +94,9 @@ public class MainActivity extends Activity {
+         Button eraseButton = findViewById(R.id.eraseButton);
+         Button nfcSettingsButton = findViewById(R.id.nfcSettingsButton);
+         Button clearHistoryButton = findViewById(R.id.clearHistoryButton);
++        Button reuseLastButton = findViewById(R.id.reuseLastButton);
++        Button exportNdefButton = findViewById(R.id.exportNdefButton);
++        Button importNdefButton = findViewById(R.id.importNdefButton);
+ 
+         payloadInput.setText(draftPrefs.getString("payload", ""));
+         int savedType = draftPrefs.getInt("type", R.id.typeText);
+@@ -127,6 +137,10 @@ public class MainActivity extends Activity {
+                 .setPositiveButton("Continuer", (d, w) -> setMode(Mode.ERASE, "Approche le tag à effacer."))
+                 .show());
+ 
++        reuseLastButton.setOnClickListener(v -> reuseLastReadInEditor());
++        exportNdefButton.setOnClickListener(v -> exportLastNdef());
++        importNdefButton.setOnClickListener(v -> importNdef());
++
+         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
+         if (nfcAdapter == null) {
+             statusText.setText("NFC non disponible sur cet appareil.");
+@@ -315,6 +329,10 @@ public class MainActivity extends Activity {
+         try {
+             ndef.connect();
+             NdefMessage message = ndef.getNdefMessage();
++            if (message != null) {
++                lastReadMessage = cloneMessage(message);
++                lastReadUid = toHex(tag.getId());
++            }
+             String decoded = decodeMessage(message);
+             int recordCount = message == null ? 0 : message.getRecords().length;
+             tagInfoText.append("\nEnregistrements NDEF : " + recordCount);
+@@ -353,6 +371,8 @@ public class MainActivity extends Activity {
+                 return;
+             }
+             copyBuffer = cloneMessage(message);
++            lastReadMessage = cloneMessage(message);
++            lastReadUid = toHex(tag.getId());
+             copySourceUid = tag.getId() == null ? null : tag.getId().clone();
+             mode = Mode.COPY_TARGET;
+             statusText.setText("Copie étape 2/2 : source mémorisée. Approche maintenant le tag CIBLE.");
+@@ -438,6 +458,119 @@ public class MainActivity extends Activity {
+     }
+ 
+ 
++    private void exportLastNdef() {
++        if (lastReadMessage == null) {
++            Toast.makeText(this, "Lis d’abord un tag NDEF à sauvegarder.", Toast.LENGTH_SHORT).show();
++            return;
++        }
++        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
++        intent.addCategory(Intent.CATEGORY_OPENABLE);
++        intent.setType("application/octet-stream");
++        String suffix = TextUtils.isEmpty(lastReadUid) ? "tag" : lastReadUid.replace(":", "-");
++        intent.putExtra(Intent.EXTRA_TITLE, "PiiWii-NFC-" + suffix + ".ndef");
++        startActivityForResult(intent, REQUEST_EXPORT_NDEF);
++    }
++
++    private void importNdef() {
++        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
++        intent.addCategory(Intent.CATEGORY_OPENABLE);
++        intent.setType("*/*");
++        startActivityForResult(intent, REQUEST_IMPORT_NDEF);
++    }
++
++    @Override
++    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
++        super.onActivityResult(requestCode, resultCode, data);
++        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
++        Uri uri = data.getData();
++        if (requestCode == REQUEST_EXPORT_NDEF) {
++            try (OutputStream out = getContentResolver().openOutputStream(uri)) {
++                if (out == null) throw new IllegalStateException("Flux de sortie indisponible");
++                out.write(lastReadMessage.toByteArray());
++                out.flush();
++                statusText.setText("Sauvegarde .ndef créée avec succès.");
++                addHistory("Export NDEF", lastReadUid, lastReadMessage.toByteArray().length + " octets");
++            } catch (Exception e) {
++                statusText.setText("Échec de l’export : " + safeMessage(e));
++            }
++        } else if (requestCode == REQUEST_IMPORT_NDEF) {
++            try (InputStream in = getContentResolver().openInputStream(uri)) {
++                if (in == null) throw new IllegalStateException("Fichier inaccessible");
++                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
++                byte[] chunk = new byte[4096];
++                int read;
++                while ((read = in.read(chunk)) != -1) {
++                    buffer.write(chunk, 0, read);
++                    if (buffer.size() > 1024 * 1024) throw new IllegalArgumentException("Fichier trop volumineux");
++                }
++                byte[] bytes = buffer.toByteArray();
++                NdefMessage imported = new NdefMessage(bytes);
++                if (imported.getRecords().length == 0) throw new IllegalArgumentException("Aucun enregistrement NDEF");
++                copyBuffer = cloneMessage(imported);
++                copySourceUid = null;
++                lastReadMessage = cloneMessage(imported);
++                lastReadUid = "FICHIER";
++                mode = Mode.COPY_TARGET;
++                tagInfoText.setText("Fichier NDEF chargé\nEnregistrements : " + imported.getRecords().length
++                        + "\nTaille : " + bytes.length + " octets\n\nContenu :\n" + decodeMessage(imported));
++                statusText.setText("Fichier .ndef chargé. Approche le tag CIBLE pour l’écrire.");
++                updateCancelVisibility();
++                addHistory("Import NDEF", "FICHIER", summarize(decodeMessage(imported)));
++            } catch (Exception e) {
++                statusText.setText("Fichier NDEF invalide : " + safeMessage(e));
++            }
++        }
++    }
++
++    private void reuseLastReadInEditor() {
++        if (lastReadMessage == null || lastReadMessage.getRecords().length == 0) {
++            Toast.makeText(this, "Aucun contenu NDEF récent à réutiliser.", Toast.LENGTH_SHORT).show();
++            return;
++        }
++        NdefRecord r = lastReadMessage.getRecords()[0];
++        try {
++            if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_TEXT)) {
++                typeGroup.check(R.id.typeText);
++                payloadInput.setText(decodeTextValue(r));
++            } else if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_URI)) {
++                String uri = String.valueOf(r.toUri());
++                if (uri.startsWith("tel:")) {
++                    typeGroup.check(R.id.typePhone);
++                    payloadInput.setText(uri.substring(4));
++                } else if (uri.startsWith("mailto:")) {
++                    typeGroup.check(R.id.typeEmail);
++                    payloadInput.setText(uri.substring(7));
++                } else if (uri.startsWith("sms:") || uri.startsWith("smsto:")) {
++                    typeGroup.check(R.id.typeSms);
++                    payloadInput.setText(uri.substring(uri.indexOf(':') + 1));
++                } else {
++                    typeGroup.check(R.id.typeUrl);
++                    payloadInput.setText(uri);
++                }
++            } else {
++                Toast.makeText(this, "Le premier enregistrement ne peut pas être converti dans l’éditeur simple.", Toast.LENGTH_LONG).show();
++                return;
++            }
++            payloadInput.requestFocus();
++            payloadInput.setSelection(payloadInput.getText().length());
++            statusText.setText("Dernier contenu chargé dans l’éditeur. Tu peux le modifier avant écriture.");
++        } catch (Exception e) {
++            statusText.setText("Impossible de réutiliser ce contenu : " + safeMessage(e));
++        }
++    }
++
++    private String decodeTextValue(NdefRecord r) {
++        byte[] payload = r.getPayload();
++        if (payload == null || payload.length == 0) return "";
++        boolean utf16 = (payload[0] & 0x80) != 0;
++        int langLen = payload[0] & 0x3F;
++        int start = 1 + langLen;
++        if (start > payload.length) return "";
++        Charset cs = utf16 ? StandardCharsets.UTF_16 : StandardCharsets.UTF_8;
++        return new String(payload, start, payload.length - start, cs);
++    }
++
++
+     private NdefMessage buildCurrentMessage(String value) {
+         if (typeUrl.isChecked()) {
+             return createUriMessage(value);
+diff --git a/app/src/main/res/layout/activity_main.xml b/app/src/main/res/layout/activity_main.xml
+index e8ed2ac..186da5b 100644
+--- a/app/src/main/res/layout/activity_main.xml
++++ b/app/src/main/res/layout/activity_main.xml
+@@ -168,6 +168,45 @@
+             android:textColor="@color/muted"
+             android:textSize="12sp" />
+ 
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="20dp"
++            android:text="Sauvegarde / reprise"
++            android:textColor="@color/text"
++            android:textSize="18sp"
++            android:textStyle="bold" />
++
++        <Button
++            android:id="@+id/reuseLastButton"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="8dp"
++            android:text="RÉUTILISER LE DERNIER CONTENU" />
++
++        <LinearLayout
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="8dp"
++            android:orientation="horizontal"
++            android:weightSum="2">
++
++            <Button
++                android:id="@+id/exportNdefButton"
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_weight="1"
++                android:text="EXPORTER .NDEF" />
++
++            <Button
++                android:id="@+id/importNdefButton"
++                android:layout_width="0dp"
++                android:layout_height="wrap_content"
++                android:layout_marginStart="10dp"
++                android:layout_weight="1"
++                android:text="IMPORTER .NDEF" />
++        </LinearLayout>
++
+         <TextView
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+@@ -226,7 +265,7 @@
+             android:layout_height="wrap_content"
+             android:layout_marginTop="20dp"
+             android:paddingBottom="24dp"
+-            android:text="PiiWii NFC 1.0.3 • Copie NDEF uniquement. Les UID matériels et protections cryptographiques ne sont pas clonés."
++            android:text="PiiWii NFC 1.0.4 • Copie NDEF uniquement. Les UID matériels et protections cryptographiques ne sont pas clonés."
+             android:textColor="@color/muted"
+             android:textSize="12sp" />
+ 
