@@ -49,8 +49,10 @@ jobs:
           cat foire-valais-app/patches/etape5/chunk-* | base64 -d | gunzip > /tmp/step5.patch
           cd foire-valais-app
           patch -p1 < /tmp/step5.patch
+          sed -i 's/Version 1\.5\.1 · versionCode 7/Version 1.5.4 · versionCode 10/g' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
           grep -q 'versionCode = 10' app/build.gradle.kts
           grep -q 'versionName = "1.5.4"' app/build.gradle.kts
+          ! grep -q 'Version 1\.5\.1' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
