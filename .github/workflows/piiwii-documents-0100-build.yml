@@ -40,6 +40,7 @@ jobs:
           rm build-piiwii-documents-080/work
           ln -s ../build-piiwii-documents-0100/work build-piiwii-documents-090/work
           python3 build-piiwii-documents-090/apply.py
+          python3 build-piiwii-documents-090/fix.py
           rm build-piiwii-documents-090/work
       - name: Apply 0.10.0 visual refinement
         run: python3 build-piiwii-documents-0100/apply.py
