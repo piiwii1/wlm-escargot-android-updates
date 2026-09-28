@@ -41,11 +41,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p foire-valais-app/app/src/main/res/drawable
+          base64 -d foire-valais-app/patches/header2026/fdv_hero_2026.webp.b64 > foire-valais-app/app/src/main/res/drawable/fdv_header_2026.webp
           (cd foire-valais-app && patch -p1 < patches/header1514/step1514.patch)
           (cd foire-valais-app && patch -p1 < patches/status1515/step1515.patch)
           grep -q 'versionCode = 21' foire-valais-app/app/build.gradle.kts
           grep -q 'versionName = "1.5.15"' foire-valais-app/app/build.gradle.kts
           grep -q 'APPEARANCE_LIGHT_STATUS_BARS' foire-valais-app/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          test -f foire-valais-app/app/src/main/res/drawable/fdv_header_2026.webp
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -60,10 +63,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p deliverables/sign-tools/lib
+          mkdir -p deliverables/sign-tools
           /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.15-ALIGNED-UNSIGNED.apk
           /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.15-ALIGNED-UNSIGNED.apk
-          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner deliverables/sign-tools/apksigner
+          cp -a /usr/local/lib/android/sdk/build-tools/35.0.0/lib deliverables/sign-tools/lib
           cd foire-valais-app
           zip -qr ../deliverables/Foire-du-Valais-2026-1.5.15-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
