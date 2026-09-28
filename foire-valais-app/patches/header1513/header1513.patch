@@ -1,0 +1,135 @@
+--- app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 21:26:53.000000000 +0000
++++ app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 21:50:55.958552242 +0000
+@@ -33,6 +33,11 @@
+     static final int PURPLE=Color.rgb(15,24,43), PINK=Color.rgb(232,14,35), GOLD=Color.rgb(247,198,65);
+     static final int BRAND_DARK=Color.rgb(177,0,23), BRAND_SOFT=Color.rgb(255,239,242);
+     static final int BG=Color.rgb(249,249,251), MUTED=Color.rgb(105,112,128), GREEN=Color.rgb(25,125,78), ORANGE=Color.rgb(178,108,0);
++    // Annual fair identity: change these values + the two drawable assets for a new edition.
++    static final String FAIR_YEAR="2026";
++    static final String FAIR_EDITION="66e édition";
++    static final String FAIR_DATES="2 → 11 oct. 2026";
++    static final String FAIR_CITY="Martigny";
+     LinearLayout root, content, dayRow, zoneRow, nav;
+     ScrollView scroll;
+     TextView title, subTitle;
+@@ -54,7 +59,7 @@
+     @Override public void onCreate(Bundle b){
+         super.onCreate(b);
+         Window w=getWindow();
+-        w.setStatusBarColor(PURPLE);
++        w.setStatusBarColor(PINK);
+         w.setNavigationBarColor(Color.WHITE);
+         if(Build.VERSION.SDK_INT>=30) w.setDecorFitsSystemWindows(false);
+         if(Build.VERSION.SDK_INT>=26) w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+@@ -192,9 +197,14 @@
+     }
+ 
+     void buildShell(){
++        // Keep the system/status-bar area red so the white clock/battery icons remain readable.
++        LinearLayout windowRoot=new LinearLayout(this);
++        windowRoot.setOrientation(LinearLayout.VERTICAL);
++        windowRoot.setBackgroundColor(PINK);
++
+         root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(darkMode()?0xFF11131A:BG);
+         if(Build.VERSION.SDK_INT>=21){
+-            root.setOnApplyWindowInsetsListener((v,insets)->{
++            windowRoot.setOnApplyWindowInsetsListener((v,insets)->{
+                 int top=0,bottom=0;
+                 if(Build.VERSION.SDK_INT>=30){
+                     android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());
+@@ -202,13 +212,13 @@
+                 } else {
+                     top=insets.getSystemWindowInsetTop(); bottom=insets.getSystemWindowInsetBottom();
+                 }
+-                v.setPadding(0,top,0,bottom);
++                v.setPadding(0,top,0,0);
++                root.setPadding(0,0,0,bottom);
+                 return insets;
+             });
+         }
+ 
+-        HeaderBrandView head=new HeaderBrandView(this);
+-        root.addView(head,new LinearLayout.LayoutParams(-1,dp(170)));
++        root.addView(buildAnnualHeader(),new LinearLayout.LayoutParams(-1,dp(210)));
+ 
+         title=txt("",24,PURPLE,true); title.setPadding(dp(16),dp(14),dp(16),0); root.addView(title);
+         subTitle=txt("",13,MUTED,false); subTitle.setPadding(dp(16),dp(3),dp(16),dp(8)); root.addView(subTitle);
+@@ -235,7 +245,46 @@
+         nav=new LinearLayout(this); nav.setGravity(Gravity.CENTER); nav.setPadding(dp(2),0,dp(2),0); nav.setBackgroundColor(darkMode()?0xFF181B23:Color.WHITE);
+         addNav("Accueil",0); addNav("Programme",1); addNav("Recherche",2); addNav("Favoris",3); addNav("Réglages",4);
+         root.addView(nav,new LinearLayout.LayoutParams(-1,dp(72)));
+-        setContentView(root);
++        windowRoot.addView(root,new LinearLayout.LayoutParams(-1,0,1));
++        setContentView(windowRoot);
++    }
++
++    View buildAnnualHeader(){
++        FrameLayout hero=new FrameLayout(this);
++        hero.setBackgroundColor(PINK);
++
++        ImageView poster=new ImageView(this);
++        poster.setImageResource(R.drawable.fdv_poster_2026);
++        poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
++        poster.setContentDescription("Affiche officielle Foire du Valais "+FAIR_YEAR);
++        hero.addView(poster,new FrameLayout.LayoutParams(-1,-1));
++
++        View shade=new View(this);
++        shade.setBackgroundColor(0x33B80019);
++        hero.addView(shade,new FrameLayout.LayoutParams(-1,-1));
++
++        LinearLayout identity=new LinearLayout(this);
++        identity.setOrientation(LinearLayout.VERTICAL);
++        identity.setPadding(dp(12),dp(9),dp(12),dp(8));
++        identity.setBackground(round(0xF5FFFFFF,18));
++        identity.setElevation(dp(4));
++
++        ImageView logo=new ImageView(this);
++        logo.setImageResource(R.drawable.fdv_logo_2026);
++        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
++        logo.setAdjustViewBounds(true);
++        logo.setContentDescription("Logo officiel Foire du Valais");
++        identity.addView(logo,new LinearLayout.LayoutParams(-1,dp(58)));
++
++        TextView meta=txt(FAIR_EDITION+"   •   "+FAIR_DATES+"   •   "+FAIR_CITY,11,PURPLE,true);
++        meta.setGravity(Gravity.CENTER);
++        meta.setPadding(0,dp(3),0,0);
++        identity.addView(meta,new LinearLayout.LayoutParams(-1,dp(25)));
++
++        FrameLayout.LayoutParams ip=new FrameLayout.LayoutParams(-1,dp(100),Gravity.BOTTOM);
++        ip.setMargins(dp(14),0,dp(14),dp(12));
++        hero.addView(identity,ip);
++        return hero;
+     }
+ 
+     void addNav(String label,int idx){
+@@ -829,7 +878,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.12","Foire du Valais 2026 · versionCode 18",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.12 · versionCode 18\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.13","Foire du Valais 2026 · versionCode 19",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.13 · versionCode 19\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -940,7 +989,7 @@
+         TextView sync=actionButton("↻ Mettre à jour le programme");sync.setOnClickListener(v->refreshRemoteProgramme(true));content.addView(sync,margin(0,7,0,5));
+         TextView src=actionButton("Ouvrir le site officiel");src.setOnClickListener(v->openUrl("https://foireduvalais.ch/fr"));content.addView(src,margin(0,5,0,5));
+         TextView notif=actionButton("Réglages notifications Android");notif.setOnClickListener(v->openNotificationSettings());content.addView(notif,margin(0,5,0,10));
+-        info("Version 1.5.12 · versionCode 18\nProgramme hors connexion + mise à jour distante · rappels restaurés après redémarrage/mise à jour · même signature Android que la 1.3.0.");
++        info("Version 1.5.13 · versionCode 19\nProgramme hors connexion + mise à jour distante · rappels restaurés après redémarrage/mise à jour · même signature Android que la 1.3.0.");
+     }
+ 
+     void eventCard(Event e){
+--- app/build.gradle.kts	2026-09-28 21:26:53.000000000 +0000
++++ app/build.gradle.kts	2026-09-28 21:50:55.958703009 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 18
+-        versionName = "1.5.12"
++        versionCode = 19
++        versionName = "1.5.13"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
