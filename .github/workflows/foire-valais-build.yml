@@ -1,3 +1,4 @@
+# audit-patch-verified-v2
 name: Foire du Valais Android Build
 on:
   push:
