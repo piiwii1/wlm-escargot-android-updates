@@ -1,10 +1,10 @@
-name: PiiWii NFC 1.0.2 Public Build
+name: PiiWii NFC 1.0.3 Public Build
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'piiwii-nfc-public/**'
+      - 'piiwii-nfc-public/nfc103.patch'
       - '.github/workflows/piiwii-nfc-public-build.yml'
   workflow_dispatch:
 
@@ -34,25 +34,29 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Extract sources
+      - name: Prepare 1.0.3 sources
         run: |
           rm -rf /tmp/piiwii-nfc
           mkdir -p /tmp/piiwii-nfc
           unzip -q piiwii-nfc-public/PiiWii-NFC-1.0.2-SOURCES.zip -d /tmp/piiwii-nfc
+          mv /tmp/piiwii-nfc/PiiWii-NFC-1.0.2 /tmp/piiwii-nfc/PiiWii-NFC-1.0.3
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.3
+          git apply "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc103.patch"
       - name: Build APK
-        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.2
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.3
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Package deliverables
         run: |
           mkdir -p piiwii-nfc-public/dist
-          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.2/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist/PiiWii-NFC-1.0.2.apk
-          cp piiwii-nfc-public/PiiWii-NFC-1.0.2-SOURCES.zip piiwii-nfc-public/dist/
-          cd piiwii-nfc-public/dist
-          sha256sum PiiWii-NFC-1.0.2.apk PiiWii-NFC-1.0.2-SOURCES.zip > SHA256SUMS.txt
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.3/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist/PiiWii-NFC-1.0.3.apk
+          cd /tmp/piiwii-nfc
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist/PiiWii-NFC-1.0.3-SOURCES.zip" PiiWii-NFC-1.0.3
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist"
+          sha256sum PiiWii-NFC-1.0.3.apk PiiWii-NFC-1.0.3-SOURCES.zip > SHA256SUMS.txt
       - name: Upload deliverables
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-NFC-1.0.2
+          name: PiiWii-NFC-1.0.3
           path: piiwii-nfc-public/dist/
           retention-days: 7
           if-no-files-found: error
