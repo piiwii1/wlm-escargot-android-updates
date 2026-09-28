@@ -11,27 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Apply 1.4.0 source
+      - name: Apply 1.5.0 step 1 source
         shell: bash
         run: |
           set -euo pipefail
-          cat foire-valais-app/patches/Foire-1.4.0.tgz.b64.part-* | base64 -d | tar -xzf - -C foire-valais-app
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('foire-valais-app/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java')
-          s=p.read_text()
-          s=s.replace("b.append(line).append('\n');", "b.append(line).append('\\n');")
-          p.write_text(s)
-          PY
-          grep -q 'versionCode = 5' foire-valais-app/app/build.gradle.kts
-          grep -q 'versionName = "1.4.0"' foire-valais-app/app/build.gradle.kts
+          cat foire-valais-app/patches/Foire-1.5.0-ETAPE1.tgz.b64.part-* | base64 -d | tar -xzf - -C foire-valais-app
+          grep -q 'versionCode = 6' foire-valais-app/app/build.gradle.kts
+          grep -q 'versionName = "1.5.0"' foire-valais-app/app/build.gradle.kts
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -47,11 +40,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p deliverables
-          cp foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.4.0-UNSIGNED.apk
+          cp foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.0-ETAPE1-UNSIGNED.apk
           cd foire-valais-app
-          zip -qr ../deliverables/Foire-du-Valais-2026-1.4.0-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.0-ETAPE1-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.4.0-unsigned
+          name: Foire-du-Valais-2026-1.5.0-ETAPE1-unsigned
           path: deliverables/*
           retention-days: 7
