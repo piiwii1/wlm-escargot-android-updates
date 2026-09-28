@@ -39,7 +39,9 @@ jobs:
           python3 build-piiwii-documents-080/apply.py
           rm build-piiwii-documents-080/work
       - name: Apply 0.9.0 UX
-        run: python3 build-piiwii-documents-090/apply.py
+        run: |
+          python3 build-piiwii-documents-090/apply.py
+          python3 build-piiwii-documents-090/fix.py
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -70,7 +72,7 @@ jobs:
           cd $W
           zip -qr dist/PiiWii-Documents-0.9.0-SOURCES.zip src README.md CHANGELOG.md -x 'src/*/bin/*' 'src/*/obj/*' 'src/PiiWii.Documents.Installer/payload/*'
           cp README.md CHANGELOG.md PACK-REPRISE/
-          cp ../../build-piiwii-documents-090/apply.py PACK-REPRISE/
+          cp ../../build-piiwii-documents-090/apply.py ../../build-piiwii-documents-090/fix.py PACK-REPRISE/
           zip -qr dist/PiiWii-Documents-0.9.0-PACK-REPRISE.zip PACK-REPRISE
           cd dist
           sha256sum PiiWii-Documents-Setup-0.9.0.exe PiiWii-Documents-0.9.0-PORTABLE.exe PiiWii-Documents-0.9.0-SOURCES.zip PiiWii-Documents-0.9.0-PACK-REPRISE.zip > PiiWii-Documents-0.9.0-SHA256SUMS.txt
