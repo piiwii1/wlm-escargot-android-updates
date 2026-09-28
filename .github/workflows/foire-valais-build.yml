@@ -1,4 +1,3 @@
-# audit-patch-verified-v3
 name: Foire du Valais Android Build
 on:
   push:
@@ -50,17 +49,17 @@ jobs:
           cd foire-valais-app
           patch -p1 < /tmp/step5.patch
           sed -i 's/Version 1\.5\.1 · versionCode 7/Version 1.5.4 · versionCode 10/g' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-      - name: Apply 1.5.5 step 6 audit fixes
+      - name: Apply 1.5.5 step 6A reminder restore only
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d foire-valais-app/patches/etape6/chunk-00 | gunzip > /tmp/step6.patch
           cd foire-valais-app
-          patch -p4 < /tmp/step6.patch
+          patch -p1 < patches/etape6a/step6a.patch
           grep -q 'versionCode = 11' app/build.gradle.kts
           grep -q 'versionName = "1.5.5"' app/build.gradle.kts
-          grep -q 'Personnalisé…' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
           grep -q 'key.startsWith("delay")' app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java
+          ! grep -q 'key.startsWith("fav")' app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java
+          ! grep -q 'Personnalisé' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -76,13 +75,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p deliverables/sign-tools/lib
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6-ALIGNED-UNSIGNED.apk
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6A-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6A-ALIGNED-UNSIGNED.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd foire-valais-app
-          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.5-ETAPE6A-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.5.5-ETAPE6-aligned
+          name: Foire-du-Valais-2026-1.5.5-ETAPE6A-aligned
           path: deliverables/*
           retention-days: 7
