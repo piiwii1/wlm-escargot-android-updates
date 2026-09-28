@@ -55,11 +55,13 @@ jobs:
           set -euo pipefail
           cd foire-valais-app
           patch -p1 < patches/etape6a/step6a.patch
+          sed -i 's/Version 1\.5\.4/Version 1.5.5/g; s/versionCode 10/versionCode 11/g' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
           grep -q 'versionCode = 11' app/build.gradle.kts
           grep -q 'versionName = "1.5.5"' app/build.gradle.kts
           grep -q 'key.startsWith("delay")' app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java
           ! grep -q 'key.startsWith("fav")' app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java
           ! grep -q 'Personnalisé' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          ! grep -q 'Version 1.5.4\|versionCode 10' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
