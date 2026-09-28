@@ -1,0 +1,51 @@
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -59,7 +59,16 @@
+         w.setStatusBarColor(PURPLE);
+         w.setNavigationBarColor(Color.WHITE);
+         if(Build.VERSION.SDK_INT>=30) w.setDecorFitsSystemWindows(false);
+-        if(Build.VERSION.SDK_INT>=26) w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
++        if(Build.VERSION.SDK_INT>=30){
++            WindowInsetsController c=w.getInsetsController();
++            if(c!=null) c.setSystemBarsAppearance(
++                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
++                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
++        } else if(Build.VERSION.SDK_INT>=26){
++            w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
++        } else if(Build.VERSION.SDK_INT>=23){
++            w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
++        }
+         prefs=getSharedPreferences("foire",MODE_PRIVATE);
+         selectedDay=Math.max(0,Math.min(9,prefs.getInt("lastDay",0)));
+         selectedZone=Math.max(0,Math.min(zones.length-1,prefs.getInt("lastZone",0)));
+@@ -849,7 +858,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.14","Foire du Valais 2026 · versionCode 20",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.14 · versionCode 20\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.15","Foire du Valais 2026 · versionCode 21",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.15 · versionCode 21\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -960,7 +969,7 @@
+         TextView sync=actionButton("↻ Mettre à jour le programme");sync.setOnClickListener(v->refreshRemoteProgramme(true));content.addView(sync,margin(0,7,0,5));
+         TextView src=actionButton("Ouvrir le site officiel");src.setOnClickListener(v->openUrl("https://foireduvalais.ch/fr"));content.addView(src,margin(0,5,0,5));
+         TextView notif=actionButton("Réglages notifications Android");notif.setOnClickListener(v->openNotificationSettings());content.addView(notif,margin(0,5,0,10));
+-        info("Version 1.5.12 · versionCode 18\nProgramme hors connexion + mise à jour distante · rappels restaurés après redémarrage/mise à jour · même signature Android que la 1.3.0.");
++        info("Version 1.5.15 · versionCode 21\nProgramme hors connexion + mise à jour distante · rappels restaurés après redémarrage/mise à jour · même signature Android que la 1.3.0.");
+     }
+ 
+     void eventCard(Event e){
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 20
+-        versionName = "1.5.14"
++        versionCode = 21
++        versionName = "1.5.15"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
