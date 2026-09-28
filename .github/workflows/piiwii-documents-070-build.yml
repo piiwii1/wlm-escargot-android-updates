@@ -1,0 +1,87 @@
+name: PiiWii Documents 0.7.0 Windows Build
+on:
+  push:
+    branches: [build/piiwii-documents-0.7.0]
+    paths:
+      - '.github/workflows/piiwii-documents-070-build.yml'
+      - 'build-piiwii-documents-070/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reassemble 0.6.0 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-piiwii-documents-070/work
+          cat build-piiwii-documents-030/chunks/00 build-piiwii-documents-030/chunks/01 build-piiwii-documents-030/chunks/02 build-piiwii-documents-030/chunks/03 build-piiwii-documents-030/chunks/04 build-piiwii-documents-030/chunks/05 build-piiwii-documents-030/chunks/06 > build-piiwii-documents-070/source.b64
+          base64 -d build-piiwii-documents-070/source.b64 > build-piiwii-documents-070/source.zip
+          unzip -q -o build-piiwii-documents-070/source.zip -d build-piiwii-documents-070/work || [ $? -eq 1 ]
+          rm -rf build-piiwii-documents-070/work/src/*/bin build-piiwii-documents-070/work/src/*/obj build-piiwii-documents-070/work/src/PiiWii.Documents.Installer/payload
+          rm -rf build-piiwii-documents-040/work build-piiwii-documents-050/work build-piiwii-documents-060/work
+          ln -s ../build-piiwii-documents-070/work build-piiwii-documents-040/work
+          python3 build-piiwii-documents-040/fix_apply.py || true
+          python3 build-piiwii-documents-040/apply.py
+          rm build-piiwii-documents-040/work
+          ln -s ../build-piiwii-documents-070/work build-piiwii-documents-050/work
+          python3 build-piiwii-documents-050/apply.py
+          rm build-piiwii-documents-050/work
+          ln -s ../build-piiwii-documents-070/work build-piiwii-documents-060/work
+          python3 build-piiwii-documents-060/apply.py
+          rm build-piiwii-documents-060/work
+      - name: Apply 0.7.0 UI
+        run: python3 build-piiwii-documents-070/apply.py
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build application
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore build-piiwii-documents-070/work/src/PiiWii.Documents/PiiWii.Documents.csproj -r win-x64
+          dotnet publish build-piiwii-documents-070/work/src/PiiWii.Documents/PiiWii.Documents.csproj -c Release -r win-x64 --self-contained true -o build-piiwii-documents-070/work/publish
+          test -f build-piiwii-documents-070/work/publish/PiiWii.Documents.exe
+      - name: Build installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-piiwii-documents-070/work/src/PiiWii.Documents.Installer/payload
+          cp build-piiwii-documents-070/work/publish/PiiWii.Documents.exe build-piiwii-documents-070/work/src/PiiWii.Documents.Installer/payload/PiiWii.Documents.exe
+          dotnet restore build-piiwii-documents-070/work/src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj -r win-x64
+          dotnet publish build-piiwii-documents-070/work/src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj -c Release -r win-x64 --self-contained true -o build-piiwii-documents-070/work/installer-publish
+          test -f build-piiwii-documents-070/work/installer-publish/PiiWii-Documents-Setup-0.7.0.exe
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          W=build-piiwii-documents-070/work
+          mkdir -p $W/dist $W/PACK-REPRISE
+          cp $W/installer-publish/PiiWii-Documents-Setup-0.7.0.exe $W/dist/
+          cp $W/publish/PiiWii.Documents.exe $W/dist/PiiWii-Documents-0.7.0-PORTABLE.exe
+          cd $W
+          zip -qr dist/PiiWii-Documents-0.7.0-SOURCES.zip src README.md CHANGELOG.md -x 'src/*/bin/*' 'src/*/obj/*' 'src/PiiWii.Documents.Installer/payload/*'
+          cp README.md CHANGELOG.md PACK-REPRISE/
+          cp ../../build-piiwii-documents-070/apply.py PACK-REPRISE/
+          zip -qr dist/PiiWii-Documents-0.7.0-PACK-REPRISE.zip PACK-REPRISE
+          cd dist
+          sha256sum PiiWii-Documents-Setup-0.7.0.exe PiiWii-Documents-0.7.0-PORTABLE.exe PiiWii-Documents-0.7.0-SOURCES.zip PiiWii-Documents-0.7.0-PACK-REPRISE.zip > PiiWii-Documents-0.7.0-SHA256SUMS.txt
+          cat PiiWii-Documents-0.7.0-SHA256SUMS.txt
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Documents-0.7.0-BINARIES
+          path: |
+            build-piiwii-documents-070/work/dist/PiiWii-Documents-Setup-0.7.0.exe
+            build-piiwii-documents-070/work/dist/PiiWii-Documents-0.7.0-PORTABLE.exe
+            build-piiwii-documents-070/work/dist/PiiWii-Documents-0.7.0-SHA256SUMS.txt
+      - name: Upload sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Documents-0.7.0-SOURCEPACK
+          path: |
+            build-piiwii-documents-070/work/dist/PiiWii-Documents-0.7.0-SOURCES.zip
+            build-piiwii-documents-070/work/dist/PiiWii-Documents-0.7.0-PACK-REPRISE.zip
+            build-piiwii-documents-070/work/dist/PiiWii-Documents-0.7.0-SHA256SUMS.txt
