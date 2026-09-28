@@ -37,18 +37,25 @@ jobs:
         run: |
           rm -rf piwii-nfc/work
           mkdir -p piwii-nfc/work
-          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/piiwii-nfc/source.zip" -o piwii-nfc/source.zip
+          cp piwii-nfc/source.zip /tmp/piiwii-nfc-source.zip
           python3 - <<'PY'
-          import zipfile
-          with zipfile.ZipFile('piiwii-nfc/source.zip') as z:
+          import os, zipfile
+          p='/tmp/piiwii-nfc-source.zip'
+          print('ZIP bytes:', os.path.getsize(p))
+          with zipfile.ZipFile(p) as z:
+              names=z.namelist()
+              print('ZIP entries:', len(names))
+              for n in names: print(n)
               z.extractall('piiwii-nfc/work')
           PY
-          find piwii-nfc/work -maxdepth 4 -type f | sort
+          echo 'Extracted files:'
+          find piwii-nfc/work -type f -print | sort
       - name: Build
         shell: bash
         run: |
-          PROJECT_DIR="$(dirname "$(find piwii-nfc/work -type f -name settings.gradle -print -quit)")"
-          test -n "$PROJECT_DIR" && test -f "$PROJECT_DIR/settings.gradle"
+          SETTINGS="$(find piwii-nfc/work -type f -name settings.gradle -print -quit)"
+          test -n "$SETTINGS"
+          PROJECT_DIR="$(dirname "$SETTINGS")"
           echo "Building from: $PROJECT_DIR"
           cd "$PROJECT_DIR"
           gradle --no-daemon --stacktrace assembleDebug
@@ -60,7 +67,7 @@ jobs:
           APK="$(find piwii-nfc/work -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           test -n "$APK" && test -f "$APK"
           cp "$APK" piwii-nfc/dist/PiiWii-NFC-1.0.2.apk
-          cp piwii-nfc/source.zip piwii-nfc/dist/PiiWii-NFC-1.0.2-SOURCES.zip
+          cp /tmp/piiwii-nfc-source.zip piwii-nfc/dist/PiiWii-NFC-1.0.2-SOURCES.zip
           cd piwii-nfc/dist
           sha256sum PiiWii-NFC-1.0.2.apk PiiWii-NFC-1.0.2-SOURCES.zip > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
