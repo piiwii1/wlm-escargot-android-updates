@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'piiwii-nfc-public/nfc104.patch'
+      - 'piiwii-nfc-public/apply104.py'
       - '.github/workflows/piiwii-nfc-public-build.yml'
   workflow_dispatch:
 
@@ -42,7 +42,7 @@ jobs:
           mv /tmp/piiwii-nfc/PiiWii-NFC-1.0.2 /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
           cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
           git apply "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc103.patch"
-          git apply "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc104.patch"
+          python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply104.py"
       - name: Build APK
         working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
         run: gradle --no-daemon --stacktrace assembleDebug
