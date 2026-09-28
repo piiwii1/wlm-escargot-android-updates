@@ -38,26 +38,26 @@ jobs:
           rm -rf /tmp/piiwii-nfc
           mkdir -p /tmp/piiwii-nfc
           unzip -q piiwii-nfc-public/PiiWii-NFC-1.0.2-SOURCES.zip -d /tmp/piiwii-nfc
-          mv /tmp/piiwii-nfc/PiiWii-NFC-1.0.2 /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST
-          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST
+          mv /tmp/piiwii-nfc/PiiWii-NFC-1.0.2 /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
           git apply "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc103.patch"
           python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply104.py"
           sed -i "s/applicationId 'ch.piiwii.nfc'/applicationId 'ch.piiwii.nfc.installtest'/" app/build.gradle
           sed -i "s/versionName '1.0.4'/versionName '1.0.4-installtest'/" app/build.gradle
       - name: Build APK
-        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Verify APK
         run: |
           AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
           APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
-          APK=/tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST/app/build/outputs/apk/debug/app-debug.apk
+          APK=/tmp/piiwii-nfc/PiiWii-NFC-1.0.4/app/build/outputs/apk/debug/app-debug.apk
           "$AAPT" dump badging "$APK" | head -20
           "$APKSIGNER" verify --verbose --print-certs "$APK"
       - name: Package deliverable
         run: |
           mkdir -p piiwii-nfc-public/dist-install-test
-          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.4-INSTALL-TEST/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-install-test/PiiWii-NFC-1.0.4-INSTALL-TEST.apk
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.4/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-install-test/PiiWii-NFC-1.0.4-INSTALL-TEST.apk
           cd piiwii-nfc-public/dist-install-test
           sha256sum PiiWii-NFC-1.0.4-INSTALL-TEST.apk > SHA256SUMS.txt
       - name: Upload deliverable
