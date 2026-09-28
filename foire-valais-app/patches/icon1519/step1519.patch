@@ -1,0 +1,40 @@
+diff -ruN '--exclude=ic_launcher.png' a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts	2026-09-28 23:25:19.000000000 +0000
++++ b/app/build.gradle.kts	2026-09-28 23:44:32.159763220 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 24
+-        versionName = "1.5.18"
++        versionCode = 25
++        versionName = "1.5.19"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN '--exclude=ic_launcher.png' a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 23:25:19.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-28 23:44:32.161993214 +0000
+@@ -850,7 +850,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.18","Foire du Valais 2026 · versionCode 24",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.18 · versionCode 24\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.19","Foire du Valais 2026 · versionCode 25",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.19 · versionCode 25\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+diff -ruN '--exclude=ic_launcher.png' a/app/src/main/res/drawable/ic_launcher.xml b/app/src/main/res/drawable/ic_launcher.xml
+--- a/app/src/main/res/drawable/ic_launcher.xml	2026-09-27 23:42:46.000000000 +0000
++++ b/app/src/main/res/drawable/ic_launcher.xml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,10 +0,0 @@
+-<vector xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:width="108dp" android:height="108dp"
+-    android:viewportWidth="108" android:viewportHeight="108">
+-    <path android:fillColor="#24143B" android:pathData="M0,0h108v108h-108z"/>
+-    <path android:fillColor="#D71968" android:pathData="M18,31h72v49c0,6 -5,10 -10,10h-52c-6,0 -10,-4 -10,-10z"/>
+-    <path android:fillColor="#FFFFFF" android:pathData="M18,23h72v16h-72z"/>
+-    <path android:fillColor="#24143B" android:pathData="M22,23h13l8,16h-13zM47,23h13l8,16h-13zM72,23h13l5,10v6h-10z"/>
+-    <path android:fillColor="#FFFFFF" android:pathData="M31,51h46v7h-46zM31,64h32v7h-32z"/>
+-    <path android:fillColor="#F4C542" android:pathData="M71,62h10v10h-10z"/>
+-</vector>
