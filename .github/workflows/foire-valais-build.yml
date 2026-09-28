@@ -68,25 +68,17 @@ jobs:
           set -euo pipefail
           cd foire-valais-app
           patch -p1 < patches/etape-icons/step-icons.patch
-      - name: Apply 1.5.8 official annual header
+      - name: Apply 1.5.8 step 7A status bar only
         shell: bash
         run: |
           set -euo pipefail
           cd foire-valais-app
-          mkdir -p app/src/main/res/drawable-nodpi
-          base64 -d patches/header2026/fdv_logo_official.webp.b64 > app/src/main/res/drawable-nodpi/fdv_logo_official.webp
-          base64 -d patches/header2026/fdv_hero_2026.webp.b64 > app/src/main/res/drawable-nodpi/fdv_hero_2026.webp
-          cat patches/header2026/patch-chunk-* | base64 -d > /tmp/header.patch
-          patch -p1 < /tmp/header.patch
+          patch -p1 < patches/etape7a/step7a.patch
           grep -q 'versionCode = 14' app/build.gradle.kts
           grep -q 'versionName = "1.5.8"' app/build.gradle.kts
-          grep -q 'class FairYearConfig' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'new FairYearConfig(2026,66' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q '2 → 11 oct. 2026' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'createAnnualHeader' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'setStatusBarColor(PINK)' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          test -s app/src/main/res/drawable-nodpi/fdv_logo_official.webp
-          test -s app/src/main/res/drawable-nodpi/fdv_hero_2026.webp
+          grep -q 'APPEARANCE_LIGHT_STATUS_BARS' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          ! grep -q 'class FairYearConfig' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          ! test -e app/src/main/res/drawable-nodpi/fdv_hero_2026.webp
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -102,13 +94,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p deliverables/sign-tools/lib
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.8-HEADER-ALIGNED-UNSIGNED.apk
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.8-HEADER-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.8-ETAPE7A-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.8-ETAPE7A-ALIGNED-UNSIGNED.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd foire-valais-app
-          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.8-HEADER-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.8-ETAPE7A-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.5.8-HEADER-aligned
+          name: Foire-du-Valais-2026-1.5.8-ETAPE7A-aligned
           path: deliverables/*
           retention-days: 7
