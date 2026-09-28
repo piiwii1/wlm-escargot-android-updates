@@ -1,0 +1,68 @@
+name: PiiWii Documents Temporary Windows Build
+on:
+  push:
+    branches:
+      - build/piiwii-documents-0.1.0
+    paths:
+      - 'build-piiwii-documents/**'
+      - '.github/workflows/piiwii-documents-temp-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-piiwii-documents/work
+          base64 -d build-piiwii-documents/source.b64 > build-piiwii-documents/source.zip
+          unzip -q -o build-piiwii-documents/source.zip -d build-piiwii-documents/work
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore and publish application
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore build-piiwii-documents/work/src/PiiWii.Documents/PiiWii.Documents.csproj -r win-x64
+          dotnet publish build-piiwii-documents/work/src/PiiWii.Documents/PiiWii.Documents.csproj -c Release -r win-x64 --self-contained true -o build-piiwii-documents/work/publish
+          test -f build-piiwii-documents/work/publish/PiiWii.Documents.exe
+
+      - name: Build installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-piiwii-documents/work/src/PiiWii.Documents.Installer/payload
+          cp build-piiwii-documents/work/publish/PiiWii.Documents.exe build-piiwii-documents/work/src/PiiWii.Documents.Installer/payload/PiiWii.Documents.exe
+          dotnet restore build-piiwii-documents/work/src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj -r win-x64
+          dotnet publish build-piiwii-documents/work/src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj -c Release -r win-x64 --self-contained true -o build-piiwii-documents/work/installer-publish
+          test -f build-piiwii-documents/work/installer-publish/PiiWii-Documents-Setup-0.1.0.exe
+
+      - name: Package deliverables
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build-piiwii-documents/work/dist
+          cp build-piiwii-documents/work/installer-publish/PiiWii-Documents-Setup-0.1.0.exe build-piiwii-documents/work/dist/
+          cp build-piiwii-documents/work/publish/PiiWii.Documents.exe build-piiwii-documents/work/dist/PiiWii-Documents-0.1.0-PORTABLE.exe
+          cd build-piiwii-documents/work
+          zip -qr dist/PiiWii-Documents-0.1.0-SOURCES.zip src installer README.md CHANGELOG.md
+          mkdir -p PACK-REPRISE
+          cp README.md CHANGELOG.md PACK-REPRISE/
+          cp ../source.b64 PACK-REPRISE/
+          cp ../../.github/workflows/piiwii-documents-temp-build.yml PACK-REPRISE/
+          zip -qr dist/PiiWii-Documents-0.1.0-PACK-REPRISE.zip PACK-REPRISE
+          cd dist
+          sha256sum PiiWii-Documents-Setup-0.1.0.exe PiiWii-Documents-0.1.0-PORTABLE.exe PiiWii-Documents-0.1.0-SOURCES.zip PiiWii-Documents-0.1.0-PACK-REPRISE.zip > SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Documents-0.1.0
+          path: build-piiwii-documents/work/dist/*
+          if-no-files-found: error
