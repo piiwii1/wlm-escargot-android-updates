@@ -38,8 +38,11 @@ jobs:
           rm -rf piwii-nfc/work
           mkdir -p piwii-nfc/work
           curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/piiwii-nfc/source.zip" -o piwii-nfc/source.zip
-          unzip -t piwii-nfc/source.zip
-          unzip -q -o piwii-nfc/source.zip -d piwii-nfc/work
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('piiwii-nfc/source.zip') as z:
+              z.extractall('piiwii-nfc/work')
+          PY
       - name: Build
         working-directory: piwii-nfc/work/PiiWii-NFC-1.0.2
         run: gradle --no-daemon --stacktrace assembleDebug
