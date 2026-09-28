@@ -43,14 +43,23 @@ jobs:
           with zipfile.ZipFile('piiwii-nfc/source.zip') as z:
               z.extractall('piiwii-nfc/work')
           PY
+          find piwii-nfc/work -maxdepth 4 -type f | sort
       - name: Build
-        working-directory: piwii-nfc/work/PiiWii-NFC-1.0.2
-        run: gradle --no-daemon --stacktrace assembleDebug
+        shell: bash
+        run: |
+          PROJECT_DIR="$(dirname "$(find piwii-nfc/work -type f -name settings.gradle -print -quit)")"
+          test -n "$PROJECT_DIR" && test -f "$PROJECT_DIR/settings.gradle"
+          echo "Building from: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          gradle --no-daemon --stacktrace assembleDebug
       - name: Package
+        shell: bash
         run: |
           rm -rf piwii-nfc/dist
           mkdir -p piwii-nfc/dist
-          cp piwii-nfc/work/PiiWii-NFC-1.0.2/app/build/outputs/apk/debug/app-debug.apk piwii-nfc/dist/PiiWii-NFC-1.0.2.apk
+          APK="$(find piwii-nfc/work -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
+          test -n "$APK" && test -f "$APK"
+          cp "$APK" piwii-nfc/dist/PiiWii-NFC-1.0.2.apk
           cp piwii-nfc/source.zip piwii-nfc/dist/PiiWii-NFC-1.0.2-SOURCES.zip
           cd piwii-nfc/dist
           sha256sum PiiWii-NFC-1.0.2.apk PiiWii-NFC-1.0.2-SOURCES.zip > SHA256SUMS.txt
