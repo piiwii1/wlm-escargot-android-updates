@@ -49,16 +49,17 @@ jobs:
           cd foire-valais-app
           patch -p1 < /tmp/step5.patch
           sed -i 's/Version 1\.5\.1 · versionCode 7/Version 1.5.4 · versionCode 10/g' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-      - name: Apply 1.5.5 step 6 consolidation
+      - name: Apply 1.5.5 step 6 audit fixes
         shell: bash
         run: |
           set -euo pipefail
-          cat foire-valais-app/patches/etape6/part-* | base64 -d | gunzip > /tmp/step6.patch
+          base64 -d foire-valais-app/patches/etape6/chunk-00 | gunzip > /tmp/step6.patch
           cd foire-valais-app
           patch -p3 < /tmp/step6.patch
           grep -q 'versionCode = 11' app/build.gradle.kts
           grep -q 'versionName = "1.5.5"' app/build.gradle.kts
-          ! grep -q 'Version 1\.5\.1' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          grep -q 'Personnalisé…' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          grep -q 'key.startsWith("delay")' app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
