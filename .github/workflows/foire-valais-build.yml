@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           base64 -d foire-valais-app/patches/etape6/patch.b64 | gunzip > /tmp/step6.patch
           cd foire-valais-app
-          patch -p1 < /tmp/step6.patch
+          patch -p3 < /tmp/step6.patch
           grep -q 'versionCode = 11' app/build.gradle.kts
           grep -q 'versionName = "1.5.5"' app/build.gradle.kts
           ! grep -q 'Version 1\.5\.1' app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
