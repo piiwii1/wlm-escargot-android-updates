@@ -1,8 +1,8 @@
-name: Build PiiWii Code Capture 1.2.3
+name: Build PiiWii Code Capture 1.2.4
 
 on:
   push:
-    branches: [ "temp-piiwii-code-capture-1.2.3" ]
+    branches: [ "temp-piiwii-code-capture-1.2.4" ]
   workflow_dispatch:
 
 jobs:
@@ -18,45 +18,15 @@ jobs:
         run: |
           $parts = Get-ChildItem PiiWiiWebAssetExtractor/appparts/Program.part* | Sort-Object Name
           $text = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          $text = $text.Replace('PiiWii Code Capture 1.2.1', 'PiiWii Code Capture 1.2.3')
+          $text = $text.Replace('PiiWii Code Capture 1.2.1', 'PiiWii Code Capture 1.2.4')
           [IO.File]::WriteAllText((Join-Path $PWD 'PiiWiiWebAssetExtractor/app/Program.cs'), $text, [Text.UTF8Encoding]::new($false))
 
-      - name: Reconstruct application icon
+      - name: Reconstruct high-resolution application icon
         shell: pwsh
         run: |
           $b64 = Get-Content 'PiiWiiWebAssetExtractor/app/app.ico.b64' -Raw
           [IO.File]::WriteAllBytes((Join-Path $PWD 'PiiWiiWebAssetExtractor/app/app.ico'), [Convert]::FromBase64String($b64))
-
-      - name: Expand icon to 256px
-        shell: pwsh
-        run: |
-          Add-Type -AssemblyName System.Drawing
-          $path = Join-Path $PWD 'PiiWiiWebAssetExtractor/app/app.ico'
-          $tmp = Join-Path $PWD 'PiiWiiWebAssetExtractor/app/app-base.ico'
-          Copy-Item $path $tmp -Force
-          $ico = New-Object System.Drawing.Icon($tmp)
-          $src = $ico.ToBitmap()
-          $bmp = New-Object System.Drawing.Bitmap(256,256,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.Clear([System.Drawing.Color]::Transparent)
-          $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-          $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-          $g.DrawImage($src,0,0,256,256)
-          $g.Dispose()
-          $ms = New-Object IO.MemoryStream
-          $bmp.Save($ms,[System.Drawing.Imaging.ImageFormat]::Png)
-          $png = $ms.ToArray()
-          $ms.Dispose(); $bmp.Dispose(); $src.Dispose(); $ico.Dispose()
-          $fs = [IO.File]::Open($path,[IO.FileMode]::Create)
-          $bw = New-Object IO.BinaryWriter($fs)
-          $bw.Write([UInt16]0); $bw.Write([UInt16]1); $bw.Write([UInt16]1)
-          $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0)
-          $bw.Write([UInt16]1); $bw.Write([UInt16]32)
-          $bw.Write([UInt32]$png.Length); $bw.Write([UInt32]22)
-          $bw.Write([byte[]]$png)
-          $bw.Flush(); $bw.Dispose(); $fs.Dispose()
-          Remove-Item $tmp -Force
-          Write-Host "Icone 256x256 creee : $((Get-Item $path).Length) octets"
+          if (!(Test-Path 'PiiWiiWebAssetExtractor/app/app.ico')) { throw 'Icone app.ico absente' }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -87,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path PiiWiiWebAssetExtractor/dist | Out-Null
-          Compress-Archive -Path PiiWiiWebAssetExtractor/publish/* -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.3-PORTABLE.zip -Force
+          Compress-Archive -Path PiiWiiWebAssetExtractor/publish/* -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.4-PORTABLE.zip -Force
 
       - name: Install Inno Setup
         shell: pwsh
@@ -104,7 +74,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $tmp | Out-Null
           Copy-Item PiiWiiWebAssetExtractor/app -Destination $tmp -Recurse
           Copy-Item PiiWiiWebAssetExtractor/installer -Destination $tmp -Recurse
-          Compress-Archive -Path "$tmp/*" -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.3-SOURCES.zip -Force
+          Compress-Archive -Path "$tmp/*" -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.4-SOURCES.zip -Force
 
       - name: SHA-256
         shell: pwsh
@@ -118,7 +88,7 @@ jobs:
       - name: Upload deliverables
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Code-Capture-1.2.3
+          name: PiiWii-Code-Capture-1.2.4
           path: PiiWiiWebAssetExtractor/dist/*
           if-no-files-found: error
           retention-days: 30
