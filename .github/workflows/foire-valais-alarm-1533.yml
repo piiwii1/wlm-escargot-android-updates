@@ -1,0 +1,108 @@
+name: Foire du Valais 1.5.33 alarm reminders
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/foire-valais-alarm-1533.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download 1.5.32 source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p previous buildsrc
+          gh run download 36531756082 -R piiwii1/wlm-escargot-android-updates -n Foire-du-Valais-2026-1.5.32 -D previous
+          unzip -q previous/Foire-du-Valais-2026-1.5.32-SOURCES.zip -d buildsrc
+      - name: Apply alarm reminder feature
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('buildsrc/app/build.gradle.kts')
+          s=p.read_text()
+          s=s.replace('versionCode = 38','versionCode = 39').replace('versionName = "1.5.32"','versionName = "1.5.33"')
+          p.write_text(s)
+
+          p=Path('buildsrc/app/src/main/java/ch/piiwii/foirevalais/AlarmScheduler.java')
+          s=p.read_text()
+          s=s.replace('static void schedule(Context context,int eventId,String title,String place,int day,String start,int beforeMinutes){','static void schedule(Context context,int eventId,String title,String place,int day,String start,int beforeMinutes,boolean alarmMode){')
+          s=s.replace('.putExtra("sub",place+" · "+start);','.putExtra("sub",place+" · "+start)\n                    .putExtra("alarmMode",alarmMode);')
+          p.write_text(s)
+
+          p=Path('buildsrc/app/src/main/java/ch/piiwii/foirevalais/ReminderRestoreReceiver.java')
+          s=p.read_text()
+          s=s.replace('if(day>=0&&time!=null&&name!=null&&place!=null)\n                    AlarmScheduler.schedule(context,id,name,place,day,time,delay);','boolean alarmMode=p.getBoolean("alarmMode"+id,false);\n                if(day>=0&&time!=null&&name!=null&&place!=null)\n                    AlarmScheduler.schedule(context,id,name,place,day,time,delay,alarmMode);')
+          p.write_text(s)
+
+          Path('buildsrc/app/src/main/java/ch/piiwii/foirevalais/EventReceiver.java').write_text('''package ch.piiwii.foirevalais;\n\nimport android.app.*;\nimport android.content.*;\nimport android.media.AudioAttributes;\nimport android.media.RingtoneManager;\nimport android.net.Uri;\nimport android.os.Build;\n\npublic class EventReceiver extends BroadcastReceiver {\n    public static final String CHANNEL = "foire_events";\n    public static final String ALARM_CHANNEL = "foire_event_alarms_v1";\n\n    static void ensureChannels(Context context){\n        if(Build.VERSION.SDK_INT<26)return;\n        NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);\n        nm.createNotificationChannel(new NotificationChannel(CHANNEL,"Mes événements Foire",NotificationManager.IMPORTANCE_HIGH));\n        NotificationChannel alarm=nm.getNotificationChannel(ALARM_CHANNEL);\n        if(alarm==null){\n            alarm=new NotificationChannel(ALARM_CHANNEL,"Alarmes Foire",NotificationManager.IMPORTANCE_HIGH);\n            alarm.setDescription("Rappels prolongés de type alarme pour les événements sélectionnés");\n            Uri sound=RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);\n            if(sound==null)sound=RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);\n            AudioAttributes attrs=new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();\n            alarm.setSound(sound,attrs);\n            alarm.enableVibration(true);\n            alarm.setVibrationPattern(new long[]{0,450,250,450,250,700});\n            alarm.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);\n            nm.createNotificationChannel(alarm);\n        }\n    }\n\n    @Override public void onReceive(Context context, Intent intent) {\n        if(!context.getSharedPreferences("foire",Context.MODE_PRIVATE).getBoolean("notificationsEnabled",true))return;\n        NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);\n        ensureChannels(context);\n        String title=intent.getStringExtra("title"); String sub=intent.getStringExtra("sub"); int eventId=intent.getIntExtra("eventId",0);\n        boolean alarmMode=intent.getBooleanExtra("alarmMode",false);\n        Intent open=new Intent(context,MainActivity.class).putExtra("openEventId",eventId).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);\n        PendingIntent pi=PendingIntent.getActivity(context,eventId,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);\n        String channel=alarmMode?ALARM_CHANNEL:CHANNEL;\n        Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(context,channel):new Notification.Builder(context);\n        b.setSmallIcon(ch.piiwii.foirevalais.R.drawable.ic_launcher)\n                .setContentTitle((alarmMode?"Alarme : ":"Bientôt : ")+title)\n                .setContentText(sub)\n                .setStyle(new Notification.BigTextStyle().bigText(sub))\n                .setAutoCancel(true)\n                .setContentIntent(pi)\n                .setCategory(alarmMode?Notification.CATEGORY_ALARM:Notification.CATEGORY_EVENT)\n                .setPriority(alarmMode?Notification.PRIORITY_MAX:Notification.PRIORITY_HIGH)\n                .setVisibility(Notification.VISIBILITY_PUBLIC);\n        if(alarmMode && Build.VERSION.SDK_INT<26){\n            Uri sound=RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);\n            if(sound==null)sound=RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);\n            b.setSound(sound,android.media.AudioManager.STREAM_ALARM);\n            b.setVibrate(new long[]{0,450,250,450,250,700});\n        }\n        Notification notification=b.build();\n        if(alarmMode) notification.flags|=Notification.FLAG_INSISTENT;\n        nm.notify(eventId!=0?eventId:(title+sub).hashCode(),notification);\n    }\n}\n''')
+
+          p=Path('buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java')
+          s=p.read_text()
+          s=s.replace('boolean pendingTestNotification=false;','boolean pendingTestNotification=false;\n    boolean pendingTestAlarm=false;')
+          s=s.replace('settingsActionRow("🔔","Tester une notification","Afficher immédiatement un exemple du rappel qui apparaîtra sur le téléphone",()->testNotification());','settingsActionRow("🔔","Tester une notification","Afficher immédiatement un rappel normal",()->testNotification());\n        settingsActionRow("⏰","Tester une alarme","Faire sonner un rappel prolongé comme une alarme jusqu’à ouverture ou arrêt",()->testAlarmNotification());')
+          s=s.replace('settingsActionRow("i","Version 1.5.32","Foire du Valais 2026 · versionCode 38",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.32 · versionCode 38\\n\\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · test de notification intégré · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());','settingsActionRow("i","Version 1.5.33","Foire du Valais 2026 · versionCode 39",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.33 · versionCode 39\\n\\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());')
+          s=s.replace('TextView bell=txt(delay>0?"🔔  Rappel "+reminderLabel(delay):"🔕  Aucun rappel",12,delay>0?PINK:MUTED,true);','boolean alarmMode=prefs.getBoolean("alarmMode"+e.id,false);\n        TextView bell=txt(delay>0?(alarmMode?"⏰  Alarme ":"🔔  Rappel ")+reminderLabel(delay):"🔕  Aucun rappel",12,delay>0?PINK:MUTED,true);')
+          s=s.replace('prefs.edit().putInt("delay"+e.id,15).apply();if(e.verified)schedule(e,15);','prefs.edit().putInt("delay"+e.id,15).putBoolean("alarmMode"+e.id,false).apply();if(e.verified)schedule(e,15,false);')
+          s=s.replace('TextView bell=txt(delay>0?"🔔 "+reminderLabel(delay):"🔕 Alerte",12,delay>0?GREEN:MUTED,true);','boolean alarmMode=prefs.getBoolean("alarmMode"+e.id,false);\n        TextView bell=txt(delay>0?(alarmMode?"⏰ ":"🔔 ")+reminderLabel(delay):"🔕 Alerte",12,delay>0?GREEN:MUTED,true);')
+
+          start=s.index('    void chooseAlert(Event e){')
+          end=s.index('    boolean darkMode()',start)
+          replacement='''    void chooseAlert(Event e){\n        String[] labels={"Aucune alerte","10 minutes avant","15 minutes avant","30 minutes avant","1 heure avant","Personnalisé…"};\n        int[] vals={-1,10,15,30,60};\n        new AlertDialog.Builder(this).setTitle("Alerte · "+e.name).setItems(labels,(d,which)->{\n            if(which==labels.length-1){showCustomAlert(e);return;}\n            if(vals[which]<=0){applyAlertDelay(e,-1,false);return;}\n            chooseAlertMode(e,vals[which]);\n        }).setNegativeButton("Annuler",null).show();\n    }\n\n    void chooseAlertMode(Event e,int delay){\n        String[] modes={"🔔 Notification normale","⏰ Alarme prolongée"};\n        int checked=prefs.getBoolean("alarmMode"+e.id,false)?1:0;\n        new AlertDialog.Builder(this)\n                .setTitle("Type de rappel · "+reminderLabel(delay))\n                .setSingleChoiceItems(modes,checked,null)\n                .setPositiveButton("Enregistrer",(dialog,which)->{\n                    AlertDialog a=(AlertDialog)dialog;\n                    int selected=a.getListView().getCheckedItemPosition();\n                    applyAlertDelay(e,delay,selected==1);\n                })\n                .setNegativeButton("Annuler",null)\n                .show();\n    }\n\n    void showCustomAlert(Event e){\n        final EditText input=new EditText(this);\n        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);\n        input.setHint("Minutes avant l’événement");\n        int current=prefs.getInt("delay"+e.id,-1);\n        if(current>0) input.setText(String.valueOf(current));\n        int pad=dp(20);\n        LinearLayout wrap=new LinearLayout(this);wrap.setPadding(pad,dp(6),pad,0);wrap.addView(input,new LinearLayout.LayoutParams(-1,-2));\n        AlertDialog dialog=new AlertDialog.Builder(this)\n                .setTitle("Rappel personnalisé · "+e.name)\n                .setMessage("Choisis un délai entre 1 minute et 24 heures (1440 min).")\n                .setView(wrap)\n                .setPositiveButton("Continuer",null)\n                .setNegativeButton("Annuler",null)\n                .create();\n        dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{\n            String raw=input.getText().toString().trim();\n            if(raw.isEmpty()){input.setError("Entre un nombre de minutes");return;}\n            try{\n                int val=Integer.parseInt(raw);\n                if(val<1||val>1440){input.setError("Entre 1 et 1440 minutes");return;}\n                dialog.dismiss();\n                chooseAlertMode(e,val);\n            }catch(Exception ex){input.setError("Valeur invalide");}\n        }));\n        dialog.show();\n    }\n\n    void applyAlertDelay(Event e,int val,boolean alarmMode){\n        prefs.edit().putInt("delay"+e.id,val).putBoolean("alarmMode"+e.id,alarmMode).apply();\n        cancel(e);\n        if(val>0&&e.verified&&prefs.getBoolean("notificationsEnabled",true))schedule(e,val,alarmMode);\n        refreshCurrent();\n    }\n\n'''
+          s=s[:start]+replacement+s[end:]
+          s=s.replace('void rescheduleConfiguredAlarms(){if(!prefs.getBoolean("notificationsEnabled",true))return;for(Event e:events){int d=prefs.getInt("delay"+e.id,-1);if(d>0&&e.verified&&!e.start.equals("—"))schedule(e,d);}}','void rescheduleConfiguredAlarms(){if(!prefs.getBoolean("notificationsEnabled",true))return;for(Event e:events){int d=prefs.getInt("delay"+e.id,-1);if(d>0&&e.verified&&!e.start.equals("—"))schedule(e,d,prefs.getBoolean("alarmMode"+e.id,false));}}')
+          s=s.replace('    void schedule(Event e,int before){\n        AlarmScheduler.schedule(this,e.id,e.name,e.place,e.day,e.start,before);','    void schedule(Event e,int before,boolean alarmMode){\n        AlarmScheduler.schedule(this,e.id,e.name,e.place,e.day,e.start,before,alarmMode);')
+          s=s.replace('.putString("alarm_place"+e.id,e.place)\n                .apply();','.putString("alarm_place"+e.id,e.place)\n                .putBoolean("alarmMode"+e.id,alarmMode)\n                .apply();')
+
+          start=s.index('    void createChannel(){')
+          end=s.index('    void openUrl(String url)',start)
+          replacement='''    void createChannel(){EventReceiver.ensureChannels(this);}\n\n    void testNotification(){prepareTestNotification(false);}\n    void testAlarmNotification(){prepareTestNotification(true);}\n\n    void prepareTestNotification(boolean alarmMode){\n        prefs.edit().putBoolean("notificationsEnabled",true).apply();\n        createChannel();\n        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){\n            pendingTestNotification=true;\n            pendingTestAlarm=alarmMode;\n            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},REQ_TEST_NOTIFICATION);\n            return;\n        }\n        sendTestNotification(alarmMode);\n    }\n\n    void sendTestNotification(boolean alarmMode){\n        NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);\n        boolean blocked=Build.VERSION.SDK_INT>=24&&!nm.areNotificationsEnabled();\n        if(Build.VERSION.SDK_INT>=26){\n            NotificationChannel ch=nm.getNotificationChannel(alarmMode?EventReceiver.ALARM_CHANNEL:EventReceiver.CHANNEL);\n            if(ch!=null&&ch.getImportance()==NotificationManager.IMPORTANCE_NONE)blocked=true;\n        }\n        if(blocked){\n            new AlertDialog.Builder(this).setTitle("Notifications désactivées").setMessage("Android bloque actuellement ce type de notification. Active-le dans les réglages puis relance le test.").setNegativeButton("Annuler",null).setPositiveButton("Ouvrir les réglages",(d,w)->openNotificationSettings()).show();\n            return;\n        }\n        Intent i=new Intent(this,EventReceiver.class)\n                .putExtra("title",alarmMode?"Test alarme":"Notification test")\n                .putExtra("sub",alarmMode?"Exemple : alarme prolongée pour un événement important.":"Exemple : votre événement commence dans 15 minutes.")\n                .putExtra("alarmMode",alarmMode)\n                .putExtra("eventId",alarmMode?1533002:1533001);\n        sendBroadcast(i);\n        Toast.makeText(this,alarmMode?"Alarme test envoyée":"Notification test envoyée",Toast.LENGTH_SHORT).show();\n        if(screen==4)new Handler(Looper.getMainLooper()).postDelayed(this::showSettings,250);\n    }\n\n    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){\n        super.onRequestPermissionsResult(requestCode,permissions,grantResults);\n        if(requestCode==REQ_TEST_NOTIFICATION){\n            boolean granted=grantResults.length>0&&grantResults[0]==PackageManager.PERMISSION_GRANTED;\n            boolean alarmMode=pendingTestAlarm;\n            pendingTestNotification=false;\n            pendingTestAlarm=false;\n            if(granted)sendTestNotification(alarmMode);\n            else new AlertDialog.Builder(this).setTitle("Autorisation nécessaire").setMessage("Pour afficher les tests et les rappels, autorise les notifications pour cette application.").setNegativeButton("Annuler",null).setPositiveButton("Ouvrir les réglages",(d,w)->openNotificationSettings()).show();\n        }\n    }\n\n'''
+          s=s[:start]+replacement+s[end:]
+          p.write_text(s)
+          PY
+          grep -q 'versionCode = 39' buildsrc/app/build.gradle.kts
+          grep -q 'versionName = "1.5.33"' buildsrc/app/build.gradle.kts
+          grep -q 'Tester une alarme' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          grep -q 'Alarme prolongée' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          grep -q 'ALARM_CHANNEL' buildsrc/app/src/main/java/ch/piiwii/foirevalais/EventReceiver.java
+      - name: Install Android SDK 35
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build release
+        working-directory: buildsrc
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deliverables/sign-tools/lib
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 buildsrc/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.33-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.33-ALIGNED-UNSIGNED.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
+          cd buildsrc
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.33-SOURCES.zip . -x '*/build/*' '.gradle/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foire-du-Valais-2026-1.5.33
+          path: deliverables/*
+          retention-days: 7
