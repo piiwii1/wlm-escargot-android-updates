@@ -36,23 +36,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          rm -rf /tmp/nfc135render /tmp/base135 /tmp/base135.zip /tmp/render135
-          mkdir -p /tmp/nfc135render /tmp/base135 /tmp/render135
+          rm -rf "$GITHUB_WORKSPACE/render135src" "$GITHUB_WORKSPACE/render135out" /tmp/base135 /tmp/base135.zip
+          mkdir -p "$GITHUB_WORKSPACE/render135src" "$GITHUB_WORKSPACE/render135out" /tmp/base135
           ART_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.35-build" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
           test -n "$ART_ID"
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/base135.zip
           unzip -q /tmp/base135.zip -d /tmp/base135
           SRCZIP=$(find /tmp/base135 -type f -name 'PiiWii-NFC-1.0.35-SOURCES-BUILD.zip' -print -quit)
           test -n "$SRCZIP"
-          unzip -q "$SRCZIP" -d /tmp/nfc135render
-          test -d /tmp/nfc135render/PiiWii-NFC-1.0.35
+          unzip -q "$SRCZIP" -d "$GITHUB_WORKSPACE/render135src"
+          test -d "$GITHUB_WORKSPACE/render135src/PiiWii-NFC-1.0.35"
 
       - name: Build debug APK for render only
-        working-directory: /tmp/nfc135render/PiiWii-NFC-1.0.35
+        working-directory: render135src/PiiWii-NFC-1.0.35
         run: |
           set -euo pipefail
           gradle --no-daemon assembleDebug
-          find /tmp/nfc135render/PiiWii-NFC-1.0.35/app/build/outputs/apk -type f -name '*.apk' -ls
+          APK=$(find "$GITHUB_WORKSPACE/render135src/PiiWii-NFC-1.0.35/app/build/outputs/apk" -type f -name '*.apk' -print -quit)
+          test -n "$APK"
+          cp "$APK" "$GITHUB_WORKSPACE/render135out/app-render.apk"
+          ls -lh "$GITHUB_WORKSPACE/render135out/app-render.apk"
 
       - name: Enable KVM
         run: |
@@ -71,30 +74,27 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             set +e
-            mkdir -p /tmp/render135
-            APK=$(find /tmp/nfc135render/PiiWii-NFC-1.0.35/app/build/outputs/apk -type f -name '*.apk' -print -quit)
-            echo "APK=$APK" > /tmp/render135/diagnostic.txt
-            echo "=== DEVICES ===" >> /tmp/render135/diagnostic.txt
-            adb devices -l >> /tmp/render135/diagnostic.txt 2>&1
-            if [ -n "$APK" ] && [ -f "$APK" ]; then
-              adb install -r "$APK" >> /tmp/render135/diagnostic.txt 2>&1
-            else
-              echo "APK_NOT_FOUND" >> /tmp/render135/diagnostic.txt
-            fi
-            adb shell wm size 1080x2400 >> /tmp/render135/diagnostic.txt 2>&1
-            adb shell wm density 420 >> /tmp/render135/diagnostic.txt 2>&1
-            adb shell settings put system font_scale 1.0 >> /tmp/render135/diagnostic.txt 2>&1
-            adb shell am force-stop ch.piiwii.nfc.app >> /tmp/render135/diagnostic.txt 2>&1
-            adb shell monkey -p ch.piiwii.nfc.app -c android.intent.category.LAUNCHER 1 >> /tmp/render135/diagnostic.txt 2>&1
+            OUT="$GITHUB_WORKSPACE/render135out"
+            APK="$OUT/app-render.apk"
+            echo "APK=$APK" > "$OUT/diagnostic.txt"
+            echo "=== DEVICES ===" >> "$OUT/diagnostic.txt"
+            adb devices -l >> "$OUT/diagnostic.txt" 2>&1
+            ls -lh "$APK" >> "$OUT/diagnostic.txt" 2>&1
+            adb install -r "$APK" >> "$OUT/diagnostic.txt" 2>&1
+            adb shell wm size 1080x2400 >> "$OUT/diagnostic.txt" 2>&1
+            adb shell wm density 420 >> "$OUT/diagnostic.txt" 2>&1
+            adb shell settings put system font_scale 1.0 >> "$OUT/diagnostic.txt" 2>&1
+            adb shell am force-stop ch.piiwii.nfc.app >> "$OUT/diagnostic.txt" 2>&1
+            adb shell monkey -p ch.piiwii.nfc.app -c android.intent.category.LAUNCHER 1 >> "$OUT/diagnostic.txt" 2>&1
             sleep 7
-            adb shell dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp' >> /tmp/render135/diagnostic.txt 2>&1
-            adb shell dumpsys activity activities | head -120 >> /tmp/render135/diagnostic.txt 2>&1
-            adb exec-out screencap -p > /tmp/render135/home.png 2>> /tmp/render135/diagnostic.txt
-            adb shell uiautomator dump /sdcard/window.xml >> /tmp/render135/diagnostic.txt 2>&1
-            adb pull /sdcard/window.xml /tmp/render135/window.xml >> /tmp/render135/diagnostic.txt 2>&1
-            adb logcat -d -t 500 > /tmp/render135/logcat.txt 2>&1
-            file /tmp/render135/home.png >> /tmp/render135/diagnostic.txt 2>&1
-            ls -lh /tmp/render135 >> /tmp/render135/diagnostic.txt 2>&1
+            adb shell dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp' >> "$OUT/diagnostic.txt" 2>&1
+            adb shell dumpsys activity activities | head -120 >> "$OUT/diagnostic.txt" 2>&1
+            adb exec-out screencap -p > "$OUT/home.png" 2>> "$OUT/diagnostic.txt"
+            adb shell uiautomator dump /sdcard/window.xml >> "$OUT/diagnostic.txt" 2>&1
+            adb pull /sdcard/window.xml "$OUT/window.xml" >> "$OUT/diagnostic.txt" 2>&1
+            adb logcat -d -t 500 > "$OUT/logcat.txt" 2>&1
+            file "$OUT/home.png" >> "$OUT/diagnostic.txt" 2>&1
+            ls -lh "$OUT" >> "$OUT/diagnostic.txt" 2>&1
             exit 0
 
       - name: Upload render check
@@ -102,6 +102,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PiiWii-NFC-1.0.35-render-check
-          path: /tmp/render135/
+          path: render135out/
           retention-days: 7
           if-no-files-found: warn
