@@ -49,7 +49,10 @@ jobs:
 
       - name: Build debug APK for render only
         working-directory: /tmp/nfc135render/PiiWii-NFC-1.0.35
-        run: gradle --no-daemon assembleDebug
+        run: |
+          set -euo pipefail
+          gradle --no-daemon assembleDebug
+          find /tmp/nfc135render/PiiWii-NFC-1.0.35/app/build/outputs/apk -type f -name '*.apk' -ls
 
       - name: Enable KVM
         run: |
@@ -68,10 +71,16 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             set +e
-            APK=/tmp/nfc135render/PiiWii-NFC-1.0.35/app/build/outputs/apk/debug/app-debug.apk
-            echo "=== DEVICES ===" > /tmp/render135/diagnostic.txt
+            mkdir -p /tmp/render135
+            APK=$(find /tmp/nfc135render/PiiWii-NFC-1.0.35/app/build/outputs/apk -type f -name '*.apk' -print -quit)
+            echo "APK=$APK" > /tmp/render135/diagnostic.txt
+            echo "=== DEVICES ===" >> /tmp/render135/diagnostic.txt
             adb devices -l >> /tmp/render135/diagnostic.txt 2>&1
-            adb install -r "$APK" >> /tmp/render135/diagnostic.txt 2>&1
+            if [ -n "$APK" ] && [ -f "$APK" ]; then
+              adb install -r "$APK" >> /tmp/render135/diagnostic.txt 2>&1
+            else
+              echo "APK_NOT_FOUND" >> /tmp/render135/diagnostic.txt
+            fi
             adb shell wm size 1080x2400 >> /tmp/render135/diagnostic.txt 2>&1
             adb shell wm density 420 >> /tmp/render135/diagnostic.txt 2>&1
             adb shell settings put system font_scale 1.0 >> /tmp/render135/diagnostic.txt 2>&1
