@@ -1,0 +1,93 @@
+name: PiiWii NFC 1.0.28 Release Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/piiwii-nfc-128-release.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download 1.0.27 sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc128 /tmp/art127 /tmp/art127.zip
+          mkdir -p /tmp/nfc128 /tmp/art127
+          ART_ID=$(gh api "repos/piiwii1/wlm-escargot-android-updates/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.27-build" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/piiwii1/wlm-escargot-android-updates/actions/artifacts/$ART_ID/zip" > /tmp/art127.zip
+          unzip -q /tmp/art127.zip -d /tmp/art127
+          SRCZIP=$(find /tmp/art127 -type f -name 'PiiWii-NFC-1.0.27-SOURCES.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc128
+          ROOT=$(find /tmp/nfc128 -maxdepth 1 -type d -name 'PiiWii-NFC-1.0.27' -print -quit)
+          test -n "$ROOT"
+          mv "$ROOT" /tmp/nfc128/PiiWii-NFC-1.0.28
+      - name: Lock identity and bump release version
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc128/PiiWii-NFC-1.0.28
+          sed -i "s/versionCode 28/versionCode 29/" "$ROOT/app/build.gradle"
+          sed -i "s/versionName '1.0.27'/versionName '1.0.28'/" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v125'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 29" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.0.28'" "$ROOT/app/build.gradle"
+      - name: Build unsigned release
+        working-directory: /tmp/nfc128/PiiWii-NFC-1.0.28
+        run: gradle --no-daemon --stacktrace assembleRelease
+      - name: Align and verify release package
+        run: |
+          set -euo pipefail
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          ROOT=/tmp/nfc128/PiiWii-NFC-1.0.28
+          APK=$(find "$ROOT/app/build/outputs/apk/release" -type f -name '*unsigned*.apk' -print -quit)
+          test -n "$APK"
+          mkdir -p /tmp/out128
+          "$ZIPALIGN" -f -p 4 "$APK" /tmp/out128/PiiWii-NFC-1.0.28-ALIGNED-UNSIGNED.apk
+          "$ZIPALIGN" -c -v 4 /tmp/out128/PiiWii-NFC-1.0.28-ALIGNED-UNSIGNED.apk >/tmp/zipalign.txt
+          "$AAPT" dump badging /tmp/out128/PiiWii-NFC-1.0.28-ALIGNED-UNSIGNED.apk | tee /tmp/badging.txt
+          grep -q "package: name='ch.piiwii.nfc.v125'" /tmp/badging.txt
+          grep -q "versionCode='29'" /tmp/badging.txt
+          grep -q "versionName='1.0.28'" /tmp/badging.txt
+          ! grep -q 'application-debuggable' /tmp/badging.txt
+      - name: Package sources
+        run: |
+          cd /tmp/nfc128
+          zip -qr /tmp/out128/PiiWii-NFC-1.0.28-SOURCES.zip PiiWii-NFC-1.0.28
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar /tmp/out128/apksigner.jar
+      - name: Upload release inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.28-release-inputs
+          path: /tmp/out128/
+          retention-days: 7
+          if-no-files-found: error
