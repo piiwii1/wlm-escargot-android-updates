@@ -49,7 +49,7 @@ jobs:
         run: |
           cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.17
           python3 -c 'import base64,zlib; open("/tmp/apply118.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v118/patch118.z64","rb").read())))'
-          test "$(sha256sum /tmp/apply118.patch | cut -d' ' -f1)" = "a7b163a0203643d590e91634f96f1ed2d14101aaa9b568547e91ed499cbc20f7"
+          test "$(sha256sum /tmp/apply118.patch | cut -d' ' -f1)" = "6283dd3fbab682567646ad448821c2a797011d9e67488ba5b57ebc0640285818"
           patch -p1 < /tmp/apply118.patch
           cd /tmp/piiwii-nfc
           mv PiiWii-NFC-1.0.17 PiiWii-NFC-1.0.18
