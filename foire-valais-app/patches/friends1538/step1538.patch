@@ -1,0 +1,62 @@
+diff -ruN foire_1538_base/app/build.gradle.kts foire_1538_mod/app/build.gradle.kts
+--- foire_1538_base/app/build.gradle.kts	2026-09-29 10:31:42.000000000 +0000
++++ foire_1538_mod/app/build.gradle.kts	2026-09-29 10:39:17.403810815 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 43
+-        versionName = "1.5.37"
++        versionCode = 44
++        versionName = "1.5.38"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+ diff -ruN foire_1538_base/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire_1538_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire_1538_base/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 10:31:42.000000000 +0000
++++ foire_1538_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 10:39:04.638109272 +0000
+@@ -52,7 +52,7 @@
+     SharedPreferences prefs;
+ 
+     final String[] days={"Ven 2","Sam 3","Dim 4","Lun 5","Mar 6","Mer 7","Jeu 8","Ven 9","Sam 10","Dim 11"};
+-    final String[] zones={"TOUT","LIVE","TRIBUS","RENDEZ-VOUS","FOIRE & ANIM.","DÉGUSTATIONS","INNOTHÈQUE","BONNE DE BOURBON","CONFÉRENCES","HALLES","AUTRES","EN VILLE","★ MES CHOIX"};
++    final String[] zones={"TOUT","LIVE","TRIBUS","RENDEZ-VOUS","FRIENDS","FOIRE & ANIM.","DÉGUSTATIONS","INNOTHÈQUE","BONNE DE BOURBON","CONFÉRENCES","HALLES","AUTRES","EN VILLE","★ MES CHOIX"};
+     final String[] searchFilters={"Tous","Concerts","Tribus","Live","Aujourd’hui","Gratuit"};
+     final String[] trendSearches={"Shaka Waka","Justine Tornay","Kadebostany","Animations"};
+     final ArrayList<Event> events=new ArrayList<>();
+@@ -72,6 +72,7 @@
+         int savedZone=prefs.getInt("lastZone",0);
+         if(!prefs.getBoolean("zones1529Migrated",false)){if(savedZone==6)savedZone=11;prefs.edit().putBoolean("zones1529Migrated",true).putInt("lastZone",savedZone).apply();}
+         if(!prefs.getBoolean("zones1531Migrated",false)){if(savedZone==11)savedZone=12;prefs.edit().putBoolean("zones1531Migrated",true).putInt("lastZone",savedZone).apply();}
++        if(!prefs.getBoolean("zones1538Migrated",false)){if(savedZone>=4)savedZone++;prefs.edit().putBoolean("zones1538Migrated",true).putInt("lastZone",savedZone).apply();}
+         selectedZone=Math.max(0,Math.min(zones.length-1,savedZone));
+         seed();
+         loadCachedProgramme();
+@@ -455,7 +456,7 @@
+     void zoneButtons(boolean show){
+         zoneRow.removeAllViews(); zoneRow.setVisibility(show?View.VISIBLE:View.GONE); if(!show)return;
+         zoneRow.setPadding(dp(10),0,dp(10),dp(10));
+-        String[] labels={"Tous","Live","Tribus","Rendez-vous","Foire","Dégustations","Innothèque","Bonne de Bourbon","Conférences","Halles","Autres","En ville","Mes choix"};
++        String[] labels={"Tous","Live","Tribus","RDV","Friends","Foire","Dégustations","Innothèque","Bonne de Bourbon","Conférences","Halles","Autres","En ville","Mes choix"};
+         for(int i=0;i<zones.length;i++){
+             final int z=i; boolean active=i==selectedZone;
+             TextView b=txt(labels[i],13,active?Color.WHITE:PURPLE,true);
+@@ -866,7 +867,8 @@
+     boolean matchesZone(Event e,String z){
+         if(z.equals("LIVE"))return e.zone.equals("LIVE")||e.place.contains("Live");
+         if(z.equals("TRIBUS"))return e.zone.equals("TRIBUS")||e.place.contains("Tribus");
+-        if(z.equals("RENDEZ-VOUS"))return e.zone.equals("RENDEZ-VOUS")||(e.category!=null&&e.category.toLowerCase(Locale.ROOT).contains("rendez-vous"));
++        if(z.equals("RENDEZ-VOUS")){if(isPersonalEvent(e))return false;return e.zone.equals("RENDEZ-VOUS")||(e.category!=null&&e.category.toLowerCase(Locale.ROOT).contains("rendez-vous"));}
++        if(z.equals("FRIENDS"))return isPersonalEvent(e);
+         if(z.equals("DÉGUSTATIONS"))return e.zone.equals("DÉGUSTATIONS");
+         if(z.equals("FOIRE & ANIM."))return e.zone.equals("FOIRE & ANIM.");
+         if(z.equals("INNOTHÈQUE"))return e.zone.equals("INNOTHÈQUE");
+@@ -1053,7 +1055,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.37","Foire du Valais 2026 · versionCode 43",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.37 · versionCode 43\n\nProgramme hors ligne + mise à jour distante · fenêtre de rendez-vous optimisée pour le mode sombre · lieu et note · ajout rapide depuis le haut de Programme · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.38","Foire du Valais 2026 · versionCode 44",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.38 · versionCode 44\n\nProgramme hors ligne + mise à jour distante · fenêtre de rendez-vous optimisée pour le mode sombre · lieu et note · ajout rapide depuis le haut de Programme · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
