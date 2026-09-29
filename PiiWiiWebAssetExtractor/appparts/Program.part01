@@ -1,0 +1,124 @@
+ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
+        btnReload.Click += (_, _) => web.Reload();
+        btnNoCache.Click += async (_, _) => await ReloadNoCacheAsync();
+        btnDevTools.Click += (_, _) => web.CoreWebView2?.OpenDevToolsWindow();
+        txtSearch.TextChanged += (_, _) => RefreshGrid();
+        cmbType.SelectedIndexChanged += (_, _) => RefreshGrid();
+        chkContinuous.CheckedChanged += (_, _) => captureEnabled = chkContinuous.Checked;
+        grid.CellDoubleClick += async (_, _) => await DownloadSelectedAsync();
+    }
+
+    private static Button BigButton(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        Height = 40,
+        Padding = new Padding(14, 6, 14, 6),
+        FlatStyle = FlatStyle.Flat,
+        BackColor = Color.FromArgb(44, 112, 210),
+        ForeColor = Color.White
+    };
+
+    private static Button SmallButton(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        Height = 34,
+        Padding = new Padding(8, 3, 8, 3),
+        FlatStyle = FlatStyle.Flat,
+        BackColor = Color.FromArgb(45, 48, 55),
+        ForeColor = Color.White
+    };
+
+    private Control BuildLayout()
+    {
+        cmbType.Items.AddRange(new object[] { "Tous", "JS", "CSS", "JSON", "Images", "XHR", "HTML", "SVG", "Fonts", "Autres" });
+        cmbType.SelectedIndex = 0;
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(10) };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+
+        var top = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 4, Padding = new Padding(0, 0, 0, 6) };
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        top.Controls.Add(new Label { Text = "URL :", AutoSize = true, Padding = new Padding(0, 9, 6, 0) }, 0, 0);
+        top.Controls.Add(txtUrl, 1, 0);
+        top.Controls.Add(btnAnalyze, 2, 0);
+        top.Controls.Add(btnFindCode, 3, 0);
+
+        var tools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 2, 0, 6) };
+        tools.Controls.AddRange(new Control[] { btnBack, btnReload, btnNoCache, btnDevTools, chkNoCache, chkContinuous, lblStatus, lblStats });
+
+        var search = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 6, 0, 6) };
+        search.Controls.Add(new Label { Text = "Recherche :", AutoSize = true, Padding = new Padding(0, 7, 3, 0) });
+        search.Controls.Add(txtSearch);
+        search.Controls.Add(new Label { Text = "Type :", AutoSize = true, Padding = new Padding(10, 7, 3, 0) });
+        search.Controls.Add(cmbType);
+        search.Controls.Add(btnDownload);
+        search.Controls.Add(btnDownloadAll);
+        search.Controls.Add(btnHar);
+        search.Controls.Add(btnCopyUrl);
+        search.Controls.Add(btnEngine);
+        search.Controls.Add(btnMark);
+        search.Controls.Add(btnPack);
+
+        root.Controls.Add(top, 0, 0);
+        root.Controls.Add(tools, 0, 1);
+        root.Controls.Add(web, 0, 2);
+        root.Controls.Add(search, 0, 3);
+        root.Controls.Add(grid, 0, 4);
+        return root;
+    }
+
+    private void BuildGrid()
+    {
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Type", DataPropertyName = nameof(ResourceItem.ResourceType), Width = 75 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Fichier", DataPropertyName = nameof(ResourceItem.FileName), Width = 310 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Statut", DataPropertyName = nameof(ResourceItem.Status), Width = 70 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Taille", DataPropertyName = nameof(ResourceItem.Size), Width = 95 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Domaine", DataPropertyName = nameof(ResourceItem.Domain), Width = 180 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "URL", DataPropertyName = nameof(ResourceItem.Url), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+    }
+
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            Directory.CreateDirectory(Log.Root);
+            var userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiiWii", "WebAssetExtractor", "WebView2");
+            var env = await CoreWebView2Environment.CreateAsync(null, userData);
+            await web.EnsureCoreWebView2Async(env);
+            web.CoreWebView2.Settings.AreDevToolsEnabled = true;
+            web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            web.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            web.CoreWebView2.NavigationCompleted += (_, e) => SetStatus(e.IsSuccess ? "🟢 Page chargée" : "🔴 Échec de navigation");
+            await HookNetworkAsync();
+            initialized = true;
+            SetStatus("🟢 Prêt");
+        }
+        catch (Exception ex)
+        {
+            Log.Write("INIT", ex);
+            MessageBox.Show("WebView2 n'a pas pu démarrer. Vérifie que Microsoft Edge WebView2 Runtime est installé.\n\n" + ex.Message,
+                "PiiWii Web Asset Extractor", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            SetStatus("🔴 WebView2 indisponible");
+        }
+    }
+
+    private async Task HookNetworkAsync()
+    {
+        if (web.CoreWebView2 is null) return;
+        await web.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+
+        requestReceiver = web.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.requestWillBeSent");
+        responseReceiver = web.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.responseReceived");
+        finishedReceiver = web.CoreWebView2.GetDevToolsProtocolEventReceiver("Network.loadingFinished");
+
+        requestReceiver.DevToolsProtocolEventReceived += OnRequestWillBeSent;
+        responseReceiver.DevToolsProtocolEv
