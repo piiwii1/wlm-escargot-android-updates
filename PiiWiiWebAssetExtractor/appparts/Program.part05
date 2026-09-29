@@ -1,0 +1,129 @@
+M-dd HH:mm:ss}");
+        readme.AppendLine($"Nombre de ressources : {snapshot.Count}");
+        readme.AppendLine("JS intéressants détectés :");
+        var idx = 1;
+        foreach (var x in jsInteresting.Take(12)) readme.AppendLine($"{idx++}. {x.item.FileName} (score {x.score})");
+        readme.AppendLine();
+        readme.AppendLine("Objectif :");
+        readme.AppendLine("Analyser le fonctionnement technique de la fonctionnalité observée.");
+        if (markerSequence > 0)
+        {
+            readme.AppendLine();
+            readme.AppendLine("Nouvelles ressources depuis le marqueur :");
+            foreach (var x in snapshot.Where(x => x.Sequence > markerSequence)) readme.AppendLine("+ " + x.FileName + " — " + x.Url);
+        }
+        await File.WriteAllTextAsync(Path.Combine(sessionDir, "CHATGPT-README.txt"), readme.ToString(), Encoding.UTF8);
+        await WriteResourceListAsync(snapshot);
+        await WriteHashesAsync(sessionDir);
+
+        var zip = Path.Combine(Log.Root, $"PiiWii-Web-Capture-{DateTime.Now:yyyy-MM-dd-HHmm}.zip");
+        if (File.Exists(zip)) File.Delete(zip);
+        ZipFile.CreateFromDirectory(sessionDir, zip, CompressionLevel.Optimal, false);
+        if (reveal)
+        {
+            SetStatus("🟢 Pack ChatGPT créé");
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zip}\"") { UseShellExecute = true });
+        }
+        return zip;
+    }
+
+    private async Task DownloadAllToSessionSilentlyAsync()
+    {
+        foreach (var item in SnapshotItems())
+        {
+            try
+            {
+                if (!item.BodyCaptured) await CaptureBodyAsync(item);
+                if (!item.BodyCaptured) continue;
+                var dir = Path.Combine(sessionDir, FolderFor(item.ResourceType));
+                Directory.CreateDirectory(dir);
+                var dst = Path.Combine(dir, SanitizeFileName(item.FileName));
+                if (!File.Exists(dst)) File.Copy(item.BodyPath!, dst, false);
+            }
+            catch { }
+        }
+        await SaveDomFinalAsync();
+        await ExportHarAsync(false);
+    }
+
+    private async Task<List<(ResourceItem item, int score)>> ScoreJsAsync(List<ResourceItem> snapshot)
+    {
+        var terms = new[] { "shape", "silhouette", "shapePixelate", "emoji", "mask", "matrix", "qr", "canvas", "finder", "module", "dotType" };
+        var list = new List<(ResourceItem item, int score)>();
+        foreach (var item in snapshot.Where(x => x.ResourceType == "JS" && x.BodyCaptured))
+        {
+            try
+            {
+                var text = await File.ReadAllTextAsync(item.BodyPath!, Encoding.UTF8);
+                var score = terms.Count(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
+                if (score > 0) list.Add((item, score));
+            }
+            catch { }
+        }
+        return list.OrderByDescending(x => x.score).ToList();
+    }
+
+    private async Task WriteResourceListAsync(List<ResourceItem> snapshot)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Type\tStatus\tTaille\tSHA-256\tFichier\tURL");
+        foreach (var x in snapshot.OrderBy(x => x.Sequence)) sb.AppendLine($"{x.ResourceType}\t{x.Status}\t{x.Size}\t{x.Sha256}\t{x.FileName}\t{x.Url}");
+        await File.WriteAllTextAsync(Path.Combine(sessionDir, "resources.tsv"), sb.ToString(), Encoding.UTF8);
+    }
+
+    private async Task WriteReportAsync(int ok, int fail, int ignored)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("PiiWii Web Asset Extractor 1.0.0");
+        sb.AppendLine($"URL : {initialUrl}");
+        sb.AppendLine($"Date : {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Ressources : {CountItems()}");
+        sb.AppendLine($"Réussis : {ok}");
+        sb.AppendLine($"Échecs : {fail}");
+        sb.AppendLine($"Ignorés : {ignored}");
+        await File.WriteAllTextAsync(Path.Combine(sessionDir, "rapport.txt"), sb.ToString(), Encoding.UTF8);
+    }
+
+    private static async Task WriteHashesAsync(string root)
+    {
+        var sb = new StringBuilder();
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Where(f => !f.EndsWith("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                await using var stream = File.OpenRead(file);
+                var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream)).ToLowerInvariant();
+                sb.AppendLine($"{hash}  {Path.GetRelativePath(root, file)}");
+            }
+            catch { }
+        }
+        await File.WriteAllTextAsync(Path.Combine(root, "SHA256SUMS.txt"), sb.ToString(), Encoding.UTF8);
+    }
+
+    private void SetStatus(string text)
+    {
+        if (InvokeRequired) { BeginInvoke(() => SetStatus(text)); return; }
+        lblStatus.Text = text;
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "resource.bin";
+        foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
+        return name.Length > 180 ? name[..180] : name;
+    }
+
+    private static string UniqueFileName(string dir, string name)
+    {
+        name = SanitizeFileName(name);
+        var path = Path.Combine(dir, name);
+        if (!File.Exists(path)) return name;
+        var stem = Path.GetFileNameWithoutExtension(name); var ext = Path.GetExtension(name);
+        for (var i = 2; i < 10000; i++)
+        {
+            var candidate = $"{stem}_{i}{ext}";
+            if (!File.Exists(Path.Combine(dir, candidate))) return candidate;
+        }
+        return Guid.NewGuid().ToString("N") + ext;
+    }
+}
