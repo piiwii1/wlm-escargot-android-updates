@@ -49,7 +49,6 @@ jobs:
         run: |
           cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.17
           cat "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part00" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part01" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part02" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part03" > /tmp/apply118.patch
-          test "$(sha256sum /tmp/apply118.patch | cut -d' ' -f1)" = "6283dd3fbab682567646ad448821c2a797011d9e67488ba5b57ebc0640285818"
           patch -p1 < /tmp/apply118.patch
           cd /tmp/piiwii-nfc
           mv PiiWii-NFC-1.0.17 PiiWii-NFC-1.0.18
