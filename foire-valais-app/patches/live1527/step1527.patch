@@ -1,0 +1,116 @@
+diff -ruN '--exclude=build' '--exclude=.gradle' foire_current/app/build.gradle.kts foire_1527_mod/app/build.gradle.kts
+--- foire_current/app/build.gradle.kts	2026-09-29 00:48:45.000000000 +0000
++++ foire_1527_mod/app/build.gradle.kts	2026-09-29 01:09:45.173928074 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 32
+-        versionName = "1.5.26"
++        versionCode = 33
++        versionName = "1.5.27"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN '--exclude=build' '--exclude=.gradle' foire_current/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire_1527_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire_current/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 00:48:45.000000000 +0000
++++ foire_1527_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 01:09:45.173278905 +0000
+@@ -189,6 +189,10 @@
+         announced.add(new Announced("TRIBUS","Annatar","Scène régionale · Espace Tribus"));
+         announced.add(new Announced("TRIBUS","Mr Banana","Spectacle d’art de rue"));
+         announced.add(new Announced("TRIBUS","Nosh","Pop-rock alternatif · date exacte à publier"));
++
++        // Programme officiel Espace Live 2026 (source : foireduvalais.ch, espace 967).
++        addOfficialLive(events);
++        removeLiveAnnouncements(announced);
+     }
+ 
+     void add(int id,int day,String start,String end,String name,String place,String zone,String category,String desc,boolean verified){add(id,day,start,end,name,place,zone,category,desc,verified,null);}
+@@ -196,6 +200,46 @@
+         events.add(new Event(id,day,start,end,name,place,zone,category,desc,verified,sourceUrl));
+     }
+ 
++
++    void addOfficialLive(ArrayList<Event> target){
++        for(Iterator<Event> it=target.iterator();it.hasNext();){if("LIVE".equals(it.next().zone))it.remove();}
++        target.add(new Event(1541,0,"09:30","14:00","Journée du Bureau des Métiers","Espace Live","LIVE","Conférence","en partenariat avec Matériaux de Construction Circulaires Valais",true,"https://www.foireduvalais.ch/fr/programme/journee-du-bureau-des-metiers-1541"));
++        target.add(new Event(986,0,"17:00","19:45","Goton le cool","Espace Live","LIVE","Concert","Hits, pop, rock et classiques de toutes les générations : Goton le cool ouvre la Foire avec un DJ set fédérateur, festif et plein de surprises.",true,"https://www.foireduvalais.ch/fr/programme/goton-le-cool-986"));
++        target.add(new Event(988,0,"20:00","23:00","Blind Test, karaoké & concert du groupe Shaka Waka","Espace Live","LIVE","Animation / Concert","Devinez les tubes, chantez les refrains et devenez acteurs du show avec Shaka Waka, pour une soirée de blind test et de karaoké entièrement live.",true,"https://www.foireduvalais.ch/fr/programme/blind-test-karaoke-concert-du-groupe-shaka-waka-988"));
++        target.add(new Event(992,1,"17:15","19:15","Polly Wants A Party","Espace Live","LIVE","Concert","De retour à la Foire du Valais, Polly Wants A Party enchaîne les grands classiques rock et pop dans un show énergique taillé pour faire chanter et danser.",true,"https://www.foireduvalais.ch/fr/programme/polly-wants-a-party-992"));
++        target.add(new Event(993,1,"19:30","21:30","Pop Idols","Espace Live","LIVE","Concert","Bruno Mars, Miley Cyrus, Michael Jackson, Dua Lipa, Queen ou Lady Gaga : Pop Idols réunit les plus grands hits dans un show moderne et ultra-festif.",true,"https://www.foireduvalais.ch/fr/programme/pop-idols-993"));
++        target.add(new Event(1074,2,"10:30","11:30","Loris Mittaz","Espace Live","LIVE","Concert","Entre classique, jazz et sonorités contemporaines, le pianiste valaisan Loris Mittaz transforme son parcours en une musique profondément sensible et lumineuse.",true,"https://www.foireduvalais.ch/fr/programme/loris-mittaz-1074"));
++        target.add(new Event(1087,2,"15:00","16:30","Disco Kids avec Linda Rao","Espace Live","LIVE","Animation","La piste de danse appartient aux enfants! Linda Rao fait bouger les plus jeunes avec une sélection festive de tubes connus de toutes les générations.",true,"https://www.foireduvalais.ch/fr/programme/disco-kids-avec-linda-rao-1087"));
++        target.add(new Event(1090,2,"18:30","21:30","Alpe Raver","Espace Live","LIVE","Concert","Un duo suisse de DJ et producteurs qui mêle hits, remixes tendance et créations originales dans des sets énergiques conçus pour faire vibrer toutes les pistes de danse.",true,"https://www.foireduvalais.ch/fr/programme/alpe-raver-1090"));
++        target.add(new Event(1587,3,"10:30","12:00","Rendez-Vous des Seniors","Espace Live","LIVE","Rendez-Vous de la Foire du Valais","La cause des femmes est plus que jamais au cœur de l’actualité et rarement en débattre aura paru aussi nécessaire. Yvette Théraulaz en invitée d’honneur.",true,"https://www.foireduvalais.ch/fr/programme/rendez-vous-des-seniors-1587"));
++        target.add(new Event(2066,3,"13:30","15:15","Jeu de l'Oie Géant des générations","Espace Live","LIVE","Animation","Un moment ludique et convivial où petits et grands, seuls, en duo ou en groupe, se retrouvent autour d’un jeu de l’oie géant.",true,"https://www.foireduvalais.ch/fr/programme/jeu-de-loie-geant-des-generations-2066"));
++        target.add(new Event(2067,3,"15:15","15:35","Le Prix Bravo récompense un engagement exceptionnel","Espace Live","LIVE","Conférence","Une belle occasion de rendre hommage à celles et ceux qui contribuent à améliorer la qualité de vie des seniors.",true,"https://www.foireduvalais.ch/fr/programme/le-prix-bravo-recompense-un-engagement-exceptionnel-2067"));
++        target.add(new Event(2068,3,"15:45","16:30","Les Gars du Rhône font vivre les traditions musicales","Espace Live","LIVE","Concert","Une prestation authentique et chaleureuse qui promet un moment d'émotion.",true,"https://www.foireduvalais.ch/fr/programme/les-gars-du-rhone-font-vivre-les-traditions-musicales-2068"));
++        target.add(new Event(1091,3,"19:30","21:30","Dynamite plays ACDC","Espace Live","LIVE","Concert","Du rock, de l’énergie et des riffs légendaires ! Dynamite fait vibrer la scène avec les plus grands classiques d’AC/DC et vous embarque pour un show électrisant.",true,"https://www.foireduvalais.ch/fr/programme/dynamite-plays-acdc-1091"));
++        target.add(new Event(2013,4,"10:00","12:00","Rendez-Vous de la Culture","Espace Live","LIVE","Rendez-Vous de la Foire du Valais","Les initiatives sont nombreuses pour encourager la rencontre entre la population et l’offre culturelle. Pour autant, les récentes statistiques mettent en évidence une baisse globale de fréquentation.",true,"https://www.foireduvalais.ch/fr/programme/rendez-vous-de-la-culture-2013"));
++        target.add(new Event(1092,4,"18:15","19:15","CEM Sonic Machine","Espace Live","LIVE","Concert","CEM Sonic Machine, c’est dix jeunes talents réunis par une même passion : faire vibrer la scène avec un rock puissant, audacieux et débordant d’énergie.",true,"https://www.foireduvalais.ch/fr/programme/cem-sonic-machine-1092"));
++        target.add(new Event(1093,4,"19:30","21:30","The Big Rock Show","Espace Live","LIVE","Concert","Les plus grands hymnes du rock mélodique des années 80.",true,"https://www.foireduvalais.ch/fr/programme/the-big-rock-show-1093"));
++        target.add(new Event(2015,5,"10:00","12:00","Rendez-Vous de la Santé","Espace Live","LIVE","Rendez-Vous de la Foire du Valais","Burn-out, télétravail, équilibre avec la vie privée: les grands enjeux de la santé au travail",true,"https://www.foireduvalais.ch/fr/programme/rendez-vous-de-la-sante-2015"));
++        target.add(new Event(2607,5,"14:30","15:20","Gabidou","Espace Live","LIVE","Spectacle","Gabidou magicien ou presque est un spectacle pour les petits, mais qui fera aussi rire les parents",true,"https://www.foireduvalais.ch/fr/programme/gabidou-2607"));
++        target.add(new Event(1094,5,"17:00","18:00","Metallikids","Espace Live","LIVE","Concert","For Kids & Parents since 2018! \nQui a dit que le métal n’était réservé qu’aux adultes?",true,"https://www.foireduvalais.ch/fr/programme/metallikids-1094"));
++        target.add(new Event(1095,5,"20:00","21:30","The Locos","Espace Live","LIVE","Concert","The Locos, c’est une explosion de ska-punk, d’énergie et de bonne humeur, portée par 20 ans de passion et des concerts inoubliables !",true,"https://www.foireduvalais.ch/fr/programme/the-locos-1095"));
++        target.add(new Event(2020,6,"10:00","12:00","Rendez-Vous du Sport","Espace Live","LIVE","Rendez-Vous de la Foire du Valais","Pour le premier Rendez-Vous de la Foire du Valais consacré au sport, venez découvrir le dossier de candidature de l'Association Valaisanne de Lutte Suisse à l'ESAF 31.",true,"https://www.foireduvalais.ch/fr/programme/rendez-vous-du-sport-2020"));
++        target.add(new Event(1096,6,"16:30","19:30","Yapaanda","Espace Live","LIVE","Concert","Yapaada, c’est un voyage musical sans frontières où l’afro house, les percussions et les influences du monde s’unissent pour faire vibrer la piste de danse.",true,"https://www.foireduvalais.ch/fr/programme/yapaanda-1096"));
++        target.add(new Event(1097,6,"20:00","21:30","Kadebostany","Espace Live","LIVE","Concert","Kadebostany revient sur le devant de la scène avec l’ère The Outsider.",true,"https://www.foireduvalais.ch/fr/programme/kadebostany-1097"));
++        target.add(new Event(2021,7,"10:00","11:50","Rendez-Vous Digital Valais","Espace Live","LIVE","Rendez-Vous de la Foire du Valais","La digitalisation redéfinit nos modes de vie et de travail. La maîtrise des données et la place de l’humain dans les évolutions technologiques deviennent des enjeux déterminants.",true,"https://www.foireduvalais.ch/fr/programme/rendez-vous-digital-valais-2021"));
++        target.add(new Event(1098,7,"18:00","19:30","RacKlet Rebels","Espace Live","LIVE","Concert","RacKlet Rebels, c’est l’énergie brute du rock et la puissance du hard rock réunies dans un show explosif porté par des musiciens d’expérience.",true,"https://www.foireduvalais.ch/fr/programme/racklet-rebels-1098"));
++        target.add(new Event(1099,7,"19:45","21:30","Balavoine Expérience","Espace Live","LIVE","Concert","Balavoine Expérience, un hommage vibrant à une icône de la chanson française, entre émotion, passion et souvenirs intemporels.",true,"https://www.foireduvalais.ch/fr/programme/balavoine-experience-1099"));
++        target.add(new Event(1085,8,"09:30","12:30","Atelier création de flipbooks","Espace Live","LIVE","Animation","Les enfants sont les bienvenus pour s'initier à la création de flipbooks encadrés par une équipe  du Festival du Film de Fribourg.",true,"https://www.foireduvalais.ch/fr/programme/atelier-creation-de-flipbooks-1085"));
++        target.add(new Event(1100,8,"19:00","20:00","Brassmaster Flash","Espace Live","LIVE","Concert","Énergique, innovante et audacieuse, la fanfare de rue de hip-hop Brassmaster Flash parcourt les scènes et les rues de Suisse et de l'étranger depuis 2017.",true,"https://www.foireduvalais.ch/fr/programme/brassmaster-flash-1100"));
++        target.add(new Event(965,8,"20:15","21:30","KT Gorique","Espace Live","LIVE","Concert","Artiste plurielle et engagée, KT Gorique est aujourd’hui l’une des figures les plus influentes du paysage musical suisse.",true,"https://www.foireduvalais.ch/fr/programme/kt-gorique-965"));
++        target.add(new Event(1121,9,"14:00","17:00","Swiss Mullet Cup","Espace Live","LIVE","Animation","La 2ème édition de la Swiss Mullet Cup se tiendra le dimanche 11 octobre 2026 à Martigny Expo, en plein cœur de la 66ème Foire du Valais.",true,"https://www.foireduvalais.ch/fr/programme/swiss-mullet-cup-1121"));
++        target.add(new Event(4128,9,"16:00","17:00","Mullet Party avec DJ Cel's","Espace Live","LIVE","Concert","Actif depuis de nombreuses années sur les scènes valaisannes et bien au-delà, DJ CELS s’est imposé comme l’un des DJs qui ont le plus marqué la scène festive valaisanne ces dernières années.",true,"https://www.foireduvalais.ch/fr/programme/mullet-party-avec-dj-cels-4128"));
++        target.add(new Event(2608,9,"17:00","21:30","Closing Party avec DJ Gaspari","Espace Live","LIVE","Concert","Gaspari, c’est avant tout une passion pour la musique, la scène et les moments qui rassemblent.",true,"https://www.foireduvalais.ch/fr/programme/closing-party-avec-dj-gaspari-2608"));
++    }
++
++    void removeLiveAnnouncements(ArrayList<Announced> list){
++        for(Iterator<Announced> it=list.iterator();it.hasNext();){if("LIVE".equals(it.next().zone))it.remove();}
++    }
++
+     void buildShell(){
+         root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(darkMode()?0xFF11131A:BG);
+         if(Build.VERSION.SDK_INT>=21){
+@@ -306,6 +350,17 @@
+ 
+ 
+     View eventThumb(Event e,int widthDp,int heightDp){
++        if(e!=null && "LIVE".equals(e.zone)){
++            int res=getResources().getIdentifier("live_"+e.id,"drawable",getPackageName());
++            if(res!=0){
++                ImageView im=new ImageView(this);
++                im.setImageResource(res);
++                im.setScaleType(ImageView.ScaleType.CENTER_CROP);
++                im.setBackground(round(darkMode()?0xFF252936:0xFFF0EDF3,14));
++                im.setClipToOutline(true);
++                im.setLayoutParams(new LinearLayout.LayoutParams(dp(widthDp),dp(heightDp)));
++                return im;
++            }
++        }
+         EventThumbView v=new EventThumbView(this,e);
+         v.setLayoutParams(new LinearLayout.LayoutParams(dp(widthDp),dp(heightDp)));
+         return v;
+@@ -852,7 +907,7 @@
+         content.addView(links);
+ 
+         settingsSection("À propos");
+-        settingsActionRow("i","Version 1.5.26","Foire du Valais 2026 · versionCode 32",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.26 · versionCode 32\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.27","Foire du Valais 2026 · versionCode 33",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.27 · versionCode 33\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+         info("Les favoris et rappels sont enregistrés localement sur cet appareil.");
+     }
+ 
+@@ -1165,6 +1220,8 @@
+             ArrayList<Announced> ann=new ArrayList<>();
+             JSONArray aa=root.optJSONArray("announced");
+             if(aa!=null)for(int i=0;i<aa.length();i++){JSONObject o=aa.getJSONObject(i);ann.add(new Announced(o.optString("zone",""),o.optString("name",""),o.optString("note","")));}
++            addOfficialLive(next);
++            removeLiveAnnouncements(ann);
+             events.clear();events.addAll(next);
+             if(!ann.isEmpty()){announced.clear();announced.addAll(ann);}
++            else removeLiveAnnouncements(announced);
+             if(upd.length()>=10)dataUpdated=upd.substring(8,10)+"."+upd.substring(5,7)+"."+upd.substring(0,4);
+             return true;
+         }catch(Exception e){return false;}
