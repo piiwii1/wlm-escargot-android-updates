@@ -1,0 +1,129 @@
+name: PiiWii NFC 1.0.35 Final Micro-Polish
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/piiwii-nfc-135.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download 1.0.34 source baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc135 /tmp/base134 /tmp/base134.zip
+          mkdir -p /tmp/nfc135 /tmp/base134
+          ART_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.34-build" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/base134.zip
+          unzip -q /tmp/base134.zip -d /tmp/base134
+          SRCZIP=$(find /tmp/base134 -type f -name 'PiiWii-NFC-1.0.34-SOURCES-BUILD.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc135
+          test -d /tmp/nfc135/PiiWii-NFC-1.0.34
+
+      - name: Apply final micro-polish
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc135/PiiWii-NFC-1.0.34
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/nfc135/PiiWii-NFC-1.0.34')
+          grad=root/'app/build.gradle'
+          s=grad.read_text()
+          s=s.replace('versionCode 35','versionCode 36').replace("versionName '1.0.34'","versionName '1.0.35'")
+          grad.write_text(s)
+          p=root/'app/src/main/res/layout/activity_main.xml'
+          x=p.read_text()
+          replacements={
+            'android:layout_height="84dp"':'android:layout_height="80dp"',
+            'android:layout_width="48dp"\n            android:layout_height="48dp"':'android:layout_width="46dp"\n            android:layout_height="46dp"',
+            'android:textSize="26sp"':'android:textSize="25sp"',
+            'android:layout_width="46dp"\n            android:layout_height="46dp"':'android:layout_width="44dp"\n            android:layout_height="44dp"',
+            'android:layout_height="58dp"':'android:layout_height="56dp"',
+            'android:textSize="9sp"':'android:textSize="8sp"',
+            'android:layout_height="142dp"':'android:layout_height="138dp"',
+            'android:layout_height="78dp"':'android:layout_height="74dp"',
+            'android:layout_height="100dp"':'android:layout_height="96dp"',
+            'android:layout_height="88dp"':'android:layout_height="84dp"',
+            'android:layout_height="76dp"':'android:layout_height="72dp"',
+          }
+          for a,b in replacements.items(): x=x.replace(a,b)
+          p.write_text(x)
+          ch=root/'CHANGELOG.md'
+          cs=ch.read_text() if ch.exists() else ''
+          ch.write_text('## 1.0.35\n- Micro-finition visuelle finale : en-tête, cartes et navigation inférieure plus proches des maquettes de référence.\n- Aucun changement du moteur NFC.\n\n'+cs)
+          PY
+          grep -q "applicationId 'ch.piiwii.nfc.app'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 36" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.0.35'" "$ROOT/app/build.gradle"
+
+      - name: Build release
+        working-directory: /tmp/nfc135/PiiWii-NFC-1.0.34
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Align and verify APK
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc135/PiiWii-NFC-1.0.34
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          IN="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUT=/tmp/PiiWii-NFC-1.0.35-ALIGNED-UNSIGNED.apk
+          "$BT/zipalign" -f -p 4 "$IN" "$OUT"
+          "$BT/zipalign" -c -v 4 "$OUT"
+          "$BT/aapt" dump badging "$OUT" | tee /tmp/badging135.txt
+          grep -q "package: name='ch.piiwii.nfc.app'" /tmp/badging135.txt
+          grep -q "versionCode='36'" /tmp/badging135.txt
+          grep -q "versionName='1.0.35'" /tmp/badging135.txt
+          if grep -q 'application-debuggable' /tmp/badging135.txt; then exit 1; fi
+          unzip -t "$OUT" >/dev/null
+
+      - name: Package deliverables
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/out135
+          cp /tmp/PiiWii-NFC-1.0.35-ALIGNED-UNSIGNED.apk /tmp/out135/
+          cd /tmp/nfc135
+          mv PiiWii-NFC-1.0.34 PiiWii-NFC-1.0.35
+          zip -qr /tmp/out135/PiiWii-NFC-1.0.35-SOURCES-BUILD.zip PiiWii-NFC-1.0.35
+          printf 'package=ch.piiwii.nfc.app\nversionCode=36\nversionName=1.0.35\nrelease=true\nscope=final micro-polish\n' > /tmp/out135/BUILD-IDENTITY.txt
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.35-build
+          path: /tmp/out135/
+          retention-days: 7
+          if-no-files-found: error
