@@ -1,5 +1,5 @@
 #define MyAppName "PiiWii Code Capture"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "PiiWii"
 #define MyAppExeName "PiiWii-Code-Capture.exe"
 
@@ -12,7 +12,7 @@ DefaultDirName={autopf}\PiiWii\Code Capture
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist
-OutputBaseFilename=PiiWii-Code-Capture-Setup-1.2.0
+OutputBaseFilename=PiiWii-Code-Capture-Setup-1.2.1
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -20,6 +20,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\app\app.ico
 
 [Files]
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
