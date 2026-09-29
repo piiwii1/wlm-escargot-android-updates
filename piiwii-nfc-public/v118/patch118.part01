@@ -1,0 +1,124 @@
+
+         }
+@@ -1556,6 +1612,7 @@
+             actions.addView(reuse, lp);
+         }
+         Button delete = historyActionButton("SUPPRIMER");
++        delete.setBackgroundResource(R.drawable.bg_red);
+         delete.setOnClickListener(v -> deleteHistoryEntry(entry.raw));
+         LinearLayout.LayoutParams deleteLp = historyButtonLayout();
+         deleteLp.leftMargin = dp(7);
+@@ -1577,6 +1634,14 @@
+         return button;
+     }
+ 
++    private int historyAccentBackground(String action) {
++        if (action.contains("Lecture")) return R.drawable.bg_blue;
++        if (action.contains("Écriture")) return R.drawable.bg_green;
++        if (action.contains("Copie")) return R.drawable.bg_purple;
++        if (action.contains("Effacement")) return R.drawable.bg_red;
++        return R.drawable.bg_card_soft;
++    }
++
+     private String historyIcon(String action) {
+         if (action.contains("Lecture")) return "⌕";
+         if (action.contains("Écriture")) return "✎";
+diff -ruN PiiWii-NFC-1.0.17-base/app/src/main/res/drawable/bg_read_hero.xml PiiWii-NFC-1.0.17/app/src/main/res/drawable/bg_read_hero.xml
+--- PiiWii-NFC-1.0.17-base/app/src/main/res/drawable/bg_read_hero.xml	1970-01-01 00:00:00.000000000 +0000
++++ PiiWii-NFC-1.0.17/app/src/main/res/drawable/bg_read_hero.xml	2026-09-29 10:34:53.852687669 +0000
+@@ -0,0 +1,5 @@
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <gradient android:angle="315" android:startColor="#12345A" android:centerColor="#0A2139" android:endColor="#071522" />
++    <corners android:radius="24dp" />
++    <stroke android:width="1dp" android:color="#248DD4" />
++</shape>
+diff -ruN PiiWii-NFC-1.0.17-base/app/src/main/res/drawable/bg_surface_glow.xml PiiWii-NFC-1.0.17/app/src/main/res/drawable/bg_surface_glow.xml
+--- PiiWii-NFC-1.0.17-base/app/src/main/res/drawable/bg_surface_glow.xml	1970-01-01 00:00:00.000000000 +0000
++++ PiiWii-NFC-1.0.17/app/src/main/res/drawable/bg_surface_glow.xml	2026-09-29 10:34:53.852719567 +0000
+@@ -0,0 +1,5 @@
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <gradient android:angle="270" android:startColor="#15314A" android:centerColor="#10263B" android:endColor="#0B1B2C" />
++    <corners android:radius="22dp" />
++    <stroke android:width="1dp" android:color="#2877A8" />
++</shape>
+diff -ruN PiiWii-NFC-1.0.17-base/app/src/main/res/layout/activity_main.xml PiiWii-NFC-1.0.17/app/src/main/res/layout/activity_main.xml
+--- PiiWii-NFC-1.0.17-base/app/src/main/res/layout/activity_main.xml	2026-09-29 10:30:28.000000000 +0000
++++ PiiWii-NFC-1.0.17/app/src/main/res/layout/activity_main.xml	2026-09-29 10:34:53.852437692 +0000
+@@ -257,16 +257,43 @@
+                 <LinearLayout
+                     android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
++                    android:gravity="center_vertical"
++                    android:orientation="horizontal"
++                    android:paddingBottom="14dp">
++                    <Button
++                        android:id="@+id/readBackButton"
++                        android:layout_width="48dp"
++                        android:layout_height="48dp"
++                        android:text="‹"
++                        android:textSize="28sp"
++                        android:textColor="@color/text"
++                        android:background="@drawable/bg_card_soft"
++                        android:stateListAnimator="@null" />
++                    <LinearLayout
++                        android:layout_width="0dp"
++                        android:layout_height="wrap_content"
++                        android:layout_weight="1"
++                        android:layout_marginStart="12dp"
++                        android:orientation="vertical">
++                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Lecture NFC" android:textColor="@color/text" android:textSize="24sp" android:textStyle="bold" />
++                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Lisez et inspectez votre tag" android:textColor="@color/muted" android:textSize="12sp" />
++                    </LinearLayout>
++                </LinearLayout>
++
++                <LinearLayout
++                    android:layout_width="match_parent"
++                    android:layout_height="wrap_content"
+                     android:orientation="vertical"
+                     android:gravity="center"
+-                    android:padding="20dp"
+-                    android:background="@drawable/bg_card">
++                    android:padding="22dp"
++                    android:elevation="6dp"
++                    android:background="@drawable/bg_read_hero">
+                     <TextView
+-                        android:layout_width="92dp"
+-                        android:layout_height="92dp"
++                        android:layout_width="104dp"
++                        android:layout_height="104dp"
+                         android:gravity="center"
+                         android:text="✓"
+-                        android:textSize="44sp"
++                        android:textSize="48sp"
+                         android:textColor="@color/cyan"
+                         android:background="@drawable/bg_glow_circle" />
+                     <TextView
+@@ -293,8 +320,9 @@
+                     android:layout_height="wrap_content"
+                     android:layout_marginTop="14dp"
+                     android:orientation="vertical"
+-                    android:padding="16dp"
+-                    android:background="@drawable/bg_card">
++                    android:padding="18dp"
++                    android:elevation="4dp"
++                    android:background="@drawable/bg_surface_glow">
+                     <TextView
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+@@ -497,6 +525,13 @@
+                 android:layout_height="wrap_content"
+                 android:orientation="vertical"
+                 android:padding="18dp">
++                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:paddingBottom="14dp">
++                    <Button android:id="@+id/writeBackButton" android:layout_width="48dp" android:layout_height="48dp" android:text="‹" android:textSize="28sp" android:textColor="@color/text" android:background="@drawable/bg_card_soft" android:stateListAnimator="@null" />
++                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="12dp" android:orientation="vertical">
++                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Écriture NFC" android:textColor="@color/text" android:textSize="24sp" android:textStyle="bold" />
++                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Choisissez ce que vous voulez enregistrer" android:textColor="@color/muted" android:textSize="12sp" />
++                    </LinearLayout>
++                </LinearLayout>
+                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Type de contenu" android:textColor="@color/text" android:textSize="16sp" android:textStyle="bold" />
+                 <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:scrollbars="none">
+                     <RadioGroup
+@@ -504,12 +539,12 @@
+                         android:layout_width="wrap_content"
+                         android:layout_height="wra
