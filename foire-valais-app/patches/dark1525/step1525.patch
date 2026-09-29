@@ -1,0 +1,61 @@
+diff -ruN foire_1525/app/build.gradle.kts foire_1525_mod/app/build.gradle.kts
+--- foire_1525/app/build.gradle.kts	2026-09-29 00:38:21.000000000 +0000
++++ foire_1525_mod/app/build.gradle.kts	2026-09-29 00:42:32.476355166 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 30
+-        versionName = "1.5.24"
++        versionCode = 31
++        versionName = "1.5.25"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN foire_1525/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire_1525_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire_1525/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 00:38:21.000000000 +0000
++++ foire_1525_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 00:42:32.476124868 +0000
+@@ -293,8 +293,8 @@
+             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44)); lp.setMargins(dp(4),0,dp(4),0); zoneRow.addView(b,lp);
+         }
+     }
+-    GradientDrawable programTabBackground(boolean active){GradientDrawable g=round(active?PINK:Color.WHITE,18); if(!active)g.setStroke(dp(1),0xFFE4DFE8); return g;}
+-    GradientDrawable programFilterBackground(boolean active){GradientDrawable g=round(active?PURPLE:0xFFF1EDF4,19); if(!active)g.setStroke(dp(1),0xFFE0DAE5); return g;}
++    GradientDrawable programTabBackground(boolean active){GradientDrawable g=round(active?PINK:Color.WHITE,18); if(!active)g.setStroke(dp(1),darkMode()?0xFF3A3F4C:0xFFE4DFE8); return g;}
++    GradientDrawable programFilterBackground(boolean active){GradientDrawable g=round(active?(darkMode()?0xFF39445A:PURPLE):0xFFF1EDF4,19); if(!active)g.setStroke(dp(1),darkMode()?0xFF3A3F4C:0xFFE0DAE5); return g;}
+     int countEvents(int day,String zone){int c=0;for(Event e:events)if(e.day==day&&(zone==null||matchesZone(e,zone)))c++;return c;}
+     int favoriteCount(){int c=0;for(Event e:events)if(prefs.getBoolean("fav"+e.id,false))c++;return c;}
+     int confirmedCount(){int c=0;for(Event e:events)if(e.verified)c++;return c;}
+@@ -851,7 +851,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.24","Foire du Valais 2026 · versionCode 30",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.24 · versionCode 30\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.25","Foire du Valais 2026 · versionCode 31",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.25 · versionCode 31\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1181,9 +1181,20 @@
+     void warning(String s){LinearLayout b=box(0xFFFFF0D6);b.addView(txt(s,13,ORANGE,true));content.addView(b,margin(0,3,0,9));}
+     void smallCard(String emoji,String name,String desc){LinearLayout c=box(Color.WHITE);LinearLayout r=new LinearLayout(this);r.setGravity(Gravity.TOP);TextView ic=txt(emoji,22,PURPLE,false);r.addView(ic,new LinearLayout.LayoutParams(dp(36),-2));LinearLayout t=new LinearLayout(this);t.setOrientation(LinearLayout.VERTICAL);t.addView(txt(name,15,PURPLE,true));TextView d=txt(desc,12,MUTED,false);d.setPadding(0,dp(2),0,0);t.addView(d);r.addView(t,new LinearLayout.LayoutParams(0,-2,1));c.addView(r);content.addView(c,margin(0,3,0,6));}
+     TextView actionButton(String label){TextView v=txt(label,14,Color.WHITE,true);v.setGravity(Gravity.CENTER);v.setPadding(dp(10),dp(11),dp(10),dp(11));v.setBackground(round(PINK,16));return v;}
+-    LinearLayout box(int color){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(14),dp(13),dp(14),dp(13));if(darkMode()&&color==Color.WHITE)color=0xFF1C1F28;l.setBackground(round(color,17));l.setElevation(dp(1));return l;}
+-    TextView txt(String s,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);int mapped=color;if(darkMode()&&color==PURPLE)mapped=0xFFF4F6FB;else if(darkMode()&&color==MUTED)mapped=0xFFADB4C2;else if(darkMode()&&color==0xFF493E52)mapped=0xFFD5D8E0;t.setTextColor(mapped);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setLineSpacing(0,1.05f);return t;}
+-    GradientDrawable round(int c,int r){GradientDrawable g=new GradientDrawable();if(darkMode()&&c==Color.WHITE)c=0xFF1C1F28;g.setColor(c);g.setCornerRadius(dp(r));return g;}
++    LinearLayout box(int color){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(14),dp(13),dp(14),dp(13));l.setBackground(round(color,17));l.setElevation(dp(1));return l;}
++    TextView txt(String s,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);int mapped=color;if(darkMode()&&color==PURPLE)mapped=0xFFF4F6FB;else if(darkMode()&&color==MUTED)mapped=0xFFB8C0CF;else if(darkMode()&&color==0xFF493E52)mapped=0xFFDDE2EC;else if(darkMode()&&color==0xFF7D8493)mapped=0xFFB8C0CF;else if(darkMode()&&color==0xFF777E8E)mapped=0xFFAEB8C9;else if(darkMode()&&color==0xFF9A2F00)mapped=0xFFFFA36F;else if(darkMode()&&color==0xFF77513E)mapped=0xFFE2C3B4;t.setTextColor(mapped);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setLineSpacing(0,1.05f);return t;}
++    int darkSurface(int c){
++        if(!darkMode())return c;
++        if(c==Color.WHITE)return 0xFF1C2029;
++        if(c==0xFFF1EDF4||c==0xFFECE7F0||c==0xFFF0E8F4||c==0xFFF1EDF5||c==0xFFF0EBF5||c==BRAND_SOFT)return 0xFF262B36;
++        if(c==0xFFFFE6F0||c==0xFFFFE6EA||c==0xFFFFE7F0||c==0xFFFFF1F3)return 0xFF35242B;
++        if(c==0xFFFFF0D6||c==0xFFFFF1DF||c==0xFFFFE9D7)return 0xFF342D22;
++        if(c==0xFFE7F0FF)return 0xFF202D40;
++        if(c==0xFFF1E5FF)return 0xFF2D253A;
++        if(c==0xFFF4F4F7)return 0xFF252A34;
++        return c;
++    }
++    GradientDrawable round(int c,int r){GradientDrawable g=new GradientDrawable();g.setColor(darkSurface(c));g.setCornerRadius(dp(r));return g;}
+     LinearLayout.LayoutParams margin(int l,int t,int r,int b){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(dp(l),dp(t),dp(r),dp(b));return p;}
+     int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
+     int dp(float v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
