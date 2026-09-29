@@ -1,0 +1,73 @@
+--- a/app/build.gradle.kts	2026-09-29 02:03:57.000000000 +0000
++++ b/app/build.gradle.kts	2026-09-29 02:14:02.948899424 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 37
+-        versionName = "1.5.31"
++        versionCode = 38
++        versionName = "1.5.32"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 02:07:26.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 02:14:02.949821836 +0000
+@@ -1026,6 +1026,7 @@
+             if(!prefs.getBoolean("notificationsEnabled",true)) cancelAllEventAlarms();
+             else rescheduleConfiguredAlarms();
+         });
++        settingsActionRow("🔔","Tester une notification","Afficher immédiatement un exemple de rappel",()->testNotification());
+         settingsToggleRow("📣","Actualités de la Foire","Recevoir les infos, annonces et temps forts","fairNewsEnabled",true,null);
+ 
+         settingsSectionHeader("▣","Programme & hors ligne","Mises à jour et données enregistrées");
+@@ -1041,7 +1042,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.31","Foire du Valais 2026 · versionCode 37",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.31 · versionCode 37\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.32","Foire du Valais 2026 · versionCode 38",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.32 · versionCode 38\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · test de notification intégré · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1372,6 +1373,40 @@
+     }
+ 
+     void createChannel(){if(Build.VERSION.SDK_INT>=26)((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(new NotificationChannel(EventReceiver.CHANNEL,"Mes événements Foire",NotificationManager.IMPORTANCE_HIGH));}
++
++    void testNotification(){
++        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
++            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},51);
++            return;
++        }
++        showTestNotification();
++    }
++
++    void showTestNotification(){
++        createChannel();
++        NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
++        Intent open=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
++        PendingIntent pi=PendingIntent.getActivity(this,1532,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
++        Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,EventReceiver.CHANNEL):new Notification.Builder(this);
++        b.setSmallIcon(R.drawable.ic_launcher)
++                .setContentTitle("Bientôt : Notification test")
++                .setContentText("Voilà à quoi ressemblera un rappel de la Foire du Valais.")
++                .setAutoCancel(true)
++                .setContentIntent(pi)
++                .setCategory(Notification.CATEGORY_EVENT)
++                .setPriority(Notification.PRIORITY_HIGH);
++        nm.notify(1532,b.build());
++        Toast.makeText(this,"Notification test envoyée",Toast.LENGTH_SHORT).show();
++    }
++
++    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
++        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
++        if(requestCode==51){
++            if(grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED) showTestNotification();
++            else Toast.makeText(this,"Autorise les notifications Android pour afficher le test.",Toast.LENGTH_LONG).show();
++        }
++    }
++
+     void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception ignored){}}
+     void openNotificationSettings(){try{Intent i=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);i.putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName());startActivity(i);}catch(Exception ignored){}}
+ 
