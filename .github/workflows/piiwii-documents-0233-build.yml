@@ -4,7 +4,7 @@ on:
     branches: [build/piiwii-documents-0.23.3]
     paths:
       - '.github/workflows/piiwii-documents-0233-build.yml'
-      - 'build-piiwii-documents-0233/source.zip'
+      - 'build-piiwii-documents-0233/chunks/**'
   workflow_dispatch:
 
 permissions:
@@ -16,15 +16,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract source candidate
+      - name: Reassemble and verify source candidate
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not (Test-Path 'build-piiwii-documents-0233\source.zip')) { throw 'Archive source introuvable.' }
-          $actual = (Get-FileHash 'build-piiwii-documents-0233\source.zip' -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne '316c60ae19d890cb8071b1b4621a02bb6e587226c113d161dc247e66287da69f') { throw "SHA256 source invalide: $actual" }
+          $expected = @(
+            '62b205ebbe67c691034d2725685bcf5ac8c993dfec7ec71b15273d715b1cecfa',
+            '0df8d8c11e126e720137d1d76857f28e1961cbd0eca747b2c3e71f26cfc8a5b0',
+            'ca8d6bc40f086b224cf89cf6157a78d0d27b14b72a6225a53ced28f702de3471',
+            'a4e7ee7920ae9fcddef051443c882f708d066afb4f50151591c5e99a0e630afa',
+            'baf3b3e9d7bbed99d49368fcf068fa8344a2a8f3d1556a9a3164a0f9f53cf735'
+          )
+          $all = New-Object System.Text.StringBuilder
+          for ($i=0; $i -lt 5; $i++) {
+            $name = '{0:D2}' -f $i
+            $path = "build-piiwii-documents-0233\chunks\$name"
+            if (-not (Test-Path $path)) { throw "Chunk $name absent." }
+            $text = (Get-Content $path -Raw).Trim()
+            $bytes = [Text.Encoding]::ASCII.GetBytes($text)
+            $sha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLower()
+            Write-Host "Chunk $name len=$($text.Length) sha=$sha"
+            if ($sha -ne $expected[$i]) { throw "Chunk $name corrompu: $sha" }
+            [void]$all.Append($text)
+          }
+          $zipBytes = [Convert]::FromBase64String($all.ToString())
+          [IO.File]::WriteAllBytes('build-piiwii-documents-0233\source-rebuilt.zip',$zipBytes)
+          $actual = (Get-FileHash 'build-piiwii-documents-0233\source-rebuilt.zip' -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne '316c60ae19d890cb8071b1b4621a02bb6e587226c113d161dc247e66287da69f') { throw "SHA256 archive reconstruite invalide: $actual" }
           New-Item -ItemType Directory -Force build-piiwii-documents-0233\work | Out-Null
-          Expand-Archive -Path build-piiwii-documents-0233\source.zip -DestinationPath build-piiwii-documents-0233\work -Force
+          Expand-Archive -Path build-piiwii-documents-0233\source-rebuilt.zip -DestinationPath build-piiwii-documents-0233\work -Force
           if (-not (Test-Path 'build-piiwii-documents-0233\work\src\PiiWii.Documents\PiiWii.Documents.csproj')) { throw 'Source application introuvable.' }
           if (-not (Test-Path 'build-piiwii-documents-0233\work\src\PiiWii.Documents.Installer\PiiWii.Documents.Installer.csproj')) { throw 'Source installateur introuvable.' }
 
