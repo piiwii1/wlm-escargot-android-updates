@@ -126,7 +126,8 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "PiiWii Code Capture 1.2.0";
+        Text = "PiiWii Code Capture 1.2.1";
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Width = 1380;
         Height = 900;
         MinimumSize = new Size(980, 680);
