@@ -1,0 +1,162 @@
+diff -ruN PiiWii-NFC-1.0.17-base/app/build.gradle PiiWii-NFC-1.0.17/app/build.gradle
+--- PiiWii-NFC-1.0.17-base/app/build.gradle	2026-09-29 10:30:28.000000000 +0000
++++ PiiWii-NFC-1.0.17/app/build.gradle	2026-09-29 10:34:53.852621839 +0000
+@@ -7,11 +7,11 @@
+     compileSdk 35
+ 
+     defaultConfig {
+-        applicationId 'ch.piiwii.nfc.v117'
++        applicationId 'ch.piiwii.nfc.v118'
+         minSdk 24
+         targetSdk 34
+-        versionCode 18
+-        versionName '1.0.17'
++        versionCode 19
++        versionName '1.0.18'
+     }
+ 
+     buildTypes {
+diff -ruN PiiWii-NFC-1.0.17-base/app/src/main/java/ch/piiwii/nfc/MainActivity.java PiiWii-NFC-1.0.17/app/src/main/java/ch/piiwii/nfc/MainActivity.java
+--- PiiWii-NFC-1.0.17-base/app/src/main/java/ch/piiwii/nfc/MainActivity.java	2026-09-29 10:30:28.000000000 +0000
++++ PiiWii-NFC-1.0.17/app/src/main/java/ch/piiwii/nfc/MainActivity.java	2026-09-29 10:39:46.515954024 +0000
+@@ -114,6 +114,9 @@
+     private View writerPanel;
+     private View technicalPanel;
+     private RadioGroup typeGroup;
++    private Button readBackButton, writeBackButton, writeAdvancedButton;
++    private Button historyAll, historyReads, historyWrites, historyCopies, historyErase;
++    private LinearLayout writeAdvancedPanel;
+     private RadioButton typeUrl;
+     private RadioButton typePhone;
+     private RadioButton typeEmail;
+@@ -190,6 +193,10 @@
+         writerPanel = findViewById(R.id.writerPanel);
+         technicalPanel = findViewById(R.id.technicalPanel);
+         typeGroup = findViewById(R.id.typeGroup);
++        readBackButton = findViewById(R.id.readBackButton);
++        writeBackButton = findViewById(R.id.writeBackButton);
++        writeAdvancedButton = findViewById(R.id.writeAdvancedButton);
++        writeAdvancedPanel = findViewById(R.id.writeAdvancedPanel);
+         typeUrl = findViewById(R.id.typeUrl);
+         typePhone = findViewById(R.id.typePhone);
+         typeEmail = findViewById(R.id.typeEmail);
+@@ -218,11 +225,11 @@
+         navToolsButton = navTools;
+         navHistoryButton = navHistory;
+         navSettingsButton = navSettings;
+-        Button historyAll = findViewById(R.id.historyAll);
+-        Button historyReads = findViewById(R.id.historyReads);
+-        Button historyWrites = findViewById(R.id.historyWrites);
+-        Button historyCopies = findViewById(R.id.historyCopies);
+-        Button historyErase = findViewById(R.id.historyErase);
++        historyAll = findViewById(R.id.historyAll);
++        historyReads = findViewById(R.id.historyReads);
++        historyWrites = findViewById(R.id.historyWrites);
++        historyCopies = findViewById(R.id.historyCopies);
++        historyErase = findViewById(R.id.historyErase);
+         Button toolsCopyButton = findViewById(R.id.toolsCopyButton);
+         Button toolsEraseButton = findViewById(R.id.toolsEraseButton);
+         Button toolsImportButton = findViewById(R.id.toolsImportButton);
+@@ -315,6 +322,13 @@
+         historyWrites.setOnClickListener(v -> { historyFilter = "Écriture"; renderHistory(); });
+         historyCopies.setOnClickListener(v -> { historyFilter = "Copie"; renderHistory(); });
+         historyErase.setOnClickListener(v -> { historyFilter = "Effacement"; renderHistory(); });
++        readBackButton.setOnClickListener(v -> showPage("home"));
++        writeBackButton.setOnClickListener(v -> showPage("home"));
++        writeAdvancedButton.setOnClickListener(v -> {
++            boolean open = writeAdvancedPanel.getVisibility() != View.VISIBLE;
++            writeAdvancedPanel.setVisibility(open ? View.VISIBLE : View.GONE);
++            writeAdvancedButton.setText(open ? "⚙   OPTIONS AVANCÉES                                      ⌃" : "⚙   OPTIONS AVANCÉES                                      ›");
++        });
+         toolsCopyButton.setOnClickListener(v -> startCopyFlow());
+         toolsEraseButton.setOnClickListener(v -> confirmErase());
+         toolsImportButton.setOnClickListener(v -> importNdef());
+@@ -1476,6 +1490,7 @@
+     }
+ 
+     private void renderHistory() {
++        updateHistoryFilterUi();
+         String h = prefs.getString("items", "");
+         historyList.removeAllViews();
+         if (h.isEmpty()) {
+@@ -1501,6 +1516,16 @@
+         }
+     }
+ 
++    private void updateHistoryFilterUi() {
++        Button[] buttons = {historyAll, historyReads, historyWrites, historyCopies, historyErase};
++        String[] filters = {"Tous", "Lecture", "Écriture", "Copie", "Effacement"};
++        for (int i = 0; i < buttons.length; i++) {
++            boolean active = filters[i].equals(historyFilter);
++            buttons[i].setBackgroundResource(active ? R.drawable.bg_blue : R.drawable.bg_chip);
++            buttons[i].setTextColor(getColor(active ? R.color.text : R.color.muted));
++        }
++    }
++
+     private void addHistoryCard(HistoryEntry entry) {
+         LinearLayout card = new LinearLayout(this);
+         card.setOrientation(LinearLayout.VERTICAL);
+@@ -1510,20 +1535,50 @@
+         cardLp.bottomMargin = dp(10);
+         historyList.addView(card, cardLp);
+ 
++        card.setElevation(dp(3));
++
++        LinearLayout header = new LinearLayout(this);
++        header.setOrientation(LinearLayout.HORIZONTAL);
++        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
++        card.addView(header, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
++
++        TextView icon = new TextView(this);
++        icon.setText(historyIcon(entry.action));
++        icon.setGravity(android.view.Gravity.CENTER);
++        icon.setTextSize(21);
++        icon.setTextColor(getColor(R.color.text));
++        icon.setBackgroundResource(historyAccentBackground(entry.action));
++        header.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
++
++        LinearLayout titleWrap = new LinearLayout(this);
++        titleWrap.setOrientation(LinearLayout.VERTICAL);
++        LinearLayout.LayoutParams twLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
++        twLp.leftMargin = dp(11);
++        header.addView(titleWrap, twLp);
++
+         TextView title = new TextView(this);
+-        title.setText(historyIcon(entry.action) + "  " + entry.action);
++        title.setText(entry.action);
+         title.setTextColor(getColor(R.color.text));
+-        title.setTextSize(17);
++        title.setTextSize(16);
+         title.setTypeface(null, android.graphics.Typeface.BOLD);
+-        card.addView(title);
++        titleWrap.addView(title);
+ 
+         TextView meta = new TextView(this);
+-        meta.setText(entry.date + "   •   UID " + entry.uid);
++        meta.setText(entry.date + "  •  UID " + entry.uid);
+         meta.setTextColor(getColor(R.color.muted));
+         meta.setTextSize(11);
+         LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+-        metaLp.topMargin = dp(4);
+-        card.addView(meta, metaLp);
++        metaLp.topMargin = dp(3);
++        titleWrap.addView(meta, metaLp);
++
++        TextView badge = new TextView(this);
++        badge.setText(detectHistoricalType(entry.details));
++        badge.setTextSize(10);
++        badge.setTextColor(getColor(R.color.cyan));
++        badge.setGravity(android.view.Gravity.CENTER);
++        badge.setPadding(dp(9), 0, dp(9), 0);
++        badge.setBackgroundResource(R.drawable.bg_chip);
++        header.addView(badge, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)));
+ 
+         if (!TextUtils.isEmpty(entry.details)) {
+             TextView details = new TextView(this);
+@@ -1545,6 +1600,7 @@
+ 
+         if (!entry.action.contains("Effacement")) {
+             Button open = historyActionButton("OUVRIR");
++            open.setBackgroundResource(R.drawable.bg_blue);
+             open.setOnClickListener(v -> openHistoryEntry(entry));
+             actions.addView(open, historyButtonLayout());
