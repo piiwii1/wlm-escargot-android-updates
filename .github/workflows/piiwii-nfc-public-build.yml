@@ -1,10 +1,10 @@
-name: PiiWii NFC 1.0.8 Visual Redesign Build
+name: PiiWii NFC 1.0.9 Ergonomics Build
 
 on:
   push:
     branches: [ main ]
     paths:
-      - 'piiwii-nfc-public/v108/**'
+      - 'piiwii-nfc-public/v109/**'
       - '.github/workflows/piiwii-nfc-public-build.yml'
   workflow_dispatch:
 
@@ -34,7 +34,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Prepare 1.0.8 sources
+      - name: Prepare 1.0.9 sources
         run: |
           rm -rf /tmp/piiwii-nfc
           mkdir -p /tmp/piiwii-nfc
@@ -65,39 +65,42 @@ jobs:
           python3 /tmp/apply108.py
           cd /tmp/piiwii-nfc
           mv PiiWii-NFC-1.0.7 PiiWii-NFC-1.0.8
+          cd PiiWii-NFC-1.0.8
+          python3 -c 'import base64,zlib; open("/tmp/apply109.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v109/apply109.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply109.patch | cut -d' ' -f1)" = "c1c39081b6e5d03436fe38df1e5e04dbb985116be974bf0e0619684e0c8d28af"
+          git apply /tmp/apply109.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.8 PiiWii-NFC-1.0.9
       - name: Build APK
-        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.8
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.9
         run: gradle --no-daemon --stacktrace assembleDebug
-      - name: Verify APK and visual redesign
+      - name: Verify APK and ergonomics
         run: |
           AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
           APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
-          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.8
+          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.9
           APK=$ROOT/app/build/outputs/apk/debug/app-debug.apk
           "$AAPT" dump badging "$APK" | head -20
           "$APKSIGNER" verify --verbose --print-certs "$APK"
-          grep -q "versionName '1.0.8'" "$ROOT/app/build.gradle"
-          grep -q "versionCode 9" "$ROOT/app/build.gradle"
-          grep -q "applicationId 'ch.piiwii.nfc.v108'" "$ROOT/app/build.gradle"
-          grep -q 'homePage' "$ROOT/app/src/main/res/layout/activity_main.xml"
-          grep -q 'navHome' "$ROOT/app/src/main/res/layout/activity_main.xml"
-          grep -q 'navTools' "$ROOT/app/src/main/res/layout/activity_main.xml"
-          grep -q 'readPage' "$ROOT/app/src/main/res/layout/activity_main.xml"
-          grep -q 'writePage' "$ROOT/app/src/main/res/layout/activity_main.xml"
-          grep -q 'historyPage' "$ROOT/app/src/main/res/layout/activity_main.xml"
-          grep -q 'showPage' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q "versionName '1.0.9'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 10" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v109'" "$ROOT/app/build.gradle"
+          grep -q 'readTypeBadge' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'historyAll' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'updateBottomNav' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q 'detectContentType' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
       - name: Package deliverables
         run: |
-          mkdir -p piiwii-nfc-public/dist-108
-          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.8/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-108/PiiWii-NFC-1.0.8.apk
+          mkdir -p piiwii-nfc-public/dist-109
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.9/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-109/PiiWii-NFC-1.0.9.apk
           cd /tmp/piiwii-nfc
-          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-108/PiiWii-NFC-1.0.8-SOURCES.zip" PiiWii-NFC-1.0.8
-          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-108"
-          sha256sum PiiWii-NFC-1.0.8.apk PiiWii-NFC-1.0.8-SOURCES.zip > SHA256SUMS.txt
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-109/PiiWii-NFC-1.0.9-SOURCES.zip" PiiWii-NFC-1.0.9
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-109"
+          sha256sum PiiWii-NFC-1.0.9.apk PiiWii-NFC-1.0.9-SOURCES.zip > SHA256SUMS.txt
       - name: Upload deliverables
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-NFC-1.0.8
-          path: piiwii-nfc-public/dist-108/
+          name: PiiWii-NFC-1.0.9
+          path: piiwii-nfc-public/dist-109/
           retention-days: 7
           if-no-files-found: error
