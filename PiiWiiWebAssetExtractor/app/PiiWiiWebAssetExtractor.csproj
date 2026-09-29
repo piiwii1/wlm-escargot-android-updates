@@ -5,14 +5,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>PiiWii-Web-Asset-Extractor</AssemblyName>
+    <AssemblyName>PiiWii-Code-Capture</AssemblyName>
     <RootNamespace>PiiWiiWebAssetExtractor</RootNamespace>
-    <Version>1.1.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <Product>PiiWii Web Asset Extractor</Product>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+    <Product>PiiWii Code Capture</Product>
     <Company>PiiWii</Company>
-    <Description>Simple WebView2 network asset capture tool.</Description>
+    <Description>Capture le code et les ressources d'une page web ou d'une zone sélectionnée.</Description>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Platforms>x64</Platforms>
   </PropertyGroup>
