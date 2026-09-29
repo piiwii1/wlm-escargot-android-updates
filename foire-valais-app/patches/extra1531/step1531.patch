@@ -1,0 +1,130 @@
+diff -ruN foire1531src/app/build.gradle.kts foire1531mod/app/build.gradle.kts
+--- foire1531src/app/build.gradle.kts	2026-09-29 01:46:53.000000000 +0000
++++ foire1531mod/app/build.gradle.kts	2026-09-29 01:57:55.159031168 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 36
+-        versionName = "1.5.30"
++        versionCode = 37
++        versionName = "1.5.31"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN foire1531src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire1531mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire1531src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 01:46:53.000000000 +0000
++++ foire1531mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 02:00:11.351122190 +0000
+@@ -48,7 +48,7 @@
+     SharedPreferences prefs;
+ 
+     final String[] days={"Ven 2","Sam 3","Dim 4","Lun 5","Mar 6","Mer 7","Jeu 8","Ven 9","Sam 10","Dim 11"};
+-    final String[] zones={"TOUT","LIVE","TRIBUS","RENDEZ-VOUS","FOIRE & ANIM.","DÉGUSTATIONS","INNOTHÈQUE","BONNE DE BOURBON","CONFÉRENCES","HALLES","AUTRES","★ MES CHOIX"};
++    final String[] zones={"TOUT","LIVE","TRIBUS","RENDEZ-VOUS","FOIRE & ANIM.","DÉGUSTATIONS","INNOTHÈQUE","BONNE DE BOURBON","CONFÉRENCES","HALLES","AUTRES","EN VILLE","★ MES CHOIX"};
+     final String[] searchFilters={"Tous","Concerts","Tribus","Live","Aujourd’hui","Gratuit"};
+     final String[] trendSearches={"Shaka Waka","Justine Tornay","Kadebostany","Animations"};
+     final ArrayList<Event> events=new ArrayList<>();
+@@ -66,7 +66,8 @@
+         else if(Build.VERSION.SDK_INT>=23) w.getDecorView().setSystemUiVisibility(dark?0:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+         selectedDay=Math.max(0,Math.min(9,prefs.getInt("lastDay",0)));
+         int savedZone=prefs.getInt("lastZone",0);
+-        if(!prefs.getBoolean("zones1529Migrated",false)){if(savedZone==6)savedZone=zones.length-1;prefs.edit().putBoolean("zones1529Migrated",true).putInt("lastZone",savedZone).apply();}
++        if(!prefs.getBoolean("zones1529Migrated",false)){if(savedZone==6)savedZone=11;prefs.edit().putBoolean("zones1529Migrated",true).putInt("lastZone",savedZone).apply();}
++        if(!prefs.getBoolean("zones1531Migrated",false)){if(savedZone==11)savedZone=12;prefs.edit().putBoolean("zones1531Migrated",true).putInt("lastZone",savedZone).apply();}
+         selectedZone=Math.max(0,Math.min(zones.length-1,savedZone));
+         seed();
+         loadCachedProgramme();
+@@ -200,6 +201,8 @@
+         removeTribusAnnouncements(announced);
+         // Tous les autres espaces officiels 2026 (Innothèque, Bonne de Bourbon, Conférences, Halles et programmes sans espace).
+         addOfficialOtherSpaces(events);
++        // Evénements liés à la Foire publiés hors du moteur de programme principal.
++        addOutsideFoireEvents(events);
+     }
+ 
+     void add(int id,int day,String start,String end,String name,String place,String zone,String category,String desc,boolean verified){add(id,day,start,end,name,place,zone,category,desc,verified,null);}
+@@ -344,6 +347,15 @@
+         target.add(new Event(2057,8,"14:00","15:00","NOCTURNE ÉLIXIR: une innovation valaisanne en route pour Séoul","Innothèque","INNOTHÈQUE","Conférence","Comment recréer la profondeur, la complexité et le rituel de dégustation d’un grand spiritueux… sans une goutte d’alcool?",true,"https://www.foireduvalais.ch/fr/programme/nocturne-elixir-une-innovation-valaisanne-en-route-pour-seoul-2057"));
+     }
+ 
++    void addOutsideFoireEvents(ArrayList<Event> target){
++        int[] ids={101,31001,31002,31003,31004};
++        for(Iterator<Event> it=target.iterator();it.hasNext();){int id=it.next().id;for(int x:ids)if(id==x){it.remove();break;}}
++        target.add(new Event(31001,1,"13:45","—","Cortège de la Foire du Valais","Avenue de la Gare · départ devant la Poste","EN VILLE","Cortège / Tradition","Le grand cortège de la 66e édition traverse le centre de Martigny avec fanfares, groupes folkloriques, costumes, animations et surprises. Les communes valaisannes invitées Brig-Glis et Port-Valais prennent part au défilé. Gratuit et ouvert à toutes et tous.",true,"https://www.martigny.ch/fr/bienvenue/manifestations/foire-du-valais-cortege-17536/"));
++        target.add(new Event(31002,1,"22:00","04:00","After Foire · From Rock'n'roll to Daft Punk","Caves du Manoir · Rue du Manoir 3","EN VILLE","After Foire / DJ","After Foire aux Caves du Manoir : 22:00–01:00 Wicked Wax, puis 01:00–04:00 Donkey Komp. Prix dès CHF 5.–.",true,"https://www.martigny.ch/fr/bienvenue/manifestations/caves-du-manoir-after-foire-17341/?date=20261003"));
++        target.add(new Event(31003,8,"22:00","04:00","After Foire · From Bamboche to Techno","Caves du Manoir · Rue du Manoir 3","EN VILLE","After Foire / DJ","After Foire aux Caves du Manoir : 22:00–00:00 Irma & the Paillett’s, 00:00–02:00 SolarVelcro, puis 02:00–04:00 Valkoo. Prix dès CHF 5.–.",true,"https://www.martigny.ch/fr/bienvenue/manifestations/caves-du-manoir-after-foire-17341/?date=20261010"));
++        target.add(new Event(31004,8,"—","—","Projection publique · Concours de courts-métrages","Foire du Valais · Martigny Expo","FOIRE & ANIM.","Cinéma / Projection","Les courts-métrages réalisés pendant la Foire seront projetés publiquement le 10 octobre et départagés par un jury. La projection sera précédée d’une table ronde sur la démocratisation et l’accès à la culture. Horaire précis pas encore publié dans les sources consultées.",true,"https://www.valaisfilms.ch/event-details/foire-du-valais-concours-de-courts-metrages"));
++    }
++
+     void buildShell(){
+         root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(darkMode()?0xFF11131A:BG);
+         if(Build.VERSION.SDK_INT>=21){
+@@ -433,7 +445,7 @@
+     void zoneButtons(boolean show){
+         zoneRow.removeAllViews(); zoneRow.setVisibility(show?View.VISIBLE:View.GONE); if(!show)return;
+         zoneRow.setPadding(dp(10),0,dp(10),dp(10));
+-        String[] labels={"Tous","Live","Tribus","Rendez-vous","Foire","Dégustations","Innothèque","Bonne de Bourbon","Conférences","Halles","Autres","Mes choix"};
++        String[] labels={"Tous","Live","Tribus","Rendez-vous","Foire","Dégustations","Innothèque","Bonne de Bourbon","Conférences","Halles","Autres","En ville","Mes choix"};
+         for(int i=0;i<zones.length;i++){
+             final int z=i; boolean active=i==selectedZone;
+             TextView b=txt(labels[i],13,active?Color.WHITE:PURPLE,true);
+@@ -821,6 +833,7 @@
+         if(e.zone.equals("DÉGUSTATIONS")||e.zone.equals("INNOTHÈQUE"))return 0xFF7A2DC7;
+         if(e.zone.equals("RENDEZ-VOUS")||e.zone.equals("BONNE DE BOURBON"))return 0xFF9A355A;
+         if(e.zone.equals("AUTRES"))return 0xFF6B7280;
++        if(e.zone.equals("EN VILLE"))return 0xFF0F766E;
+         return PINK;
+     }
+     int lightZoneColor(Event e){
+@@ -829,6 +842,7 @@
+         if(e.zone.equals("DÉGUSTATIONS")||e.zone.equals("INNOTHÈQUE"))return 0xFFF1E5FF;
+         if(e.zone.equals("RENDEZ-VOUS")||e.zone.equals("BONNE DE BOURBON"))return 0xFFFFE7F0;
+         if(e.zone.equals("AUTRES"))return 0xFFF4F4F7;
++        if(e.zone.equals("EN VILLE"))return 0xFFE3F5F2;
+         return 0xFFFFE6EA;
+     }
+     void emptyState(String titleText,String message){
+@@ -850,6 +864,7 @@
+         if(z.equals("CONFÉRENCES"))return e.zone.equals("CONFÉRENCES");
+         if(z.equals("HALLES"))return e.zone.equals("HALLES");
+         if(z.equals("AUTRES"))return e.zone.equals("AUTRES");
++        if(z.equals("EN VILLE"))return e.zone.equals("EN VILLE");
+         if(z.equals("★ MES CHOIX"))return prefs.getBoolean("fav"+e.id,false);
+         return true;
+     }
+@@ -1026,7 +1041,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.30","Foire du Valais 2026 · versionCode 36",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.30 · versionCode 36\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.31","Foire du Valais 2026 · versionCode 37",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.31 · versionCode 37\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1191,7 +1206,9 @@
+     void addToCalendar(Event e){
+         try{
+             long begin=eventMillis(e); if(begin==Long.MAX_VALUE)return;
+-            int em=parseMinutes(e.end); long finish=em>=0?begin+(em-parseMinutes(e.start))*60000L:begin+3600000L;
++            int sm=parseMinutes(e.start), em=parseMinutes(e.end);
++            long finish;
++            if(em>=0&&sm>=0){int delta=em-sm;if(delta<=0)delta+=24*60;finish=begin+delta*60000L;}else finish=begin+3600000L;
+             Intent i=new Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI)
+                     .putExtra(CalendarContract.Events.TITLE,e.name)
+                     .putExtra(CalendarContract.Events.EVENT_LOCATION,e.place)
+@@ -1345,6 +1362,7 @@
+             addOfficialTribus(next);
+             removeTribusAnnouncements(ann);
+             addOfficialOtherSpaces(next);
++            addOutsideFoireEvents(next);
+             events.clear();events.addAll(next);
+             if(!ann.isEmpty()){announced.clear();announced.addAll(ann);}
+             else { removeLiveAnnouncements(announced); removeTribusAnnouncements(announced); }
+@@ -1373,6 +1391,7 @@
+         if(c==0xFFE7F0FF)return 0xFF202D40;
+         if(c==0xFFF1E5FF)return 0xFF2D253A;
+         if(c==0xFFF4F4F7)return 0xFF252A34;
++        if(c==0xFFE3F5F2)return 0xFF173733;
+         return c;
+     }
+     GradientDrawable round(int c,int r){GradientDrawable g=new GradientDrawable();g.setColor(darkSurface(c));g.setCornerRadius(dp(r));return g;}
