@@ -1,0 +1,205 @@
+diff -ruN a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts	2026-09-29 09:59:50.000000000 +0000
++++ b/app/build.gradle.kts	2026-09-29 10:09:16.347259311 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 40
+-        versionName = "1.5.34"
++        versionCode = 41
++        versionName = "1.5.35"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+ diff -ruN a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 09:59:50.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 10:09:16.347102074 +0000
+@@ -35,6 +35,7 @@
+     static final int PURPLE=Color.rgb(15,24,43), PINK=Color.rgb(232,14,35), GOLD=Color.rgb(247,198,65);
+     static final int BRAND_DARK=Color.rgb(177,0,23), BRAND_SOFT=Color.rgb(255,239,242);
+     static final int REQ_TEST_NOTIFICATION=1532;
++    static final int PERSONAL_ID_BASE=900000;
+     static final int BG=Color.rgb(249,249,251), MUTED=Color.rgb(105,112,128), GREEN=Color.rgb(25,125,78), ORANGE=Color.rgb(178,108,0);
+     LinearLayout root, content, dayRow, zoneRow, nav;
+     HeaderBrandView headerBrand;
+@@ -206,6 +207,8 @@
+         addOfficialOtherSpaces(events);
+         // Evénements liés à la Foire publiés hors du moteur de programme principal.
+         addOutsideFoireEvents(events);
++        // Rendez-vous personnels ajoutés par l’utilisateur.
++        loadPersonalAppointments(events);
+     }
+ 
+     void add(int id,int day,String start,String end,String name,String place,String zone,String category,String desc,boolean verified){add(id,day,start,end,name,place,zone,category,desc,verified,null);}
+@@ -783,7 +786,11 @@
+         int verified=0;for(Event e:list)if(e.verified)verified++;
+         String filter=selectedZone==0?"Tous les espaces":zones[selectedZone].replace("★ ","");
+         TextView m=txt(list.size()+" événement(s) · "+verified+" confirmé(s) · "+filter,12,MUTED,false);m.setPadding(0,dp(3),0,0);summary.addView(m);
+-        content.addView(summary,margin(0,2,0,10));
++        content.addView(summary,margin(0,2,0,6));
++
++        TextView addMeeting=actionButton("＋ Ajouter un rendez-vous");
++        addMeeting.setOnClickListener(v->showPersonalAppointmentDialog(null));
++        content.addView(addMeeting,margin(0,0,0,10));
+ 
+         if(list.isEmpty()){
+             emptyState("Aucun événement ici","Essaie un autre espace, un autre jour ou efface la recherche.");
+@@ -1046,7 +1053,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.34","Foire du Valais 2026 · versionCode 40",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.34 · versionCode 40\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.35","Foire du Valais 2026 · versionCode 41",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.35 · versionCode 41\n\nProgramme hors ligne + mise à jour distante · rendez-vous personnels dans Programme · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1198,21 +1205,138 @@
+ 
+     void showEventActions(Event e){
+         ArrayList<String> labels=new ArrayList<>();
++        if(isPersonalEvent(e)) labels.add("✏ Modifier le rendez-vous");
+         labels.add("🔔 Régler l’alerte");
+         if(!e.start.equals("—")) labels.add("📅 Ajouter au calendrier");
+-        labels.add("📍 Itinéraire vers le lieu");
++        if(!isPersonalEvent(e)) labels.add("📍 Itinéraire vers le lieu");
+         labels.add("↗ Partager");
++        if(isPersonalEvent(e)) labels.add("🗑 Supprimer le rendez-vous");
+         if(e.sourceUrl!=null&&!e.sourceUrl.isEmpty()) labels.add("🌐 Ouvrir la source");
+         new AlertDialog.Builder(this).setTitle(e.name).setItems(labels.toArray(new String[0]),(d,which)->{
+             String a=labels.get(which);
+-            if(a.startsWith("🔔")) chooseAlert(e);
++            if(a.startsWith("✏")) showPersonalAppointmentDialog(e);
++            else if(a.startsWith("🔔")) chooseAlert(e);
+             else if(a.startsWith("📅")) addToCalendar(e);
+             else if(a.startsWith("📍")) openPlace(e);
+             else if(a.startsWith("↗")) shareEvent(e);
++            else if(a.startsWith("🗑")) confirmDeletePersonalAppointment(e);
+             else if(a.startsWith("🌐")) openUrl(e.sourceUrl);
+         }).setNegativeButton("Fermer",null).show();
+     }
+ 
++    boolean isPersonalEvent(Event e){return e!=null&&e.id>=PERSONAL_ID_BASE;}
++
++    String personalName(Event e){
++        if(e==null)return "";
++        String prefix="Rendez-vous avec ";
++        return e.name!=null&&e.name.startsWith(prefix)?e.name.substring(prefix.length()):e.name;
++    }
++
++    void showPersonalAppointmentDialog(Event existing){
++        final EditText person=new EditText(this);
++        person.setHint("Nom de la personne");
++        person.setSingleLine(true);
++        if(existing!=null)person.setText(personalName(existing));
++
++        final int[] chosenDay={existing!=null?existing.day:selectedDay};
++        int nowMinutes=Calendar.getInstance().get(Calendar.HOUR_OF_DAY)*60+Calendar.getInstance().get(Calendar.MINUTE);
++        final int[] chosenMinutes={existing!=null&&parseMinutes(existing.start)>=0?parseMinutes(existing.start):Math.max(0,Math.min(23*60+55,((nowMinutes+4)/5)*5))};
++
++        TextView dayButton=actionButton("Jour : "+fullDayLabel(chosenDay[0]));
++        TextView timeButton=actionButton("Heure : "+String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60));
++        dayButton.setOnClickListener(v->{
++            String[] labels=new String[10];for(int i=0;i<10;i++)labels[i]=fullDayLabel(i);
++            new AlertDialog.Builder(this).setTitle("Quel jour ?").setSingleChoiceItems(labels,chosenDay[0],(d,which)->{
++                chosenDay[0]=which;dayButton.setText("Jour : "+fullDayLabel(which));d.dismiss();
++            }).setNegativeButton("Annuler",null).show();
++        });
++        timeButton.setOnClickListener(v->new TimePickerDialog(this,(view,hour,minute)->{
++            chosenMinutes[0]=hour*60+minute;
++            timeButton.setText("Heure : "+String.format(Locale.ROOT,"%02d:%02d",hour,minute));
++        },chosenMinutes[0]/60,chosenMinutes[0]%60,true).show());
++
++        LinearLayout wrap=new LinearLayout(this);wrap.setOrientation(LinearLayout.VERTICAL);wrap.setPadding(dp(20),dp(6),dp(20),0);
++        wrap.addView(person,new LinearLayout.LayoutParams(-1,-2));
++        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,dp(10),0,0);wrap.addView(dayButton,bp);
++        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(-1,-2);tp.setMargins(0,dp(8),0,0);wrap.addView(timeButton,tp);
++
++        AlertDialog dialog=new AlertDialog.Builder(this)
++                .setTitle(existing==null?"Ajouter un rendez-vous":"Modifier le rendez-vous")
++                .setMessage("Ajoute la personne, le jour et l’heure. Le rendez-vous apparaîtra directement dans Programme et dans Mes choix.")
++                .setView(wrap)
++                .setPositiveButton(existing==null?"Ajouter":"Enregistrer",null)
++                .setNegativeButton("Annuler",null)
++                .create();
++        dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
++            String n=person.getText().toString().trim();
++            if(n.isEmpty()){person.setError("Entre le nom de la personne");return;}
++            int id=existing!=null?existing.id:prefs.getInt("nextPersonalId",PERSONAL_ID_BASE);
++            if(existing!=null)cancel(existing);
++            savePersonalAppointment(id,n,chosenDay[0],String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60));
++            if(existing==null)prefs.edit().putInt("nextPersonalId",id+1).putBoolean("fav"+id,true).apply();
++            reloadPersonalAppointments();
++            Event updated=findEvent(id);
++            int delay=prefs.getInt("delay"+id,-1);
++            if(updated!=null&&delay>0&&prefs.getBoolean("notificationsEnabled",true))schedule(updated,delay,prefs.getBoolean("alarmMode"+id,false));
++            selectedDay=chosenDay[0];prefs.edit().putInt("lastDay",selectedDay).apply();
++            dialog.dismiss();
++            screen=1;showProgram();
++            Toast.makeText(this,existing==null?"Rendez-vous ajouté":"Rendez-vous modifié",Toast.LENGTH_SHORT).show();
++        }));
++        dialog.show();
++    }
++
++    void savePersonalAppointment(int id,String person,int day,String start){
++        try{
++            JSONArray src=new JSONArray(prefs.getString("personalAppointments","[]"));
++            JSONArray out=new JSONArray();boolean replaced=false;
++            for(int i=0;i<src.length();i++){
++                JSONObject o=src.optJSONObject(i);if(o==null)continue;
++                if(o.optInt("id",-1)==id){out.put(personalAppointmentJson(id,person,day,start));replaced=true;}else out.put(o);
++            }
++            if(!replaced)out.put(personalAppointmentJson(id,person,day,start));
++            prefs.edit().putString("personalAppointments",out.toString()).apply();
++        }catch(Exception ignored){}
++    }
++
++    JSONObject personalAppointmentJson(int id,String person,int day,String start)throws JSONException{
++        JSONObject o=new JSONObject();o.put("id",id);o.put("person",person);o.put("day",day);o.put("start",start);return o;
++    }
++
++    void loadPersonalAppointments(ArrayList<Event> target){
++        for(Iterator<Event> it=target.iterator();it.hasNext();)if(isPersonalEvent(it.next()))it.remove();
++        try{
++            JSONArray arr=new JSONArray(prefs.getString("personalAppointments","[]"));
++            for(int i=0;i<arr.length();i++){
++                JSONObject o=arr.optJSONObject(i);if(o==null)continue;
++                int id=o.optInt("id",-1),day=o.optInt("day",-1);String person=o.optString("person","").trim(),start=o.optString("start","—");
++                if(id<PERSONAL_ID_BASE||day<0||day>9||person.isEmpty()||parseMinutes(start)<0)continue;
++                target.add(new Event(id,day,start,"—","Rendez-vous avec "+person,"Rendez-vous personnel","RENDEZ-VOUS","Rendez-vous personnel","Rendez-vous personnel avec "+person+".",true,null));
++            }
++        }catch(Exception ignored){}
++    }
++
++    void reloadPersonalAppointments(){loadPersonalAppointments(events);}
++
++    void confirmDeletePersonalAppointment(Event e){
++        new AlertDialog.Builder(this).setTitle("Supprimer le rendez-vous ?")
++                .setMessage(e.name+" · "+fullDayLabel(e.day)+" à "+e.start)
++                .setPositiveButton("Supprimer",(d,w)->deletePersonalAppointment(e))
++                .setNegativeButton("Annuler",null).show();
++    }
++
++    void deletePersonalAppointment(Event e){
++        if(!isPersonalEvent(e))return;
++        cancel(e);
++        try{
++            JSONArray src=new JSONArray(prefs.getString("personalAppointments","[]"));JSONArray out=new JSONArray();
++            for(int i=0;i<src.length();i++){JSONObject o=src.optJSONObject(i);if(o!=null&&o.optInt("id",-1)!=e.id)out.put(o);}
++            SharedPreferences.Editor ed=prefs.edit().putString("personalAppointments",out.toString());
++            ed.remove("fav"+e.id).remove("delay"+e.id).remove("alarmMode"+e.id).remove("alarm_day"+e.id).remove("alarm_time"+e.id).remove("alarm_name"+e.id).remove("alarm_place"+e.id).apply();
++        }catch(Exception ignored){}
++        reloadPersonalAppointments();refreshCurrent();Toast.makeText(this,"Rendez-vous supprimé",Toast.LENGTH_SHORT).show();
++    }
++
+     void addToCalendar(Event e){
+         try{
+             long begin=eventMillis(e); if(begin==Long.MAX_VALUE)return;
+@@ -1457,6 +1581,7 @@
+             removeTribusAnnouncements(ann);
+             addOfficialOtherSpaces(next);
+             addOutsideFoireEvents(next);
++            loadPersonalAppointments(next);
+             events.clear();events.addAll(next);
+             if(!ann.isEmpty()){announced.clear();announced.addAll(ann);}
+             else { removeLiveAnnouncements(announced); removeTribusAnnouncements(announced); }
