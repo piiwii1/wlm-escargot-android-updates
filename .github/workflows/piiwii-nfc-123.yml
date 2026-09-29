@@ -1,0 +1,84 @@
+name: PiiWii NFC 1.0.23 Final Visual Polish Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'piiwii-nfc-public/v123/**'
+      - '.github/workflows/piiwii-nfc-123.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download validated 1.0.22 sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf /tmp/piiwii-nfc /tmp/art122
+          mkdir -p /tmp/piiwii-nfc /tmp/art122
+          gh api repos/${{ github.repository }}/actions/artifacts/11039772308/zip > /tmp/art122.zip
+          unzip -q /tmp/art122.zip -d /tmp/art122
+          unzip -q /tmp/art122/PiiWii-NFC-1.0.22-SOURCES.zip -d /tmp/piiwii-nfc
+          test -d /tmp/piiwii-nfc/PiiWii-NFC-1.0.22
+      - name: Apply 1.0.23 final visual polish
+        run: |
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.22
+          python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/v123/apply123.py"
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.22 PiiWii-NFC-1.0.23
+      - name: Build APK
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.23
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify APK and final visual polish
+        run: |
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.23
+          APK=$ROOT/app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT" dump badging "$APK" | head -20
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          grep -q "versionName '1.0.23'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 24" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v123'" "$ROOT/app/build.gradle"
+          grep -q 'setWeightSum(history ? 4f : 3f)' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q 'drawableTop="@drawable/ic_history"' "$ROOT/app/src/main/res/layout/activity_main.xml"
+      - name: Package deliverables
+        run: |
+          mkdir -p piiwii-nfc-public/dist-123
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.23/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-123/PiiWii-NFC-1.0.23.apk
+          cd /tmp/piiwii-nfc
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-123/PiiWii-NFC-1.0.23-SOURCES.zip" PiiWii-NFC-1.0.23
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-123"
+          sha256sum PiiWii-NFC-1.0.23.apk PiiWii-NFC-1.0.23-SOURCES.zip > SHA256SUMS.txt
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.23
+          path: piiwii-nfc-public/dist-123/
+          retention-days: 7
+          if-no-files-found: error
