@@ -1,0 +1,110 @@
+name: PiiWii NFC 1.0.29 Fresh Install Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/piiwii-nfc-129-fresh-install.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download latest 1.0.28 release sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc129 /tmp/art128 /tmp/art128.zip
+          mkdir -p /tmp/nfc129 /tmp/art128
+          ART_ID=$(gh api "repos/piiwii1/wlm-escargot-android-updates/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.28-release-inputs" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/piiwii1/wlm-escargot-android-updates/actions/artifacts/$ART_ID/zip" > /tmp/art128.zip
+          unzip -q /tmp/art128.zip -d /tmp/art128
+          SRCZIP=$(find /tmp/art128 -type f -name 'PiiWii-NFC-1.0.28-SOURCES.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc129
+          ROOT=$(find /tmp/nfc129 -maxdepth 1 -type d -name 'PiiWii-NFC-1.0.28' -print -quit)
+          test -n "$ROOT"
+          mv "$ROOT" /tmp/nfc129/PiiWii-NFC-1.0.29
+
+      - name: Create fresh install identity
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc129/PiiWii-NFC-1.0.29
+          sed -i "s/applicationId 'ch.piiwii.nfc.v125'/applicationId 'ch.piiwii.nfc.app'/" "$ROOT/app/build.gradle"
+          sed -i "s/versionCode 29/versionCode 30/" "$ROOT/app/build.gradle"
+          sed -i "s/versionName '1.0.28'/versionName '1.0.29'/" "$ROOT/app/build.gradle"
+          find "$ROOT/app/src" -type f \( -name '*.xml' -o -name '*.java' \) -print0 | xargs -0 sed -i 's/1\.0\.28/1.0.29/g'
+          grep -q "applicationId 'ch.piiwii.nfc.app'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 30" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.0.29'" "$ROOT/app/build.gradle"
+
+      - name: Build unsigned release
+        working-directory: /tmp/nfc129/PiiWii-NFC-1.0.29
+        run: gradle --no-daemon --stacktrace clean assembleRelease
+
+      - name: Align and verify fresh APK
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc129/PiiWii-NFC-1.0.29
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          ZIPALIGN=/usr/local/lib/android/sdk/build-tools/35.0.0/zipalign
+          APK="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
+          test -f "$APK"
+          mkdir -p /tmp/out129
+          "$ZIPALIGN" -f -p 4 "$APK" /tmp/out129/PiiWii-NFC-1.0.29-ALIGNED-UNSIGNED.apk
+          "$ZIPALIGN" -c -v 4 /tmp/out129/PiiWii-NFC-1.0.29-ALIGNED-UNSIGNED.apk
+          "$AAPT" dump badging /tmp/out129/PiiWii-NFC-1.0.29-ALIGNED-UNSIGNED.apk | tee /tmp/badging129.txt
+          grep -q "package: name='ch.piiwii.nfc.app'" /tmp/badging129.txt
+          grep -q "versionCode='30'" /tmp/badging129.txt
+          grep -q "versionName='1.0.29'" /tmp/badging129.txt
+          if grep -q '^application-debuggable' /tmp/badging129.txt; then
+            echo 'ERROR: release APK is debuggable' >&2
+            exit 1
+          fi
+
+      - name: Package clean sources
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc129/PiiWii-NFC-1.0.29
+          rm -rf "$ROOT/.gradle" "$ROOT/app/build" "$ROOT/build"
+          cd /tmp/nfc129
+          zip -qr /tmp/out129/PiiWii-NFC-1.0.29-SOURCES-BUILD.zip PiiWii-NFC-1.0.29
+          printf 'Canonical applicationId: ch.piiwii.nfc.app\nVersion: 1.0.29\nVersionCode: 30\nBuild type: release unsigned, zipaligned before final signing\n' > /tmp/out129/BUILD-IDENTITY.txt
+
+      - name: Upload fresh install inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.29-fresh-install
+          path: /tmp/out129/
+          retention-days: 7
+          if-no-files-found: error
