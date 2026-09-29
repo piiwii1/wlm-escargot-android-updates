@@ -1,0 +1,102 @@
+name: Foire du Valais 1.5.27 Espace Live
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/foire-valais-live-1527.yml'
+      - 'foire-valais-app/patches/live1527/step1527.patch'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download 1.5.26 source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p previous buildsrc
+          gh run download 36504862515 -R piiwii1/wlm-escargot-android-updates -n Foire-du-Valais-2026-1.5.26 -D previous
+          unzip -q previous/Foire-du-Valais-2026-1.5.26-SOURCES.zip -d buildsrc
+      - name: Apply complete Espace Live programme
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd buildsrc && patch -p1 < ../foire-valais-app/patches/live1527/step1527.patch)
+          grep -q 'versionCode = 33' buildsrc/app/build.gradle.kts
+          grep -q 'versionName = "1.5.27"' buildsrc/app/build.gradle.kts
+          grep -q 'Blind Test, karaoké & concert du groupe Shaka Waka' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          grep -q 'Closing Party avec DJ Gaspari' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+      - name: Download official Espace Live photos
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests
+          python - <<'PY'
+          import requests, os, json
+          from urllib.parse import urlencode, urljoin
+          h={'User-Agent':'Mozilla/5.0','Accept':'application/json'}
+          pairs=[('site','2'),('locale','fr'),('types[]','programs'),('date_start','2026-10-02'),('date_end','2026-10-11'),('date_search_on_period','true'),('count','500'),('page','1'),('orderByProperty','dateFrom'),('orderByDirection','ASC'),('embed[]','spaces'),('embed[]','categories'),('embed[]','tags')]
+          url='https://www.foireduvalais.ch/api/search?'+urlencode(pairs)
+          data=requests.get(url,headers=h,timeout=60).json()
+          live=[x for x in data.get('hydra:member',[]) if any(s.get('id')==967 for s in (x.get('spaces') or []))]
+          assert len(live)==32, f'Expected 32 Espace Live events, got {len(live)}'
+          out='buildsrc/app/src/main/res/drawable-nodpi'
+          os.makedirs(out,exist_ok=True)
+          downloaded=0
+          manifest=[]
+          for x in live:
+              eid=x['id']; imgs=x.get('aio:images') or []; chosen=None
+              if imgs:
+                  fm=imgs[0].get('formats') or {}
+                  for key in ('medium_1_1','normal_1_1','mini_1_1','medium_16_9','normal_16_9'):
+                      u=((fm.get(key) or {}).get('url'))
+                      if u:
+                          chosen=urljoin('https://www.foireduvalais.ch',u); break
+              manifest.append({'id':eid,'title':x.get('title'),'image':chosen})
+              if not chosen: continue
+              r=requests.get(chosen,headers=h,timeout=60); r.raise_for_status()
+              ctype=r.headers.get('content-type','')
+              ext='.png' if 'png' in ctype else '.jpg'
+              p=os.path.join(out,f'live_{eid}{ext}')
+              open(p,'wb').write(r.content)
+              downloaded+=1
+          open('buildsrc/ESPACE-LIVE-2026-OFFICIAL.json','w',encoding='utf-8').write(json.dumps(manifest,ensure_ascii=False,indent=2))
+          print('Official Espace Live events:',len(live),'photos downloaded:',downloaded)
+          assert downloaded>=28, f'Only {downloaded} photos downloaded'
+          PY
+      - name: Install Android SDK 35
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build release
+        working-directory: buildsrc
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deliverables/sign-tools/lib
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 buildsrc/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.27-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.27-ALIGNED-UNSIGNED.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
+          cd buildsrc
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.27-SOURCES.zip . -x '*/build/*' '.gradle/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foire-du-Valais-2026-1.5.27
+          path: deliverables/*
+          retention-days: 7
