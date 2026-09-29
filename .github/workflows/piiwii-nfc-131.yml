@@ -63,7 +63,7 @@ jobs:
           PAYLOAD="$GITHUB_WORKSPACE/piiwii-nfc-public/v131"
           cat "$PAYLOAD/patch_00.b64" "$PAYLOAD/patch_01.b64" | base64 -d | gzip -d > /tmp/v131.patch
           cd "$ROOT"
-          patch -p4 < /tmp/v131.patch
+          patch --batch -p5 < /tmp/v131.patch
           mkdir -p app/src/main/res/drawable-nodpi
           cat "$PAYLOAD/hero_00.b64" "$PAYLOAD/hero_01.b64" | base64 -d > app/src/main/res/drawable-nodpi/home_nfc_art.webp
           grep -q "applicationId 'ch.piiwii.nfc.app'" app/build.gradle
