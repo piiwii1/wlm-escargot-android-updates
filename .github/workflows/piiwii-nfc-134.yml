@@ -59,7 +59,29 @@ jobs:
         run: |
           set -euo pipefail
           PAYLOAD="$GITHUB_WORKSPACE/piiwii-nfc-public/v134"
-          cat "$PAYLOAD/patch_00.b64" "$PAYLOAD/patch_01.b64" "$PAYLOAD/patch_02.b64" "$PAYLOAD/patch_03.b64" | base64 -d | gzip -d > /tmp/v134.patch
+
+          echo "=== PATCH PART CHECKS ==="
+          wc -c "$PAYLOAD/patch_00.b64" "$PAYLOAD/patch_01.b64" "$PAYLOAD/patch_02.b64" "$PAYLOAD/patch_03.b64"
+          sha256sum "$PAYLOAD/patch_00.b64" "$PAYLOAD/patch_01.b64" "$PAYLOAD/patch_02.b64" "$PAYLOAD/patch_03.b64"
+
+          test "$(wc -c < "$PAYLOAD/patch_00.b64")" -eq 1800
+          test "$(wc -c < "$PAYLOAD/patch_01.b64")" -eq 1800
+          test "$(wc -c < "$PAYLOAD/patch_02.b64")" -eq 1800
+          test "$(wc -c < "$PAYLOAD/patch_03.b64")" -eq 1564
+
+          test "$(sha256sum "$PAYLOAD/patch_00.b64" | awk '{print $1}')" = "b3350e029790e1219ec27bd5a2b1d270bf98df846b8509f68824df252730059d"
+          test "$(sha256sum "$PAYLOAD/patch_01.b64" | awk '{print $1}')" = "4815ec85fe0daeaf2d5a42b96a986c4f611ed28fb61f6b66621f0a5946dcbd2e"
+          test "$(sha256sum "$PAYLOAD/patch_02.b64" | awk '{print $1}')" = "4b654db8c397a33839a8f807845130da1394db67bcfef9fdc1bc7de85e51b03c"
+          test "$(sha256sum "$PAYLOAD/patch_03.b64" | awk '{print $1}')" = "811d924fe439f2dba1d65cde817c162515e1e7124769bb7deb98ca059e4a448d"
+
+          cat "$PAYLOAD/patch_00.b64" "$PAYLOAD/patch_01.b64" "$PAYLOAD/patch_02.b64" "$PAYLOAD/patch_03.b64" > /tmp/v134.b64
+          echo "=== FULL PATCH CHECK ==="
+          wc -c /tmp/v134.b64
+          sha256sum /tmp/v134.b64
+          test "$(wc -c < /tmp/v134.b64)" -eq 6964
+          test "$(sha256sum /tmp/v134.b64 | awk '{print $1}')" = "87031ec4b63373e427beab0c61c5eb804751267d0f02cf1ea2ea54b44d6b98ac"
+
+          base64 -d /tmp/v134.b64 | gzip -d > /tmp/v134.patch
           cd /tmp/nfc134/PiiWii-NFC-1.0.33
           patch -p2 < /tmp/v134.patch
           grep -q "applicationId 'ch.piiwii.nfc.app'" app/build.gradle
