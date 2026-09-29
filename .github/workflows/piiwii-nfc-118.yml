@@ -1,0 +1,89 @@
+name: PiiWii NFC 1.0.18 Visual Refinement Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'piiwii-nfc-public/v118/**'
+      - '.github/workflows/piiwii-nfc-118.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download validated 1.0.17 sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf /tmp/piiwii-nfc /tmp/art117
+          mkdir -p /tmp/piiwii-nfc /tmp/art117
+          gh api repos/${{ github.repository }}/actions/artifacts/11027512230/zip > /tmp/art117.zip
+          unzip -q /tmp/art117.zip -d /tmp/art117
+          unzip -q /tmp/art117/PiiWii-NFC-1.0.17-SOURCES.zip -d /tmp/piiwii-nfc
+          test -d /tmp/piiwii-nfc/PiiWii-NFC-1.0.17
+      - name: Prepare 1.0.18 sources
+        run: |
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.17
+          python3 -c 'import base64,zlib; open("/tmp/apply118.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v118/patch118.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply118.patch | cut -d' ' -f1)" = "a7b163a0203643d590e91634f96f1ed2d14101aaa9b568547e91ed499cbc20f7"
+          patch -p1 < /tmp/apply118.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.17 PiiWii-NFC-1.0.18
+      - name: Build APK
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.18
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify APK and visual refinement
+        run: |
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.18
+          APK=$ROOT/app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT" dump badging "$APK" | head -20
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          grep -q "versionName '1.0.18'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 19" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v118'" "$ROOT/app/build.gradle"
+          grep -q 'readBackButton' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'writeAdvancedButton' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'bg_read_hero' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'updateHistoryFilterUi' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q 'historyAccentBackground' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+      - name: Package deliverables
+        run: |
+          mkdir -p piiwii-nfc-public/dist-118
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.18/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-118/PiiWii-NFC-1.0.18.apk
+          cd /tmp/piiwii-nfc
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-118/PiiWii-NFC-1.0.18-SOURCES.zip" PiiWii-NFC-1.0.18
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-118"
+          sha256sum PiiWii-NFC-1.0.18.apk PiiWii-NFC-1.0.18-SOURCES.zip > SHA256SUMS.txt
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.18
+          path: piiwii-nfc-public/dist-118/
+          retention-days: 7
+          if-no-files-found: error
