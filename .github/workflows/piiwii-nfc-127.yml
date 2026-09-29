@@ -1,0 +1,90 @@
+name: PiiWii NFC 1.0.27 Corrected Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/piiwii-nfc-127.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download PiiWii NFC 1.0.26 sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc127 /tmp/art126 /tmp/art126.zip
+          mkdir -p /tmp/nfc127 /tmp/art126
+          ART_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.26" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ART_ID/zip" > /tmp/art126.zip
+          unzip -q /tmp/art126.zip -d /tmp/art126
+          SRCZIP=$(find /tmp/art126 -type f -name 'PiiWii-NFC-1.0.26-SOURCES.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc127
+          ROOT=$(find /tmp/nfc127 -maxdepth 1 -type d -name 'PiiWii-NFC-1.0.26' -print -quit)
+          test -n "$ROOT"
+          mv "$ROOT" /tmp/nfc127/PiiWii-NFC-1.0.27
+      - name: Lock update identity and bump version
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc127/PiiWii-NFC-1.0.27
+          sed -i "s/versionCode 27/versionCode 28/" "$ROOT/app/build.gradle"
+          sed -i "s/versionName '1.0.26'/versionName '1.0.27'/" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v125'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 28" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.0.27'" "$ROOT/app/build.gradle"
+      - name: Build corrected APK
+        working-directory: /tmp/nfc127/PiiWii-NFC-1.0.27
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify package and version
+        run: |
+          set -euo pipefail
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APK=/tmp/nfc127/PiiWii-NFC-1.0.27/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$AAPT" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.piiwii.nfc.v125'" /tmp/badging.txt
+          grep -q "versionCode='28'" /tmp/badging.txt
+          grep -q "versionName='1.0.27'" /tmp/badging.txt
+      - name: Package deliverables
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/out127
+          cp /tmp/nfc127/PiiWii-NFC-1.0.27/app/build/outputs/apk/debug/app-debug.apk /tmp/out127/PiiWii-NFC-1.0.27-UNSIGNED-FOR-RESIGN.apk
+          cd /tmp/nfc127
+          zip -qr /tmp/out127/PiiWii-NFC-1.0.27-SOURCES.zip PiiWii-NFC-1.0.27
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.27-build
+          path: /tmp/out127/
+          retention-days: 7
+          if-no-files-found: error
