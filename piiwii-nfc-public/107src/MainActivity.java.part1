@@ -1,0 +1,300 @@
+package ch.piiwii.nfc;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.net.Uri;
+import android.content.SharedPreferences;
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
+import android.nfc.tech.Ndef;
+import android.nfc.tech.NdefFormatable;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.text.Editable;
+import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.Window;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.RadioButton;
+import android.widget.TextView;
+import android.widget.RadioGroup;
+import android.widget.Toast;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+
+public class MainActivity extends Activity {
+    private enum Mode { READ, WRITE, COPY_SOURCE, COPY_TARGET, ERASE }
+
+    private NfcAdapter nfcAdapter;
+    private PendingIntent pendingIntent;
+    private Mode mode = Mode.READ;
+    private NdefMessage copyBuffer;
+    private byte[] copySourceUid;
+    private NdefMessage lastReadMessage;
+    private String lastReadUid = "";
+    private static final int REQUEST_EXPORT_NDEF = 4101;
+    private static final int REQUEST_IMPORT_NDEF = 4102;
+
+    private TextView statusText;
+    private TextView nfcStateText;
+    private TextView tagInfoText;
+    private TextView historyText;
+    private TextView payloadSizeText;
+    private TextView readContentText;
+    private EditText payloadInput;
+    private Button cancelButton;
+    private Button actionButton;
+    private Button copyContentButton;
+    private Button armWriteButton;
+    private Button toggleTechnicalButton;
+    private View writerPanel;
+    private View technicalPanel;
+    private RadioGroup typeGroup;
+    private RadioButton typeUrl;
+    private RadioButton typePhone;
+    private RadioButton typeEmail;
+    private RadioButton typeSms;
+    private SharedPreferences prefs;
+    private SharedPreferences draftPrefs;
+    private long lastTagTimeMs = 0L;
+    private String lastTagUid = "";
+    private static final long TAG_DEBOUNCE_MS = 1200L;
+    private String lastDecodedContent = "";
+    private Uri lastActionUri;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        configureSystemBarsAndInsets();
+
+        statusText = findViewById(R.id.statusText);
+        nfcStateText = findViewById(R.id.nfcStateText);
+        tagInfoText = findViewById(R.id.tagInfoText);
+        historyText = findViewById(R.id.historyText);
+        payloadSizeText = findViewById(R.id.payloadSizeText);
+        readContentText = findViewById(R.id.readContentText);
+        payloadInput = findViewById(R.id.payloadInput);
+        cancelButton = findViewById(R.id.cancelButton);
+        actionButton = findViewById(R.id.actionButton);
+        copyContentButton = findViewById(R.id.copyContentButton);
+        armWriteButton = findViewById(R.id.armWriteButton);
+        toggleTechnicalButton = findViewById(R.id.toggleTechnicalButton);
+        writerPanel = findViewById(R.id.writerPanel);
+        technicalPanel = findViewById(R.id.technicalPanel);
+        typeGroup = findViewById(R.id.typeGroup);
+        typeUrl = findViewById(R.id.typeUrl);
+        typePhone = findViewById(R.id.typePhone);
+        typeEmail = findViewById(R.id.typeEmail);
+        typeSms = findViewById(R.id.typeSms);
+        prefs = getSharedPreferences("history", MODE_PRIVATE);
+        draftPrefs = getSharedPreferences("draft", MODE_PRIVATE);
+
+        Button readButton = findViewById(R.id.readButton);
+        Button writeButton = findViewById(R.id.writeButton);
+        Button copyButton = findViewById(R.id.copyButton);
+        Button eraseButton = findViewById(R.id.eraseButton);
+        Button nfcSettingsButton = findViewById(R.id.nfcSettingsButton);
+        Button clearHistoryButton = findViewById(R.id.clearHistoryButton);
+        Button reuseLastButton = findViewById(R.id.reuseLastButton);
+        Button exportNdefButton = findViewById(R.id.exportNdefButton);
+        Button importNdefButton = findViewById(R.id.importNdefButton);
+
+        payloadInput.setText(draftPrefs.getString("payload", ""));
+        int savedType = draftPrefs.getInt("type", R.id.typeText);
+        typeGroup.check(savedType);
+        payloadInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                draftPrefs.edit().putString("payload", s.toString()).apply();
+                updatePayloadSize();
+            }
+            @Override public void afterTextChanged(Editable s) { }
+        });
+        typeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            draftPrefs.edit().putInt("type", checkedId).apply();
+            updatePayloadSize();
+        });
+        cancelButton.setOnClickListener(v -> cancelOperation());
+        armWriteButton.setOnClickListener(v -> prepareWrite());
+        actionButton.setOnClickListener(v -> openLastAction());
+        copyContentButton.setOnClickListener(v -> copyLastContent());
+        toggleTechnicalButton.setOnClickListener(v -> toggleTechnicalDetails());
+
+        readButton.setOnClickListener(v -> {
+            setMode(Mode.READ, "Lecture prête : approche un tag NFC.");
+            writerPanel.setVisibility(View.GONE);
+        });
+        writeButton.setOnClickListener(v -> {
+            mode = Mode.READ;
+            updateCancelVisibility();
+            writerPanel.setVisibility(View.VISIBLE);
+            statusText.setText("Prépare le contenu, puis appuie sur PRÊT À ÉCRIRE.");
+            payloadInput.requestFocus();
+        });
+        copyButton.setOnClickListener(v -> {
+            copyBuffer = null;
+            copySourceUid = null;
+            setMode(Mode.COPY_SOURCE, "Copie étape 1/2 : approche le tag SOURCE.");
+        });
+        nfcSettingsButton.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)));
+        clearHistoryButton.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Vider l’historique ?")
+                .setMessage("Les opérations enregistrées localement seront supprimées.")
+                .setNegativeButton("Annuler", null)
+                .setPositiveButton("Vider", (d, w) -> { prefs.edit().remove("items").apply(); renderHistory(); })
+                .show());
+
+        eraseButton.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Effacer le tag ?")
+                .setMessage("Le contenu NDEF du prochain tag compatible sera effacé.")
+                .setNegativeButton("Annuler", null)
+                .setPositiveButton("Continuer", (d, w) -> setMode(Mode.ERASE, "Approche le tag à effacer."))
+                .show());
+
+        reuseLastButton.setOnClickListener(v -> reuseLastReadInEditor());
+        exportNdefButton.setOnClickListener(v -> exportLastNdef());
+        importNdefButton.setOnClickListener(v -> importNdef());
+
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this);
+        if (nfcAdapter == null) {
+            statusText.setText("NFC non disponible sur cet appareil.");
+            readButton.setEnabled(false);
+            writeButton.setEnabled(false);
+            copyButton.setEnabled(false);
+            eraseButton.setEnabled(false);
+        } else {
+            Intent intent = new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE;
+            pendingIntent = PendingIntent.getActivity(this, 0, intent, flags);
+            if (!nfcAdapter.isEnabled()) {
+                statusText.setText("Le NFC est désactivé. Active-le dans les réglages Android.");
+                statusText.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)));
+            }
+        }
+
+        renderHistory();
+        updatePayloadSize();
+        updateNfcState();
+        updateCancelVisibility();
+    }
+
+
+    private void configureSystemBarsAndInsets() {
+        final View safe = findViewById(R.id.safeContent);
+        if (safe == null) return;
+
+        final int baseLeft = safe.getPaddingLeft();
+        final int baseTop = safe.getPaddingTop();
+        final int baseRight = safe.getPaddingRight();
+        final int baseBottom = safe.getPaddingBottom();
+
+        safe.setOnApplyWindowInsetsListener((v, insets) -> {
+            int left = 0, top = 0, right = 0, bottom = 0;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                int types = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout();
+                android.graphics.Insets bars = insets.getInsets(types);
+                left = bars.left;
+                top = bars.top;
+                right = bars.right;
+                bottom = bars.bottom;
+            } else {
+                left = insets.getSystemWindowInsetLeft();
+                top = insets.getSystemWindowInsetTop();
+                right = insets.getSystemWindowInsetRight();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            v.setPadding(baseLeft + left, baseTop + top, baseRight + right, baseBottom + bottom);
+            return insets;
+        });
+        safe.post(safe::requestApplyInsets);
+    }
+
+    private void prepareWrite() {
+        String input = payloadInput.getText().toString().trim();
+        if (TextUtils.isEmpty(input)) {
+            Toast.makeText(this, "Entre d’abord le contenu à écrire.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setMode(Mode.WRITE, "Approche le tag sur lequel écrire les données.");
+    }
+
+    private void setMode(Mode newMode, String message) {
+        mode = newMode;
+        statusText.setText(message);
+        updateCancelVisibility();
+    }
+
+    private void cancelOperation() {
+        copyBuffer = null;
+        copySourceUid = null;
+        mode = Mode.READ;
+        statusText.setText("Opération annulée. Mode lecture actif.");
+        updateCancelVisibility();
+    }
+
+    private void updateCancelVisibility() {
+        if (cancelButton != null) {
+            cancelButton.setVisibility(mode == Mode.READ ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private void updateNfcState() {
+        if (nfcStateText == null) return;
+        if (nfcAdapter == null) {
+            nfcStateText.setText("🔴 NFC indisponible sur cet appareil");
+        } else if (!nfcAdapter.isEnabled()) {
+            nfcStateText.setText("🟠 NFC désactivé — ouvre les réglages NFC");
+        } else {
+            nfcStateText.setText("🟢 NFC actif — prêt à détecter un tag");
+        }
+    }
+
+    private void updatePayloadSize() {
+        if (payloadSizeText == null || payloadInput == null) return;
+        String value = payloadInput.getText().toString().trim();
+        if (value.isEmpty()) {
+            payloadSizeText.setText("Taille estimée : 0 octet");
+            return;
+        }
+        try {
+            NdefMessage message = buildCurrentMessage(value);
+            int bytes = message.toByteArray().length;
+            payloadSizeText.setText("Taille NDEF estimée : " + bytes + " octet" + (bytes > 1 ? "s" : ""));
+        } catch (Exception e) {
+            payloadSizeText.setText("Taille NDEF : impossible à estimer");
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateNfcState();
+        if (nfcAdapter != null && nfcAdapter.isEnabled()) {
+            nfcAdapter.enableForegroundDispatch(this, pendingIntent, null, null);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
