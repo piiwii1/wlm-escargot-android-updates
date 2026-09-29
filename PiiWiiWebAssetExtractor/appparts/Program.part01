@@ -8,15 +8,30 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
         grid.CellDoubleClick += async (_, _) => await DownloadSelectedAsync();
     }
 
-    private static Button BigButton(string text) => new()
+    private static Button PrimaryButton(string text) => new()
     {
         Text = text,
         AutoSize = true,
-        Height = 40,
-        Padding = new Padding(14, 6, 14, 6),
+        Height = 48,
+        Padding = new Padding(22, 8, 22, 8),
         FlatStyle = FlatStyle.Flat,
-        BackColor = Color.FromArgb(44, 112, 210),
-        ForeColor = Color.White
+        BackColor = Color.FromArgb(46, 122, 228),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 10.5f),
+        Cursor = Cursors.Hand
+    };
+
+    private static Button AccentButton(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        Height = 42,
+        Padding = new Padding(16, 6, 16, 6),
+        FlatStyle = FlatStyle.Flat,
+        BackColor = Color.FromArgb(38, 42, 50),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 9.5f),
+        Cursor = Cursors.Hand
     };
 
     private static Button SmallButton(string text) => new()
@@ -27,7 +42,8 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
         Padding = new Padding(8, 3, 8, 3),
         FlatStyle = FlatStyle.Flat,
         BackColor = Color.FromArgb(45, 48, 55),
-        ForeColor = Color.White
+        ForeColor = Color.White,
+        Cursor = Cursors.Hand
     };
 
     private Control BuildLayout()
@@ -35,49 +51,73 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
         cmbType.Items.AddRange(new object[] { "Tous", "JS", "CSS", "JSON", "Images", "XHR", "HTML", "SVG", "Fonts", "Autres" });
         cmbType.SelectedIndex = 0;
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(10) };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
 
-        var top = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 4, Padding = new Padding(0, 0, 0, 6) };
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        top.Controls.Add(new Label { Text = "URL :", AutoSize = true, Padding = new Padding(0, 9, 6, 0) }, 0, 0);
-        top.Controls.Add(txtUrl, 1, 0);
-        top.Controls.Add(btnAnalyze, 2, 0);
-        top.Controls.Add(btnFindCode, 3, 0);
+        var header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(0, 0, 0, 10) };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var titleBlock = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0) };
+        titleBlock.Controls.Add(new Label { Text = "PiiWii Web Asset Extractor", AutoSize = true, Font = new Font("Segoe UI Semibold", 18f), ForeColor = Color.White, Margin = new Padding(0) });
+        titleBlock.Controls.Add(new Label { Text = "Analyse une page et prépare directement les fichiers utiles pour ChatGPT.", AutoSize = true, ForeColor = Color.FromArgb(165, 170, 180), Margin = new Padding(1, 4, 0, 0) });
+        header.Controls.Add(titleBlock, 0, 0);
+        header.Controls.Add(btnSettings, 1, 0);
 
-        var tools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 2, 0, 6) };
-        tools.Controls.AddRange(new Control[] { btnBack, btnReload, btnNoCache, btnDevTools, chkNoCache, chkContinuous, lblStatus, lblStats });
+        var actionCard = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(14), BackColor = Color.FromArgb(25, 28, 34), Margin = new Padding(0, 0, 0, 12) };
+        var urlRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 8) };
+        urlRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        urlRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        urlRow.Controls.Add(txtUrl, 0, 0);
+        urlRow.Controls.Add(btnFindCode, 1, 0);
+        var targetRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0, 8, 0, 0) };
+        targetRow.Controls.Add(btnTargetStart);
+        targetRow.Controls.Add(btnTargetDone);
+        actionCard.Controls.Add(urlRow, 0, 0);
+        actionCard.Controls.Add(targetRow, 0, 1);
 
-        var search = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 6, 0, 6) };
-        search.Controls.Add(new Label { Text = "Recherche :", AutoSize = true, Padding = new Padding(0, 7, 3, 0) });
-        search.Controls.Add(txtSearch);
-        search.Controls.Add(new Label { Text = "Type :", AutoSize = true, Padding = new Padding(10, 7, 3, 0) });
-        search.Controls.Add(cmbType);
-        search.Controls.Add(btnDownload);
-        search.Controls.Add(btnDownloadAll);
-        search.Controls.Add(btnHar);
-        search.Controls.Add(btnCopyUrl);
-        search.Controls.Add(btnEngine);
-        search.Controls.Add(btnMark);
-        search.Controls.Add(btnPack);
+        var browserWrap = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 24, 29), Padding = new Padding(1), Margin = new Padding(0, 0, 0, 10) };
+        browserWrap.Controls.Add(web);
 
-        root.Controls.Add(top, 0, 0);
-        root.Controls.Add(tools, 0, 1);
-        root.Controls.Add(web, 0, 2);
-        root.Controls.Add(search, 0, 3);
-        root.Controls.Add(grid, 0, 4);
+        var statusBar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(2, 8, 2, 0) };
+        statusBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        statusBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var statusLeft = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
+        statusLeft.Controls.Add(lblStatus);
+        statusLeft.Controls.Add(lblStats);
+        statusBar.Controls.Add(statusLeft, 0, 0);
+        statusBar.Controls.Add(new Label { Text = "Les captures sont enregistrées dans Documents\\PiiWii Web Extractor", AutoSize = true, ForeColor = Color.FromArgb(120, 125, 135), Padding = new Padding(0, 5, 0, 0) }, 1, 0);
+
+        var advancedTools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 0, 0, 8) };
+        advancedTools.Controls.AddRange(new Control[] { btnBack, btnReload, btnNoCache, btnDevTools, chkNoCache, chkContinuous, txtSearch, cmbType, btnAnalyze, btnDownload, btnDownloadAll, btnHar, btnCopyUrl, btnEngine, btnMark, btnPack });
+        advancedPanel.Controls.Add(grid);
+        advancedPanel.Controls.Add(advancedTools);
+        advancedTools.BringToFront();
+
+        root.Controls.Add(header, 0, 0);
+        root.Controls.Add(actionCard, 0, 1);
+        root.Controls.Add(browserWrap, 0, 2);
+        root.Controls.Add(statusBar, 0, 3);
+        root.Controls.Add(advancedPanel, 0, 4);
+
+        advancedPanel.VisibleChanged += (_, _) =>
+        {
+            root.RowStyles[4].Height = advancedPanel.Visible ? 280 : 0;
+        };
         return root;
     }
 
     private void BuildGrid()
     {
+        grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(34, 37, 43);
+        grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        grid.DefaultCellStyle.BackColor = Color.FromArgb(23, 25, 30);
+        grid.DefaultCellStyle.ForeColor = Color.Gainsboro;
+        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 86, 145);
+        grid.EnableHeadersVisualStyles = false;
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Type", DataPropertyName = nameof(ResourceItem.ResourceType), Width = 75 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Fichier", DataPropertyName = nameof(ResourceItem.FileName), Width = 310 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Statut", DataPropertyName = nameof(ResourceItem.Status), Width = 70 });
@@ -100,7 +140,7 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
             web.CoreWebView2.NavigationCompleted += (_, e) => SetStatus(e.IsSuccess ? "🟢 Page chargée" : "🔴 Échec de navigation");
             await HookNetworkAsync();
             initialized = true;
-            SetStatus("🟢 Prêt");
+            SetStatus("🟢 Prêt — colle une adresse puis lance l'analyse");
         }
         catch (Exception ex)
         {
