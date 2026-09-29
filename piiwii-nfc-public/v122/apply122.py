@@ -36,7 +36,7 @@ new='''            <LinearLayout android:layout_width="match_parent" android:lay
                     </LinearLayout>
                     <TextView android:id="@+id/copySourceStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="En attente — approchez le tag à copier" android:textColor="@color/text" android:textSize="14sp" android:lineSpacingExtra="4dp" />
                 </LinearLayout>
-                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="↓" android:textColor="@color/blue" android:textSize="22sp" android:gravity="center" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="↓" android:textColor="@color/accent" android:textSize="22sp" android:gravity="center" />
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:orientation="vertical" android:padding="16dp" android:background="@drawable/bg_card">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
                         <ImageView android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/ic_nfc" android:contentDescription="Cible" />
