@@ -1,0 +1,133 @@
+        }
+    }
+
+    private async Task DownloadAllAsync()
+    {
+        if (string.IsNullOrWhiteSpace(sessionDir)) return;
+        var snapshot = SnapshotItems();
+        var ok = 0; var fail = 0; var ignored = 0;
+        foreach (var item in snapshot)
+        {
+            try
+            {
+                if (!item.BodyCaptured) await CaptureBodyAsync(item);
+                if (!item.BodyCaptured) { fail++; continue; }
+                var dir = Path.Combine(sessionDir, FolderFor(item.ResourceType));
+                Directory.CreateDirectory(dir);
+                var name = UniqueFileName(dir, item.FileName);
+                File.Copy(item.BodyPath!, Path.Combine(dir, name), true);
+                ok++;
+            }
+            catch { fail++; }
+        }
+        await SaveDomFinalAsync();
+        await ExportHarAsync(false);
+        await WriteReportAsync(ok, fail, ignored);
+        SetStatus($"🟢 Export terminé — Réussis {ok}, échecs {fail}, ignorés {ignored}");
+        Process.Start(new ProcessStartInfo("explorer.exe", sessionDir) { UseShellExecute = true });
+    }
+
+    private static string FolderFor(string type) => type switch
+    {
+        "JS" => "js", "CSS" => "css", "JSON" => "json", "XHR" => "xhr", "SVG" => "svg",
+        "Images" => "images", "Fonts" => "fonts", "HTML" => "html", _ => "autres"
+    };
+
+    private async Task<string?> ExportHarAsync(bool choosePath)
+    {
+        if (string.IsNullOrWhiteSpace(sessionDir)) return null;
+        var path = Path.Combine(sessionDir, "network.har");
+        if (choosePath)
+        {
+            using var dlg = new SaveFileDialog { FileName = "network.har", Filter = "HAR|*.har|Tous les fichiers|*.*" };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return null;
+            path = dlg.FileName;
+        }
+
+        var entries = SnapshotItems().Select(x => new
+        {
+            startedDateTime = x.Time.ToUniversalTime().ToString("O"),
+            time = 0,
+            request = new { method = x.Method, url = x.Url, httpVersion = "HTTP/2", headers = Array.Empty<object>(), queryString = ParseQuery(x.Query), cookies = Array.Empty<object>(), headersSize = -1, bodySize = 0 },
+            response = new { status = x.Status, statusText = "", httpVersion = "HTTP/2", headers = Array.Empty<object>(), cookies = Array.Empty<object>(), content = new { size = x.Size, mimeType = x.MimeType }, redirectURL = x.RedirectUrl ?? "", headersSize = -1, bodySize = x.Size },
+            cache = new { }, timings = new { send = 0, wait = 0, receive = 0 }
+        }).ToArray();
+        var har = new { log = new { version = "1.2", creator = new { name = "PiiWii Web Asset Extractor", version = "1.0.0" }, pages = Array.Empty<object>(), entries } };
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(har, new JsonSerializerOptions { WriteIndented = true }), Encoding.UTF8);
+        if (choosePath) SetStatus("🟢 HAR exporté");
+        return path;
+    }
+
+    private static object[] ParseQuery(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return Array.Empty<object>();
+        return query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Select(p =>
+        {
+            var kv = p.Split('=', 2);
+            return (object)new { name = Uri.UnescapeDataString(kv[0]), value = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : "" };
+        }).ToArray();
+    }
+
+    private void CopySelectedUrl()
+    {
+        var item = SelectedItem;
+        if (item is null) return;
+        try { Clipboard.SetText(item.Url); SetStatus("🟢 URL copiée"); } catch { }
+    }
+
+    private async Task FindEngineAsync()
+    {
+        var terms = new[] { "shape", "silhouette", "shapePixelate", "emoji", "mask", "matrix", "qr", "canvas", "finder", "module", "dotType" };
+        var scored = new List<(ResourceItem item, int score, List<string> hits)>();
+        foreach (var item in SnapshotItems().Where(x => x.ResourceType == "JS"))
+        {
+            if (!item.BodyCaptured) await CaptureBodyAsync(item);
+            if (!item.BodyCaptured || item.Size > 15_000_000) continue;
+            try
+            {
+                var text = await File.ReadAllTextAsync(item.BodyPath!, Encoding.UTF8);
+                var hits = terms.Where(t => text.Contains(t, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var score = hits.Sum(h => h.Equals("qr", StringComparison.OrdinalIgnoreCase) ? 2 : 1);
+                if (score > 0) scored.Add((item, score, hits));
+            }
+            catch { }
+        }
+
+        var top = scored.OrderByDescending(x => x.score).ThenBy(x => x.item.FileName).Take(15).ToList();
+        if (top.Count == 0)
+        {
+            MessageBox.Show("Aucun fichier JavaScript clairement lié au moteur n'a été identifié automatiquement.", "Recherche moteur");
+            return;
+        }
+        var sb = new StringBuilder("Fichiers probablement intéressants\n\n");
+        foreach (var x in top)
+        {
+            var stars = new string('★', Math.Min(5, Math.Max(1, x.score / 2 + 1)));
+            sb.AppendLine($"{stars} {x.item.FileName}");
+            sb.AppendLine($"    {string.Join(", ", x.hits)}");
+        }
+        MessageBox.Show(sb.ToString(), "Recherche moteur", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+        var best = top[0].item.FileName;
+        txtSearch.Text = Path.GetFileNameWithoutExtension(best).Split('.')[0];
+        SetStatus($"🟢 Fichier principal probable : {best}");
+    }
+
+    private void MarkCurrentState()
+    {
+        markerSequence = sequence;
+        SetStatus($"🟢 Marqueur posé après {markerSequence} requêtes");
+        MessageBox.Show("État actuel marqué. Utilise maintenant la page dans le navigateur intégré.\n\nLes nouvelles ressources auront un numéro supérieur au marqueur.", "Marqueur");
+    }
+
+    private async Task<string?> CreateChatGptPackAsync(bool reveal)
+    {
+        if (string.IsNullOrWhiteSpace(sessionDir)) return null;
+        await DownloadAllToSessionSilentlyAsync();
+        var snapshot = SnapshotItems();
+        var jsInteresting = await ScoreJsAsync(snapshot);
+        var readme = new StringBuilder();
+        readme.AppendLine("PIIWII WEB ASSET EXTRACTOR - PACK POUR CHATGPT");
+        readme.AppendLine("================================================");
+        readme.AppendLine($"URL analysée : {initialUrl}");
+        readme.AppendLine($"Date : {sessionStarted:yyyy-M
