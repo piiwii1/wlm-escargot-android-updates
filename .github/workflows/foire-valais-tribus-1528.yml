@@ -1,0 +1,162 @@
+name: Foire du Valais 1.5.28 Espace Tribus
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/foire-valais-tribus-1528.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download 1.5.27 source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p previous buildsrc
+          gh run download 36506842557 -R piiwii1/wlm-escargot-android-updates -n Foire-du-Valais-2026-1.5.27 -D previous
+          unzip -q previous/Foire-du-Valais-2026-1.5.27-SOURCES.zip -d buildsrc
+      - name: Fetch and integrate official Espace Tribus programme
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests
+          python - <<'PY'
+          import requests, json, os, re
+          from urllib.parse import urlencode, urljoin
+          from datetime import datetime
+
+          h={'User-Agent':'Mozilla/5.0','Accept':'application/json'}
+          pairs=[('site','2'),('locale','fr'),('types[]','programs'),('date_start','2026-10-02'),('date_end','2026-10-11'),('date_search_on_period','true'),('count','500'),('page','1'),('orderByProperty','dateFrom'),('orderByDirection','ASC'),('embed[]','spaces'),('embed[]','categories'),('embed[]','tags')]
+          api='https://www.foireduvalais.ch/api/search?'+urlencode(pairs)
+          r=requests.get(api,headers=h,timeout=60); r.raise_for_status(); data=r.json()
+          trib=[x for x in data.get('hydra:member',[]) if any(isinstance(s,dict) and s.get('id')==975 for s in (x.get('spaces') or []))]
+          trib.sort(key=lambda x:x.get('aio:dateFrom') or '')
+          assert len(trib)==40, f'Expected 40 Espace Tribus occurrences, got {len(trib)}'
+          assert len({x['id'] for x in trib})==18, f'Expected 18 unique Espace Tribus programmes, got {len({x["id"] for x in trib})}'
+          base=datetime(2026,10,2)
+
+          def category(x):
+              vals=[]
+              for c in x.get('categories') or []:
+                  if not isinstance(c,dict): continue
+                  t=(c.get('aio:seo') or {}).get('title') or c.get('title')
+                  if t and t not in vals: vals.append(t)
+              return ' / '.join(vals) if vals else 'Animation'
+          def source(x):
+              try:return x['aio:urls']['2']['langs']['fr'][0]
+              except:return None
+          def image(x):
+              imgs=x.get('aio:images') or []
+              if not imgs:return None
+              fm=imgs[0].get('formats') or {}
+              for key in ('medium_16_9','normal_16_9','medium_3_2','medium_1_1','normal_3_2','normal_1_1'):
+                  u=((fm.get(key) or {}).get('url'))
+                  if u:return urljoin('https://www.foireduvalais.ch',u)
+              return None
+          def jesc(s):
+              if s is None:return 'null'
+              s=s.replace('\\','\\\\').replace('"','\\"').replace('\r',' ').replace('\n','\\n')
+              return '"'+s+'"'
+
+          rows=[]
+          for x in trib:
+              df=datetime.fromisoformat(x['aio:dateFrom']); dt=datetime.fromisoformat(x['aio:dateTo'])
+              rows.append({'id':x['id'],'day':(df.replace(tzinfo=None)-base).days,'date':df.date().isoformat(),'start':df.strftime('%H:%M'),'end':dt.strftime('%H:%M'),'name':(x.get('aio:seo') or {}).get('title') or f'Événement {x["id"]}','place':'Espace Tribus','zone':'TRIBUS','category':category(x),'desc':(x.get('aio:seo') or {}).get('description') or '','sourceUrl':source(x),'imageUrl':image(x)})
+
+          with open('buildsrc/ESPACE-TRIBUS-2026-OFFICIAL.json','w',encoding='utf-8') as f:
+              json.dump({'source':'Foire du Valais API','spaceId':975,'spaceName':'Espace Tribus','dateRange':'2026-10-02/2026-10-11','occurrences':len(rows),'uniquePrograms':len({z['id'] for z in rows}),'events':rows},f,ensure_ascii=False,indent=2)
+
+          jp='buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java'
+          s=open(jp,encoding='utf-8').read()
+          old='        addOfficialLive(events);\n        removeLiveAnnouncements(announced);'
+          new=old+'\n        // Programme officiel Espace Tribus 2026 (source : foireduvalais.ch, espace 975).\n        addOfficialTribus(events);\n        removeTribusAnnouncements(announced);'
+          assert old in s
+          s=s.replace(old,new,1)
+
+          lines=['    void addOfficialTribus(ArrayList<Event> target){','        for(Iterator<Event> it=target.iterator();it.hasNext();){Event e=it.next(); if("TRIBUS".equals(e.zone) || (e.place!=null && e.place.toLowerCase(Locale.ROOT).contains("tribus")))it.remove();}']
+          for z in rows:
+              lines.append('        target.add(new Event(%d,%d,%s,%s,%s,"Espace Tribus","TRIBUS",%s,%s,true,%s));' % (z['id'],z['day'],jesc(z['start']),jesc(z['end']),jesc(z['name']),jesc(z['category']),jesc(z['desc']),jesc(z['sourceUrl'])))
+          lines += ['    }','','    void removeTribusAnnouncements(ArrayList<Announced> list){','        for(Iterator<Announced> it=list.iterator();it.hasNext();){if("TRIBUS".equals(it.next().zone))it.remove();}','    }','']
+          block='\n'.join(lines)
+          marker='    void removeLiveAnnouncements(ArrayList<Announced> list){\n        for(Iterator<Announced> it=list.iterator();it.hasNext();){if("LIVE".equals(it.next().zone))it.remove();}\n    }\n'
+          assert marker in s
+          s=s.replace(marker,marker+'\n'+block,1)
+
+          old='        if(e!=null && "LIVE".equals(e.zone)){\n            int res=getResources().getIdentifier("live_"+e.id,"drawable",getPackageName());'
+          new='        if(e!=null && ("LIVE".equals(e.zone) || "TRIBUS".equals(e.zone))){\n            String prefix="TRIBUS".equals(e.zone)?"tribus_":"live_";\n            int res=getResources().getIdentifier(prefix+e.id,"drawable",getPackageName());'
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old='            addOfficialLive(next);\n            removeLiveAnnouncements(ann);'
+          new=old+'\n            addOfficialTribus(next);\n            removeTribusAnnouncements(ann);'
+          assert old in s
+          s=s.replace(old,new,1)
+          old='            else removeLiveAnnouncements(announced);'
+          new='            else { removeLiveAnnouncements(announced); removeTribusAnnouncements(announced); }'
+          assert old in s
+          s=s.replace(old,new,1)
+          s=s.replace('Version 1.5.27','Version 1.5.28').replace('versionCode 33','versionCode 34')
+          open(jp,'w',encoding='utf-8').write(s)
+
+          gp='buildsrc/app/build.gradle.kts'
+          g=open(gp,encoding='utf-8').read()
+          assert 'versionCode = 33' in g and 'versionName = "1.5.27"' in g
+          g=g.replace('versionCode = 33','versionCode = 34').replace('versionName = "1.5.27"','versionName = "1.5.28"')
+          open(gp,'w',encoding='utf-8').write(g)
+
+          out='buildsrc/app/src/main/res/drawable-nodpi'; os.makedirs(out,exist_ok=True)
+          done=set(); downloaded=0
+          for z in rows:
+              if z['id'] in done or not z['imageUrl']:continue
+              rr=requests.get(z['imageUrl'],headers=h,timeout=60); rr.raise_for_status()
+              ctype=rr.headers.get('content-type','').lower(); ext='.png' if 'png' in ctype else '.jpg'
+              open(os.path.join(out,f'tribus_{z["id"]}{ext}'),'wb').write(rr.content)
+              done.add(z['id']); downloaded+=1
+          print('Official Espace Tribus occurrences:',len(rows),'unique programmes:',len(done),'photos downloaded:',downloaded)
+          assert downloaded==18, f'Expected 18 official Tribus photos, got {downloaded}'
+          assert any(z['name']=='Elias D' and z['start']=='18:30' for z in rows)
+          assert any(z['name']=='Nelsang' and z['start']=='21:30' for z in rows)
+          assert any(z['name']=="Banan'O'Rama" for z in rows)
+          assert any(z['name']=='Marie Jay' and z['start']=='20:00' for z in rows)
+          PY
+          grep -q 'versionCode = 34' buildsrc/app/build.gradle.kts
+          grep -q 'versionName = "1.5.28"' buildsrc/app/build.gradle.kts
+          grep -q 'addOfficialTribus' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          test "$(find buildsrc/app/src/main/res/drawable-nodpi -maxdepth 1 -type f -name 'tribus_*' | wc -l)" -eq 18
+      - name: Install Android SDK 35
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build release
+        working-directory: buildsrc
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deliverables/sign-tools/lib
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 buildsrc/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.28-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.28-ALIGNED-UNSIGNED.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
+          cd buildsrc
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.28-SOURCES.zip . -x '*/build/*' '.gradle/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foire-du-Valais-2026-1.5.28
+          path: deliverables/*
+          retention-days: 7
