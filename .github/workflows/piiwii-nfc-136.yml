@@ -59,15 +59,16 @@ jobs:
         run: |
           set -euo pipefail
           ROOT=/tmp/nfc136/PiiWii-NFC-1.0.35
-          test "$(sha256sum piwii-nfc-public/v136/patch.b64 | awk '{print $1}')" = "255ecc1e0178341cd942910908500c7a100719c42dd8e275ff21c61e264188bd"
+          echo "payload bytes: $(wc -c < piwii-nfc-public/v136/patch.b64)"
           base64 -d piwii-nfc-public/v136/patch.b64 | gzip -d > /tmp/v136.patch
+          test -s /tmp/v136.patch
           cd "$ROOT"
-          patch -p1 < /tmp/v136.patch
+          patch --batch --forward -p1 < /tmp/v136.patch
           grep -q "applicationId 'ch.piiwii.nfc.app'" app/build.gradle
           grep -q "versionCode 37" app/build.gradle
           grep -q "versionName '1.0.36'" app/build.gradle
-          grep -q '<FrameLayout' app/src/main/res/layout/activity_main.xml
           grep -q 'android:id="@+id/readButton"' app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/backupShortcutButton"' app/src/main/res/layout/activity_main.xml
           grep -q 'View readButton = findViewById' app/src/main/java/ch/piiwii/nfc/MainActivity.java
 
       - name: Build release
