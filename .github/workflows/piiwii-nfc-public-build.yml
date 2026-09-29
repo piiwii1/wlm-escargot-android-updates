@@ -4,8 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'piiwii-nfc-public/nfc107.patch.b64.001'
-      - 'piiwii-nfc-public/nfc107.patch.b64.002'
+      - 'piiwii-nfc-public/107src/**'
       - '.github/workflows/piiwii-nfc-public-build.yml'
   workflow_dispatch:
 
@@ -53,9 +52,10 @@ jobs:
           mv PiiWii-NFC-1.0.5 PiiWii-NFC-1.0.6
           cd PiiWii-NFC-1.0.6
           python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply106.py"
-          cat "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc107.patch.b64.001" "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc107.patch.b64.002" | base64 --decode --ignore-garbage > /tmp/nfc107.patch
-          git apply /tmp/nfc107.patch
-          sed -i "s/applicationId 'ch.piiwii.nfc.v106'/applicationId 'ch.piiwii.nfc.v107'/" app/build.gradle
+          cat "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/MainActivity.java.part1" "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/MainActivity.java.part2" "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/MainActivity.java.part3" > app/src/main/java/ch/piiwii/nfc/MainActivity.java
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/activity_main.xml" app/src/main/res/layout/activity_main.xml
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/build.gradle" app/build.gradle
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/CHANGELOG.md" CHANGELOG.md
           cd /tmp/piiwii-nfc
           mv PiiWii-NFC-1.0.6 PiiWii-NFC-1.0.7
       - name: Build APK
