@@ -1,8 +1,8 @@
-name: Build PiiWii Code Capture 1.2.0
+name: Build PiiWii Code Capture 1.2.1
 
 on:
   push:
-    branches: [ "temp-piiwii-code-capture-1.2.0" ]
+    branches: [ "temp-piiwii-code-capture-1.2.1" ]
   workflow_dispatch:
 
 jobs:
@@ -19,6 +19,13 @@ jobs:
           $parts = Get-ChildItem PiiWiiWebAssetExtractor/appparts/Program.part* | Sort-Object Name
           $text = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllText((Join-Path $PWD 'PiiWiiWebAssetExtractor/app/Program.cs'), $text, [Text.UTF8Encoding]::new($false))
+
+      - name: Reconstruct application icon
+        shell: pwsh
+        run: |
+          $b64 = Get-Content 'PiiWiiWebAssetExtractor/app/app.ico.b64' -Raw
+          [IO.File]::WriteAllBytes((Join-Path $PWD 'PiiWiiWebAssetExtractor/app/app.ico'), [Convert]::FromBase64String($b64))
+          if (!(Test-Path 'PiiWiiWebAssetExtractor/app/app.ico')) { throw 'Icone app.ico absente' }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
@@ -45,7 +52,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path PiiWiiWebAssetExtractor/dist | Out-Null
-          Compress-Archive -Path PiiWiiWebAssetExtractor/publish/* -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.0-PORTABLE.zip -Force
+          Compress-Archive -Path PiiWiiWebAssetExtractor/publish/* -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.1-PORTABLE.zip -Force
 
       - name: Install Inno Setup
         shell: pwsh
@@ -62,7 +69,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $tmp | Out-Null
           Copy-Item PiiWiiWebAssetExtractor/app -Destination $tmp -Recurse
           Copy-Item PiiWiiWebAssetExtractor/installer -Destination $tmp -Recurse
-          Compress-Archive -Path "$tmp/*" -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.0-SOURCES.zip -Force
+          Compress-Archive -Path "$tmp/*" -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Code-Capture-1.2.1-SOURCES.zip -Force
 
       - name: SHA-256
         shell: pwsh
@@ -76,7 +83,7 @@ jobs:
       - name: Upload deliverables
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Code-Capture-1.2.0
+          name: PiiWii-Code-Capture-1.2.1
           path: PiiWiiWebAssetExtractor/dist/*
           if-no-files-found: error
           retention-days: 30
