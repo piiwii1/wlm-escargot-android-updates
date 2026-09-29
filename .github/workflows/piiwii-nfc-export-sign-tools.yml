@@ -1,0 +1,31 @@
+name: PiiWii NFC Export Android Sign Tools
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/piiwii-nfc-export-sign-tools.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install Android build tools 35
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "build-tools;35.0.0"
+      - name: Package apksigner and zipalign
+        run: |
+          ROOT=/usr/local/lib/android/sdk/build-tools/35.0.0
+          mkdir -p out/lib
+          cp "$ROOT/apksigner" out/
+          cp "$ROOT/zipalign" out/
+          cp "$ROOT/lib/apksigner.jar" out/lib/
+      - name: Upload tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-sign-tools-35
+          path: out/
+          retention-days: 1
