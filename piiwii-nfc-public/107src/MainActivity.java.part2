@@ -1,0 +1,300 @@
+        if (nfcAdapter != null) {
+            nfcAdapter.disableForegroundDispatch(this);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null || !NfcAdapter.ACTION_TAG_DISCOVERED.equals(intent.getAction())
+                && !NfcAdapter.ACTION_TECH_DISCOVERED.equals(intent.getAction())
+                && !NfcAdapter.ACTION_NDEF_DISCOVERED.equals(intent.getAction())) {
+            return;
+        }
+        Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+        if (tag == null) return;
+
+        String uid = toHex(tag.getId());
+        long now = System.currentTimeMillis();
+        if (uid.equals(lastTagUid) && now - lastTagTimeMs < TAG_DEBOUNCE_MS) {
+            return;
+        }
+        lastTagUid = uid;
+        lastTagTimeMs = now;
+
+        renderTagInfo(tag);
+        switch (mode) {
+            case READ:
+                readTag(tag);
+                break;
+            case WRITE:
+                writeCurrentInput(tag);
+                break;
+            case COPY_SOURCE:
+                loadCopySource(tag);
+                break;
+            case COPY_TARGET:
+                writeCopyTarget(tag);
+                break;
+            case ERASE:
+                eraseTag(tag);
+                break;
+        }
+    }
+
+    private void renderTagInfo(Tag tag) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("UID visible : ").append(toHex(tag.getId())).append('\n');
+        sb.append("Technologies :\n");
+        for (String tech : tag.getTechList()) {
+            int p = tech.lastIndexOf('.');
+            sb.append(" • ").append(p >= 0 ? tech.substring(p + 1) : tech).append('\n');
+        }
+
+        Ndef ndef = Ndef.get(tag);
+        if (ndef != null) {
+            sb.append("NDEF : oui\n");
+            sb.append("Capacité : ").append(ndef.getMaxSize()).append(" octets\n");
+            sb.append("Écriture : ").append(ndef.isWritable() ? "autorisée" : "lecture seule").append('\n');
+            sb.append("Type : ").append(ndef.getType()).append('\n');
+            sb.append("UID longueur : ").append(tag.getId() == null ? 0 : tag.getId().length).append(" octets\n");
+            try {
+                ndef.connect();
+                NdefMessage current = ndef.getNdefMessage();
+                int used = current == null ? 0 : current.toByteArray().length;
+                sb.append("Utilisé : ").append(used).append(" / ").append(ndef.getMaxSize()).append(" octets\n");
+                if (current != null && current.getRecords().length > 0) {
+                    sb.append("Copie contenu : 🟢 compatible NDEF");
+                } else {
+                    sb.append("Copie contenu : 🟠 tag vide");
+                }
+            } catch (Exception e) {
+                sb.append("Copie contenu : 🟠 lecture à confirmer");
+            } finally {
+                closeQuietly(ndef);
+            }
+        } else {
+            NdefFormatable formattable = NdefFormatable.get(tag);
+            sb.append("NDEF : non détecté\n");
+            if (formattable != null) {
+                sb.append("Écriture : 🟠 formatage NDEF possible");
+            } else {
+                sb.append("Copie contenu : 🔴 non compatible NDEF standard");
+            }
+        }
+        tagInfoText.setText(sb.toString());
+    }
+
+    private void readTag(Tag tag) {
+        Ndef ndef = Ndef.get(tag);
+        if (ndef == null) {
+            lastReadMessage = null;
+            lastDecodedContent = "";
+            lastActionUri = null;
+            readContentText.setText("Aucun contenu NDEF standard sur ce tag.");
+            actionButton.setVisibility(View.GONE);
+            copyContentButton.setVisibility(View.GONE);
+            statusText.setText("Tag détecté : informations techniques disponibles.");
+            addHistory("Lecture", toHex(tag.getId()), "Tag non-NDEF");
+            return;
+        }
+        try {
+            ndef.connect();
+            NdefMessage message = ndef.getNdefMessage();
+            if (message != null) {
+                lastReadMessage = cloneMessage(message);
+                lastReadUid = toHex(tag.getId());
+            }
+            String decoded = decodeMessage(message);
+            int recordCount = message == null ? 0 : message.getRecords().length;
+            tagInfoText.append("\nEnregistrements NDEF : " + recordCount);
+            updateReadResult(message, decoded);
+            statusText.setText(decoded.isEmpty() ? "Tag lu : contenu vide." : "Lecture terminée — contenu reconnu.");
+            addHistory("Lecture", toHex(tag.getId()), summarize(decoded));
+        } catch (Exception e) {
+            statusText.setText("Erreur de lecture : " + safeMessage(e));
+        } finally {
+            closeQuietly(ndef);
+        }
+    }
+
+    private void updateReadResult(NdefMessage message, String decoded) {
+        lastDecodedContent = decoded == null ? "" : decoded;
+        readContentText.setText(lastDecodedContent.isEmpty() ? "(Tag vide)" : lastDecodedContent);
+        copyContentButton.setVisibility(lastDecodedContent.isEmpty() ? View.GONE : View.VISIBLE);
+        lastActionUri = null;
+        actionButton.setVisibility(View.GONE);
+        if (message == null) return;
+        for (NdefRecord r : message.getRecords()) {
+            if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_URI)) {
+                Uri uri = r.toUri();
+                if (uri == null) continue;
+                lastActionUri = uri;
+                String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+                if ("tel".equals(scheme)) actionButton.setText("APPELER");
+                else if ("mailto".equals(scheme)) actionButton.setText("OUVRIR L’E-MAIL");
+                else if ("sms".equals(scheme) || "smsto".equals(scheme)) actionButton.setText("OUVRIR LE SMS");
+                else actionButton.setText("OUVRIR LE LIEN");
+                actionButton.setVisibility(View.VISIBLE);
+                break;
+            }
+        }
+    }
+
+    private void openLastAction() {
+        if (lastActionUri == null) return;
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, lastActionUri);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Aucune application ne peut ouvrir ce contenu.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void copyLastContent() {
+        if (TextUtils.isEmpty(lastDecodedContent)) return;
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText("Contenu NFC", lastDecodedContent));
+        Toast.makeText(this, "Contenu copié.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void toggleTechnicalDetails() {
+        boolean show = technicalPanel.getVisibility() != View.VISIBLE;
+        technicalPanel.setVisibility(show ? View.VISIBLE : View.GONE);
+        toggleTechnicalButton.setText(show ? "MASQUER LES DÉTAILS TECHNIQUES" : "VOIR LES DÉTAILS TECHNIQUES");
+    }
+
+    private void writeCurrentInput(Tag tag) {
+        String value = payloadInput.getText().toString().trim();
+        NdefMessage message = buildCurrentMessage(value);
+        if (writeMessage(tag, message)) {
+            statusText.setText("Écriture réussie.");
+            addHistory("Écriture", toHex(tag.getId()), summarize(value));
+            mode = Mode.READ;
+            updateCancelVisibility();
+            writerPanel.setVisibility(View.GONE);
+        }
+    }
+
+    private void loadCopySource(Tag tag) {
+        Ndef ndef = Ndef.get(tag);
+        if (ndef == null) {
+            statusText.setText("Source incompatible : aucun message NDEF à copier.");
+            return;
+        }
+        try {
+            ndef.connect();
+            NdefMessage message = ndef.getNdefMessage();
+            if (message == null || message.getRecords().length == 0) {
+                statusText.setText("Le tag source est vide.");
+                return;
+            }
+            copyBuffer = cloneMessage(message);
+            lastReadMessage = cloneMessage(message);
+            lastReadUid = toHex(tag.getId());
+            copySourceUid = tag.getId() == null ? null : tag.getId().clone();
+            mode = Mode.COPY_TARGET;
+            statusText.setText("Copie étape 2/2 : source mémorisée. Approche maintenant le tag CIBLE.");
+            addHistory("Copie source", toHex(tag.getId()), summarize(decodeMessage(message)));
+        } catch (Exception e) {
+            statusText.setText("Impossible de lire la source : " + safeMessage(e));
+        } finally {
+            closeQuietly(ndef);
+        }
+    }
+
+    private void writeCopyTarget(Tag tag) {
+        if (copyBuffer == null) {
+            setMode(Mode.COPY_SOURCE, "Le tampon de copie est vide. Approche à nouveau le tag SOURCE.");
+            return;
+        }
+        if (copySourceUid != null && Arrays.equals(copySourceUid, tag.getId())) {
+            statusText.setText("C'est encore le tag SOURCE. Présente un autre tag comme CIBLE.");
+            return;
+        }
+        if (writeMessage(tag, copyBuffer)) {
+            statusText.setText("Copie terminée. Le contenu NDEF a été reproduit sur la cible.");
+            addHistory("Copie cible", toHex(tag.getId()), summarize(decodeMessage(copyBuffer)));
+            copyBuffer = null;
+            copySourceUid = null;
+            mode = Mode.READ;
+            updateCancelVisibility();
+        }
+    }
+
+    private void eraseTag(Tag tag) {
+        NdefMessage empty = new NdefMessage(new NdefRecord[]{
+                new NdefRecord(NdefRecord.TNF_EMPTY, new byte[0], new byte[0], new byte[0])
+        });
+        if (writeMessage(tag, empty)) {
+            statusText.setText("Tag effacé.");
+            addHistory("Effacement", toHex(tag.getId()), "NDEF vidé");
+            mode = Mode.READ;
+            updateCancelVisibility();
+        }
+    }
+
+    private boolean writeMessage(Tag tag, NdefMessage message) {
+        int size = message.toByteArray().length;
+        Ndef ndef = Ndef.get(tag);
+        if (ndef != null) {
+            try {
+                ndef.connect();
+                if (!ndef.isWritable()) {
+                    statusText.setText("Ce tag est en lecture seule.");
+                    return false;
+                }
+                if (ndef.getMaxSize() < size) {
+                    statusText.setText("Données trop grandes : " + size + " octets pour une capacité de " + ndef.getMaxSize() + ".");
+                    return false;
+                }
+                ndef.writeNdefMessage(message);
+                return true;
+            } catch (Exception e) {
+                statusText.setText("Erreur d’écriture : " + safeMessage(e));
+                return false;
+            } finally {
+                closeQuietly(ndef);
+            }
+        }
+
+        NdefFormatable formatable = NdefFormatable.get(tag);
+        if (formatable != null) {
+            try {
+                formatable.connect();
+                formatable.format(message);
+                return true;
+            } catch (Exception e) {
+                statusText.setText("Impossible de formater/écrire : " + safeMessage(e));
+                return false;
+            } finally {
+                try { formatable.close(); } catch (Exception ignored) { }
+            }
+        }
+
+        statusText.setText("Ce tag n’est pas inscriptible en NDEF avec Android.");
+        return false;
+    }
+
+
+    private void exportLastNdef() {
+        if (lastReadMessage == null) {
+            Toast.makeText(this, "Lis d’abord un tag NDEF à sauvegarder.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/octet-stream");
+        String suffix = TextUtils.isEmpty(lastReadUid) ? "tag" : lastReadUid.replace(":", "-");
+        intent.putExtra(Intent.EXTRA_TITLE, "PiiWii-NFC-" + suffix + ".ndef");
+        startActivityForResult(intent, REQUEST_EXPORT_NDEF);
+    }
+
+    private void importNdef() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        startActivityForResult(intent, REQUEST_IMPORT_NDEF);
+    }
+
+    @Override
