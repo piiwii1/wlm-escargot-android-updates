@@ -1,0 +1,120 @@
+name: PiiWii NFC 1.0.33 UI Part 3
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/piiwii-nfc-133.yml'
+      - 'piiwii-nfc-public/v133/**'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download 1.0.32 source baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc133 /tmp/base132 /tmp/base132.zip
+          mkdir -p /tmp/nfc133 /tmp/base132
+          ART_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.32-build" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/base132.zip
+          unzip -q /tmp/base132.zip -d /tmp/base132
+          SRCZIP=$(find /tmp/base132 -type f -name 'PiiWii-NFC-1.0.32-SOURCES-BUILD.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc133
+          test -d /tmp/nfc133/PiiWii-NFC-1.0.32
+
+      - name: Apply final-reference screens
+        run: |
+          set -euo pipefail
+          PAYLOAD="$GITHUB_WORKSPACE/piiwii-nfc-public/v133"
+          cat "$PAYLOAD/patch_00.b64" "$PAYLOAD/patch_01.b64" | base64 -d | gzip -d > /tmp/v133.patch
+          cd /tmp/nfc133/PiiWii-NFC-1.0.32
+          patch -p2 < /tmp/v133.patch
+          grep -q "applicationId 'ch.piiwii.nfc.app'" app/build.gradle
+          grep -q "versionCode 34" app/build.gradle
+          grep -q "versionName '1.0.33'" app/build.gradle
+          grep -q 'android:id="@+id/modelsPage"' app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/diagnosticsPage"' app/src/main/res/layout/activity_main.xml
+          grep -q 'android:id="@+id/backupPage"' app/src/main/res/layout/activity_main.xml
+
+      - name: Build release
+        working-directory: /tmp/nfc133/PiiWii-NFC-1.0.32
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Align and verify APK
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc133/PiiWii-NFC-1.0.32
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          IN="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUT=/tmp/PiiWii-NFC-1.0.33-ALIGNED-UNSIGNED.apk
+          test -f "$IN"
+          "$BT/zipalign" -f -p 4 "$IN" "$OUT"
+          "$BT/zipalign" -c -v 4 "$OUT"
+          "$BT/aapt" dump badging "$OUT" | tee /tmp/badging133.txt
+          grep -q "package: name='ch.piiwii.nfc.app'" /tmp/badging133.txt
+          grep -q "versionCode='34'" /tmp/badging133.txt
+          grep -q "versionName='1.0.33'" /tmp/badging133.txt
+          if grep -q 'application-debuggable' /tmp/badging133.txt; then
+            echo 'ERROR: release APK is debuggable' >&2
+            exit 1
+          fi
+          unzip -t "$OUT" >/dev/null
+
+      - name: Package deliverables
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/out133
+          cp /tmp/PiiWii-NFC-1.0.33-ALIGNED-UNSIGNED.apk /tmp/out133/
+          cd /tmp/nfc133
+          mv PiiWii-NFC-1.0.32 PiiWii-NFC-1.0.33
+          zip -qr /tmp/out133/PiiWii-NFC-1.0.33-SOURCES-BUILD.zip PiiWii-NFC-1.0.33
+          cat > /tmp/out133/BUILD-IDENTITY.txt <<'EOF'
+          PiiWii NFC 1.0.33 — UI final reference part 3
+          package=ch.piiwii.nfc.app
+          versionCode=34
+          versionName=1.0.33
+          release=true
+          scope=history + models + diagnostics + backup + settings
+          signing=stable PiiWii key after artifact download
+          EOF
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.33-build
+          path: /tmp/out133/
+          retention-days: 7
+          if-no-files-found: error
