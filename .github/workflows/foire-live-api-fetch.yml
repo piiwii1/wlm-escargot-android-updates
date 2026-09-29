@@ -1,0 +1,40 @@
+name: Fetch Foire Live API
+on:
+  push:
+    branches: [ main ]
+    paths: ['.github/workflows/foire-live-api-fetch.yml']
+  workflow_dispatch:
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch official API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests
+          python - <<'PY'
+          import requests, json, os
+          from urllib.parse import urlencode
+          h={'User-Agent':'Mozilla/5.0','Accept':'application/ld+json, application/json, text/plain, */*'}
+          base='https://www.foireduvalais.ch/api/search'
+          tests=[]
+          tests.append([('types[]','programs'),('count','5'),('page','1')])
+          filt=json.dumps({'operator':'AND','matches':[{'key':'spaces','operator':'IN','value':[967],'type':'programs','recursive':True}]},separators=(',',':'))
+          tests.append([('types[]','programs'),('date_start','2026-10-02'),('date_end','2026-10-02'),('date_search_on_period','true'),('controls_filters',filt),('count','100'),('page','1'),('orderByProperty','dateFrom'),('orderByDirection','ASC'),('embed[]','spaces'),('embed[]','categories'),('embed[]','tags')])
+          tests.append([('type','programs'),('date_start','2026-10-02'),('date_end','2026-10-02'),('date_search_on_period','true'),('controls_filters',filt),('count','100'),('page','1'),('orderByProperty','dateFrom'),('orderByDirection','ASC'),('embed[]','spaces'),('embed[]','categories'),('embed[]','tags')])
+          os.makedirs('fetch',exist_ok=True)
+          for i,pairs in enumerate(tests,1):
+              u=base+'?'+urlencode(pairs)
+              r=requests.get(u,headers=h,timeout=30)
+              print('\nTEST',i,'status',r.status_code,'ctype',r.headers.get('content-type'),'len',len(r.content))
+              print('URL',u)
+              print(r.text[:12000])
+              open(f'fetch/test{i}.txt','w',encoding='utf-8').write(r.text)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foire-live-api-fetch
+          path: fetch
+          retention-days: 7
