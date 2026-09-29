@@ -1,0 +1,128 @@
+entReceived += OnResponseReceived;
+        finishedReceiver.DevToolsProtocolEventReceived += OnLoadingFinished;
+    }
+
+    private void OnRequestWillBeSent(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+    {
+        if (!captureEnabled) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(e.ParameterObjectAsJson);
+            var root = doc.RootElement;
+            var id = root.GetProperty("requestId").GetString() ?? "";
+            var req = root.GetProperty("request");
+            var url = req.GetProperty("url").GetString() ?? "";
+            var method = req.TryGetProperty("method", out var m) ? m.GetString() ?? "GET" : "GET";
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(url)) return;
+            var item = byRequest.GetOrAdd(id, _ => NewResource(id, url));
+            item.Url = url;
+            item.Method = method;
+            if (root.TryGetProperty("redirectResponse", out var rr) && rr.TryGetProperty("url", out var ru)) item.RedirectUrl = ru.GetString();
+        }
+        catch (Exception ex) { Log.Write("requestWillBeSent", ex); }
+    }
+
+    private void OnResponseReceived(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+    {
+        if (!captureEnabled) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(e.ParameterObjectAsJson);
+            var root = doc.RootElement;
+            var id = root.GetProperty("requestId").GetString() ?? "";
+            var response = root.GetProperty("response");
+            var url = response.GetProperty("url").GetString() ?? "";
+            var item = byRequest.GetOrAdd(id, _ => NewResource(id, url));
+            item.Url = url;
+            item.Status = response.TryGetProperty("status", out var s) ? (int)Math.Round(s.GetDouble()) : 0;
+            item.MimeType = response.TryGetProperty("mimeType", out var mt) ? mt.GetString() ?? "" : "";
+            if (response.TryGetProperty("encodedDataLength", out var len) && len.ValueKind == JsonValueKind.Number) item.Size = (long)len.GetDouble();
+            var protocolType = root.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
+            FillDerived(item, protocolType);
+            AddOrUpdateItem(item);
+        }
+        catch (Exception ex) { Log.Write("responseReceived", ex); }
+    }
+
+    private async void OnLoadingFinished(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+    {
+        if (!captureEnabled || web.CoreWebView2 is null) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(e.ParameterObjectAsJson);
+            var id = doc.RootElement.GetProperty("requestId").GetString() ?? "";
+            if (!byRequest.TryGetValue(id, out var item)) return;
+            if (doc.RootElement.TryGetProperty("encodedDataLength", out var len) && len.ValueKind == JsonValueKind.Number) item.Size = (long)len.GetDouble();
+            await CaptureBodyAsync(item);
+            AddOrUpdateItem(item);
+        }
+        catch (Exception ex) { Log.Write("loadingFinished", ex); }
+    }
+
+    private ResourceItem NewResource(string id, string url)
+    {
+        var item = new ResourceItem { RequestId = id, Url = url, Sequence = Interlocked.Increment(ref sequence) };
+        FillDerived(item, "");
+        return item;
+    }
+
+    private void FillDerived(ResourceItem item, string protocolType)
+    {
+        if (Uri.TryCreate(item.Url, UriKind.Absolute, out var uri))
+        {
+            item.Domain = uri.Host;
+            item.Query = uri.Query;
+            var name = Uri.UnescapeDataString(Path.GetFileName(uri.AbsolutePath));
+            item.FileName = string.IsNullOrWhiteSpace(name) ? SanitizeFileName(uri.Host + "-document.html") : SanitizeFileName(name);
+        }
+        else item.FileName = "resource.bin";
+
+        var ext = Path.GetExtension(item.FileName).ToLowerInvariant();
+        var mime = item.MimeType.ToLowerInvariant();
+        item.ResourceType = Classify(ext, mime, protocolType);
+        item.IsText = item.ResourceType is "JS" or "CSS" or "JSON" or "HTML" or "SVG" or "XHR" || mime.StartsWith("text/");
+    }
+
+    private static string Classify(string ext, string mime, string protocolType)
+    {
+        if (ext is ".js" or ".mjs" or ".map" || mime.Contains("javascript")) return "JS";
+        if (ext == ".css" || mime.Contains("text/css")) return "CSS";
+        if (ext == ".json" || mime.Contains("json")) return protocolType is "XHR" or "Fetch" ? "XHR" : "JSON";
+        if (ext is ".png" or ".jpg" or ".jpeg" or ".webp" or ".gif" or ".avif" or ".ico" || mime.StartsWith("image/") && !mime.Contains("svg")) return "Images";
+        if (ext == ".svg" || mime.Contains("svg")) return "SVG";
+        if (ext is ".woff" or ".woff2" or ".ttf" or ".otf" or ".eot" || mime.Contains("font")) return "Fonts";
+        if (protocolType is "XHR" or "Fetch") return "XHR";
+        if (ext is ".html" or ".htm" || mime.Contains("text/html") || protocolType == "Document") return "HTML";
+        return "Autres";
+    }
+
+    private async Task CaptureBodyAsync(ResourceItem item)
+    {
+        if (web.CoreWebView2 is null || string.IsNullOrWhiteSpace(item.RequestId) || string.IsNullOrWhiteSpace(bodiesDir)) return;
+        try
+        {
+            var json = await web.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.getResponseBody", JsonSerializer.Serialize(new { requestId = item.RequestId }));
+            using var doc = JsonDocument.Parse(json);
+            var body = doc.RootElement.GetProperty("body").GetString() ?? "";
+            var base64 = doc.RootElement.TryGetProperty("base64Encoded", out var b) && b.GetBoolean();
+            byte[] bytes = base64 ? Convert.FromBase64String(body) : Encoding.UTF8.GetBytes(body);
+            var safe = $"{item.Sequence:0000}_{SanitizeFileName(item.FileName)}";
+            var path = Path.Combine(bodiesDir, safe);
+            Directory.CreateDirectory(bodiesDir);
+            await File.WriteAllBytesAsync(path, bytes);
+            item.BodyPath = path;
+            item.Size = bytes.LongLength;
+            item.Sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            Log.Write("BODY", ex, item.Url);
+        }
+    }
+
+    private void AddOrUpdateItem(ResourceItem item)
+    {
+        lock (itemGate)
+        {
+            var existing = items.FirstOrDefault(x => ReferenceEquals(x, item));
+            if (existing is null) ite
