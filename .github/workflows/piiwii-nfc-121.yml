@@ -1,0 +1,92 @@
+name: PiiWii NFC 1.0.21 Strict Mockup Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'piiwii-nfc-public/v121/**'
+      - '.github/workflows/piiwii-nfc-121.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download validated 1.0.20 sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf /tmp/piiwii-nfc /tmp/art120
+          mkdir -p /tmp/piiwii-nfc /tmp/art120
+          gh api repos/${{ github.repository }}/actions/artifacts/11037955622/zip > /tmp/art120.zip
+          unzip -q /tmp/art120.zip -d /tmp/art120
+          unzip -q /tmp/art120/PiiWii-NFC-1.0.20-SOURCES.zip -d /tmp/piiwii-nfc
+          test -d /tmp/piiwii-nfc/PiiWii-NFC-1.0.20
+      - name: Apply strict 1.0.21 mockup redesign
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, zlib
+          p=Path('piiwii-nfc-public/v121/patch121.z64')
+          Path('/tmp/patch121.diff').write_bytes(zlib.decompress(base64.b64decode(p.read_text().strip())))
+          PY
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.20
+          patch -p5 < /tmp/patch121.diff
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.20 PiiWii-NFC-1.0.21
+      - name: Build APK
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.21
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify APK and strict UI redesign
+        run: |
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.21
+          APK=$ROOT/app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT" dump badging "$APK" | head -20
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          grep -q "versionName '1.0.21'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 22" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v121'" "$ROOT/app/build.gradle"
+          grep -q 'headerBar' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'bottomNav' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'historySearchToggle' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'boolean mainNavPage' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+      - name: Package deliverables
+        run: |
+          mkdir -p piiwii-nfc-public/dist-121
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.21/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-121/PiiWii-NFC-1.0.21.apk
+          cd /tmp/piiwii-nfc
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-121/PiiWii-NFC-1.0.21-SOURCES.zip" PiiWii-NFC-1.0.21
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-121"
+          sha256sum PiiWii-NFC-1.0.21.apk PiiWii-NFC-1.0.21-SOURCES.zip > SHA256SUMS.txt
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.21
+          path: piiwii-nfc-public/dist-121/
+          retention-days: 7
+          if-no-files-found: error
