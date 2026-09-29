@@ -1,0 +1,158 @@
+name: NFC Toolbox 1.0.38 Real Branding Assets
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nfc-toolbox-138.yml'
+      - 'piiwii-nfc-public/v138/**'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download NFC Toolbox 1.0.37 baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc138 /tmp/base137 /tmp/base137.zip
+          mkdir -p /tmp/nfc138 /tmp/base137
+          ART_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "NFC-Toolbox-1.0.37-build" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/base137.zip
+          unzip -q /tmp/base137.zip -d /tmp/base137
+          SRCZIP=$(find /tmp/base137 -type f -name 'NFC-Toolbox-1.0.37-SOURCES-BUILD.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc138
+          test -d /tmp/nfc138/NFC-Toolbox-1.0.37
+
+      - name: Integrate real NFC Toolbox images
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc138/NFC-Toolbox-1.0.37
+          ASSETS="$GITHUB_WORKSPACE/piiwii-nfc-public/v138"
+          test "$(sha256sum "$ASSETS/nfc_toolbox_icon.webp" | awk '{print $1}')" = "901ae72b01940d84e70701266e82ad93b61f0b99d9ceb634331487fd7e09f5b2"
+          test "$(sha256sum "$ASSETS/nfc_toolbox_logo.webp" | awk '{print $1}')" = "391366890b6c0a00b38c1898c119326f88251f7a37405d8a714858d382e2d67b"
+          mkdir -p "$ROOT/app/src/main/res/drawable-nodpi"
+          cp "$ASSETS/nfc_toolbox_icon.webp" "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_icon.webp"
+          cp "$ASSETS/nfc_toolbox_logo.webp" "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_logo.webp"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/nfc138/NFC-Toolbox-1.0.37')
+
+          p=root/'app/build.gradle'
+          s=p.read_text().replace('versionCode 38','versionCode 39').replace("versionName '1.0.37'","versionName '1.0.38'")
+          p.write_text(s)
+
+          p=root/'app/src/main/AndroidManifest.xml'
+          s=p.read_text()
+          s=s.replace('android:icon="@drawable/ic_nfc"', 'android:icon="@drawable/nfc_toolbox_icon"\n        android:roundIcon="@drawable/nfc_toolbox_icon"')
+          p.write_text(s)
+
+          p=root/'app/src/main/res/layout/activity_main.xml'
+          s=p.read_text()
+
+          start=s.index('        <FrameLayout\n            android:layout_width="44dp"')
+          end=s.index('        <Button\n            android:id="@+id/headerSettingsButton"', start)
+          header='''        <LinearLayout\n            android:layout_width="0dp"\n            android:layout_height="match_parent"\n            android:layout_weight="1"\n            android:gravity="center_vertical"\n            android:orientation="vertical">\n\n            <ImageView\n                android:id="@+id/homeBrandLogo"\n                android:layout_width="190dp"\n                android:layout_height="50dp"\n                android:adjustViewBounds="true"\n                android:scaleType="fitStart"\n                android:src="@drawable/nfc_toolbox_logo"\n                android:contentDescription="NFC Toolbox" />\n\n            <TextView\n                android:id="@+id/screenTitle"\n                android:layout_width="1dp"\n                android:layout_height="1dp"\n                android:visibility="gone"\n                android:text="NFC Toolbox" />\n\n            <TextView\n                android:id="@+id/screenSubtitle"\n                android:layout_width="wrap_content"\n                android:layout_height="wrap_content"\n                android:layout_marginTop="-4dp"\n                android:text="Lisez, écrivez, copiez et gérez vos tags NFC"\n                android:textColor="#C2D1E3"\n                android:textSize="11sp" />\n        </LinearLayout>\n\n'''
+          s=s[:start]+header+s[end:]
+
+          old='''                    <ImageView android:layout_width="48dp" android:layout_height="48dp" android:src="@drawable/ic_nfc" android:contentDescription="NFC Toolbox" />\n                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="12dp" android:orientation="vertical">\n                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="NFC Toolbox" android:textColor="@color/text" android:textSize="18sp" android:textStyle="bold" />\n                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Version 1.0.37" android:textColor="@color/muted" android:textSize="11sp" />\n                    </LinearLayout>'''
+          new='''                    <ImageView\n                        android:layout_width="0dp"\n                        android:layout_height="58dp"\n                        android:layout_weight="1"\n                        android:adjustViewBounds="true"\n                        android:scaleType="fitStart"\n                        android:src="@drawable/nfc_toolbox_logo"\n                        android:contentDescription="NFC Toolbox" />\n                    <TextView\n                        android:layout_width="wrap_content"\n                        android:layout_height="wrap_content"\n                        android:layout_marginStart="10dp"\n                        android:text="1.0.38"\n                        android:textColor="@color/muted"\n                        android:textSize="11sp" />'''
+          if old not in s:
+              raise SystemExit('settings brand block not found')
+          s=s.replace(old,new)
+          p.write_text(s)
+
+          q=root/'CHANGELOG.md'
+          previous=q.read_text(errors='ignore') if q.exists() else ''
+          q.write_text('## 1.0.38\n- Vraie intégration du logo NFC Toolbox généré dans l’accueil et les paramètres.\n- Vraie intégration de l’icône NFC Toolbox générée comme icône Android et icône ronde.\n- Aucun changement du moteur NFC.\n\n'+previous)
+          q=root/'README.md'
+          if q.exists(): q.write_text(q.read_text(errors='ignore').replace('1.0.37','1.0.38'))
+          PY
+
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse('/tmp/nfc138/NFC-Toolbox-1.0.37/app/src/main/res/layout/activity_main.xml')
+          ET.parse('/tmp/nfc138/NFC-Toolbox-1.0.37/app/src/main/AndroidManifest.xml')
+          PY
+
+          grep -q "applicationId 'ch.piiwii.nfc.app'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 39" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.0.38'" "$ROOT/app/build.gradle"
+          grep -q 'android:icon="@drawable/nfc_toolbox_icon"' "$ROOT/app/src/main/AndroidManifest.xml"
+          grep -q 'android:roundIcon="@drawable/nfc_toolbox_icon"' "$ROOT/app/src/main/AndroidManifest.xml"
+          grep -q 'android:src="@drawable/nfc_toolbox_logo"' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          test -s "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_icon.webp"
+          test -s "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_logo.webp"
+
+      - name: Build release
+        working-directory: /tmp/nfc138/NFC-Toolbox-1.0.37
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Align and verify APK
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc138/NFC-Toolbox-1.0.37
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          IN="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUT=/tmp/NFC-Toolbox-1.0.38-ALIGNED-UNSIGNED.apk
+          test -f "$IN"
+          "$BT/zipalign" -f -p 4 "$IN" "$OUT"
+          "$BT/zipalign" -c -v 4 "$OUT"
+          "$BT/aapt" dump badging "$OUT" | tee /tmp/badging138.txt
+          grep -q "package: name='ch.piiwii.nfc.app'" /tmp/badging138.txt
+          grep -q "versionCode='39'" /tmp/badging138.txt
+          grep -q "versionName='1.0.38'" /tmp/badging138.txt
+          if grep -q 'application-debuggable' /tmp/badging138.txt; then exit 1; fi
+          unzip -t "$OUT" >/dev/null
+
+      - name: Package deliverables
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/out138
+          cp /tmp/NFC-Toolbox-1.0.38-ALIGNED-UNSIGNED.apk /tmp/out138/
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/v138/nfc_toolbox_icon.webp" /tmp/out138/NFC-Toolbox-Icon-used.webp
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/v138/nfc_toolbox_logo.webp" /tmp/out138/NFC-Toolbox-Logo-used.webp
+          cd /tmp/nfc138
+          mv NFC-Toolbox-1.0.37 NFC-Toolbox-1.0.38
+          zip -qr /tmp/out138/NFC-Toolbox-1.0.38-SOURCES-BUILD.zip NFC-Toolbox-1.0.38
+          printf 'package=ch.piiwii.nfc.app\nversionCode=39\nversionName=1.0.38\nrelease=true\npublicName=NFC Toolbox\nrealBrandAssets=true\n' > /tmp/out138/BUILD-IDENTITY.txt
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFC-Toolbox-1.0.38-build
+          path: /tmp/out138/
+          retention-days: 7
+          if-no-files-found: error
