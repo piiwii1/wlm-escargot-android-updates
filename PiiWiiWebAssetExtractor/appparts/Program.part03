@@ -3,6 +3,149 @@ ms.Add(item);
         if (IsHandleCreated) BeginInvoke(RefreshGrid);
     }
 
+    private async Task OpenSiteAsync()
+    {
+        if (!initialized || web.CoreWebView2 is null) return;
+        var url = txtUrl.Text.Trim();
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+        {
+            MessageBox.Show("Colle une adresse de site valide, par exemple https://exemple.ch", "Adresse invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        try
+        {
+            StartNewSession(url);
+            captureEnabled = true;
+            SetStatus("🟠 Ouverture du site…");
+            web.CoreWebView2.Navigate(url);
+            await WaitForNavigationAndQuietAsync();
+            await SaveDomFinalAsync();
+            SetStatus("🟢 Site ouvert — choisis Scanner tout ou Sélectionner une zone");
+        }
+        catch (Exception ex)
+        {
+            Log.Write("OPEN", ex);
+            SetStatus("🔴 Impossible d'ouvrir le site");
+        }
+    }
+
+    private async Task ScanCurrentSiteAndCreateZipAsync()
+    {
+        if (string.IsNullOrWhiteSpace(sessionDir) || !string.Equals(initialUrl, txtUrl.Text.Trim(), StringComparison.OrdinalIgnoreCase))
+            await OpenSiteAsync();
+        if (string.IsNullOrWhiteSpace(sessionDir)) return;
+        targetHtml = null;
+        targetSelector = null;
+        targetSummary = null;
+        lblTarget.Visible = false;
+        btnTargetDone.Enabled = false;
+        await AnalyzeAsync(false);
+        await FindEngineAsync();
+        await CreateChatGptPackAsync(true);
+    }
+
+    private async Task StartVisualTargetingAsync()
+    {
+        if (web.CoreWebView2 is null) return;
+        if (string.IsNullOrWhiteSpace(sessionDir) || !string.Equals(initialUrl, txtUrl.Text.Trim(), StringComparison.OrdinalIgnoreCase))
+            await OpenSiteAsync();
+        if (string.IsNullOrWhiteSpace(sessionDir)) return;
+
+        targetHtml = null;
+        targetSelector = null;
+        targetSummary = null;
+        lblTarget.Visible = false;
+        btnTargetDone.Enabled = false;
+        markerSequence = sequence;
+
+        var script = """
+(() => {
+  if (window.__piiwiiTargetCleanup) window.__piiwiiTargetCleanup();
+  const old = {el:null, outline:'', cursor: document.body.style.cursor};
+  const hover = (e) => {
+    if (old.el && old.el !== e.target) old.el.style.outline = old.outline;
+    old.el = e.target; old.outline = e.target.style.outline;
+    e.target.style.outline = '3px solid #2e7ae4';
+    document.body.style.cursor = 'crosshair';
+  };
+  const selector = (el) => {
+    if (el.id) return '#' + CSS.escape(el.id);
+    const parts=[]; let n=el;
+    while(n && n.nodeType===1 && parts.length<5){
+      let p=n.tagName.toLowerCase();
+      if(n.classList && n.classList.length) p += '.' + [...n.classList].slice(0,2).map(x=>CSS.escape(x)).join('.');
+      if(n.parentElement){ const same=[...n.parentElement.children].filter(x=>x.tagName===n.tagName); if(same.length>1) p += ':nth-of-type('+(same.indexOf(n)+1)+')'; }
+      parts.unshift(p); n=n.parentElement;
+    }
+    return parts.join(' > ');
+  };
+  const click = (e) => {
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    const el=e.target;
+    if (old.el) old.el.style.outline=old.outline;
+    document.body.style.cursor=old.cursor;
+    document.removeEventListener('mousemove',hover,true);
+    document.removeEventListener('click',click,true);
+    const data={selector:selector(el), tag:el.tagName, id:el.id||'', classes:el.className||'', text:(el.innerText||'').trim().slice(0,500), html:el.outerHTML};
+    chrome.webview.postMessage('PIIWII_TARGET:' + JSON.stringify(data));
+  };
+  window.__piiwiiTargetCleanup=()=>{ if(old.el) old.el.style.outline=old.outline; document.body.style.cursor=old.cursor; document.removeEventListener('mousemove',hover,true); document.removeEventListener('click',click,true); };
+  document.addEventListener('mousemove',hover,true);
+  document.addEventListener('click',click,true);
+})();
+""";
+        await web.CoreWebView2.ExecuteScriptAsync(script);
+        SetStatus("🎯 Survole la page : la zone bleue sera sélectionnée quand tu cliqueras");
+    }
+
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        try
+        {
+            var msg = e.TryGetWebMessageAsString();
+            if (!msg.StartsWith("PIIWII_TARGET:", StringComparison.Ordinal)) return;
+            using var doc = JsonDocument.Parse(msg[14..]);
+            var root = doc.RootElement;
+            targetSelector = root.TryGetProperty("selector", out var s) ? s.GetString() : null;
+            targetHtml = root.TryGetProperty("html", out var h) ? h.GetString() : null;
+            var tag = root.TryGetProperty("tag", out var t) ? t.GetString() : "élément";
+            var text = root.TryGetProperty("text", out var tx) ? tx.GetString() ?? "" : "";
+            targetSummary = $"{tag} {targetSelector} {text}".Trim();
+            lblTarget.Text = "✓ Zone sélectionnée : " + ShortText(targetSelector ?? tag ?? "élément", 60);
+            lblTarget.Visible = true;
+            btnTargetDone.Enabled = true;
+            SetStatus("🟢 Zone sélectionnée — clique maintenant sur Extraire cette zone");
+        }
+        catch (Exception ex) { Log.Write("TARGET", ex); }
+    }
+
+    private async Task ExtractSelectedTargetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(targetHtml) || string.IsNullOrWhiteSpace(sessionDir))
+        {
+            MessageBox.Show("Clique d'abord sur « Sélectionner une zone », puis choisis une partie de la page.", "Aucune zone sélectionnée", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        try
+        {
+            var targetDir = Path.Combine(sessionDir, "cible");
+            Directory.CreateDirectory(targetDir);
+            await File.WriteAllTextAsync(Path.Combine(targetDir, "zone-selectionnee.html"), targetHtml, Encoding.UTF8);
+            var info = JsonSerializer.Serialize(new { url = initialUrl, selector = targetSelector, description = targetSummary, date = DateTime.Now }, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(Path.Combine(targetDir, "zone-selectionnee.json"), info, Encoding.UTF8);
+            await SaveDomFinalAsync();
+            await CreateChatGptPackAsync(true);
+            SetStatus("🟢 ZIP ciblé créé — prêt à être envoyé dans ChatGPT");
+        }
+        catch (Exception ex)
+        {
+            Log.Write("TARGET_EXPORT", ex);
+            SetStatus("🔴 Impossible de créer le ZIP ciblé");
+        }
+    }
+
+    private static string ShortText(string value, int max) => value.Length <= max ? value : value[..max] + "…";
+
     private async Task AnalyzeAsync(bool autoPack)
     {
         if (!initialized || web.CoreWebView2 is null) return;
@@ -26,11 +169,7 @@ ms.Add(item);
             if (autoPack)
             {
                 await FindEngineAsync();
-                var zip = await CreateChatGptPackAsync(false);
-                if (!string.IsNullOrWhiteSpace(zip))
-                {
-                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zip}\"") { UseShellExecute = true });
-                }
+                await CreateChatGptPackAsync(true);
             }
         }
         catch (Exception ex)
@@ -44,16 +183,28 @@ ms.Add(item);
 
     private void StartNewSession(string url)
     {
+        TryDeleteSessionDirectory();
         initialUrl = url;
         sessionStarted = DateTime.Now;
         sequence = 0;
         markerSequence = 0;
         byRequest.Clear();
         lock (itemGate) items.Clear();
-        sessionDir = Path.Combine(Log.Root, $"Capture-{DateTime.Now:yyyy-MM-dd_HHmmss}");
+        var tempRoot = Path.Combine(Path.GetTempPath(), "PiiWii-Code-Capture");
+        Directory.CreateDirectory(tempRoot);
+        sessionDir = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
         bodiesDir = Path.Combine(sessionDir, "_bodies");
         Directory.CreateDirectory(bodiesDir);
         RefreshGrid();
+    }
+
+    private void TryDeleteSessionDirectory()
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(sessionDir) && Directory.Exists(sessionDir)) Directory.Delete(sessionDir, true);
+        }
+        catch { }
     }
 
     private async Task WaitForNavigationAndQuietAsync()
@@ -74,7 +225,7 @@ ms.Add(item);
             var now = CountItems();
             if (now == last) stableTicks++; else stableTicks = 0;
             last = now;
-            SetStatus($"🟠 Page chargée — {now} ressources détectées...");
+            SetStatus($"🟠 Chargement — {now} ressources détectées…");
             if (stableTicks >= 5) break;
         }
     }
