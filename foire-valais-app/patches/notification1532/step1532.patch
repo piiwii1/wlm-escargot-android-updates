@@ -1,0 +1,93 @@
+--- foire_1532_work/app/build.gradle.kts	2026-09-29 02:03:57.000000000 +0000
++++ foire_1532_mod/app/build.gradle.kts	2026-09-29 06:32:54.525414217 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 37
+-        versionName = "1.5.31"
++        versionCode = 38
++        versionName = "1.5.32"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+--- foire_1532_work/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 02:07:26.000000000 +0000
++++ foire_1532_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 06:32:54.525143054 +0000
+@@ -34,6 +34,7 @@
+     static final String PROGRAMME_URL="https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/main/foire-valais-app/programme-2026.json";
+     static final int PURPLE=Color.rgb(15,24,43), PINK=Color.rgb(232,14,35), GOLD=Color.rgb(247,198,65);
+     static final int BRAND_DARK=Color.rgb(177,0,23), BRAND_SOFT=Color.rgb(255,239,242);
++    static final int REQ_TEST_NOTIFICATION=1532;
+     static final int BG=Color.rgb(249,249,251), MUTED=Color.rgb(105,112,128), GREEN=Color.rgb(25,125,78), ORANGE=Color.rgb(178,108,0);
+     LinearLayout root, content, dayRow, zoneRow, nav;
+     HeaderBrandView headerBrand;
+@@ -45,6 +46,7 @@
+     String search="";
+     String dataUpdated="28.09.2026";
+     boolean remoteSyncRunning=false;
++    boolean pendingTestNotification=false;
+     SharedPreferences prefs;
+ 
+     final String[] days={"Ven 2","Sam 3","Dim 4","Lun 5","Mar 6","Mer 7","Jeu 8","Ven 9","Sam 10","Dim 11"};
+@@ -1026,6 +1028,7 @@
+             if(!prefs.getBoolean("notificationsEnabled",true)) cancelAllEventAlarms();
+             else rescheduleConfiguredAlarms();
+         });
++        settingsActionRow("🔔","Tester une notification","Afficher immédiatement un exemple du rappel qui apparaîtra sur le téléphone",()->testNotification());
+         settingsToggleRow("📣","Actualités de la Foire","Recevoir les infos, annonces et temps forts","fairNewsEnabled",true,null);
+ 
+         settingsSectionHeader("▣","Programme & hors ligne","Mises à jour et données enregistrées");
+@@ -1041,7 +1044,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.31","Foire du Valais 2026 · versionCode 37",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.31 · versionCode 37\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.32","Foire du Valais 2026 · versionCode 38",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.32 · versionCode 38\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · test de notification intégré · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1372,6 +1375,45 @@
+     }
+ 
+     void createChannel(){if(Build.VERSION.SDK_INT>=26)((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(new NotificationChannel(EventReceiver.CHANNEL,"Mes événements Foire",NotificationManager.IMPORTANCE_HIGH));}
++
++    void testNotification(){
++        prefs.edit().putBoolean("notificationsEnabled",true).apply();
++        createChannel();
++        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
++            pendingTestNotification=true;
++            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},REQ_TEST_NOTIFICATION);
++            return;
++        }
++        sendTestNotification();
++    }
++
++    void sendTestNotification(){
++        NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
++        boolean blocked=Build.VERSION.SDK_INT>=24&&!nm.areNotificationsEnabled();
++        if(Build.VERSION.SDK_INT>=26){NotificationChannel ch=nm.getNotificationChannel(EventReceiver.CHANNEL);if(ch!=null&&ch.getImportance()==NotificationManager.IMPORTANCE_NONE)blocked=true;}
++        if(blocked){
++            new AlertDialog.Builder(this).setTitle("Notifications désactivées").setMessage("Android bloque actuellement les notifications de l’application. Active-les dans les réglages puis retouche « Tester une notification ».").setNegativeButton("Annuler",null).setPositiveButton("Ouvrir les réglages",(d,w)->openNotificationSettings()).show();
++            return;
++        }
++        Intent i=new Intent(this,EventReceiver.class)
++                .putExtra("title","Notification test")
++                .putExtra("sub","Exemple : votre événement commence dans 15 minutes.")
++                .putExtra("eventId",1532001);
++        sendBroadcast(i);
++        Toast.makeText(this,"Notification test envoyée",Toast.LENGTH_SHORT).show();
++        if(screen==4)new Handler(Looper.getMainLooper()).postDelayed(this::showSettings,250);
++    }
++
++    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
++        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
++        if(requestCode==REQ_TEST_NOTIFICATION){
++            boolean granted=grantResults.length>0&&grantResults[0]==PackageManager.PERMISSION_GRANTED;
++            pendingTestNotification=false;
++            if(granted)sendTestNotification();
++            else new AlertDialog.Builder(this).setTitle("Autorisation nécessaire").setMessage("Pour afficher le test et les rappels, autorise les notifications pour cette application.").setNegativeButton("Annuler",null).setPositiveButton("Ouvrir les réglages",(d,w)->openNotificationSettings()).show();
++        }
++    }
++
+     void openUrl(String url){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception ignored){}}
+     void openNotificationSettings(){try{Intent i=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);i.putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName());startActivity(i);}catch(Exception ignored){}}
