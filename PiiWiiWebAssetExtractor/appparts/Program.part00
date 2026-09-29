@@ -25,8 +25,8 @@ internal static class Program
 internal static class Log
 {
     private static readonly object Gate = new();
-    public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PiiWii Web Extractor");
-    public static readonly string LogDir = Path.Combine(Root, "logs");
+    public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PiiWii Code Capture");
+    public static readonly string LogDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiiWii", "CodeCapture", "logs");
     public static readonly string LogFile = Path.Combine(LogDir, "app.log");
     public static void Write(string area, Exception? ex = null, string? message = null)
     {
@@ -68,18 +68,19 @@ internal sealed class MainForm : Form
     private readonly TextBox txtUrl = new() { PlaceholderText = "Colle l'adresse du site ici…", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 12f), Margin = new Padding(0, 0, 10, 0) };
     private readonly TextBox txtSearch = new() { PlaceholderText = "Mot-clé facultatif (ex. CustomGenerator)", Width = 320 };
     private readonly ComboBox cmbType = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
-    private readonly Button btnFindCode = PrimaryButton("ANALYSER ET PRÉPARER POUR CHATGPT");
-    private readonly Button btnTargetStart = AccentButton("🎯 CIBLER UNE FONCTION PRÉCISE");
-    private readonly Button btnTargetDone = AccentButton("✓ TERMINER LE CIBLAGE ET CRÉER LE PACK");
+    private readonly Button btnOpenSite = PrimaryButton("OUVRIR LE SITE");
+    private readonly Button btnFindCode = PrimaryButton("📦 SCANNER TOUT ET CRÉER LE ZIP");
+    private readonly Button btnTargetStart = AccentButton("🎯 SÉLECTIONNER UNE ZONE");
+    private readonly Button btnTargetDone = AccentButton("📦 EXTRAIRE CETTE ZONE");
     private readonly Button btnSettings = SmallButton("⚙ Outils avancés");
-    private readonly Button btnAnalyze = SmallButton("Analyser sans créer de pack");
+    private readonly Button btnAnalyze = SmallButton("Analyser sans créer de ZIP");
     private readonly Button btnDownload = SmallButton("Télécharger la ressource sélectionnée");
     private readonly Button btnDownloadAll = SmallButton("Tout télécharger");
     private readonly Button btnHar = SmallButton("Exporter HAR");
     private readonly Button btnCopyUrl = SmallButton("Copier URL");
     private readonly Button btnEngine = SmallButton("Rechercher le moteur");
     private readonly Button btnMark = SmallButton("Poser un marqueur");
-    private readonly Button btnPack = SmallButton("Créer pack ChatGPT");
+    private readonly Button btnPack = SmallButton("Créer ZIP");
     private readonly Button btnBack = SmallButton("← Retour");
     private readonly Button btnReload = SmallButton("Recharger");
     private readonly Button btnNoCache = SmallButton("Recharger sans cache");
@@ -87,7 +88,8 @@ internal sealed class MainForm : Form
     private readonly CheckBox chkNoCache = new() { Text = "Désactiver le cache pendant l'analyse", Checked = true, AutoSize = true };
     private readonly CheckBox chkContinuous = new() { Text = "Capture continue", Checked = true, AutoSize = true };
     private readonly Label lblStatus = new() { AutoSize = true, Text = "🟢 Prêt", Font = new Font("Segoe UI Semibold", 10f), Padding = new Padding(0, 5, 0, 0) };
-    private readonly Label lblStats = new() { AutoSize = true, Text = "Aucune analyse", ForeColor = Color.FromArgb(165, 170, 180), Padding = new Padding(12, 5, 0, 0) };
+    private readonly Label lblStats = new() { AutoSize = true, Text = "Colle une adresse puis ouvre le site", ForeColor = Color.FromArgb(165, 170, 180), Padding = new Padding(12, 5, 0, 0) };
+    private readonly Label lblTarget = new() { AutoSize = true, Text = "", ForeColor = Color.FromArgb(110, 200, 150), Padding = new Padding(8, 7, 0, 0), Visible = false };
     private readonly Panel advancedPanel = new() { Dock = DockStyle.Fill, Visible = false, BackColor = Color.FromArgb(21, 23, 28), Padding = new Padding(10) };
     private readonly DataGridView grid = new()
     {
@@ -118,10 +120,13 @@ internal sealed class MainForm : Form
     private bool captureEnabled;
     private string initialUrl = "";
     private DateTime sessionStarted;
+    private string? targetHtml;
+    private string? targetSelector;
+    private string? targetSummary;
 
     public MainForm()
     {
-        Text = "PiiWii Web Asset Extractor 1.1.0";
+        Text = "PiiWii Code Capture 1.2.0";
         Width = 1380;
         Height = 900;
         MinimumSize = new Size(980, 680);
@@ -134,20 +139,19 @@ internal sealed class MainForm : Form
         Controls.Add(BuildLayout());
         Load += async (_, _) => await InitializeAsync();
 
-        btnFindCode.Click += async (_, _) => await AnalyzeAsync(true);
-        btnTargetStart.Click += async (_, _) =>
+        btnOpenSite.Click += async (_, _) => await OpenSiteAsync();
+        txtUrl.KeyDown += async (_, e) =>
         {
-            if (string.IsNullOrWhiteSpace(sessionDir) || !string.Equals(initialUrl, txtUrl.Text.Trim(), StringComparison.OrdinalIgnoreCase))
-                await AnalyzeAsync(false);
-            MarkCurrentState();
-            SetStatus("🟠 Ciblage actif : utilise la page puis clique sur ‘Terminer le ciblage’");
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                await OpenSiteAsync();
+            }
         };
-        btnTargetDone.Click += async (_, _) =>
-        {
-            await SaveDomFinalAsync();
-            await CreateChatGptPackAsync(true);
-            SetStatus("🟢 Pack ciblé créé, prêt à être envoyé dans ChatGPT");
-        };
+        btnFindCode.Click += async (_, _) => await ScanCurrentSiteAndCreateZipAsync();
+        btnTargetStart.Click += async (_, _) => await StartVisualTargetingAsync();
+        btnTargetDone.Click += async (_, _) => await ExtractSelectedTargetAsync();
+        btnTargetDone.Enabled = false;
         btnSettings.Click += (_, _) =>
         {
             advancedPanel.Visible = !advancedPanel.Visible;
