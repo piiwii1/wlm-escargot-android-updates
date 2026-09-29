@@ -31,12 +31,13 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Install Android build platform
+      - name: Install Android SDK and emulator
         run: |
           set -euo pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools" "emulator" "system-images;android-34;google_apis;x86_64"
+          sudo chmod 666 /dev/kvm || true
 
       - name: Download 1.0.34 source baseline
         env:
@@ -52,41 +53,54 @@ jobs:
           SRCZIP=$(find /tmp/base134 -type f -name 'PiiWii-NFC-1.0.34-SOURCES-BUILD.zip' -print -quit)
           test -n "$SRCZIP"
           unzip -q "$SRCZIP" -d /tmp/nfc134-audit
-          test -d /tmp/nfc134-audit/PiiWii-NFC-1.0.34
-          grep -q "applicationId 'ch.piiwii.nfc.app'" /tmp/nfc134-audit/PiiWii-NFC-1.0.34/app/build.gradle
-          grep -q "versionCode 35" /tmp/nfc134-audit/PiiWii-NFC-1.0.34/app/build.gradle
+          ROOT=/tmp/nfc134-audit/PiiWii-NFC-1.0.34
+          test -d "$ROOT"
+          grep -q "applicationId 'ch.piiwii.nfc.app'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 35" "$ROOT/app/build.gradle"
 
-      - name: Build debug APK for visual audit
+          # Emulator has no physical NFC. This audit-only patch keeps operation
+          # buttons navigable and presents the same enabled-state copy as a real
+          # NFC-capable phone. It is never included in the release APK.
+          MAIN="$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          sed -i '/readButton.setEnabled(false);/d;/writeButton.setEnabled(false);/d;/copyButton.setEnabled(false);/d;/eraseButton.setEnabled(false);/d' "$MAIN"
+          sed -i 's/if (nfcAdapter == null) state = "NFC indisponible sur cet appareil";/if (nfcAdapter == null) state = "Prêt à lire, écrire ou gérer votre tag";/' "$MAIN"
+
+      - name: Build audit APK
         working-directory: /tmp/nfc134-audit/PiiWii-NFC-1.0.34
         run: gradle --no-daemon assembleDebug
 
-      - name: Run app and capture 10 real screens
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          profile: pixel_7
-          target: google_apis
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          disable-animations: true
-          script: |
-            set -euo pipefail
-            APK=/tmp/nfc134-audit/PiiWii-NFC-1.0.34/app/build/outputs/apk/debug/app-debug.apk
-            OUT=/tmp/nfc134-screens
-            mkdir -p "$OUT"
-            adb install -r "$APK"
-            adb shell wm size 1080x2400
-            adb shell wm density 420
-            adb shell am force-stop ch.piiwii.nfc.app
-            adb shell am start -W -n ch.piiwii.nfc.app/ch.piiwii.nfc.MainActivity
-            sleep 2
+      - name: Create and boot Android emulator
+        run: |
+          set -euo pipefail
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n piwii_audit -k "system-images;android-34;google_apis;x86_64" --device "pixel_7" --force
+          nohup "$ANDROID_HOME/emulator/emulator" @piwii_audit -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim > /tmp/emulator.log 2>&1 &
+          adb wait-for-device
+          timeout 240 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell wm size 1080x2400
+          adb shell wm density 420
+          adb shell input keyevent 82 || true
+          adb devices
 
-            click_id() {
-              local ID="$1"
-              adb shell uiautomator dump /sdcard/window.xml >/dev/null
-              adb pull /sdcard/window.xml /tmp/window.xml >/dev/null
-              local BOUNDS
-              BOUNDS=$(python3 - "$ID" <<'PY'
+      - name: Capture 10 real app screens
+        run: |
+          set -euo pipefail
+          APK=/tmp/nfc134-audit/PiiWii-NFC-1.0.34/app/build/outputs/apk/debug/app-debug.apk
+          OUT=/tmp/nfc134-screens
+          mkdir -p "$OUT"
+          adb install -r "$APK"
+          adb shell am force-stop ch.piiwii.nfc.app
+          adb shell am start -W -n ch.piiwii.nfc.app/ch.piiwii.nfc.MainActivity
+          sleep 2
+
+          click_id() {
+            local ID="$1"
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null
+            adb pull /sdcard/window.xml /tmp/window.xml >/dev/null
+            local BOUNDS
+            BOUNDS=$(python3 - "$ID" <<'PY'
 import sys, xml.etree.ElementTree as ET
 needle=':id/'+sys.argv[1]
 root=ET.parse('/tmp/window.xml').getroot()
@@ -98,8 +112,8 @@ for n in root.iter('node'):
 raise SystemExit(2)
 PY
 )
-              local XY
-              XY=$(python3 - "$BOUNDS" <<'PY'
+            local XY
+            XY=$(python3 - "$BOUNDS" <<'PY'
 import re,sys
 m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', sys.argv[1])
 if not m: raise SystemExit(2)
@@ -107,44 +121,35 @@ x1,y1,x2,y2=map(int,m.groups())
 print((x1+x2)//2, (y1+y2)//2)
 PY
 )
-              adb shell input tap $XY
-              sleep 1
-            }
+            adb shell input tap $XY
+            sleep 1
+          }
 
-            shot() {
-              adb exec-out screencap -p > "$OUT/$1.png"
-            }
+          shot() {
+            adb exec-out screencap -p > "$OUT/$1.png"
+          }
 
-            shot 01-home
-            click_id readButton
-            shot 02-read
-            click_id readBackButton
-            click_id writeButton
-            shot 03-write
-            click_id writeBackButton
-            click_id copyButton
-            shot 04-copy
-            click_id copyBackButton
-            click_id eraseButton
-            shot 05-erase
-            click_id eraseBackButton
-            click_id modelsShortcutButton
-            shot 06-models
-            click_id modelsBackButton
-            click_id headerSettingsButton
-            shot 10-settings
-            click_id settingsDiagnosticsPageButton
-            shot 07-diagnostics
-            click_id diagnosticsBackButton
-            click_id settingsBackupPageButton
-            shot 08-backup
-            click_id backupBackButton
-            click_id navHistory
-            shot 09-history
+          shot 01-home
+          click_id readButton; shot 02-read
+          click_id readBackButton
+          click_id writeButton; shot 03-write
+          click_id writeBackButton
+          click_id copyButton; shot 04-copy
+          click_id copyBackButton
+          click_id eraseButton; shot 05-erase
+          click_id eraseBackButton
+          click_id modelsShortcutButton; shot 06-models
+          click_id modelsBackButton
+          click_id headerSettingsButton; shot 10-settings
+          click_id settingsDiagnosticsPageButton; shot 07-diagnostics
+          click_id diagnosticsBackButton
+          click_id settingsBackupPageButton; shot 08-backup
+          click_id backupBackButton
+          click_id navHistory; shot 09-history
 
-            adb shell uiautomator dump /sdcard/window.xml >/dev/null || true
-            adb pull /sdcard/window.xml "$OUT/last-window.xml" >/dev/null || true
-            ls -lh "$OUT"
+          adb shell uiautomator dump /sdcard/window.xml >/dev/null || true
+          adb pull /sdcard/window.xml "$OUT/last-window.xml" >/dev/null || true
+          ls -lh "$OUT"
 
       - name: Upload visual audit screenshots
         uses: actions/upload-artifact@v4
