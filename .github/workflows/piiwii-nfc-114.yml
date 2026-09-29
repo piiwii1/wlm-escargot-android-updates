@@ -1,0 +1,136 @@
+name: PiiWii NFC 1.0.14 History Cards Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'piiwii-nfc-public/v114/**'
+      - '.github/workflows/piiwii-nfc-114.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Prepare 1.0.14 sources
+        run: |
+          rm -rf /tmp/piiwii-nfc
+          mkdir -p /tmp/piiwii-nfc
+          unzip -q piiwii-nfc-public/PiiWii-NFC-1.0.2-SOURCES.zip -d /tmp/piiwii-nfc
+          mv /tmp/piiwii-nfc/PiiWii-NFC-1.0.2 /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.4
+          git apply "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc103.patch"
+          python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply104.py"
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.4 PiiWii-NFC-1.0.5
+          cd PiiWii-NFC-1.0.5
+          python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply105.py"
+          sed -i "s/applicationId 'ch.piiwii.nfc'/applicationId 'ch.piiwii.nfc.v105'/" app/build.gradle
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.5 PiiWii-NFC-1.0.6
+          cd PiiWii-NFC-1.0.6
+          python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply106.py"
+          cat "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/MainActivity.java.part1" "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/MainActivity.java.part2" "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/MainActivity.java.part3" > app/src/main/java/ch/piiwii/nfc/MainActivity.java
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/activity_main.xml" app/src/main/res/layout/activity_main.xml
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/build.gradle" app/build.gradle
+          cp "$GITHUB_WORKSPACE/piiwii-nfc-public/107src/CHANGELOG.md" CHANGELOG.md
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.6 PiiWii-NFC-1.0.7
+          cd PiiWii-NFC-1.0.7
+          cat "$GITHUB_WORKSPACE"/piiwii-nfc-public/v108/apply108.z64.* > /tmp/apply108.z64
+          python3 -c 'import base64,zlib; open("/tmp/apply108.py","wb").write(zlib.decompress(base64.b64decode(open("/tmp/apply108.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply108.py | cut -d' ' -f1)" = "5ff79637152fef671010e5e662df1b5a7ee5cc9f0e09835b818ae74a5811aae4"
+          python3 /tmp/apply108.py
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.7 PiiWii-NFC-1.0.8
+          cd PiiWii-NFC-1.0.8
+          python3 -c 'import base64,zlib; open("/tmp/apply109.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v109/apply109.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply109.patch | cut -d' ' -f1)" = "c1c39081b6e5d03436fe38df1e5e04dbb985116be974bf0e0619684e0c8d28af"
+          git apply /tmp/apply109.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.8 PiiWii-NFC-1.0.9
+          cd PiiWii-NFC-1.0.9
+          python3 -c 'import base64,zlib; open("/tmp/apply110.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v110/patch110.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply110.patch | cut -d' ' -f1)" = "44ab2d6986b4749bee559900e26f529516c7b3e268e4c579a0d052e813b22332"
+          git apply /tmp/apply110.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.9 PiiWii-NFC-1.0.10
+          cd PiiWii-NFC-1.0.10
+          python3 -c 'import base64,zlib; open("/tmp/apply111.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v111/patch111.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply111.patch | cut -d' ' -f1)" = "aab981dd1220d5d09a3f4a203ac14c2adc31d347e7fec910199644c842b8f3e9"
+          git apply /tmp/apply111.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.10 PiiWii-NFC-1.0.11
+          cd PiiWii-NFC-1.0.11
+          python3 -c 'import base64,zlib; open("/tmp/apply112.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v112/patch112.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply112.patch | cut -d' ' -f1)" = "e64013cf2ef9e54505dccd306cd5fde6d2b87dfa8c1c1b3239688bcf446aa1ae"
+          patch -p2 < /tmp/apply112.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.11 PiiWii-NFC-1.0.12
+          cd PiiWii-NFC-1.0.12
+          python3 -c 'import base64,zlib; open("/tmp/apply113.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v113/patch113.patch","rb").read())))'
+          test "$(sha256sum /tmp/apply113.patch | cut -d' ' -f1)" = "8e89dc366a8a2052d0758fd18083395d12bb21b203c9f8e7b864c0a62e72db05"
+          patch -p2 < /tmp/apply113.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.12 PiiWii-NFC-1.0.13
+          cd PiiWii-NFC-1.0.13
+          python3 -c 'import base64,zlib; open("/tmp/apply114.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v114/patch114.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply114.patch | cut -d' ' -f1)" = "567bda0b15ed0181cb6821236cd55fec7cd0bbad5da3a056fbe431ea6a684ec2"
+          patch -p2 < /tmp/apply114.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.13 PiiWii-NFC-1.0.14
+      - name: Build APK
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.14
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify APK and history cards
+        run: |
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.14
+          APK=$ROOT/app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT" dump badging "$APK" | head -20
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          grep -q "versionName '1.0.14'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 15" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v114'" "$ROOT/app/build.gradle"
+          grep -q 'historyList' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'addHistoryCard' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q 'reuseHistoryEntry' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q 'deleteHistoryEntry' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+      - name: Package deliverables
+        run: |
+          mkdir -p piiwii-nfc-public/dist-114
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.14/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-114/PiiWii-NFC-1.0.14.apk
+          cd /tmp/piiwii-nfc
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-114/PiiWii-NFC-1.0.14-SOURCES.zip" PiiWii-NFC-1.0.14
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-114"
+          sha256sum PiiWii-NFC-1.0.14.apk PiiWii-NFC-1.0.14-SOURCES.zip > SHA256SUMS.txt
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.14
+          path: piiwii-nfc-public/dist-114/
+          retention-days: 7
+          if-no-files-found: error
