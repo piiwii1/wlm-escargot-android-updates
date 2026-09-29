@@ -1,0 +1,49 @@
+name: Foire du Valais all programme audit
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/foire-valais-all-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch official programme and audit spaces/categories
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests
+          python - <<'PY'
+          import requests, json, collections
+          from urllib.parse import urlencode
+          pairs=[('site','2'),('locale','fr'),('types[]','programs'),('date_start','2026-10-02'),('date_end','2026-10-11'),('date_search_on_period','true'),('count','500'),('page','1'),('orderByProperty','dateFrom'),('orderByDirection','ASC'),('embed[]','spaces'),('embed[]','categories'),('embed[]','tags')]
+          url='https://www.foireduvalais.ch/api/search?'+urlencode(pairs)
+          data=requests.get(url,headers={'User-Agent':'Mozilla/5.0','Accept':'application/json'},timeout=60).json()
+          items=data.get('hydra:member',[])
+          spaces=collections.Counter(); cats=collections.Counter(); combos=collections.Counter()
+          records=[]
+          for x in items:
+              s=[(v.get('id'),v.get('title') or v.get('name') or '') for v in (x.get('spaces') or [])]
+              c=[(v.get('id'),v.get('title') or v.get('name') or '') for v in (x.get('categories') or [])]
+              for a in s: spaces[a]+=1
+              for a in c: cats[a]+=1
+              for a in s:
+                  for b in c: combos[(a,b)]+=1
+              records.append({'id':x.get('id'),'title':x.get('title'),'dateFrom':x.get('dateFrom'),'dateTo':x.get('dateTo'),'spaces':s,'categories':c,'slug':x.get('slug')})
+          out={'total':len(items),'spaces':[{'id':k[0],'name':k[1],'count':v} for k,v in spaces.most_common()], 'categories':[{'id':k[0],'name':k[1],'count':v} for k,v in cats.most_common()], 'records':records}
+          open('FOIRE-2026-ALL-PROGRAMME-AUDIT.json','w',encoding='utf-8').write(json.dumps(out,ensure_ascii=False,indent=2))
+          print('TOTAL',len(items))
+          print('SPACES')
+          for k,v in spaces.most_common(): print(k[0],repr(k[1]),v)
+          print('CATEGORIES')
+          for k,v in cats.most_common(): print(k[0],repr(k[1]),v)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Foire-2026-all-programme-audit
+          path: FOIRE-2026-ALL-PROGRAMME-AUDIT.json
+          retention-days: 7
