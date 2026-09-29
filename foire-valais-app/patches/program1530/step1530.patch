@@ -1,0 +1,35 @@
+diff -ruN foire_1529_debug/app/build.gradle.kts foire_1530_fix/app/build.gradle.kts
+--- foire_1529_debug/app/build.gradle.kts	2026-09-29 01:39:29.000000000 +0000
++++ foire_1530_fix/app/build.gradle.kts	2026-09-29 01:45:22.539288827 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 35
+-        versionName = "1.5.29"
++        versionCode = 36
++        versionName = "1.5.30"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN foire_1529_debug/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire_1530_fix/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire_1529_debug/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 01:39:29.000000000 +0000
++++ foire_1530_fix/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 01:45:22.539129737 +0000
+@@ -433,7 +433,7 @@
+     void zoneButtons(boolean show){
+         zoneRow.removeAllViews(); zoneRow.setVisibility(show?View.VISIBLE:View.GONE); if(!show)return;
+         zoneRow.setPadding(dp(10),0,dp(10),dp(10));
+-        String[] labels={"Tous","Live","Tribus","Rendez-vous","Foire","Dégustations","Mes choix"};
++        String[] labels={"Tous","Live","Tribus","Rendez-vous","Foire","Dégustations","Innothèque","Bonne de Bourbon","Conférences","Halles","Autres","Mes choix"};
+         for(int i=0;i<zones.length;i++){
+             final int z=i; boolean active=i==selectedZone;
+             TextView b=txt(labels[i],13,active?Color.WHITE:PURPLE,true);
+@@ -1026,7 +1026,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.29","Foire du Valais 2026 · versionCode 35",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.29 · versionCode 35\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.30","Foire du Valais 2026 · versionCode 36",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.30 · versionCode 36\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
