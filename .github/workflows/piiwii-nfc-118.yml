@@ -50,26 +50,7 @@ jobs:
           cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.17
           cat "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part00" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part01" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part02" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part03" > /tmp/apply118.patch
           patch -p1 < /tmp/apply118.patch
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('app/src/main/java/ch/piiwii/nfc/MainActivity.java')
-          s = p.read_text()
-          helper = '''    private int historyAccentBackground(String action) {
-              if (action.contains("Lecture")) return R.drawable.bg_blue;
-              if (action.contains("Écriture")) return R.drawable.bg_green;
-              if (action.contains("Copie")) return R.drawable.bg_purple;
-              if (action.contains("Effacement")) return R.drawable.bg_red;
-              return R.drawable.bg_card_soft;
-          }
-
-'''
-          if 'private int historyAccentBackground(String action)' not in s:
-              marker = '    private String historyIcon(String action) {'
-              if marker not in s:
-                  raise SystemExit('historyIcon marker not found')
-              s = s.replace(marker, helper + marker, 1)
-              p.write_text(s)
-          PY
+          python3 -c 'from pathlib import Path; p=Path("app/src/main/java/ch/piiwii/nfc/MainActivity.java"); s=p.read_text(); marker="    private String historyIcon(String action) {"; helper="    private int historyAccentBackground(String action) {\n        if (action.contains(\"Lecture\")) return R.drawable.bg_blue;\n        if (action.contains(\"Écriture\")) return R.drawable.bg_green;\n        if (action.contains(\"Copie\")) return R.drawable.bg_purple;\n        if (action.contains(\"Effacement\")) return R.drawable.bg_red;\n        return R.drawable.bg_card_soft;\n    }\n\n"; s=s if "private int historyAccentBackground(String action)" in s else s.replace(marker,helper+marker,1); p.write_text(s)'
           cd /tmp/piiwii-nfc
           mv PiiWii-NFC-1.0.17 PiiWii-NFC-1.0.18
       - name: Build APK
