@@ -93,6 +93,7 @@ jobs:
           rm -rf piiwii-nfc-public/dist-126
           mkdir -p piiwii-nfc-public/dist-126
           cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.26/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-126/PiiWii-NFC-1.0.26.apk
+          cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar piiwii-nfc-public/dist-126/apksigner-35.0.0.jar
           cd /tmp/piiwii-nfc
           zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-126/PiiWii-NFC-1.0.26-SOURCES.zip" PiiWii-NFC-1.0.26
           cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-126"
