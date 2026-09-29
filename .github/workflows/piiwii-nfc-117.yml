@@ -1,0 +1,88 @@
+name: PiiWii NFC 1.0.17 Visual Overhaul Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'piiwii-nfc-public/v117/**'
+      - '.github/workflows/piiwii-nfc-117.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Download validated 1.0.16 sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf /tmp/piiwii-nfc /tmp/art116
+          mkdir -p /tmp/piiwii-nfc /tmp/art116
+          gh api repos/${{ github.repository }}/actions/artifacts/11026590932/zip > /tmp/art116.zip
+          unzip -q /tmp/art116.zip -d /tmp/art116
+          unzip -q /tmp/art116/PiiWii-NFC-1.0.16-SOURCES.zip -d /tmp/piiwii-nfc
+          test -d /tmp/piiwii-nfc/PiiWii-NFC-1.0.16
+      - name: Prepare 1.0.17 sources
+        run: |
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.16
+          python3 -c 'import base64,zlib; open("/tmp/apply117.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v117/patch117.z64","rb").read())))'
+          test "$(sha256sum /tmp/apply117.patch | cut -d' ' -f1)" = "334620a76d3e7884639b53d7980543db9de2ec02bd0aef50ca154e822404d0c1"
+          patch -p2 < /tmp/apply117.patch
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.16 PiiWii-NFC-1.0.17
+      - name: Build APK
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.17
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Verify APK and visual overhaul
+        run: |
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.17
+          APK=$ROOT/app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT" dump badging "$APK" | head -20
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          grep -q "versionName '1.0.17'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 18" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v117'" "$ROOT/app/build.gradle"
+          grep -q 'bg_logo_glow' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'bg_hero_status' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'bg_type_selector' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'bg_nav_active' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+      - name: Package deliverables
+        run: |
+          mkdir -p piiwii-nfc-public/dist-117
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.17/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-117/PiiWii-NFC-1.0.17.apk
+          cd /tmp/piiwii-nfc
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-117/PiiWii-NFC-1.0.17-SOURCES.zip" PiiWii-NFC-1.0.17
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-117"
+          sha256sum PiiWii-NFC-1.0.17.apk PiiWii-NFC-1.0.17-SOURCES.zip > SHA256SUMS.txt
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.17
+          path: piiwii-nfc-public/dist-117/
+          retention-days: 7
+          if-no-files-found: error
