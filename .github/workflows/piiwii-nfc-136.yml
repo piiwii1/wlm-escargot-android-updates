@@ -62,7 +62,7 @@ jobs:
           test "$(sha256sum piwii-nfc-public/v136/patch.b64 | awk '{print $1}')" = "255ecc1e0178341cd942910908500c7a100719c42dd8e275ff21c61e264188bd"
           base64 -d piwii-nfc-public/v136/patch.b64 | gzip -d > /tmp/v136.patch
           cd "$ROOT"
-          patch -p2 < /tmp/v136.patch
+          patch -p1 < /tmp/v136.patch
           grep -q "applicationId 'ch.piiwii.nfc.app'" app/build.gradle
           grep -q "versionCode 37" app/build.gradle
           grep -q "versionName '1.0.36'" app/build.gradle
