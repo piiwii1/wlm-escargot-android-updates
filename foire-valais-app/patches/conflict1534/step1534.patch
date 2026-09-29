@@ -1,0 +1,114 @@
+diff -ruN foire_1534_src/app/build.gradle.kts foire_1534_mod/app/build.gradle.kts
+--- foire_1534_src/app/build.gradle.kts	2026-09-29 09:44:28.000000000 +0000
++++ foire_1534_mod/app/build.gradle.kts	2026-09-29 09:57:53.414103451 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 39
+-        versionName = "1.5.33"
++        versionCode = 40
++        versionName = "1.5.34"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN foire_1534_src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire_1534_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire_1534_src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 09:44:28.000000000 +0000
++++ foire_1534_mod/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 09:57:53.415319622 +0000
+@@ -1046,7 +1046,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.33","Foire du Valais 2026 · versionCode 39",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.33 · versionCode 39\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.34","Foire du Valais 2026 · versionCode 40",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.34 · versionCode 40\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1132,7 +1132,10 @@
+ 
+     void conflictCard(String text,Event a,Event b){LinearLayout c=box(0xFFFFF1DF);c.setPadding(dp(12),dp(10),dp(10),dp(10));LinearLayout r=new LinearLayout(this);r.setGravity(Gravity.CENTER_VERTICAL);TextView icon=txt("!",22,0xFFE45500,true);icon.setGravity(Gravity.CENTER);r.addView(icon,new LinearLayout.LayoutParams(dp(38),dp(38)));LinearLayout t=new LinearLayout(this);t.setOrientation(LinearLayout.VERTICAL);t.addView(txt("Conflit d’horaires détecté",13,0xFF9A2F00,true));TextView m=txt(text,11,0xFF77513E,false);m.setMaxLines(3);t.addView(m);r.addView(t,new LinearLayout.LayoutParams(0,-2,1));TextView see=txt("Voir les détails ›",11,PINK,true);see.setPadding(dp(8),dp(8),dp(8),dp(8));see.setBackground(round(Color.WHITE,12));see.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Conflit d’horaires").setMessage(a.name+"\n"+a.start+"–"+a.end+"\n\n"+b.name+"\n"+b.start+"–"+b.end).setPositiveButton("OK",null).show());r.addView(see);c.addView(r);content.addView(c,margin(0,0,0,8));}
+ 
+-    boolean overlaps(Event a,Event b){int as=parseMinutes(a.start),ae=parseMinutes(a.end),bs=parseMinutes(b.start),be=parseMinutes(b.end);return as>=0&&ae>=0&&bs>=0&&be>=0&&as<be&&bs<ae;}
++    boolean overlaps(Event a,Event b){
++        int as=eventStartAbsoluteMinutes(a),ae=eventEndAbsoluteMinutes(a),bs=eventStartAbsoluteMinutes(b),be=eventEndAbsoluteMinutes(b);
++        return as!=Integer.MAX_VALUE&&ae!=Integer.MAX_VALUE&&bs!=Integer.MAX_VALUE&&be!=Integer.MAX_VALUE&&as<be&&bs<ae;
++    }
+ 
+     String conflictText(ArrayList<Event> list){
+         for(int i=0;i<list.size();i++)for(int j=i+1;j<list.size();j++){Event a=list.get(i),b=list.get(j);if(overlaps(a,b))return "« "+a.name+" » chevauche « "+b.name+" » ("+b.start+"–"+b.end+").";}return null;
+@@ -1246,7 +1249,74 @@
+     Event nextSelectedEvent(){Event best=null;long now=System.currentTimeMillis(),bt=Long.MAX_VALUE;for(Event e:events)if(prefs.getBoolean("fav"+e.id,false)){long t=eventMillis(e);if(t>=now&&t<bt){best=e;bt=t;}}return best;}
+ 
+     void toggleFavorite(Event e){
+-        boolean n=!prefs.getBoolean("fav"+e.id,false);prefs.edit().putBoolean("fav"+e.id,n).apply();refreshCurrent();
++        boolean already=prefs.getBoolean("fav"+e.id,false);
++        if(already){
++            prefs.edit().putBoolean("fav"+e.id,false).apply();
++            refreshCurrent();
++            return;
++        }
++        ArrayList<Event> conflicts=findFavoriteConflicts(e);
++        if(conflicts.isEmpty()){
++            prefs.edit().putBoolean("fav"+e.id,true).apply();
++            refreshCurrent();
++            return;
++        }
++        showFavoriteConflictDialog(e,conflicts);
++    }
++
++    ArrayList<Event> findFavoriteConflicts(Event candidate){
++        ArrayList<Event> conflicts=new ArrayList<>();
++        for(Event other:events){
++            if(other.id==candidate.id||!prefs.getBoolean("fav"+other.id,false))continue;
++            if(overlaps(candidate,other))conflicts.add(other);
++        }
++        Collections.sort(conflicts,(a,b)->Integer.compare(eventStartAbsoluteMinutes(a),eventStartAbsoluteMinutes(b)));
++        return conflicts;
++    }
++
++    void showFavoriteConflictDialog(Event candidate,ArrayList<Event> conflicts){
++        StringBuilder msg=new StringBuilder();
++        msg.append("« ").append(candidate.name).append(" » ("+timeRange(candidate)+") chevauche ");
++        if(conflicts.size()==1)msg.append("un événement déjà sélectionné :\n\n");
++        else msg.append(conflicts.size()).append(" événements déjà sélectionnés :\n\n");
++        for(Event c:conflicts)msg.append("• ").append(c.name).append(" — ").append(timeRange(c)).append("\n");
++        msg.append("\nTu peux garder les deux, remplacer l'autre sélection, ou annuler.");
++        AlertDialog dialog=new AlertDialog.Builder(this)
++                .setTitle("⚠ Conflit d’horaires")
++                .setMessage(msg.toString())
++                .setPositiveButton("Garder les deux",(d,w)->{
++                    prefs.edit().putBoolean("fav"+candidate.id,true).apply();
++                    refreshCurrent();
++                })
++                .setNeutralButton(conflicts.size()==1?"Remplacer l’autre":"Remplacer les autres",(d,w)->{
++                    SharedPreferences.Editor ed=prefs.edit();
++                    for(Event c:conflicts)ed.putBoolean("fav"+c.id,false);
++                    ed.putBoolean("fav"+candidate.id,true).apply();
++                    Toast.makeText(this,conflicts.size()==1?"Sélection remplacée":"Sélections remplacées",Toast.LENGTH_SHORT).show();
++                    refreshCurrent();
++                })
++                .setNegativeButton("Annuler",null)
++                .create();
++        dialog.setOnShowListener(x->{
++            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(PINK);
++            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(PURPLE);
++        });
++        dialog.show();
++    }
++
++    String timeRange(Event e){return e.start+(e.end.equals("—")?"":"–"+e.end);}
++
++    int eventStartAbsoluteMinutes(Event e){
++        int sm=parseMinutes(e.start);
++        return sm<0?Integer.MAX_VALUE:e.day*1440+sm;
++    }
++
++    int eventEndAbsoluteMinutes(Event e){
++        int sm=parseMinutes(e.start),em=parseMinutes(e.end);
++        if(sm<0||em<0)return Integer.MAX_VALUE;
++        int end=e.day*1440+em;
++        if(em<=sm)end+=1440;
++        return end;
+     }
+ 
+     void chooseAlert(Event e){
