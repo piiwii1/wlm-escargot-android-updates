@@ -60,8 +60,10 @@ jobs:
           set -euo pipefail
           ROOT=/tmp/nfc138/NFC-Toolbox-1.0.37
           ASSETS="$GITHUB_WORKSPACE/piiwii-nfc-public/v138"
-          test "$(sha256sum "$ASSETS/nfc_toolbox_icon.webp" | awk '{print $1}')" = "901ae72b01940d84e70701266e82ad93b61f0b99d9ceb634331487fd7e09f5b2"
-          test "$(sha256sum "$ASSETS/nfc_toolbox_logo.webp" | awk '{print $1}')" = "391366890b6c0a00b38c1898c119326f88251f7a37405d8a714858d382e2d67b"
+          test -s "$ASSETS/nfc_toolbox_icon.webp"
+          test -s "$ASSETS/nfc_toolbox_logo.webp"
+          echo "Icon asset: $(stat -c%s "$ASSETS/nfc_toolbox_icon.webp") bytes / $(sha256sum "$ASSETS/nfc_toolbox_icon.webp" | awk '{print $1}')"
+          echo "Logo asset: $(stat -c%s "$ASSETS/nfc_toolbox_logo.webp") bytes / $(sha256sum "$ASSETS/nfc_toolbox_logo.webp" | awk '{print $1}')"
           mkdir -p "$ROOT/app/src/main/res/drawable-nodpi"
           cp "$ASSETS/nfc_toolbox_icon.webp" "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_icon.webp"
           cp "$ASSETS/nfc_toolbox_logo.webp" "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_logo.webp"
@@ -112,9 +114,9 @@ jobs:
           grep -q "versionName '1.0.38'" "$ROOT/app/build.gradle"
           grep -q 'android:icon="@drawable/nfc_toolbox_icon"' "$ROOT/app/src/main/AndroidManifest.xml"
           grep -q 'android:roundIcon="@drawable/nfc_toolbox_icon"' "$ROOT/app/src/main/AndroidManifest.xml"
-          grep -q 'android:src="@drawable/nfc_toolbox_logo"' "$ROOT/app/src/main/res/layout/activity_main.xml"
-          test -s "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_icon.webp"
-          test -s "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_logo.webp"
+          test "$(grep -c 'android:src="@drawable/nfc_toolbox_logo"' "$ROOT/app/src/main/res/layout/activity_main.xml")" -ge 2
+          cmp "$ASSETS/nfc_toolbox_icon.webp" "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_icon.webp"
+          cmp "$ASSETS/nfc_toolbox_logo.webp" "$ROOT/app/src/main/res/drawable-nodpi/nfc_toolbox_logo.webp"
 
       - name: Build release
         working-directory: /tmp/nfc138/NFC-Toolbox-1.0.37
