@@ -55,21 +55,38 @@ jobs:
           unzip -q "$SRCZIP" -d /tmp/nfc136
           test -d /tmp/nfc136/PiiWii-NFC-1.0.35
 
-      - name: Apply faithful home cards
+      - name: Inject faithful custom-card interface
         run: |
           set -euo pipefail
           ROOT=/tmp/nfc136/PiiWii-NFC-1.0.35
-          echo "payload bytes: $(wc -c < piwii-nfc-public/v136/patch.b64)"
-          base64 -d piwii-nfc-public/v136/patch.b64 | gzip -d > /tmp/v136.patch
-          test -s /tmp/v136.patch
-          cd "$ROOT"
-          patch --batch --forward -p1 < /tmp/v136.patch
-          grep -q "applicationId 'ch.piiwii.nfc.app'" app/build.gradle
-          grep -q "versionCode 37" app/build.gradle
-          grep -q "versionName '1.0.36'" app/build.gradle
-          grep -q 'android:id="@+id/readButton"' app/src/main/res/layout/activity_main.xml
-          grep -q 'android:id="@+id/backupShortcutButton"' app/src/main/res/layout/activity_main.xml
-          grep -q 'View readButton = findViewById' app/src/main/java/ch/piiwii/nfc/MainActivity.java
+          PAYLOAD="$GITHUB_WORKSPACE/piiwii-nfc-public/v136"
+          cat "$PAYLOAD/xml_00.b64" "$PAYLOAD/xml_01.b64" "$PAYLOAD/xml_02.b64" "$PAYLOAD/xml_03.b64" > /tmp/activity_main.xml.gz.b64
+          test "$(wc -c < /tmp/activity_main.xml.gz.b64)" -eq 12304
+          test "$(sha256sum /tmp/activity_main.xml.gz.b64 | awk '{print $1}')" = "81f85527a37e7610b1513cd492b29c9e4b2fbd9c0699452b9b771291b6d6aa47"
+          base64 -d /tmp/activity_main.xml.gz.b64 | gzip -d > "$ROOT/app/src/main/res/layout/activity_main.xml"
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/nfc136/PiiWii-NFC-1.0.35')
+          grad=root/'app/build.gradle'
+          s=grad.read_text()
+          s=s.replace('versionCode 36','versionCode 37').replace("versionName '1.0.35'","versionName '1.0.36'")
+          grad.write_text(s)
+          java=root/'app/src/main/java/ch/piiwii/nfc/MainActivity.java'
+          j=java.read_text()
+          for name in ['readButton','writeButton','copyButton','eraseButton','historyShortcutButton','modelsShortcutButton','backupShortcutButton']:
+              old=f'Button {name} = findViewById(R.id.{name});'
+              new=f'View {name} = findViewById(R.id.{name});'
+              if old not in j:
+                  raise SystemExit(f'missing Java anchor: {name}')
+              j=j.replace(old,new)
+          java.write_text(j)
+          PY
+          grep -q "applicationId 'ch.piiwii.nfc.app'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 37" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.0.36'" "$ROOT/app/build.gradle"
+          grep -q 'android:id="@+id/readButton"' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'android:id="@+id/backupShortcutButton"' "$ROOT/app/src/main/res/layout/activity_main.xml"
+          grep -q 'View readButton = findViewById' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
 
       - name: Build release
         working-directory: /tmp/nfc136/PiiWii-NFC-1.0.35
