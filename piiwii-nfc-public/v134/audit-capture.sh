@@ -47,30 +47,49 @@ shot() {
   adb exec-out screencap -p > "$OUT/$NAME.png"
 }
 
+# Home
 shot 01-home
+
+# Read -> Home
 click_id readButton
 shot 02-read
-click_id readBackButton
+click_id navHome
+
+# Write -> Home
 click_id writeButton
 shot 03-write
-click_id writeBackButton
+click_id navHome
+
+# Copy -> Home (its header back intentionally returns to Tools)
 click_id copyButton
 shot 04-copy
-click_id copyBackButton
+click_id navHome
+
+# Erase -> Home
 click_id eraseButton
 shot 05-erase
-click_id eraseBackButton
+click_id navHome
+
+# Models -> Home
 click_id modelsShortcutButton
 shot 06-models
-click_id modelsBackButton
+click_id navHome
+
+# Settings
 click_id headerSettingsButton
 shot 10-settings
+
+# Diagnostics -> Settings
 click_id settingsDiagnosticsPageButton
 shot 07-diagnostics
 click_id diagnosticsBackButton
+
+# Backup -> Settings
 click_id settingsBackupPageButton
 shot 08-backup
 click_id backupBackButton
+
+# History
 click_id navHistory
 shot 09-history
 
