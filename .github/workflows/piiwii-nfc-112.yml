@@ -86,7 +86,7 @@ jobs:
           cd PiiWii-NFC-1.0.11
           python3 -c 'import base64,zlib; open("/tmp/apply112.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v112/patch112.z64","rb").read())))'
           test "$(sha256sum /tmp/apply112.patch | cut -d' ' -f1)" = "e64013cf2ef9e54505dccd306cd5fde6d2b87dfa8c1c1b3239688bcf446aa1ae"
-          patch -p3 < /tmp/apply112.patch
+          patch -p2 < /tmp/apply112.patch
           cd /tmp/piiwii-nfc
           mv PiiWii-NFC-1.0.11 PiiWii-NFC-1.0.12
       - name: Build APK
