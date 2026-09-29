@@ -48,7 +48,7 @@ jobs:
       - name: Prepare 1.0.18 sources
         run: |
           cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.17
-          python3 -c 'import base64,zlib; open("/tmp/apply118.patch","wb").write(zlib.decompress(base64.b64decode(open("'$GITHUB_WORKSPACE'/piiwii-nfc-public/v118/patch118.z64","rb").read())))'
+          cat "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part00" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part01" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part02" "$GITHUB_WORKSPACE/piiwii-nfc-public/v118/patch118.part03" > /tmp/apply118.patch
           test "$(sha256sum /tmp/apply118.patch | cut -d' ' -f1)" = "6283dd3fbab682567646ad448821c2a797011d9e67488ba5b57ebc0640285818"
           patch -p1 < /tmp/apply118.patch
           cd /tmp/piiwii-nfc
