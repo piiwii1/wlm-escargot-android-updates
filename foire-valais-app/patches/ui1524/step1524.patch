@@ -1,0 +1,115 @@
+diff -ruN a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts	2026-09-29 00:31:49.000000000 +0000
++++ b/app/build.gradle.kts	2026-09-29 00:36:35.229047174 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 29
+-        versionName = "1.5.23"
++        versionCode = 30
++        versionName = "1.5.24"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 00:31:49.000000000 +0000
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 00:36:35.228889136 +0000
+@@ -242,7 +242,7 @@
+         scroll=new ScrollView(this); scroll.setFillViewport(true); content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(12),dp(2),dp(12),dp(20)); scroll.addView(content); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+ 
+         nav=new LinearLayout(this); nav.setGravity(Gravity.CENTER); nav.setPadding(dp(2),0,dp(2),0); nav.setBackgroundColor(darkMode()?0xFF181B23:Color.WHITE);
+-        addNav("Accueil",0); addNav("Programme",1); addNav("Recherche",2); addNav("Favoris",3); addNav("Réglages",4);
++        addNav("Accueil",0); addNav("Programme",1); addNav("Favoris",3); addNav("Réglages",4);
+         root.addView(nav,new LinearLayout.LayoutParams(-1,dp(72)));
+         setContentView(root);
+     }
+@@ -253,7 +253,7 @@
+         nav.addView(item,new LinearLayout.LayoutParams(0,-1,1));
+     }
+     void refreshNav(){
+-        for(int i=0;i<nav.getChildCount();i++)((NavItemView)nav.getChildAt(i)).setActive(i==screen);
++        for(int i=0;i<nav.getChildCount();i++){ NavItemView item=(NavItemView)nav.getChildAt(i); item.setActive(item.index==screen); }
+     }
+ 
+     void clear(String t,String st,boolean dayTabs,boolean zoneTabs,boolean searchVisible){
+@@ -274,11 +274,11 @@
+             final int d=i; boolean active=i==selectedDay;
+             LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setGravity(Gravity.CENTER); card.setPadding(dp(5),dp(6),dp(5),dp(5));
+             card.setBackground(programTabBackground(active)); card.setElevation(active?dp(3):dp(1));
+-            TextView w=txt(wd[i],10,active?Color.WHITE:MUTED,true); w.setGravity(Gravity.CENTER); card.addView(w,new LinearLayout.LayoutParams(-1,dp(18)));
+-            TextView n=txt(String.valueOf(i+2),21,active?Color.WHITE:PURPLE,true); n.setGravity(Gravity.CENTER); card.addView(n,new LinearLayout.LayoutParams(-1,dp(28)));
+-            TextView mo=txt("OCT",9,active?0xFFFFD5DB:MUTED,true); mo.setGravity(Gravity.CENTER); card.addView(mo,new LinearLayout.LayoutParams(-1,dp(15)));
++            TextView w=txt(wd[i],11,active?Color.WHITE:MUTED,true); w.setGravity(Gravity.CENTER); card.addView(w,new LinearLayout.LayoutParams(-1,dp(20)));
++            TextView n=txt(String.valueOf(i+2),22,active?Color.WHITE:PURPLE,true); n.setGravity(Gravity.CENTER); card.addView(n,new LinearLayout.LayoutParams(-1,dp(30)));
++            TextView mo=txt("OCT",10,active?0xFFFFD5DB:MUTED,true); mo.setGravity(Gravity.CENTER); card.addView(mo,new LinearLayout.LayoutParams(-1,dp(18)));
+             card.setOnClickListener(v->{selectedDay=d;prefs.edit().putInt("lastDay",d).apply();showProgram();});
+-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(58),dp(66)); lp.setMargins(dp(4),0,dp(4),0); dayRow.addView(card,lp);
++            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(64),dp(74)); lp.setMargins(dp(4),0,dp(4),0); dayRow.addView(card,lp);
+         }
+     }
+     void zoneButtons(boolean show){
+@@ -287,10 +287,10 @@
+         String[] labels={"Tous","Live","Tribus","Rendez-vous","Foire","Dégustations","Mes choix"};
+         for(int i=0;i<zones.length;i++){
+             final int z=i; boolean active=i==selectedZone;
+-            TextView b=txt(labels[i],12,active?Color.WHITE:PURPLE,true);
+-            b.setGravity(Gravity.CENTER); b.setPadding(dp(14),0,dp(14),0); b.setBackground(programFilterBackground(active)); b.setElevation(active?dp(2):0);
++            TextView b=txt(labels[i],13,active?Color.WHITE:PURPLE,true);
++            b.setGravity(Gravity.CENTER); b.setPadding(dp(16),0,dp(16),0); b.setSingleLine(true); b.setBackground(programFilterBackground(active)); b.setElevation(active?dp(2):0);
+             b.setOnClickListener(v->{selectedZone=z;prefs.edit().putInt("lastZone",z).apply();renderProgramList();zoneButtons(true);});
+-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(38)); lp.setMargins(dp(4),0,dp(4),0); zoneRow.addView(b,lp);
++            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(44)); lp.setMargins(dp(4),0,dp(4),0); zoneRow.addView(b,lp);
+         }
+     }
+     GradientDrawable programTabBackground(boolean active){GradientDrawable g=round(active?PINK:Color.WHITE,18); if(!active)g.setStroke(dp(1),0xFFE4DFE8); return g;}
+@@ -827,38 +827,31 @@
+     }
+ 
+     void showSettings(){
+-        screen=4; clear("Réglages","Personnalise ton expérience de la Foire.",false,false,false);
+-        content.setPadding(dp(12),dp(2),dp(12),dp(24));
+-        settingsHero();
++        screen=4; clear("Réglages","Paramètres de l’application",false,false,false);
++        content.setPadding(dp(12),dp(4),dp(12),dp(24));
+ 
+-        settingsSectionHeader("🔔","Notifications","Ne manque plus aucun moment de la Foire");
+-        settingsToggleRow("🔔","Alertes événementielles","Autoriser les rappels que tu règles sur les événements","notificationsEnabled",true,()->{
++        settingsSectionHeader("⚙","Préférences","Affichage et notifications");
++        settingsToggleRow("☾","Mode sombre","Réduire l’éblouissement et économiser la batterie","darkMode",false,()->recreate());
++        settingsToggleRow("🔔","Alertes événementielles","Autoriser les rappels réglés sur les événements","notificationsEnabled",true,()->{
+             if(!prefs.getBoolean("notificationsEnabled",true)) cancelAllEventAlarms();
+             else rescheduleConfiguredAlarms();
+         });
+-        settingsToggleRow("📣","Actualités de la Foire","Préférence pour les infos, annonces et temps forts","fairNewsEnabled",true,null);
++        settingsToggleRow("📣","Actualités de la Foire","Recevoir les infos, annonces et temps forts","fairNewsEnabled",true,null);
+ 
+-        settingsSectionHeader("▣","Mise à jour du programme","Garde toujours le programme le plus récent");
++        settingsSectionHeader("▣","Programme & hors ligne","Mises à jour et données enregistrées");
+         settingsActionRow("↻","Vérifier les mises à jour","Dernière mise à jour : "+dataUpdated,()->refreshRemoteProgramme(true));
++        settingsActionRow("☁","Actualiser la copie hors ligne","Conserver le dernier programme valide sur le téléphone",()->refreshRemoteProgramme(true));
+ 
+-        settingsSectionHeader("◐","Apparence","Personnalise ton expérience");
+-        settingsToggleRow("☾","Mode sombre","Réduire l’éblouissement et économiser la batterie","darkMode",false,()->recreate());
+-
+-        settingsSectionHeader("⇩","Données hors ligne","Accède au programme même sans connexion");
+-        settingsActionRow("☁","Actualiser la copie hors ligne","Le dernier programme valide reste conservé sur le téléphone",()->refreshRemoteProgramme(true));
+-
+-        settingsSectionHeader("🔗","Sources officielles","Retrouve la Foire du Valais en ligne");
++        settingsSectionHeader("🔗","Liens & aide","Sources officielles et informations pratiques");
+         LinearLayout socials=new LinearLayout(this);socials.setGravity(Gravity.CENTER_VERTICAL);socials.setPadding(dp(8),dp(4),dp(8),dp(4));
+         TextView web=settingsSocial("◎","Site");web.setOnClickListener(v->openUrl("https://foireduvalais.ch/fr"));socials.addView(web,weighted(1,0,4));
+         TextView ig=settingsSocial("◉","Instagram");ig.setOnClickListener(v->openUrl("https://www.instagram.com/foireduvalais/"));socials.addView(ig,weighted(1,4,4));
+         TextView fb=settingsSocial("f","Facebook");fb.setOnClickListener(v->openUrl("https://www.facebook.com/foireduvalais"));socials.addView(fb,weighted(1,4,0));
+         LinearLayout socialBox=box(Color.WHITE);socialBox.setPadding(dp(8),dp(7),dp(8),dp(7));socialBox.addView(socials);content.addView(socialBox,margin(0,0,0,10));
+-
+-        settingsSectionHeader("✉","Contact","Une question ? Les informations officielles sont à portée de main");
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+-        settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.23","Foire du Valais 2026 · versionCode 29",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.23 · versionCode 29\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
++        settingsActionRow("i","Version 1.5.24","Foire du Valais 2026 · versionCode 30",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.24 · versionCode 30\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
