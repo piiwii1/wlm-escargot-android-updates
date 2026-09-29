@@ -1,5 +1,5 @@
 #define MyAppName "PiiWii Web Asset Extractor"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "PiiWii"
 #define MyAppExeName "PiiWii-Web-Asset-Extractor.exe"
 
@@ -12,7 +12,7 @@ DefaultDirName={autopf}\PiiWii\Web Asset Extractor
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist
-OutputBaseFilename=PiiWii-Web-Asset-Extractor-Setup-1.0.0
+OutputBaseFilename=PiiWii-Web-Asset-Extractor-Setup-1.1.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
