@@ -1,0 +1,132 @@
+--- foire_1537_base/app/build.gradle.kts
++++ foire_1537/app/build.gradle.kts
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 42
+-        versionName = "1.5.36"
++        versionCode = 43
++        versionName = "1.5.37"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+--- foire_1537_base/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ foire_1537/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -1053,7 +1053,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.36","Foire du Valais 2026 · versionCode 42",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.36 · versionCode 42\n\nProgramme hors ligne + mise à jour distante · rendez-vous personnels améliorés avec lieu et note · ajout rapide depuis le haut de Programme · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.37","Foire du Valais 2026 · versionCode 43",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.37 · versionCode 43\n\nProgramme hors ligne + mise à jour distante · fenêtre de rendez-vous optimisée pour le mode sombre · lieu et note · ajout rapide depuis le haut de Programme · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1244,27 +1244,34 @@
+     }
+ 
+     void styleAppointmentInput(EditText e,String hint){
+-        e.setHint(hint);e.setTextSize(15);e.setTextColor(darkMode()?0xFFF4F6FB:PURPLE);e.setHintTextColor(darkMode()?0xFF8F96A5:0xFF8B91A1);
+-        e.setPadding(dp(14),dp(11),dp(14),dp(11));GradientDrawable g=round(darkMode()?0xFF20242E:Color.WHITE,14);g.setStroke(dp(1),darkMode()?0xFF3A3F4C:0xFFE2DCE7);e.setBackground(g);
++        e.setHint(hint);e.setTextSize(15);
++        e.setTextColor(darkMode()?0xFFF7F9FC:PURPLE);
++        e.setHintTextColor(darkMode()?0xFFAAB3C2:0xFF8B91A1);
++        e.setPadding(dp(14),dp(11),dp(14),dp(11));
++        GradientDrawable g=round(darkMode()?0xFF252A34:Color.WHITE,14);
++        g.setStroke(dp(1),darkMode()?0xFF465061:0xFFE2DCE7);
++        e.setBackground(g);
+     }
+ 
+     void updateAppointmentDayCard(LinearLayout card,int day,boolean active){
+-        card.setBackground(round(active?PINK:(darkMode()?0xFF20242E:Color.WHITE),15));
+-        if(!active){GradientDrawable g=round(darkMode()?0xFF20242E:Color.WHITE,15);g.setStroke(dp(1),darkMode()?0xFF3A3F4C:0xFFE2DCE7);card.setBackground(g);}
++        int inactiveBg=darkMode()?0xFF252A34:Color.WHITE;
++        GradientDrawable g=round(active?PINK:inactiveBg,15);
++        if(!active)g.setStroke(dp(1),darkMode()?0xFF465061:0xFFE2DCE7);
++        card.setBackground(g);
+         if(card.getChildCount()>=3){
+-            ((TextView)card.getChildAt(0)).setTextColor(active?Color.WHITE:MUTED);
+-            ((TextView)card.getChildAt(1)).setTextColor(active?Color.WHITE:PURPLE);
+-            ((TextView)card.getChildAt(2)).setTextColor(active?0xFFFFD4DA:MUTED);
++            ((TextView)card.getChildAt(0)).setTextColor(active?Color.WHITE:(darkMode()?0xFFB7C0CF:MUTED));
++            ((TextView)card.getChildAt(1)).setTextColor(active?Color.WHITE:(darkMode()?0xFFF4F7FC:PURPLE));
++            ((TextView)card.getChildAt(2)).setTextColor(active?0xFFFFD4DA:(darkMode()?0xFF9EA8B9:MUTED));
+         }
+-        card.setElevation(active?dp(3):0);
++        card.setElevation(active?dp(4):0);
+     }
+ 
+     LinearLayout appointmentDayCard(int day,boolean active){
+         String[] wd={"VEN","SAM","DIM","LUN","MAR","MER","JEU","VEN","SAM","DIM"};
+         LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setGravity(Gravity.CENTER);c.setPadding(dp(3),dp(6),dp(3),dp(5));
+-        TextView w=txt(wd[day],10,active?Color.WHITE:MUTED,true);w.setGravity(Gravity.CENTER);c.addView(w,new LinearLayout.LayoutParams(-1,dp(18)));
+-        TextView n=txt(String.valueOf(day+2),20,active?Color.WHITE:PURPLE,true);n.setGravity(Gravity.CENTER);c.addView(n,new LinearLayout.LayoutParams(-1,dp(27)));
+-        TextView mo=txt("OCT",9,active?0xFFFFD4DA:MUTED,true);mo.setGravity(Gravity.CENTER);c.addView(mo,new LinearLayout.LayoutParams(-1,dp(16)));
++        TextView w=txt(wd[day],10,active?Color.WHITE:(darkMode()?0xFFB7C0CF:MUTED),true);w.setGravity(Gravity.CENTER);c.addView(w,new LinearLayout.LayoutParams(-1,dp(18)));
++        TextView n=txt(String.valueOf(day+2),20,active?Color.WHITE:(darkMode()?0xFFF4F7FC:PURPLE),true);n.setGravity(Gravity.CENTER);c.addView(n,new LinearLayout.LayoutParams(-1,dp(27)));
++        TextView mo=txt("OCT",9,active?0xFFFFD4DA:(darkMode()?0xFF9EA8B9:MUTED),true);mo.setGravity(Gravity.CENTER);c.addView(mo,new LinearLayout.LayoutParams(-1,dp(16)));
+         updateAppointmentDayCard(c,day,active);return c;
+     }
+ 
+@@ -1283,10 +1290,10 @@
+         final int[] chosenMinutes={existing!=null&&parseMinutes(existing.start)>=0?parseMinutes(existing.start):Math.max(0,Math.min(23*60+55,((nowMinutes+4)/5)*5))};
+ 
+         LinearLayout wrap=new LinearLayout(this);wrap.setOrientation(LinearLayout.VERTICAL);wrap.setPadding(dp(20),dp(4),dp(20),dp(2));
+-        TextView intro=txt(existing==null?"Avec qui as-tu rendez-vous ?":"Modifie ton rendez-vous",14,MUTED,false);intro.setPadding(0,0,0,dp(10));wrap.addView(intro);
++        TextView intro=txt(existing==null?"Avec qui as-tu rendez-vous ?":"Modifie ton rendez-vous",14,darkMode()?0xFFB7C0CF:MUTED,false);intro.setPadding(0,0,0,dp(10));wrap.addView(intro);
+         wrap.addView(person,new LinearLayout.LayoutParams(-1,-2));
+ 
+-        TextView dayLabel=txt("Jour",13,PURPLE,true);dayLabel.setPadding(0,dp(14),0,dp(7));wrap.addView(dayLabel);
++        TextView dayLabel=txt("Jour",13,darkMode()?0xFFE3E8F1:PURPLE,true);dayLabel.setPadding(0,dp(14),0,dp(7));wrap.addView(dayLabel);
+         GridLayout grid=new GridLayout(this);grid.setColumnCount(5);grid.setUseDefaultMargins(false);
+         final LinearLayout[] cards=new LinearLayout[10];
+         for(int i=0;i<10;i++){
+@@ -1296,23 +1303,29 @@
+         }
+         wrap.addView(grid,new LinearLayout.LayoutParams(-1,dp(146)));
+ 
+-        TextView timeLabel=txt("Heure",13,PURPLE,true);timeLabel.setPadding(0,dp(9),0,dp(6));wrap.addView(timeLabel);
+-        TextView timeButton=txt("🕒  "+String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60),17,PURPLE,true);timeButton.setGravity(Gravity.CENTER_VERTICAL);timeButton.setPadding(dp(14),0,dp(14),0);timeButton.setBackground(round(darkMode()?0xFF20242E:0xFFF7F3F8,14));
++        TextView timeLabel=txt("Heure",13,darkMode()?0xFFE3E8F1:PURPLE,true);timeLabel.setPadding(0,dp(9),0,dp(6));wrap.addView(timeLabel);
++        TextView timeButton=txt("🕒  "+String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60),17,darkMode()?0xFFF7F9FC:PURPLE,true);timeButton.setGravity(Gravity.CENTER_VERTICAL);timeButton.setPadding(dp(14),0,dp(14),0);GradientDrawable timeBg=round(darkMode()?0xFF252A34:0xFFF7F3F8,14);timeBg.setStroke(dp(1),darkMode()?0xFF465061:0xFFE2DCE7);timeButton.setBackground(timeBg);
+         timeButton.setOnClickListener(v->new TimePickerDialog(this,(view,hour,minute)->{chosenMinutes[0]=hour*60+minute;timeButton.setText("🕒  "+String.format(Locale.ROOT,"%02d:%02d",hour,minute));},chosenMinutes[0]/60,chosenMinutes[0]%60,true).show());
+         wrap.addView(timeButton,new LinearLayout.LayoutParams(-1,dp(52)));
+ 
+-        TextView placeLabel=txt("Lieu",13,PURPLE,true);placeLabel.setPadding(0,dp(13),0,dp(6));wrap.addView(placeLabel);wrap.addView(place,new LinearLayout.LayoutParams(-1,-2));
+-        TextView noteLabel=txt("Note",13,PURPLE,true);noteLabel.setPadding(0,dp(13),0,dp(6));wrap.addView(noteLabel);wrap.addView(note,new LinearLayout.LayoutParams(-1,-2));
++        TextView placeLabel=txt("Lieu",13,darkMode()?0xFFE3E8F1:PURPLE,true);placeLabel.setPadding(0,dp(13),0,dp(6));wrap.addView(placeLabel);wrap.addView(place,new LinearLayout.LayoutParams(-1,-2));
++        TextView noteLabel=txt("Note",13,darkMode()?0xFFE3E8F1:PURPLE,true);noteLabel.setPadding(0,dp(13),0,dp(6));wrap.addView(noteLabel);wrap.addView(note,new LinearLayout.LayoutParams(-1,-2));
+ 
+-        ScrollView body=new ScrollView(this);body.addView(wrap);
++        int appointmentDialogBg=darkMode()?0xFF171A21:Color.WHITE;
++        wrap.setBackgroundColor(appointmentDialogBg);
++        ScrollView body=new ScrollView(this);body.setBackgroundColor(appointmentDialogBg);body.addView(wrap);
++        TextView dialogTitle=txt(existing==null?"Nouveau rendez-vous":"Modifier le rendez-vous",24,darkMode()?0xFFF7F9FC:PURPLE,true);
++        dialogTitle.setPadding(dp(24),dp(20),dp(24),dp(7));dialogTitle.setBackgroundColor(appointmentDialogBg);
+         AlertDialog dialog=new AlertDialog.Builder(this)
+-                .setTitle(existing==null?"Nouveau rendez-vous":"Modifier le rendez-vous")
++                .setCustomTitle(dialogTitle)
+                 .setView(body)
+                 .setPositiveButton(existing==null?"Ajouter":"Enregistrer",null)
+                 .setNegativeButton("Annuler",null)
+                 .create();
+         dialog.setOnShowListener(x->{
+             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(PINK);
++            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(darkMode()?0xFFD3DAE6:PINK);
++            View buttonParent=(View)dialog.getButton(AlertDialog.BUTTON_POSITIVE).getParent();if(buttonParent!=null)buttonParent.setBackgroundColor(appointmentDialogBg);
+             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                 String n=person.getText().toString().trim();if(n.isEmpty()){person.setError("Entre le nom de la personne");return;}
+                 String where=place.getText().toString().trim(), memo=note.getText().toString().trim();
+@@ -1327,7 +1340,11 @@
+             });
+         });
+         dialog.show();
+-        Window win=dialog.getWindow();if(win!=null)win.setLayout((int)(getResources().getDisplayMetrics().widthPixels*0.94f),WindowManager.LayoutParams.WRAP_CONTENT);
++        Window win=dialog.getWindow();if(win!=null){
++            GradientDrawable dlgBg=round(appointmentDialogBg,22);win.setBackgroundDrawable(dlgBg);
++            win.setLayout((int)(getResources().getDisplayMetrics().widthPixels*0.94f),WindowManager.LayoutParams.WRAP_CONTENT);
++            WindowManager.LayoutParams lp=win.getAttributes();lp.dimAmount=0.72f;win.setAttributes(lp);win.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
++        }
+     }
+ 
+     void savePersonalAppointment(int id,String person,int day,String start,String place,String note){
