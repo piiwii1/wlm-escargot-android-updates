@@ -1,0 +1,108 @@
+name: PiiWii NFC 1.0.35 Host Render
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/piiwii-nfc-135-host-render.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download 1.0.35 sources and build debug
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc135host /tmp/base135host /tmp/base135host.zip "$GITHUB_WORKSPACE/render135host"
+          mkdir -p /tmp/nfc135host /tmp/base135host "$GITHUB_WORKSPACE/render135host"
+          ART_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.35-build" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/base135host.zip
+          unzip -q /tmp/base135host.zip -d /tmp/base135host
+          SRCZIP=$(find /tmp/base135host -type f -name 'PiiWii-NFC-1.0.35-SOURCES-BUILD.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc135host
+          cd /tmp/nfc135host/PiiWii-NFC-1.0.35
+          gradle --no-daemon assembleDebug
+          APK=$(find app/build/outputs/apk -type f -name '*.apk' -print -quit)
+          test -n "$APK"
+          cp "$APK" "$GITHUB_WORKSPACE/render135host/app-render.apk"
+
+      - name: Install Android emulator image
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-34;google_apis;x86_64"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo chmod 666 /dev/kvm || true
+
+      - name: Launch emulator and capture home
+        run: |
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/render135host"
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          echo no | avdmanager create avd -n piwii_render -k "system-images;android-34;google_apis;x86_64" --device "pixel_6" --force
+          emulator -avd piwii_render -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none -camera-front none > "$OUT/emulator.log" 2>&1 &
+          EMU_PID=$!
+          trap 'kill $EMU_PID || true' EXIT
+          adb wait-for-device
+          for i in $(seq 1 90); do
+            BOOT=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            [ "$BOOT" = "1" ] && break
+            sleep 2
+          done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+          adb shell input keyevent 82 || true
+          adb shell wm size 1080x2400
+          adb shell wm density 420
+          adb shell settings put system font_scale 1.0
+          adb install -r "$OUT/app-render.apk"
+          adb shell am force-stop ch.piiwii.nfc.app
+          adb shell monkey -p ch.piiwii.nfc.app -c android.intent.category.LAUNCHER 1
+          sleep 7
+          adb shell dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp' > "$OUT/focus.txt" || true
+          adb exec-out screencap -p > "$OUT/home.png"
+          adb shell uiautomator dump /sdcard/window.xml >/dev/null || true
+          adb pull /sdcard/window.xml "$OUT/window.xml" >/dev/null || true
+          adb logcat -d -t 800 > "$OUT/logcat.txt" || true
+          file "$OUT/home.png"
+          test -s "$OUT/home.png"
+          ls -lh "$OUT"
+
+      - name: Upload host render
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.35-host-render
+          path: render135host/
+          retention-days: 7
+          if-no-files-found: error
