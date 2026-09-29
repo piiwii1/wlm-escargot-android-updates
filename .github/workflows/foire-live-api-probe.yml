@@ -1,0 +1,57 @@
+name: Probe Foire Live API
+on:
+  push:
+    branches: [ main ]
+    paths: ['.github/workflows/foire-live-api-probe.yml']
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe frontend API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests
+          python - <<'PY'
+          import requests, re, json, os
+          from urllib.parse import urljoin
+          h={'User-Agent':'Mozilla/5.0'}
+          os.makedirs('probe',exist_ok=True)
+          base='https://www.foireduvalais.ch'
+          html=requests.get(base+'/fr/programme/',headers=h,timeout=30).text
+          scripts=re.findall(r'<script[^>]+src="([^"]+)"',html)
+          print('scripts',scripts)
+          alljs=''
+          for src in scripts:
+              u=urljoin(base,src)
+              try:
+                  r=requests.get(u,headers=h,timeout=30)
+                  print('js',u,r.status_code,len(r.text))
+                  alljs+='\n'+r.text
+              except Exception as e: print('ERRJS',u,e)
+          open('probe/all.js','w',encoding='utf-8').write(alljs)
+          # Print strings around likely API paths
+          for pat in ['contexts/contents','allinone.io','api/program','date_search_on_period','embed_medias_new_format']:
+              print('\n###',pat)
+              for m in list(re.finditer(re.escape(pat),alljs,re.I))[:20]:
+                  print(alljs[max(0,m.start()-500):m.start()+1000])
+          urls=[
+            'https://martigny-expo.allinone.io/contexts/contents?type=programs&count=5',
+            'https://martigny-expo.allinone.io/api/contexts/contents?type=programs&count=5',
+            'https://www.foireduvalais.ch/api/contexts/contents?type=programs&count=5',
+            'https://www.foireduvalais.ch/api/programs?count=5'
+          ]
+          for u in urls:
+              try:
+                  r=requests.get(u,headers=h,timeout=30)
+                  print('\nURL',u,'status',r.status_code,'type',r.headers.get('content-type'),'len',len(r.content))
+                  print(r.text[:3000])
+              except Exception as e: print('ERR',u,e)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foire-live-api-probe
+          path: probe
+          retention-days: 7
