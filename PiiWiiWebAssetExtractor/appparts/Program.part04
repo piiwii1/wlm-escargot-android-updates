@@ -52,7 +52,7 @@
             response = new { status = x.Status, statusText = "", httpVersion = "HTTP/2", headers = Array.Empty<object>(), cookies = Array.Empty<object>(), content = new { size = x.Size, mimeType = x.MimeType }, redirectURL = x.RedirectUrl ?? "", headersSize = -1, bodySize = x.Size },
             cache = new { }, timings = new { send = 0, wait = 0, receive = 0 }
         }).ToArray();
-        var har = new { log = new { version = "1.2", creator = new { name = "PiiWii Web Asset Extractor", version = "1.0.0" }, pages = Array.Empty<object>(), entries } };
+        var har = new { log = new { version = "1.2", creator = new { name = "PiiWii Code Capture", version = "1.2.0" }, pages = Array.Empty<object>(), entries } };
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(har, new JsonSerializerOptions { WriteIndented = true }), Encoding.UTF8);
         if (choosePath) SetStatus("🟢 HAR exporté");
         return path;
@@ -96,28 +96,19 @@
         var top = scored.OrderByDescending(x => x.score).ThenBy(x => x.item.FileName).Take(15).ToList();
         if (top.Count == 0)
         {
-            MessageBox.Show("Aucun fichier JavaScript clairement lié au moteur n'a été identifié automatiquement.", "Recherche moteur");
+            SetStatus("🟢 Capture prête");
             return;
         }
-        var sb = new StringBuilder("Fichiers probablement intéressants\n\n");
-        foreach (var x in top)
-        {
-            var stars = new string('★', Math.Min(5, Math.Max(1, x.score / 2 + 1)));
-            sb.AppendLine($"{stars} {x.item.FileName}");
-            sb.AppendLine($"    {string.Join(", ", x.hits)}");
-        }
-        MessageBox.Show(sb.ToString(), "Recherche moteur", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         var best = top[0].item.FileName;
         txtSearch.Text = Path.GetFileNameWithoutExtension(best).Split('.')[0];
-        SetStatus($"🟢 Fichier principal probable : {best}");
+        SetStatus($"🟢 Code principal probable : {best}");
     }
 
     private void MarkCurrentState()
     {
         markerSequence = sequence;
         SetStatus($"🟢 Marqueur posé après {markerSequence} requêtes");
-        MessageBox.Show("État actuel marqué. Utilise maintenant la page dans le navigateur intégré.\n\nLes nouvelles ressources auront un numéro supérieur au marqueur.", "Marqueur");
     }
 
     private async Task<string?> CreateChatGptPackAsync(bool reveal)
@@ -127,7 +118,7 @@
         var snapshot = SnapshotItems();
         var jsInteresting = await ScoreJsAsync(snapshot);
         var readme = new StringBuilder();
-        readme.AppendLine("PIIWII WEB ASSET EXTRACTOR - PACK POUR CHATGPT");
-        readme.AppendLine("================================================");
+        readme.AppendLine("PIIWII CODE CAPTURE - PACK POUR CHATGPT");
+        readme.AppendLine("======================================");
         readme.AppendLine($"URL analysée : {initialUrl}");
         readme.AppendLine($"Date : {sessionStarted:yyyy-M
