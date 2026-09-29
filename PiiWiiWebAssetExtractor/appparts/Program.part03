@@ -1,0 +1,153 @@
+ms.Add(item);
+        }
+        if (IsHandleCreated) BeginInvoke(RefreshGrid);
+    }
+
+    private async Task AnalyzeAsync(bool autoPack)
+    {
+        if (!initialized || web.CoreWebView2 is null) return;
+        var url = txtUrl.Text.Trim();
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+        {
+            MessageBox.Show("Colle une URL http:// ou https:// valide.", "URL invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            StartNewSession(url);
+            SetStatus("🟠 Analyse en cours");
+            if (chkNoCache.Checked) await web.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
+            captureEnabled = true;
+            web.CoreWebView2.Navigate(url);
+            await WaitForNavigationAndQuietAsync();
+            await SaveDomFinalAsync();
+            SetStatus($"🟢 Analyse terminée — {CountItems()} ressources capturées");
+            if (autoPack)
+            {
+                await FindEngineAsync();
+                var zip = await CreateChatGptPackAsync(false);
+                if (!string.IsNullOrWhiteSpace(zip))
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zip}\"") { UseShellExecute = true });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write("ANALYZE", ex);
+            SetStatus("🔴 Analyse interrompue");
+            MessageBox.Show("L'analyse a rencontré une erreur, mais les ressources déjà capturées restent disponibles.\n\n" + ex.Message,
+                "Analyse", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void StartNewSession(string url)
+    {
+        initialUrl = url;
+        sessionStarted = DateTime.Now;
+        sequence = 0;
+        markerSequence = 0;
+        byRequest.Clear();
+        lock (itemGate) items.Clear();
+        sessionDir = Path.Combine(Log.Root, $"Capture-{DateTime.Now:yyyy-MM-dd_HHmmss}");
+        bodiesDir = Path.Combine(sessionDir, "_bodies");
+        Directory.CreateDirectory(bodiesDir);
+        RefreshGrid();
+    }
+
+    private async Task WaitForNavigationAndQuietAsync()
+    {
+        if (web.CoreWebView2 is null) return;
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler<CoreWebView2NavigationCompletedEventArgs>? handler = null;
+        handler = (_, _) => tcs.TrySetResult(true);
+        web.CoreWebView2.NavigationCompleted += handler;
+        try { await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30))); }
+        finally { web.CoreWebView2.NavigationCompleted -= handler; }
+
+        var last = CountItems();
+        var stableTicks = 0;
+        for (var i = 0; i < 25; i++)
+        {
+            await Task.Delay(400);
+            var now = CountItems();
+            if (now == last) stableTicks++; else stableTicks = 0;
+            last = now;
+            SetStatus($"🟠 Page chargée — {now} ressources détectées...");
+            if (stableTicks >= 5) break;
+        }
+    }
+
+    private async Task ReloadNoCacheAsync()
+    {
+        if (web.CoreWebView2 is null) return;
+        try
+        {
+            await web.CoreWebView2.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
+            web.Reload();
+        }
+        catch (Exception ex) { Log.Write("RELOAD", ex); }
+    }
+
+    private async Task SaveDomFinalAsync()
+    {
+        if (web.CoreWebView2 is null || string.IsNullOrWhiteSpace(sessionDir)) return;
+        try
+        {
+            var result = await web.CoreWebView2.ExecuteScriptAsync("document.documentElement.outerHTML");
+            var html = JsonSerializer.Deserialize<string>(result) ?? "";
+            var dir = Path.Combine(sessionDir, "html");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(Path.Combine(dir, "dom-final.html"), html, Encoding.UTF8);
+            var main = SnapshotItems().FirstOrDefault(x => x.ResourceType == "HTML" && x.BodyCaptured);
+            if (main?.BodyPath is not null) File.Copy(main.BodyPath, Path.Combine(dir, "initial.html"), true);
+        }
+        catch (Exception ex) { Log.Write("DOM", ex); }
+    }
+
+    private void RefreshGrid()
+    {
+        if (InvokeRequired) { BeginInvoke(RefreshGrid); return; }
+        var q = txtSearch.Text.Trim();
+        var type = cmbType.SelectedItem?.ToString() ?? "Tous";
+        var data = SnapshotItems()
+            .Where(x => type == "Tous" || type == "Autres" && x.ResourceType == "Autres" || x.ResourceType.Equals(type, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrWhiteSpace(q) || x.FileName.Contains(q, StringComparison.OrdinalIgnoreCase) || x.Url.Contains(q, StringComparison.OrdinalIgnoreCase) || ContentContains(x, q))
+            .OrderBy(x => x.Sequence)
+            .ToList();
+        grid.DataSource = data;
+        lblStats.Text = $"{SnapshotItems().Count} ressources • {SnapshotItems().Count(x => x.ResourceType == "JS")} JS";
+    }
+
+    private static bool ContentContains(ResourceItem item, string q)
+    {
+        if (!item.IsText || !item.BodyCaptured || q.Length < 3 || item.Size > 3_000_000) return false;
+        try { return File.ReadAllText(item.BodyPath!, Encoding.UTF8).Contains(q, StringComparison.OrdinalIgnoreCase); }
+        catch { return false; }
+    }
+
+    private List<ResourceItem> SnapshotItems()
+    {
+        lock (itemGate) return items.Distinct().ToList();
+    }
+
+    private int CountItems() { lock (itemGate) return items.Count; }
+
+    private ResourceItem? SelectedItem => grid.CurrentRow?.DataBoundItem as ResourceItem;
+
+    private async Task DownloadSelectedAsync()
+    {
+        var item = SelectedItem;
+        if (item is null) return;
+        if (!item.BodyCaptured) await CaptureBodyAsync(item);
+        if (!item.BodyCaptured)
+        {
+            MessageBox.Show("Impossible de récupérer le corps exact de cette ressource.", "Téléchargement", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        using var dlg = new SaveFileDialog { FileName = item.FileName, Filter = "Tous les fichiers|*.*" };
+        if (dlg.ShowDialog(this) == DialogResult.OK)
+        {
+            File.Copy(item.BodyPath!, dlg.FileName, true);
+            SetStatus("🟢 Fichier enregistré");
