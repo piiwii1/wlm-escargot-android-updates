@@ -1,8 +1,8 @@
-name: Build PiiWii Web Asset Extractor 1.0.0 Temp
+name: Build PiiWii Web Asset Extractor 1.1.0 Temp
 
 on:
   push:
-    branches: [ "temp-piiwii-web-asset-extractor-1.0.0" ]
+    branches: [ "temp-piiwii-web-asset-extractor-1.1.0" ]
   workflow_dispatch:
 
 jobs:
@@ -45,7 +45,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path PiiWiiWebAssetExtractor/dist | Out-Null
-          Compress-Archive -Path PiiWiiWebAssetExtractor/publish/* -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Web-Asset-Extractor-PORTABLE.zip -Force
+          Compress-Archive -Path PiiWiiWebAssetExtractor/publish/* -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Web-Asset-Extractor-1.1.0-PORTABLE.zip -Force
 
       - name: Install Inno Setup
         shell: pwsh
@@ -62,7 +62,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $tmp | Out-Null
           Copy-Item PiiWiiWebAssetExtractor/app -Destination $tmp -Recurse
           Copy-Item PiiWiiWebAssetExtractor/installer -Destination $tmp -Recurse
-          Compress-Archive -Path "$tmp/*" -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Web-Asset-Extractor-SOURCES.zip -Force
+          Compress-Archive -Path "$tmp/*" -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Web-Asset-Extractor-1.1.0-SOURCES.zip -Force
 
       - name: SHA-256
         shell: pwsh
@@ -76,7 +76,7 @@ jobs:
       - name: Upload deliverables
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Web-Asset-Extractor-1.0.0
+          name: PiiWii-Web-Asset-Extractor-1.1.0
           path: PiiWiiWebAssetExtractor/dist/*
           if-no-files-found: error
           retention-days: 30
