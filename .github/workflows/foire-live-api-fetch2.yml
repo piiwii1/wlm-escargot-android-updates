@@ -1,0 +1,41 @@
+name: Fetch Foire API with site
+on:
+  push:
+    branches: [ main ]
+    paths: ['.github/workflows/foire-live-api-fetch2.yml']
+  workflow_dispatch:
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch official programme data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests
+          python - <<'PY'
+          import requests, os
+          from urllib.parse import urlencode
+          h={'User-Agent':'Mozilla/5.0','Accept':'application/ld+json, application/json, text/plain, */*'}
+          base='https://www.foireduvalais.ch/api/search'
+          tests=[
+            [('site','2'),('locale','fr'),('type','programs'),('count','5'),('page','1')],
+            [('site','2'),('locale','fr'),('types[]','programs'),('count','5'),('page','1')],
+            [('site','2'),('locale','fr'),('type','programs'),('date_start','2026-10-02'),('date_end','2026-10-11'),('date_search_on_period','true'),('count','500'),('page','1'),('orderByProperty','dateFrom'),('orderByDirection','ASC'),('embed[]','spaces'),('embed[]','categories'),('embed[]','tags')],
+            [('site','2'),('locale','fr'),('types[]','programs'),('date_start','2026-10-02'),('date_end','2026-10-11'),('date_search_on_period','true'),('count','500'),('page','1'),('orderByProperty','dateFrom'),('orderByDirection','ASC'),('embed[]','spaces'),('embed[]','categories'),('embed[]','tags')]
+          ]
+          os.makedirs('fetch2',exist_ok=True)
+          for i,pairs in enumerate(tests,1):
+              u=base+'?'+urlencode(pairs)
+              r=requests.get(u,headers=h,timeout=30)
+              print('\nTEST',i,'status',r.status_code,'ctype',r.headers.get('content-type'),'len',len(r.content))
+              print('URL',u)
+              print(r.text[:8000])
+              open(f'fetch2/test{i}.json','w',encoding='utf-8').write(r.text)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foire-live-api-fetch2
+          path: fetch2
+          retention-days: 7
