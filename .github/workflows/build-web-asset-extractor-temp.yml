@@ -1,0 +1,82 @@
+name: Build PiiWii Web Asset Extractor 1.0.0 Temp
+
+on:
+  push:
+    branches: [ "temp-piiwii-web-asset-extractor-1.0.0" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct Program.cs
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem PiiWiiWebAssetExtractor/appparts/Program.part* | Sort-Object Name
+          $text = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllText((Join-Path $PWD 'PiiWiiWebAssetExtractor/app/Program.cs'), $text, [Text.UTF8Encoding]::new($false))
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore PiiWiiWebAssetExtractor/app/PiiWiiWebAssetExtractor.csproj
+
+      - name: Build Release x64
+        run: dotnet build PiiWiiWebAssetExtractor/app/PiiWiiWebAssetExtractor.csproj -c Release -p:Platform=x64 --no-restore
+
+      - name: Publish
+        run: dotnet publish PiiWiiWebAssetExtractor/app/PiiWiiWebAssetExtractor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o PiiWiiWebAssetExtractor/publish
+
+      - name: Smoke-check executable
+        shell: pwsh
+        run: |
+          $exe = 'PiiWiiWebAssetExtractor/publish/PiiWii-Web-Asset-Extractor.exe'
+          if (!(Test-Path $exe)) { throw 'EXE absent' }
+          if ((Get-Item $exe).Length -lt 10000) { throw 'EXE anormalement petit' }
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path PiiWiiWebAssetExtractor/dist | Out-Null
+          Compress-Archive -Path PiiWiiWebAssetExtractor/publish/* -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Web-Asset-Extractor-PORTABLE.zip -Force
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "PiiWiiWebAssetExtractor\installer\PiiWii-Web-Asset-Extractor.iss"'
+
+      - name: Create source ZIP
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP 'PiiWii-Web-Asset-Extractor-SOURCES'
+          New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+          Copy-Item PiiWiiWebAssetExtractor/app -Destination $tmp -Recurse
+          Copy-Item PiiWiiWebAssetExtractor/installer -Destination $tmp -Recurse
+          Compress-Archive -Path "$tmp/*" -DestinationPath PiiWiiWebAssetExtractor/dist/PiiWii-Web-Asset-Extractor-SOURCES.zip -Force
+
+      - name: SHA-256
+        shell: pwsh
+        run: |
+          Get-ChildItem PiiWiiWebAssetExtractor/dist -File | ForEach-Object {
+            $h = Get-FileHash $_.FullName -Algorithm SHA256
+            "$($h.Hash.ToLower())  $($_.Name)"
+          } | Set-Content PiiWiiWebAssetExtractor/dist/SHA256SUMS.txt
+          Get-Content PiiWiiWebAssetExtractor/dist/SHA256SUMS.txt
+
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Web-Asset-Extractor-1.0.0
+          path: PiiWiiWebAssetExtractor/dist/*
+          if-no-files-found: error
+          retention-days: 30
