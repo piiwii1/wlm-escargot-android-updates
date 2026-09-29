@@ -1,0 +1,142 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+
+namespace PiiWiiWebAssetExtractor;
+
+internal static class Program
+{
+    [STAThread]
+    static void Main()
+    {
+        ApplicationConfiguration.Initialize();
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => Log.Write("UI", e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Write("APP", e.ExceptionObject as Exception);
+        Application.Run(new MainForm());
+    }
+}
+
+internal static class Log
+{
+    private static readonly object Gate = new();
+    public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PiiWii Web Extractor");
+    public static readonly string LogDir = Path.Combine(Root, "logs");
+    public static readonly string LogFile = Path.Combine(LogDir, "app.log");
+
+    public static void Write(string area, Exception? ex = null, string? message = null)
+    {
+        try
+        {
+            Directory.CreateDirectory(LogDir);
+            var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{area}] {message ?? ex?.ToString() ?? ""}{Environment.NewLine}";
+            lock (Gate) File.AppendAllText(LogFile, line, Encoding.UTF8);
+        }
+        catch { }
+    }
+}
+
+internal sealed class ResourceItem
+{
+    public string RequestId { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string Method { get; set; } = "GET";
+    public int Status { get; set; }
+    public string MimeType { get; set; } = "";
+    public string ResourceType { get; set; } = "Autre";
+    public long Size { get; set; }
+    public DateTime Time { get; set; } = DateTime.Now;
+    public string Domain { get; set; } = "";
+    public string Query { get; set; } = "";
+    public string FileName { get; set; } = "";
+    public string? RedirectUrl { get; set; }
+    public string? BodyPath { get; set; }
+    public string? Sha256 { get; set; }
+    public bool IsText { get; set; }
+    public int SeenCount { get; set; } = 1;
+    public int Sequence { get; set; }
+    public bool BodyCaptured => !string.IsNullOrWhiteSpace(BodyPath) && File.Exists(BodyPath);
+}
+
+internal sealed class MainForm : Form
+{
+    private readonly WebView2 web = new() { Dock = DockStyle.Fill };
+    private readonly TextBox txtUrl = new() { PlaceholderText = "https://ezqr.ca/custom-qr-code", Dock = DockStyle.Fill };
+    private readonly TextBox txtSearch = new() { PlaceholderText = "CustomGenerator", Width = 260 };
+    private readonly ComboBox cmbType = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+    private readonly Button btnAnalyze = BigButton("ANALYSER LA PAGE");
+    private readonly Button btnFindCode = BigButton("🎯 TROUVER LE CODE DE CETTE PAGE");
+    private readonly Button btnDownload = SmallButton("Télécharger");
+    private readonly Button btnDownloadAll = SmallButton("Tout télécharger");
+    private readonly Button btnHar = SmallButton("Exporter HAR");
+    private readonly Button btnCopyUrl = SmallButton("Copier URL");
+    private readonly Button btnEngine = SmallButton("🔎 Rechercher le moteur");
+    private readonly Button btnMark = SmallButton("Marquer l'état actuel");
+    private readonly Button btnPack = SmallButton("📦 Créer pack pour ChatGPT");
+    private readonly Button btnBack = SmallButton("←");
+    private readonly Button btnReload = SmallButton("Recharger");
+    private readonly Button btnNoCache = SmallButton("Sans cache");
+    private readonly Button btnDevTools = SmallButton("DevTools");
+    private readonly CheckBox chkNoCache = new() { Text = "Désactiver le cache pendant l'analyse", Checked = true, AutoSize = true };
+    private readonly CheckBox chkContinuous = new() { Text = "Capture continue", Checked = true, AutoSize = true };
+    private readonly Label lblStatus = new() { AutoSize = true, Text = "Prêt", Padding = new Padding(8, 7, 8, 7) };
+    private readonly Label lblStats = new() { AutoSize = true, Text = "0 ressource", Padding = new Padding(8, 7, 8, 7) };
+    private readonly DataGridView grid = new()
+    {
+        Dock = DockStyle.Fill,
+        ReadOnly = true,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        MultiSelect = false,
+        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+        AutoGenerateColumns = false,
+        BackgroundColor = Color.FromArgb(22, 24, 28),
+        BorderStyle = BorderStyle.None,
+        RowHeadersVisible = false
+    };
+
+    private readonly ConcurrentDictionary<string, ResourceItem> byRequest = new();
+    private readonly List<ResourceItem> items = new();
+    private readonly object itemGate = new();
+    private CoreWebView2DevToolsProtocolEventReceiver? responseReceiver;
+    private CoreWebView2DevToolsProtocolEventReceiver? finishedReceiver;
+    private CoreWebView2DevToolsProtocolEventReceiver? requestReceiver;
+    private string sessionDir = "";
+    private string bodiesDir = "";
+    private int sequence = 0;
+    private int markerSequence = 0;
+    private bool initialized;
+    private bool captureEnabled;
+    private string initialUrl = "";
+    private DateTime sessionStarted;
+
+    public MainForm()
+    {
+        Text = "PiiWii Web Asset Extractor 1.0.0";
+        Width = 1500;
+        Height = 920;
+        MinimumSize = new Size(1100, 700);
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Color.FromArgb(18, 20, 24);
+        ForeColor = Color.Gainsboro;
+        Font = new Font("Segoe UI", 10f);
+
+        BuildGrid();
+        Controls.Add(BuildLayout());
+        Load += async (_, _) => await InitializeAsync();
+
+        btnAnalyze.Click += async (_, _) => await AnalyzeAsync(false);
+        btnFindCode.Click += async (_, _) => await AnalyzeAsync(true);
+        btnDownload.Click += async (_, _) => await DownloadSelectedAsync();
+        btnDownloadAll.Click += async (_, _) => await DownloadAllAsync();
+        btnHar.Click += async (_, _) => await ExportHarAsync(true);
+        btnCopyUrl.Click += (_, _) => CopySelectedUrl();
+        btnEngine.Click += async (_, _) => await FindEngineAsync();
+        btnMark.Click += (_, _) => MarkCurrentState();
+        btnPack.Click += async (_, _) => await CreateChatGptPackAsync(true);
+        btnBa
