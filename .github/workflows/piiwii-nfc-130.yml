@@ -1,22 +1,23 @@
 name: PiiWii NFC 1.0.30 Build
 
 on:
-  workflow_dispatch:
   push:
     paths:
+      - 'piiwii-nfc-public/v130/v130.patch.gz.b64'
       - '.github/workflows/piiwii-nfc-130.yml'
-      - 'piiwii-nfc-public/v130/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
   actions: read
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
 jobs:
   build:
     runs-on: ubuntu-24.04
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,92 +30,68 @@ jobs:
 
       - name: Install Android platform
         run: |
-          set -euo pipefail
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Download clean 1.0.29 source baseline
+      - name: Download official 1.0.29 fresh-install sources
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          rm -rf /tmp/nfc130 /tmp/base129 /tmp/base129.zip
-          mkdir -p /tmp/nfc130 /tmp/base129
+          rm -rf /tmp/nfc130 /tmp/art129 /tmp/art129.zip
+          mkdir -p /tmp/nfc130 /tmp/art129
           ART_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.29-fresh-install" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
           test -n "$ART_ID"
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/base129.zip
-          unzip -q /tmp/base129.zip -d /tmp/base129
-          SRCZIP=$(find /tmp/base129 -type f -name 'PiiWii-NFC-1.0.29-SOURCES-BUILD.zip' -print -quit)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/art129.zip
+          unzip -q /tmp/art129.zip -d /tmp/art129
+          SRCZIP=$(find /tmp/art129 -type f \( -name 'PiiWii-NFC-1.0.29-SOURCES-BUILD.zip' -o -name 'PiiWii-NFC-1.0.29-SOURCES.zip' \) -print -quit)
           test -n "$SRCZIP"
           unzip -q "$SRCZIP" -d /tmp/nfc130
           ROOT=$(find /tmp/nfc130 -maxdepth 1 -type d -name 'PiiWii-NFC-1.0.29' -print -quit)
           test -n "$ROOT"
-          mv "$ROOT" /tmp/nfc130/PiiWii-NFC-1.0.30
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
 
-      - name: Apply 1.0.30 source changes
+      - name: Apply 1.0.30 improvements
         run: |
           set -euo pipefail
-          ROOT=/tmp/nfc130/PiiWii-NFC-1.0.30
-          PAYLOAD="$GITHUB_WORKSPACE/piiwii-nfc-public/v130"
-
-          cat "$PAYLOAD/mainactivity.part00.b64" "$PAYLOAD/mainactivity.part01.b64" "$PAYLOAD/mainactivity.part02.b64" > /tmp/MainActivity.java.gz.b64
-          base64 -d /tmp/MainActivity.java.gz.b64 | gzip -d > "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
-          base64 -d "$PAYLOAD/activity_main.xml.gz.b64" | gzip -d > "$ROOT/app/src/main/res/layout/activity_main.xml"
-          base64 -d "$PAYLOAD/build.gradle.gz.b64" | gzip -d > "$ROOT/app/build.gradle"
-          base64 -d "$PAYLOAD/README.md.gz.b64" | gzip -d > "$ROOT/README.md"
-          base64 -d "$PAYLOAD/CHANGELOG.md.gz.b64" | gzip -d > "$ROOT/CHANGELOG.md"
-
+          base64 -d piiwii-nfc-public/v130/v130.patch.gz.b64 | gzip -d > /tmp/v130.patch
+          patch -p1 -d "$ROOT" < /tmp/v130.patch
           grep -q "applicationId 'ch.piiwii.nfc.app'" "$ROOT/app/build.gradle"
           grep -q "versionCode 31" "$ROOT/app/build.gradle"
           grep -q "versionName '1.0.30'" "$ROOT/app/build.gradle"
 
       - name: Build release
-        working-directory: /tmp/nfc130/PiiWii-NFC-1.0.30
+        working-directory: ${{ env.ROOT }}
         run: gradle --no-daemon --stacktrace assembleRelease
 
       - name: Align and verify APK
         run: |
           set -euo pipefail
-          ROOT=/tmp/nfc130/PiiWii-NFC-1.0.30
-          BT="$ANDROID_HOME/build-tools/35.0.0"
-          IN="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
-          OUT=/tmp/PiiWii-NFC-1.0.30-ALIGNED-UNSIGNED.apk
-          test -f "$IN"
-          "$BT/zipalign" -f -p 4 "$IN" "$OUT"
-          "$BT/zipalign" -c -v 4 "$OUT"
-          "$BT/aapt" dump badging "$OUT" | tee /tmp/badging130.txt
+          mkdir -p /tmp/out130
+          APK=$(find "$ROOT/app/build/outputs/apk/release" -type f -name '*.apk' -print -quit)
+          test -n "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$APK" /tmp/out130/PiiWii-NFC-1.0.30-ALIGNED-UNSIGNED.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 /tmp/out130/PiiWii-NFC-1.0.30-ALIGNED-UNSIGNED.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging /tmp/out130/PiiWii-NFC-1.0.30-ALIGNED-UNSIGNED.apk | tee /tmp/badging130.txt
           grep -q "package: name='ch.piiwii.nfc.app'" /tmp/badging130.txt
           grep -q "versionCode='31'" /tmp/badging130.txt
           grep -q "versionName='1.0.30'" /tmp/badging130.txt
-          if grep -q 'application-debuggable' /tmp/badging130.txt; then
-            echo 'ERROR: release APK is debuggable' >&2
-            exit 1
-          fi
-          unzip -t "$OUT" >/dev/null
+          if grep -q 'application-debuggable' /tmp/badging130.txt; then exit 1; fi
+          unzip -t /tmp/out130/PiiWii-NFC-1.0.30-ALIGNED-UNSIGNED.apk >/dev/null
 
-      - name: Package deliverables
+      - name: Package sources
         run: |
           set -euo pipefail
-          mkdir -p /tmp/out130
-          cp /tmp/PiiWii-NFC-1.0.30-ALIGNED-UNSIGNED.apk /tmp/out130/
+          mv "$ROOT" /tmp/nfc130/PiiWii-NFC-1.0.30
           cd /tmp/nfc130
           zip -qr /tmp/out130/PiiWii-NFC-1.0.30-SOURCES-BUILD.zip PiiWii-NFC-1.0.30
-          cat > /tmp/out130/BUILD-IDENTITY.txt <<'EOF'
-          PiiWii NFC 1.0.30
-          package=ch.piiwii.nfc.app
-          versionCode=31
-          versionName=1.0.30
-          release=true
-          signing=performed after artifact download with stable PiiWii NFC key
-          EOF
 
-      - name: Upload build artifact
+      - name: Upload build
         uses: actions/upload-artifact@v4
         with:
           name: PiiWii-NFC-1.0.30-build
