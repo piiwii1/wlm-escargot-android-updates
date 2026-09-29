@@ -1,0 +1,245 @@
+diff -ruN foire_1536_base/app/build.gradle.kts foire_1536/app/build.gradle.kts
+--- foire_1536_base/app/build.gradle.kts	2026-09-29 10:11:46.000000000 +0000
++++ foire_1536/app/build.gradle.kts	2026-09-29 10:18:19.708459162 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 41
+-        versionName = "1.5.35"
++        versionCode = 42
++        versionName = "1.5.36"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+ diff -ruN foire_1536_base/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire_1536/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire_1536_base/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 10:11:46.000000000 +0000
++++ foire_1536/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 10:18:19.708308225 +0000
+@@ -40,7 +40,7 @@
+     LinearLayout root, content, dayRow, zoneRow, nav;
+     HeaderBrandView headerBrand;
+     ScrollView scroll;
+-    TextView title, subTitle, programSearchAction;
++    TextView title, subTitle, programSearchAction, programAddAction;
+     EditText searchBox;
+     int screen=0, selectedDay=0, selectedZone=0;
+     int searchFilter=0;
+@@ -383,9 +383,12 @@
+ 
+         LinearLayout titleBar=new LinearLayout(this); titleBar.setGravity(Gravity.CENTER_VERTICAL); titleBar.setPadding(dp(16),dp(10),dp(10),0);
+         title=txt("",24,PURPLE,true); titleBar.addView(title,new LinearLayout.LayoutParams(0,dp(42),1));
++        programAddAction=txt("+",30,Color.WHITE,true); programAddAction.setGravity(Gravity.CENTER); programAddAction.setContentDescription("Ajouter un rendez-vous"); programAddAction.setBackground(round(PINK,20));
++        programAddAction.setOnClickListener(v->showPersonalAppointmentDialog(null));
++        LinearLayout.LayoutParams pa=new LinearLayout.LayoutParams(dp(42),dp(42)); pa.setMargins(dp(8),0,0,0); titleBar.addView(programAddAction,pa);
+         programSearchAction=txt("⌕",28,PURPLE,true); programSearchAction.setGravity(Gravity.CENTER); programSearchAction.setContentDescription("Rechercher"); programSearchAction.setBackground(round(0xFFF1EDF4,20));
+         programSearchAction.setOnClickListener(v->{screen=2;showSearch();new Handler(Looper.getMainLooper()).postDelayed(()->{searchBox.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(searchBox,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);},120);});
+-        LinearLayout.LayoutParams ps=new LinearLayout.LayoutParams(dp(42),dp(42)); ps.setMargins(dp(8),0,0,0); titleBar.addView(programSearchAction,ps);
++        LinearLayout.LayoutParams ps=new LinearLayout.LayoutParams(dp(42),dp(42)); ps.setMargins(dp(6),0,0,0); titleBar.addView(programSearchAction,ps);
+         root.addView(titleBar,new LinearLayout.LayoutParams(-1,dp(52)));
+         subTitle=txt("",13,MUTED,false); subTitle.setPadding(dp(16),0,dp(16),dp(8)); root.addView(subTitle);
+ 
+@@ -428,6 +431,7 @@
+         title.setText(t); subTitle.setText(st); content.removeAllViews(); content.setPadding(dp(12),dp(2),dp(12),dp(20));
+         if(headerBrand!=null) headerBrand.setVisibility(screen==0?View.VISIBLE:View.GONE);
+         if(programSearchAction!=null) programSearchAction.setVisibility(screen==1?View.VISIBLE:View.GONE);
++        if(programAddAction!=null) programAddAction.setVisibility(screen==1?View.VISIBLE:View.GONE);
+         dayButtons(dayTabs); zoneButtons(zoneTabs); searchBox.setVisibility(searchVisible?View.VISIBLE:View.GONE);
+         if(!searchVisible){search=""; searchBox.setText("");}
+         scroll.scrollTo(0,0); refreshNav();
+@@ -788,10 +792,6 @@
+         TextView m=txt(list.size()+" événement(s) · "+verified+" confirmé(s) · "+filter,12,MUTED,false);m.setPadding(0,dp(3),0,0);summary.addView(m);
+         content.addView(summary,margin(0,2,0,6));
+ 
+-        TextView addMeeting=actionButton("＋ Ajouter un rendez-vous");
+-        addMeeting.setOnClickListener(v->showPersonalAppointmentDialog(null));
+-        content.addView(addMeeting,margin(0,0,0,10));
+-
+         if(list.isEmpty()){
+             emptyState("Aucun événement ici","Essaie un autre espace, un autre jour ou efface la recherche.");
+         }else{
+@@ -1053,7 +1053,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
+-        settingsActionRow("i","Version 1.5.35","Foire du Valais 2026 · versionCode 41",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.35 · versionCode 41\n\nProgramme hors ligne + mise à jour distante · rendez-vous personnels dans Programme · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.36","Foire du Valais 2026 · versionCode 42",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.36 · versionCode 42\n\nProgramme hors ligne + mise à jour distante · rendez-vous personnels améliorés avec lieu et note · ajout rapide depuis le haut de Programme · rappels restaurés après redémarrage · notifications normales ou alarmes prolongées · détection des conflits entre favoris · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
+@@ -1232,75 +1232,119 @@
+         return e.name!=null&&e.name.startsWith(prefix)?e.name.substring(prefix.length()):e.name;
+     }
+ 
++    String personalField(int id,String key,String fallback){
++        try{
++            JSONArray arr=new JSONArray(prefs.getString("personalAppointments","[]"));
++            for(int i=0;i<arr.length();i++){
++                JSONObject o=arr.optJSONObject(i);
++                if(o!=null&&o.optInt("id",-1)==id)return o.optString(key,fallback);
++            }
++        }catch(Exception ignored){}
++        return fallback;
++    }
++
++    void styleAppointmentInput(EditText e,String hint){
++        e.setHint(hint);e.setTextSize(15);e.setTextColor(darkMode()?0xFFF4F6FB:PURPLE);e.setHintTextColor(darkMode()?0xFF8F96A5:0xFF8B91A1);
++        e.setPadding(dp(14),dp(11),dp(14),dp(11));GradientDrawable g=round(darkMode()?0xFF20242E:Color.WHITE,14);g.setStroke(dp(1),darkMode()?0xFF3A3F4C:0xFFE2DCE7);e.setBackground(g);
++    }
++
++    void updateAppointmentDayCard(LinearLayout card,int day,boolean active){
++        card.setBackground(round(active?PINK:(darkMode()?0xFF20242E:Color.WHITE),15));
++        if(!active){GradientDrawable g=round(darkMode()?0xFF20242E:Color.WHITE,15);g.setStroke(dp(1),darkMode()?0xFF3A3F4C:0xFFE2DCE7);card.setBackground(g);}
++        if(card.getChildCount()>=3){
++            ((TextView)card.getChildAt(0)).setTextColor(active?Color.WHITE:MUTED);
++            ((TextView)card.getChildAt(1)).setTextColor(active?Color.WHITE:PURPLE);
++            ((TextView)card.getChildAt(2)).setTextColor(active?0xFFFFD4DA:MUTED);
++        }
++        card.setElevation(active?dp(3):0);
++    }
++
++    LinearLayout appointmentDayCard(int day,boolean active){
++        String[] wd={"VEN","SAM","DIM","LUN","MAR","MER","JEU","VEN","SAM","DIM"};
++        LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setGravity(Gravity.CENTER);c.setPadding(dp(3),dp(6),dp(3),dp(5));
++        TextView w=txt(wd[day],10,active?Color.WHITE:MUTED,true);w.setGravity(Gravity.CENTER);c.addView(w,new LinearLayout.LayoutParams(-1,dp(18)));
++        TextView n=txt(String.valueOf(day+2),20,active?Color.WHITE:PURPLE,true);n.setGravity(Gravity.CENTER);c.addView(n,new LinearLayout.LayoutParams(-1,dp(27)));
++        TextView mo=txt("OCT",9,active?0xFFFFD4DA:MUTED,true);mo.setGravity(Gravity.CENTER);c.addView(mo,new LinearLayout.LayoutParams(-1,dp(16)));
++        updateAppointmentDayCard(c,day,active);return c;
++    }
++
+     void showPersonalAppointmentDialog(Event existing){
+-        final EditText person=new EditText(this);
+-        person.setHint("Nom de la personne");
+-        person.setSingleLine(true);
+-        if(existing!=null)person.setText(personalName(existing));
++        final EditText person=new EditText(this);styleAppointmentInput(person,"Nom de la personne");person.setSingleLine(true);
++        final EditText place=new EditText(this);styleAppointmentInput(place,"Lieu de rendez-vous (facultatif)");place.setSingleLine(true);
++        final EditText note=new EditText(this);styleAppointmentInput(note,"Note (facultatif)");note.setMinLines(2);note.setMaxLines(3);note.setGravity(Gravity.TOP|Gravity.LEFT);
++        if(existing!=null){
++            person.setText(personalName(existing));
++            place.setText(personalField(existing.id,"place",existing.place.equals("Rendez-vous personnel")?"":existing.place));
++            note.setText(personalField(existing.id,"note",""));
++        }
+ 
+         final int[] chosenDay={existing!=null?existing.day:selectedDay};
+         int nowMinutes=Calendar.getInstance().get(Calendar.HOUR_OF_DAY)*60+Calendar.getInstance().get(Calendar.MINUTE);
+         final int[] chosenMinutes={existing!=null&&parseMinutes(existing.start)>=0?parseMinutes(existing.start):Math.max(0,Math.min(23*60+55,((nowMinutes+4)/5)*5))};
+ 
+-        TextView dayButton=actionButton("Jour : "+fullDayLabel(chosenDay[0]));
+-        TextView timeButton=actionButton("Heure : "+String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60));
+-        dayButton.setOnClickListener(v->{
+-            String[] labels=new String[10];for(int i=0;i<10;i++)labels[i]=fullDayLabel(i);
+-            new AlertDialog.Builder(this).setTitle("Quel jour ?").setSingleChoiceItems(labels,chosenDay[0],(d,which)->{
+-                chosenDay[0]=which;dayButton.setText("Jour : "+fullDayLabel(which));d.dismiss();
+-            }).setNegativeButton("Annuler",null).show();
+-        });
+-        timeButton.setOnClickListener(v->new TimePickerDialog(this,(view,hour,minute)->{
+-            chosenMinutes[0]=hour*60+minute;
+-            timeButton.setText("Heure : "+String.format(Locale.ROOT,"%02d:%02d",hour,minute));
+-        },chosenMinutes[0]/60,chosenMinutes[0]%60,true).show());
+-
+-        LinearLayout wrap=new LinearLayout(this);wrap.setOrientation(LinearLayout.VERTICAL);wrap.setPadding(dp(20),dp(6),dp(20),0);
++        LinearLayout wrap=new LinearLayout(this);wrap.setOrientation(LinearLayout.VERTICAL);wrap.setPadding(dp(20),dp(4),dp(20),dp(2));
++        TextView intro=txt(existing==null?"Avec qui as-tu rendez-vous ?":"Modifie ton rendez-vous",14,MUTED,false);intro.setPadding(0,0,0,dp(10));wrap.addView(intro);
+         wrap.addView(person,new LinearLayout.LayoutParams(-1,-2));
+-        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.setMargins(0,dp(10),0,0);wrap.addView(dayButton,bp);
+-        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(-1,-2);tp.setMargins(0,dp(8),0,0);wrap.addView(timeButton,tp);
+ 
++        TextView dayLabel=txt("Jour",13,PURPLE,true);dayLabel.setPadding(0,dp(14),0,dp(7));wrap.addView(dayLabel);
++        GridLayout grid=new GridLayout(this);grid.setColumnCount(5);grid.setUseDefaultMargins(false);
++        final LinearLayout[] cards=new LinearLayout[10];
++        for(int i=0;i<10;i++){
++            final int d=i;cards[i]=appointmentDayCard(i,i==chosenDay[0]);
++            cards[i].setOnClickListener(v->{chosenDay[0]=d;for(int j=0;j<cards.length;j++)updateAppointmentDayCard(cards[j],j,j==d);});
++            GridLayout.LayoutParams gp=new GridLayout.LayoutParams();gp.width=0;gp.height=dp(67);gp.columnSpec=GridLayout.spec(i%5,1f);gp.rowSpec=GridLayout.spec(i/5);gp.setMargins(dp(3),dp(3),dp(3),dp(3));grid.addView(cards[i],gp);
++        }
++        wrap.addView(grid,new LinearLayout.LayoutParams(-1,dp(146)));
++
++        TextView timeLabel=txt("Heure",13,PURPLE,true);timeLabel.setPadding(0,dp(9),0,dp(6));wrap.addView(timeLabel);
++        TextView timeButton=txt("🕒  "+String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60),17,PURPLE,true);timeButton.setGravity(Gravity.CENTER_VERTICAL);timeButton.setPadding(dp(14),0,dp(14),0);timeButton.setBackground(round(darkMode()?0xFF20242E:0xFFF7F3F8,14));
++        timeButton.setOnClickListener(v->new TimePickerDialog(this,(view,hour,minute)->{chosenMinutes[0]=hour*60+minute;timeButton.setText("🕒  "+String.format(Locale.ROOT,"%02d:%02d",hour,minute));},chosenMinutes[0]/60,chosenMinutes[0]%60,true).show());
++        wrap.addView(timeButton,new LinearLayout.LayoutParams(-1,dp(52)));
++
++        TextView placeLabel=txt("Lieu",13,PURPLE,true);placeLabel.setPadding(0,dp(13),0,dp(6));wrap.addView(placeLabel);wrap.addView(place,new LinearLayout.LayoutParams(-1,-2));
++        TextView noteLabel=txt("Note",13,PURPLE,true);noteLabel.setPadding(0,dp(13),0,dp(6));wrap.addView(noteLabel);wrap.addView(note,new LinearLayout.LayoutParams(-1,-2));
++
++        ScrollView body=new ScrollView(this);body.addView(wrap);
+         AlertDialog dialog=new AlertDialog.Builder(this)
+-                .setTitle(existing==null?"Ajouter un rendez-vous":"Modifier le rendez-vous")
+-                .setMessage("Ajoute la personne, le jour et l’heure. Le rendez-vous apparaîtra directement dans Programme et dans Mes choix.")
+-                .setView(wrap)
++                .setTitle(existing==null?"Nouveau rendez-vous":"Modifier le rendez-vous")
++                .setView(body)
+                 .setPositiveButton(existing==null?"Ajouter":"Enregistrer",null)
+                 .setNegativeButton("Annuler",null)
+                 .create();
+-        dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+-            String n=person.getText().toString().trim();
+-            if(n.isEmpty()){person.setError("Entre le nom de la personne");return;}
+-            int id=existing!=null?existing.id:prefs.getInt("nextPersonalId",PERSONAL_ID_BASE);
+-            if(existing!=null)cancel(existing);
+-            savePersonalAppointment(id,n,chosenDay[0],String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60));
+-            if(existing==null)prefs.edit().putInt("nextPersonalId",id+1).putBoolean("fav"+id,true).apply();
+-            reloadPersonalAppointments();
+-            Event updated=findEvent(id);
+-            int delay=prefs.getInt("delay"+id,-1);
+-            if(updated!=null&&delay>0&&prefs.getBoolean("notificationsEnabled",true))schedule(updated,delay,prefs.getBoolean("alarmMode"+id,false));
+-            selectedDay=chosenDay[0];prefs.edit().putInt("lastDay",selectedDay).apply();
+-            dialog.dismiss();
+-            screen=1;showProgram();
+-            Toast.makeText(this,existing==null?"Rendez-vous ajouté":"Rendez-vous modifié",Toast.LENGTH_SHORT).show();
+-        }));
++        dialog.setOnShowListener(x->{
++            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(PINK);
++            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
++                String n=person.getText().toString().trim();if(n.isEmpty()){person.setError("Entre le nom de la personne");return;}
++                String where=place.getText().toString().trim(), memo=note.getText().toString().trim();
++                int id=existing!=null?existing.id:prefs.getInt("nextPersonalId",PERSONAL_ID_BASE);
++                if(existing!=null)cancel(existing);
++                savePersonalAppointment(id,n,chosenDay[0],String.format(Locale.ROOT,"%02d:%02d",chosenMinutes[0]/60,chosenMinutes[0]%60),where,memo);
++                if(existing==null)prefs.edit().putInt("nextPersonalId",id+1).putBoolean("fav"+id,true).apply();
++                reloadPersonalAppointments();Event updated=findEvent(id);int delay=prefs.getInt("delay"+id,-1);
++                if(updated!=null&&delay>0&&prefs.getBoolean("notificationsEnabled",true))schedule(updated,delay,prefs.getBoolean("alarmMode"+id,false));
++                selectedDay=chosenDay[0];prefs.edit().putInt("lastDay",selectedDay).apply();dialog.dismiss();screen=1;showProgram();
++                Toast.makeText(this,existing==null?"Rendez-vous ajouté":"Rendez-vous modifié",Toast.LENGTH_SHORT).show();
++            });
++        });
+         dialog.show();
++        Window win=dialog.getWindow();if(win!=null)win.setLayout((int)(getResources().getDisplayMetrics().widthPixels*0.94f),WindowManager.LayoutParams.WRAP_CONTENT);
+     }
+ 
+-    void savePersonalAppointment(int id,String person,int day,String start){
++    void savePersonalAppointment(int id,String person,int day,String start,String place,String note){
+         try{
+             JSONArray src=new JSONArray(prefs.getString("personalAppointments","[]"));
+             JSONArray out=new JSONArray();boolean replaced=false;
+             for(int i=0;i<src.length();i++){
+                 JSONObject o=src.optJSONObject(i);if(o==null)continue;
+-                if(o.optInt("id",-1)==id){out.put(personalAppointmentJson(id,person,day,start));replaced=true;}else out.put(o);
++                if(o.optInt("id",-1)==id){out.put(personalAppointmentJson(id,person,day,start,place,note));replaced=true;}else out.put(o);
+             }
+-            if(!replaced)out.put(personalAppointmentJson(id,person,day,start));
++            if(!replaced)out.put(personalAppointmentJson(id,person,day,start,place,note));
+             prefs.edit().putString("personalAppointments",out.toString()).apply();
+         }catch(Exception ignored){}
+     }
+ 
+-    JSONObject personalAppointmentJson(int id,String person,int day,String start)throws JSONException{
+-        JSONObject o=new JSONObject();o.put("id",id);o.put("person",person);o.put("day",day);o.put("start",start);return o;
++    JSONObject personalAppointmentJson(int id,String person,int day,String start,String place,String note)throws JSONException{
++        JSONObject o=new JSONObject();o.put("id",id);o.put("person",person);o.put("day",day);o.put("start",start);o.put("place",place);o.put("note",note);return o;
+     }
+ 
+     void loadPersonalAppointments(ArrayList<Event> target){
+@@ -1310,8 +1354,11 @@
+             for(int i=0;i<arr.length();i++){
+                 JSONObject o=arr.optJSONObject(i);if(o==null)continue;
+                 int id=o.optInt("id",-1),day=o.optInt("day",-1);String person=o.optString("person","").trim(),start=o.optString("start","—");
++                String place=o.optString("place","").trim(),note=o.optString("note","").trim();
+                 if(id<PERSONAL_ID_BASE||day<0||day>9||person.isEmpty()||parseMinutes(start)<0)continue;
+-                target.add(new Event(id,day,start,"—","Rendez-vous avec "+person,"Rendez-vous personnel","RENDEZ-VOUS","Rendez-vous personnel","Rendez-vous personnel avec "+person+".",true,null));
++                String shownPlace=place.isEmpty()?"Rendez-vous personnel":place;
++                String desc="Rendez-vous personnel avec "+person+"."+(note.isEmpty()?"":"\n"+note);
++                target.add(new Event(id,day,start,"—","Rendez-vous avec "+person,shownPlace,"RENDEZ-VOUS","Rendez-vous personnel",desc,true,null));
+             }
+         }catch(Exception ignored){}
+     }
