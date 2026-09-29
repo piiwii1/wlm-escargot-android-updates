@@ -1,18 +1,18 @@
-#define MyAppName "PiiWii Web Asset Extractor"
-#define MyAppVersion "1.1.0"
+#define MyAppName "PiiWii Code Capture"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "PiiWii"
-#define MyAppExeName "PiiWii-Web-Asset-Extractor.exe"
+#define MyAppExeName "PiiWii-Code-Capture.exe"
 
 [Setup]
 AppId={{1B1D2EFC-2A62-4F3C-9D03-72E197BB63C0}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\PiiWii\Web Asset Extractor
+DefaultDirName={autopf}\PiiWii\Code Capture
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist
-OutputBaseFilename=PiiWii-Web-Asset-Extractor-Setup-1.1.0
+OutputBaseFilename=PiiWii-Code-Capture-Setup-1.2.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
