@@ -1,0 +1,101 @@
+name: Build PiiWii Documents 0.23.3
+
+on:
+  push:
+    branches:
+      - temp/piiwii-documents-0.23.3-build
+    paths:
+      - .github/workflows/piiwii-documents-0233-public-build.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Reconstruct and verify sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = Get-ChildItem 'piiwii-documents-build/source.part*.b64' | Sort-Object Name
+          if ($parts.Count -ne 9) { throw "Expected 9 source chunks, found $($parts.Count)." }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $zip = 'PiiWii-Documents-0.23.3-RC-SOURCES.zip'
+          [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String($b64))
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = '316c60ae19d890cb8071b1b4621a02bb6e587226c113d161dc247e66287da69f'
+          Write-Host "Source SHA256: $hash"
+          if ($hash -ne $expected) { throw "Source SHA256 mismatch. Expected $expected, got $hash." }
+          New-Item buildsrc -ItemType Directory -Force | Out-Null
+          Expand-Archive $zip -DestinationPath buildsrc -Force
+
+      - name: Restore and publish Windows application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'buildsrc/src/PiiWii.Documents/PiiWii.Documents.csproj'
+          $appOut = 'buildsrc/dist/app'
+          New-Item $appOut -ItemType Directory -Force | Out-Null
+          dotnet restore $app -p:EnableWindowsTargeting=true
+          if ($LASTEXITCODE -ne 0) { throw 'Application restore failed.' }
+          dotnet publish $app -c Release -r win-x64 --self-contained true -p:EnableWindowsTargeting=true -o $appOut --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Application publish failed.' }
+          $appExe = Join-Path $appOut 'PiiWii.Documents.exe'
+          if (-not (Test-Path $appExe)) { throw 'PiiWii.Documents.exe was not produced.' }
+          if ((Get-Item $appExe).Length -lt 1MB) { throw 'Application EXE is unexpectedly small.' }
+          Copy-Item $appExe 'buildsrc/dist/PiiWii-Documents-0.23.3-PORTABLE.exe' -Force
+          New-Item 'buildsrc/src/PiiWii.Documents.Installer/payload' -ItemType Directory -Force | Out-Null
+          Copy-Item $appExe 'buildsrc/src/PiiWii.Documents.Installer/payload/PiiWii.Documents.exe' -Force
+
+      - name: Restore and publish Windows installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = 'buildsrc/src/PiiWii.Documents.Installer/PiiWii.Documents.Installer.csproj'
+          $setupOut = 'buildsrc/dist/setup'
+          New-Item $setupOut -ItemType Directory -Force | Out-Null
+          dotnet restore $installer -p:EnableWindowsTargeting=true
+          if ($LASTEXITCODE -ne 0) { throw 'Installer restore failed.' }
+          dotnet publish $installer -c Release -r win-x64 --self-contained true -p:EnableWindowsTargeting=true -o $setupOut --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Installer publish failed.' }
+          $builtSetup = Join-Path $setupOut 'PiiWii-Documents-Setup-0.23.3.exe'
+          if (-not (Test-Path $builtSetup)) { throw "Installer missing: $builtSetup" }
+          if ((Get-Item $builtSetup).Length -lt 1MB) { throw 'Installer EXE is unexpectedly small.' }
+          Copy-Item $builtSetup 'buildsrc/dist/PiiWii-Documents-Setup-0.23.3.exe' -Force
+
+      - name: Verify and hash binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = 'buildsrc/dist/PiiWii-Documents-Setup-0.23.3.exe'
+          $portable = 'buildsrc/dist/PiiWii-Documents-0.23.3-PORTABLE.exe'
+          $payload = 'buildsrc/src/PiiWii.Documents.Installer/payload/PiiWii.Documents.exe'
+          $portableHash = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+          $payloadHash = (Get-FileHash $payload -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($portableHash -ne $payloadHash) { throw 'Installer payload differs from the portable application.' }
+          $setupHash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            "$portableHash  PiiWii-Documents-0.23.3-PORTABLE.exe",
+            "$setupHash  PiiWii-Documents-Setup-0.23.3.exe"
+          ) | Set-Content 'buildsrc/dist/SHA256SUMS.txt' -Encoding utf8
+          Write-Host "Portable SHA256: $portableHash"
+          Write-Host "Setup SHA256:    $setupHash"
+
+      - name: Upload Windows binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Documents-0.23.3-Windows
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            buildsrc/dist/PiiWii-Documents-Setup-0.23.3.exe
+            buildsrc/dist/PiiWii-Documents-0.23.3-PORTABLE.exe
+            buildsrc/dist/SHA256SUMS.txt
