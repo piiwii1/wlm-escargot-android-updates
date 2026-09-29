@@ -1,0 +1,25 @@
+xt" android:textSize="26sp" android:textStyle="bold" />
+                         <TextView android:id="@+id/historyCountText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="0 opération" android:textColor="@color/muted" android:textSize="12sp" />
+                     </LinearLayout>
+                     <Button android:id="@+id/clearHistoryButton" android:layout_width="wrap_content" android:layout_height="46dp" android:text="VIDER" android:textColor="@color/text" android:background="@drawable/bg_card_soft" android:stateListAnimator="@null" />
+@@ -717,8 +778,9 @@
+                     android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
+                     android:layout_marginTop="14dp"
+-                    android:minHeight="180dp"
+-                    android:padding="16dp"
++                    android:minHeight="110dp"
++                    android:gravity="center"
++                    android:padding="20dp"
+                     android:text="Aucun historique."
+                     android:textColor="@color/text"
+                     android:textSize="14sp"
+@@ -755,7 +817,7 @@
+                 </LinearLayout>
+                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:orientation="vertical" android:padding="16dp" android:background="@drawable/bg_card">
+                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="À propos" android:textColor="@color/text" android:textSize="18sp" android:textStyle="bold" />
+-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="PiiWii NFC 1.0.17\nLecture, écriture, copie et gestion de tags NDEF." android:textColor="@color/muted" android:textSize="13sp" />
++                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="PiiWii NFC 1.0.18\nLecture, écriture, copie et gestion de tags NDEF." android:textColor="@color/muted" android:textSize="13sp" />
+                 </LinearLayout>
+             </LinearLayout>
+         </ScrollView>
