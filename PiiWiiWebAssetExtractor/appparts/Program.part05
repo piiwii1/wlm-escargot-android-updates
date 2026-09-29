@@ -1,35 +1,55 @@
 M-dd HH:mm:ss}");
-        readme.AppendLine($"Nombre de ressources : {snapshot.Count}");
+        readme.AppendLine($"Nombre de ressources capturées : {snapshot.Count}");
+        if (!string.IsNullOrWhiteSpace(targetSelector))
+        {
+            readme.AppendLine();
+            readme.AppendLine("MODE CIBLÉ");
+            readme.AppendLine($"Sélecteur : {targetSelector}");
+            readme.AppendLine($"Description : {targetSummary}");
+            readme.AppendLine("Le dossier cible contient exactement l'élément sélectionné sur la page.");
+        }
+        readme.AppendLine();
         readme.AppendLine("JS intéressants détectés :");
         var idx = 1;
         foreach (var x in jsInteresting.Take(12)) readme.AppendLine($"{idx++}. {x.item.FileName} (score {x.score})");
         readme.AppendLine();
-        readme.AppendLine("Objectif :");
-        readme.AppendLine("Analyser le fonctionnement technique de la fonctionnalité observée.");
-        if (markerSequence > 0)
-        {
-            readme.AppendLine();
-            readme.AppendLine("Nouvelles ressources depuis le marqueur :");
-            foreach (var x in snapshot.Where(x => x.Sequence > markerSequence)) readme.AppendLine("+ " + x.FileName + " — " + x.Url);
-        }
+        readme.AppendLine("Objectif : analyser le code de la page ou de la zone sélectionnée.");
         await File.WriteAllTextAsync(Path.Combine(sessionDir, "CHATGPT-README.txt"), readme.ToString(), Encoding.UTF8);
         await WriteResourceListAsync(snapshot);
         await WriteHashesAsync(sessionDir);
 
-        var zip = Path.Combine(Log.Root, $"PiiWii-Web-Capture-{DateTime.Now:yyyy-MM-dd-HHmm}.zip");
+        Directory.CreateDirectory(Log.Root);
+        var site = GetSiteSlug();
+        var zip = Path.Combine(Log.Root, $"PiiWii-Code-Capture-{site}-{DateTime.Now:yyyy-MM-dd-HHmm}.zip");
         if (File.Exists(zip)) File.Delete(zip);
         ZipFile.CreateFromDirectory(sessionDir, zip, CompressionLevel.Optimal, false);
+        TryDeleteSessionDirectory();
+        sessionDir = "";
+        bodiesDir = "";
+
         if (reveal)
         {
-            SetStatus("🟢 Pack ChatGPT créé");
+            SetStatus($"🟢 ZIP créé : {Path.GetFileName(zip)}");
             Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zip}\"") { UseShellExecute = true });
         }
         return zip;
     }
 
+    private string GetSiteSlug()
+    {
+        try
+        {
+            var host = new Uri(initialUrl).Host;
+            if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)) host = host[4..];
+            return SanitizeFileName(host).Replace(' ', '-');
+        }
+        catch { return "site"; }
+    }
+
     private async Task DownloadAllToSessionSilentlyAsync()
     {
-        foreach (var item in SnapshotItems())
+        var packItems = await GetItemsForPackAsync();
+        foreach (var item in packItems)
         {
             try
             {
@@ -42,8 +62,47 @@ M-dd HH:mm:ss}");
             }
             catch { }
         }
-        await SaveDomFinalAsync();
-        await ExportHarAsync(false);
+        if (string.IsNullOrWhiteSpace(targetHtml))
+        {
+            await SaveDomFinalAsync();
+            await ExportHarAsync(false);
+        }
+    }
+
+    private async Task<List<ResourceItem>> GetItemsForPackAsync()
+    {
+        var all = SnapshotItems();
+        if (string.IsNullOrWhiteSpace(targetHtml)) return all;
+
+        var tokenSource = (targetSelector + " " + targetSummary).ToLowerInvariant();
+        var tokens = tokenSource.Split(new[] { ' ', '.', '#', '>', ':', '[', ']', '(', ')', '/', '\\', '-', '_', '"', '\'', '=' }, StringSplitOptions.RemoveEmptyEntries)
+            .Where(x => x.Length >= 4)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(24)
+            .ToArray();
+        var selected = new List<ResourceItem>();
+        foreach (var item in all)
+        {
+            if (item.Sequence > markerSequence)
+            {
+                selected.Add(item);
+                continue;
+            }
+            if (item.ResourceType is not ("JS" or "CSS" or "JSON" or "XHR" or "SVG")) continue;
+            if (!item.BodyCaptured) await CaptureBodyAsync(item);
+            if (!item.BodyCaptured || item.Size > 12_000_000) continue;
+            try
+            {
+                var text = await File.ReadAllTextAsync(item.BodyPath!, Encoding.UTF8);
+                if (tokens.Any(t => text.Contains(t, StringComparison.OrdinalIgnoreCase))) selected.Add(item);
+            }
+            catch { }
+        }
+        if (selected.Count == 0)
+        {
+            selected.AddRange(all.Where(x => x.ResourceType is "JS" or "CSS").Take(20));
+        }
+        return selected.Distinct().ToList();
     }
 
     private async Task<List<(ResourceItem item, int score)>> ScoreJsAsync(List<ResourceItem> snapshot)
@@ -56,6 +115,11 @@ M-dd HH:mm:ss}");
             {
                 var text = await File.ReadAllTextAsync(item.BodyPath!, Encoding.UTF8);
                 var score = terms.Count(t => text.Contains(t, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(targetSummary))
+                {
+                    var targetTokens = targetSummary.Split(new[] { ' ', '.', '#', '>', ':', '-', '_' }, StringSplitOptions.RemoveEmptyEntries).Where(x => x.Length >= 4).Take(12);
+                    score += targetTokens.Count(t => text.Contains(t, StringComparison.OrdinalIgnoreCase)) * 2;
+                }
                 if (score > 0) list.Add((item, score));
             }
             catch { }
@@ -74,7 +138,7 @@ M-dd HH:mm:ss}");
     private async Task WriteReportAsync(int ok, int fail, int ignored)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("PiiWii Web Asset Extractor 1.0.0");
+        sb.AppendLine("PiiWii Code Capture 1.2.0");
         sb.AppendLine($"URL : {initialUrl}");
         sb.AppendLine($"Date : {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine($"Ressources : {CountItems()}");
