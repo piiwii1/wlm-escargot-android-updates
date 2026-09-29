@@ -28,17 +28,17 @@ jobs:
           [IO.File]::WriteAllBytes((Join-Path $PWD 'PiiWiiWebAssetExtractor/app/app.ico'), [Convert]::FromBase64String($b64))
           if (!(Test-Path 'PiiWiiWebAssetExtractor/app/app.ico')) { throw 'Icone app.ico absente' }
 
-      - name: Create installer-compatible icon
+      - name: Install ImageMagick
+        shell: pwsh
+        run: choco install imagemagick -y --no-progress
+
+      - name: Create installer-compatible multi-resolution icon
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Drawing
-          $srcPath = (Resolve-Path 'PiiWiiWebAssetExtractor/app/app.ico').Path
-          $dstPath = Join-Path $PWD 'PiiWiiWebAssetExtractor/app/setup.ico'
-          $icon = New-Object System.Drawing.Icon($srcPath, 256, 256)
-          $fs = [IO.File]::Open($dstPath, [IO.FileMode]::Create)
-          $icon.Save($fs)
-          $fs.Dispose(); $icon.Dispose()
-          if (!(Test-Path $dstPath)) { throw 'Icone setup.ico absente' }
+          $src = (Resolve-Path 'PiiWiiWebAssetExtractor/app/app.ico').Path
+          $dst = Join-Path $PWD 'PiiWiiWebAssetExtractor/app/setup.ico'
+          magick "$src[0]" -background none -define icon:auto-resize=256,128,64,48,32,16 "$dst"
+          if (!(Test-Path $dst)) { throw 'Icone setup.ico absente' }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
