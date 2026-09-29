@@ -7,9 +7,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>PiiWii-Web-Asset-Extractor</AssemblyName>
     <RootNamespace>PiiWiiWebAssetExtractor</RootNamespace>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <Product>PiiWii Web Asset Extractor</Product>
     <Company>PiiWii</Company>
     <Description>Simple WebView2 network asset capture tool.</Description>
