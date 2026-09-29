@@ -1,0 +1,549 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index cecde1f..141d42b 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,14 @@
+ # Changelog
+ 
++## 1.0.7 — 2026-09-29
++- Refonte ergonomique de l’écran principal.
++- Écriture en deux temps : préparation puis armement explicite.
++- Résultat de lecture séparé des détails techniques.
++- Actions contextuelles sur URI : ouvrir, appeler, e-mail, SMS.
++- Copie rapide du contenu lu dans le presse-papiers.
++- Détails techniques masqués par défaut et affichables à la demande.
++- Aucun changement des limites de sécurité : copie NDEF uniquement.
++
+ ## 1.0.6 — 2026-09-29
+ - Correction renforcée des zones système Android haut/bas.
+ - targetSdk ramené à 34 pour éviter le edge-to-edge forcé d’Android 15 sur cette version sideload.
+diff --git a/app/build.gradle b/app/build.gradle
+index 570542e..598a28e 100644
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -10,8 +10,8 @@ android {
+         applicationId 'ch.piiwii.nfc.v106'
+         minSdk 24
+         targetSdk 34
+-        versionCode 7
+-        versionName '1.0.6'
++        versionCode 8
++        versionName '1.0.7'
+     }
+ 
+     buildTypes {
+diff --git a/app/src/main/java/ch/piiwii/nfc/MainActivity.java b/app/src/main/java/ch/piiwii/nfc/MainActivity.java
+index 0c18cb7..ae6982e 100644
+--- a/app/src/main/java/ch/piiwii/nfc/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/nfc/MainActivity.java
+@@ -4,6 +4,9 @@ import android.app.Activity;
+ import android.app.AlertDialog;
+ import android.app.PendingIntent;
+ import android.content.Intent;
++import android.content.ClipData;
++import android.content.ClipboardManager;
++import android.content.Context;
+ import android.net.Uri;
+ import android.content.SharedPreferences;
+ import android.nfc.NdefMessage;
+@@ -57,8 +60,15 @@ public class MainActivity extends Activity {
+     private TextView tagInfoText;
+     private TextView historyText;
+     private TextView payloadSizeText;
++    private TextView readContentText;
+     private EditText payloadInput;
+     private Button cancelButton;
++    private Button actionButton;
++    private Button copyContentButton;
++    private Button armWriteButton;
++    private Button toggleTechnicalButton;
++    private View writerPanel;
++    private View technicalPanel;
+     private RadioGroup typeGroup;
+     private RadioButton typeUrl;
+     private RadioButton typePhone;
+@@ -69,6 +79,8 @@ public class MainActivity extends Activity {
+     private long lastTagTimeMs = 0L;
+     private String lastTagUid = "";
+     private static final long TAG_DEBOUNCE_MS = 1200L;
++    private String lastDecodedContent = "";
++    private Uri lastActionUri;
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+@@ -81,8 +93,15 @@ public class MainActivity extends Activity {
+         tagInfoText = findViewById(R.id.tagInfoText);
+         historyText = findViewById(R.id.historyText);
+         payloadSizeText = findViewById(R.id.payloadSizeText);
++        readContentText = findViewById(R.id.readContentText);
+         payloadInput = findViewById(R.id.payloadInput);
+         cancelButton = findViewById(R.id.cancelButton);
++        actionButton = findViewById(R.id.actionButton);
++        copyContentButton = findViewById(R.id.copyContentButton);
++        armWriteButton = findViewById(R.id.armWriteButton);
++        toggleTechnicalButton = findViewById(R.id.toggleTechnicalButton);
++        writerPanel = findViewById(R.id.writerPanel);
++        technicalPanel = findViewById(R.id.technicalPanel);
+         typeGroup = findViewById(R.id.typeGroup);
+         typeUrl = findViewById(R.id.typeUrl);
+         typePhone = findViewById(R.id.typePhone);
+@@ -118,9 +137,22 @@ public class MainActivity extends Activity {
+             updatePayloadSize();
+         });
+         cancelButton.setOnClickListener(v -> cancelOperation());
++        armWriteButton.setOnClickListener(v -> prepareWrite());
++        actionButton.setOnClickListener(v -> openLastAction());
++        copyContentButton.setOnClickListener(v -> copyLastContent());
++        toggleTechnicalButton.setOnClickListener(v -> toggleTechnicalDetails());
+ 
+-        readButton.setOnClickListener(v -> setMode(Mode.READ, "Mode lecture : approche un tag NFC."));
+-        writeButton.setOnClickListener(v -> prepareWrite());
++        readButton.setOnClickListener(v -> {
++            setMode(Mode.READ, "Lecture prête : approche un tag NFC.");
++            writerPanel.setVisibility(View.GONE);
++        });
++        writeButton.setOnClickListener(v -> {
++            mode = Mode.READ;
++            updateCancelVisibility();
++            writerPanel.setVisibility(View.VISIBLE);
++            statusText.setText("Prépare le contenu, puis appuie sur PRÊT À ÉCRIRE.");
++            payloadInput.requestFocus();
++        });
+         copyButton.setOnClickListener(v -> {
+             copyBuffer = null;
+             copySourceUid = null;
+@@ -353,24 +385,81 @@ public class MainActivity extends Activity {
+ 
+     private void readTag(Tag tag) {
+         Ndef ndef = Ndef.get(tag);
+         if (ndef == null) {
+-            statusText.setText("Tag lu, mais aucun contenu NDEF standard n’est disponible.");
++            lastReadMessage = null;
++            lastDecodedContent = "";
++            lastActionUri = null;
++            readContentText.setText("Aucun contenu NDEF standard sur ce tag.");
++            actionButton.setVisibility(View.GONE);
++            copyContentButton.setVisibility(View.GONE);
++            statusText.setText("Tag détecté : informations techniques disponibles.");
+             addHistory("Lecture", toHex(tag.getId()), "Tag non-NDEF");
+             return;
+         }
+         try {
+             ndef.connect();
+             NdefMessage message = ndef.getNdefMessage();
+             if (message != null) {
+                 lastReadMessage = cloneMessage(message);
+                 lastReadUid = toHex(tag.getId());
+             }
+             String decoded = decodeMessage(message);
+             int recordCount = message == null ? 0 : message.getRecords().length;
+             tagInfoText.append("\nEnregistrements NDEF : " + recordCount);
+-            tagInfoText.append("\n\nContenu :\n" + (decoded.isEmpty() ? "(vide)" : decoded));
+-            statusText.setText("Lecture terminée.");
++            updateReadResult(message, decoded);
++            statusText.setText(decoded.isEmpty() ? "Tag lu : contenu vide." : "Lecture terminée — contenu reconnu.");
+             addHistory("Lecture", toHex(tag.getId()), summarize(decoded));
+         } catch (Exception e) {
+             statusText.setText("Erreur de lecture : " + safeMessage(e));
+         } finally {
+             closeQuietly(ndef);
+         }
+     }
+ 
++    private void updateReadResult(NdefMessage message, String decoded) {
++        lastDecodedContent = decoded == null ? "" : decoded;
++        readContentText.setText(lastDecodedContent.isEmpty() ? "(Tag vide)" : lastDecodedContent);
++        copyContentButton.setVisibility(lastDecodedContent.isEmpty() ? View.GONE : View.VISIBLE);
++        lastActionUri = null;
++        actionButton.setVisibility(View.GONE);
++        if (message == null) return;
++        for (NdefRecord r : message.getRecords()) {
++            if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_URI)) {
++                Uri uri = r.toUri();
++                if (uri == null) continue;
++                lastActionUri = uri;
++                String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
++                if ("tel".equals(scheme)) actionButton.setText("APPELER");
++                else if ("mailto".equals(scheme)) actionButton.setText("OUVRIR L’E-MAIL");
++                else if ("sms".equals(scheme) || "smsto".equals(scheme)) actionButton.setText("OUVRIR LE SMS");
++                else actionButton.setText("OUVRIR LE LIEN");
++                actionButton.setVisibility(View.VISIBLE);
++                break;
++            }
++        }
++    }
++
++    private void openLastAction() {
++        if (lastActionUri == null) return;
++        try {
++            Intent intent = new Intent(Intent.ACTION_VIEW, lastActionUri);
++            startActivity(intent);
++        } catch (Exception e) {
++            Toast.makeText(this, "Aucune application ne peut ouvrir ce contenu.", Toast.LENGTH_LONG).show();
++        }
++    }
++
++    private void copyLastContent() {
++        if (TextUtils.isEmpty(lastDecodedContent)) return;
++        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
++        clipboard.setPrimaryClip(ClipData.newPlainText("Contenu NFC", lastDecodedContent));
++        Toast.makeText(this, "Contenu copié.", Toast.LENGTH_SHORT).show();
++    }
++
++    private void toggleTechnicalDetails() {
++        boolean show = technicalPanel.getVisibility() != View.VISIBLE;
++        technicalPanel.setVisibility(show ? View.VISIBLE : View.GONE);
++        toggleTechnicalButton.setText(show ? "MASQUER LES DÉTAILS TECHNIQUES" : "VOIR LES DÉTAILS TECHNIQUES");
++    }
++
+     private void writeCurrentInput(Tag tag) {
+         String value = payloadInput.getText().toString().trim();
+         NdefMessage message = buildCurrentMessage(value);
+@@ -380,6 +469,7 @@ public class MainActivity extends Activity {
+             addHistory("Écriture", toHex(tag.getId()), summarize(value));
+             mode = Mode.READ;
+             updateCancelVisibility();
++            writerPanel.setVisibility(View.GONE);
+         }
+     }
+ 
+diff --git a/app/src/main/res/layout/activity_main.xml b/app/src/main/res/layout/activity_main.xml
+index 18e1d63..7bd756f 100644
+--- a/app/src/main/res/layout/activity_main.xml
++++ b/app/src/main/res/layout/activity_main.xml
+@@ -1,267 +1,145 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+     android:id="@+id/rootScroll"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+     android:background="@color/bg"
+     android:clipToPadding="false"
+     android:fillViewport="true">
+ 
+     <LinearLayout
+         android:id="@+id/safeContent"
+         android:layout_width="match_parent"
+         android:layout_height="wrap_content"
+         android:orientation="vertical"
+         android:padding="20dp">
+-
+-        <TextView
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:text="PiiWii NFC"
+-            android:textColor="@color/text"
+-            android:textSize="30sp"
+-            android:textStyle="bold" />
+-
+-        <TextView
+-            android:id="@+id/statusText"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="8dp"
+-            android:text="Prêt. Choisis une opération puis approche un tag NFC."
+-            android:textColor="@color/muted"
+-            android:textSize="15sp" />
+-
+-        <TextView
+-            android:id="@+id/nfcStateText"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="10dp"
+-            android:background="@color/panel"
+-            android:padding="12dp"
+-            android:text="État NFC : vérification…"
+-            android:textColor="@color/text"
+-            android:textSize="14sp" />
+-
+-        <Button
+-            android:id="@+id/nfcSettingsButton"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="10dp"
+-            android:text="RÉGLAGES NFC" />
+-
+-        <LinearLayout
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="12dp"
+-            android:orientation="horizontal"
+-            android:weightSum="2">
+-
+-            <Button
+-                android:id="@+id/readButton"
+-                android:layout_width="0dp"
+-                android:layout_height="56dp"
+-                android:layout_weight="1"
+-                android:text="LIRE" />
+-
+-            <Button
+-                android:id="@+id/copyButton"
+-                android:layout_width="0dp"
+-                android:layout_height="56dp"
+-                android:layout_marginStart="10dp"
+-                android:layout_weight="1"
+-                android:text="COPIER" />
+-        </LinearLayout>
+-
+-        <LinearLayout
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="10dp"
+-            android:orientation="horizontal"
+-            android:weightSum="2">
+-
+-            <Button
+-                android:id="@+id/writeButton"
+-                android:layout_width="0dp"
+-                android:layout_height="56dp"
+-                android:layout_weight="1"
+-                android:text="ÉCRIRE" />
+-
+-            <Button
+-                android:id="@+id/eraseButton"
+-                android:layout_width="0dp"
+-                android:layout_height="56dp"
+-                android:layout_marginStart="10dp"
+-                android:layout_weight="1"
+-                android:text="EFFACER" />
+-        </LinearLayout>
+-
+-        <Button
+-            android:id="@+id/cancelButton"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="10dp"
+-            android:text="ANNULER L’OPÉRATION"
+-            android:visibility="gone" />
+-
+-        <TextView
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="24dp"
+-            android:text="Données à écrire"
+-            android:textColor="@color/text"
+-            android:textSize="18sp"
+-            android:textStyle="bold" />
+-
+-        <RadioGroup
+-            android:id="@+id/typeGroup"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:orientation="vertical">
+-            <RadioButton
+-                android:id="@+id/typeText"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:checked="true"
+-                android:text="Texte"
+-                android:textColor="@color/text" />
+-            <RadioButton
+-                android:id="@+id/typeUrl"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="URL"
+-                android:textColor="@color/text" />
+-            <RadioButton
+-                android:id="@+id/typePhone"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="Téléphone"
+-                android:textColor="@color/text" />
+-            <RadioButton
+-                android:id="@+id/typeEmail"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="E-mail"
+-                android:textColor="@color/text" />
+-            <RadioButton
+-                android:id="@+id/typeSms"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="SMS"
+-                android:textColor="@color/text" />
+-        </RadioGroup>
+-
+-        <EditText
+-            android:id="@+id/payloadInput"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="8dp"
+-            android:backgroundTint="@color/accent"
+-            android:hint="Texte, URL, numéro ou adresse e-mail…"
+-            android:inputType="textMultiLine"
+-            android:minLines="3"
+-            android:textColor="@color/text"
+-            android:textColorHint="@color/muted" />
+-
+-        <TextView
+-            android:id="@+id/payloadSizeText"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="6dp"
+-            android:text="Taille estimée : 0 octet"
+-            android:textColor="@color/muted"
+-            android:textSize="12sp" />
+-
+-        <TextView
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="20dp"
+-            android:text="Sauvegarde / reprise"
+-            android:textColor="@color/text"
+-            android:textSize="18sp"
+-            android:textStyle="bold" />
+-
+-        <Button
+-            android:id="@+id/reuseLastButton"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="8dp"
+-            android:text="RÉUTILISER LE DERNIER CONTENU" />
+-
+-        <LinearLayout
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="8dp"
+-            android:orientation="horizontal"
+-            android:weightSum="2">
+-
+-            <Button
+-                android:id="@+id/exportNdefButton"
+-                android:layout_width="0dp"
+-                android:layout_height="wrap_content"
+-                android:layout_weight="1"
+-                android:text="EXPORTER .NDEF" />
+-
+-            <Button
+-                android:id="@+id/importNdefButton"
+-                android:layout_width="0dp"
+-                android:layout_height="wrap_content"
+-                android:layout_marginStart="10dp"
+-                android:layout_weight="1"
+-                android:text="IMPORTER .NDEF" />
+-        </LinearLayout>
+-
+-        <TextView
+-            android:layout_width="wrap_content"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="24dp"
+-            android:text="Dernier tag"
+-            android:textColor="@color/text"
+-            android:textSize="18sp"
+-            android:textStyle="bold" />
+-
+-        <TextView
+-            android:id="@+id/tagInfoText"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="8dp"
+-            android:background="@color/panel"
+-            android:padding="14dp"
+-            android:text="Aucun tag lu."
+-            android:textColor="@color/text"
+-            android:textIsSelectable="true"
+-            android:textSize="14sp" />
+-
+-        <LinearLayout
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="24dp"
+-            android:gravity="center_vertical"
+-            android:orientation="horizontal">
+-            <TextView
+-                android:layout_width="0dp"
+-                android:layout_height="wrap_content"
+-                android:layout_weight="1"
+-                android:text="Historique récent"
+-                android:textColor="@color/text"
+-                android:textSize="18sp"
+-                android:textStyle="bold" />
+-            <Button
+-                android:id="@+id/clearHistoryButton"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:text="VIDER" />
+-        </LinearLayout>
+-
+-        <TextView
+-            android:id="@+id/historyText"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="8dp"
+-            android:background="@color/panel2"
+-            android:padding="14dp"
+-            android:text="Aucun historique."
+-            android:textColor="@color/muted"
+-            android:textSize="13sp" />
+-
+-        <TextView
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="20dp"
+-            android:paddingBottom="24dp"
+-            android:text="PiiWii NFC 1.0.6 • Copie NDEF uniquement. Les UID matériels et protections cryptographiques ne sont pas clonés."
+-            android:textColor="@color/muted"
+-            android:textSize="12sp" />
+-
+-    </LinearLayout>
+-</ScrollView>
++        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
++            android:text="PiiWii NFC" android:textColor="@color/text" android:textSize="30sp" android:textStyle="bold" />
++        <TextView android:id="@+id/statusText" android:layout_width="match_parent" android:layout_height="wrap_content"
++            android:layout_marginTop="6dp" android:text="Prêt. Choisis une opération."
++            android:textColor="@color/muted" android:textSize="15sp" />
++        <TextView android:id="@+id/nfcStateText" android:layout_width="match_parent" android:layout_height="wrap_content"
++            android:layout_marginTop="12dp" android:background="@color/panel" android:padding="12dp"
++            android:text="État NFC : vérification…" android:textColor="@color/text" android:textSize="14sp" />
++        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
++            android:layout_marginTop="12dp" android:orientation="horizontal" android:weightSum="2">
++            <Button android:id="@+id/readButton" android:layout_width="0dp" android:layout_height="58dp" android:layout_weight="1" android:text="LIRE" />
++            <Button android:id="@+id/writeButton" android:layout_width="0dp" android:layout_height="58dp" android:layout_marginStart="10dp" android:layout_weight="1" android:text="ÉCRIRE" />
++        </LinearLayout>
++        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
++            android:layout_marginTop="8dp" android:orientation="horizontal" android:weightSum="2">
++            <Button android:id="@+id/copyButton" android:layout_width="0dp" android:layout_height="54dp" android:layout_weight="1" android:text="COPIER" />
++            <Button android:id="@+id/eraseButton" android:layout_width="0dp" android:layout_height="54dp" android:layout_marginStart="10dp" android:layout_weight="1" android:text="EFFACER" />
++        </LinearLayout>
++        <Button android:id="@+id/cancelButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="ANNULER L’OPÉRATION" android:visibility="gone" />
++        <LinearLayout android:id="@+id/writerPanel" android:layout_width="match_parent" android:layout_height="wrap_content"
++            android:layout_marginTop="18dp" android:background="@color/panel" android:orientation="vertical" android:padding="14dp" android:visibility="gone">
++            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Préparer une écriture" android:textColor="@color/text" android:textSize="20sp" android:textStyle="bold" />
++            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Choisis le type, saisis le contenu, puis arme l’écriture." android:textColor="@color/muted" android:textSize="13sp" />
++            <RadioGroup android:id="@+id/typeGroup" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical">
++                <RadioButton android:id="@+id/typeText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="Texte" android:textColor="@color/text" />
++                <RadioButton android:id="@+id/typeUrl" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Lien / URL" android:textColor="@color/text" />
++                <RadioButton android:id="@+id/typePhone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Téléphone" android:textColor="@color/text" />
++                <RadioButton android:id="@+id/typeEmail" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="E-mail" android:textColor="@color/text" />
++                <RadioButton android:id="@+id/typeSms" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="SMS" android:textColor="@color/text" />
++            </RadioGroup>
++            <EditText android:id="@+id/payloadInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:backgroundTint="@color/accent" android:hint="Contenu à écrire…" android:inputType="textMultiLine" android:minLines="3" android:textColor="@color/text" android:textColorHint="@color/muted" />
++            <TextView android:id="@+id/payloadSizeText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Taille estimée : 0 octet" android:textColor="@color/muted" android:textSize="12sp" />
++            <Button android:id="@+id/armWriteButton" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="10dp" android:text="PRÊT À ÉCRIRE" />
++        </LinearLayout>
++        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:text="Contenu lu" android:textColor="@color/text" android:textSize="20sp" android:textStyle="bold" />
++        <TextView android:id="@+id/readContentText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@color/panel" android:minHeight="86dp" android:padding="14dp" android:text="Approche un tag pour afficher son contenu." android:textColor="@color/text" android:textIsSelectable="true" android:textSize="15sp" />
++        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal" android:weightSum="2">
++            <Button android:id="@+id/actionButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="OUVRIR" android:visibility="gone" />
++            <Button android:id="@+id/copyContentButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:text="COPIER LE CONTENU" android:visibility="gone" />
++        </LinearLayout>
++        <Button android:id="@+id/toggleTechnicalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="VOIR LES DÉTAILS TECHNIQUES" />
++        <LinearLayout android:id="@+id/technicalPanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
++            <TextView android:id="@+id/tagInfoText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@color/panel2" android:padding="14dp" android:text="Aucun tag lu." android:textColor="@color/text" android:textIsSelectable="true" android:textSize="13sp" />
++        </LinearLayout>
++        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:text="Sauvegarde / reprise" android:textColor="@color/text" android:textSize="18sp" android:textStyle="bold" />
++        <Button android:id="@+id/reuseLastButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="MODIFIER LE DERNIER CONTENU" />
++        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal" android:weightSum="2">
++            <Button android:id="@+id/exportNdefButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="EXPORTER .NDEF" />
++            <Button android:id="@+id/importNdefButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:text="IMPORTER .NDEF" />
++        </LinearLayout>
++        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:gravity="center_vertical" android:orientation="horizontal">
++            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Historique" android:textColor="@color/text" android:textSize="18sp" android:textStyle="bold" />
++            <Button android:id="@+id/clearHistoryButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="VIDER" />
++        </LinearLayout>
++        <TextView android:id="@+id/historyText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@color/panel2" android:padding="14dp" android:text="Aucun historique." android:textColor="@color/muted" android:textSize="13sp" />
++        <Button android:id="@+id/nfcSettingsButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:text="RÉGLAGES NFC ANDROID" />
++        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:paddingBottom="24dp" android:text="PiiWii NFC 1.0.7 • Lecture/écriture NDEF. Les UID matériels et protections cryptographiques ne sont pas clonés." android:textColor="@color/muted" android:textSize="12sp" />
++    </LinearLayout>
++</ScrollView>
