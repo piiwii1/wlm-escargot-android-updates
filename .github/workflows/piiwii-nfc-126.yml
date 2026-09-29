@@ -1,0 +1,117 @@
+name: PiiWii NFC 1.0.26 Stability Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'piiwii-nfc-public/v126/v126.patch'
+      - '.github/workflows/piiwii-nfc-126.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download latest PiiWii NFC 1.0.25 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/piiwii-nfc /tmp/art125 /tmp/art125.zip
+          mkdir -p /tmp/piiwii-nfc /tmp/art125
+          ART_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.25" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID" || { echo "No unexpired PiiWii-NFC-1.0.25 artifact found"; exit 1; }
+          echo "Using artifact $ART_ID"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ART_ID/zip" > /tmp/art125.zip
+          unzip -q /tmp/art125.zip -d /tmp/art125
+          SRCZIP=$(find /tmp/art125 -type f -name 'PiiWii-NFC-1.0.25-SOURCES.zip' -print -quit)
+          test -n "$SRCZIP" || { echo "1.0.25 source ZIP missing"; find /tmp/art125 -maxdepth 2 -type f -print; exit 1; }
+          unzip -q "$SRCZIP" -d /tmp/piiwii-nfc
+          test -d /tmp/piiwii-nfc/PiiWii-NFC-1.0.25
+
+      - name: Apply 1.0.26 stability improvements
+        run: |
+          set -euo pipefail
+          cd /tmp/piiwii-nfc/PiiWii-NFC-1.0.25
+          patch -p1 --forward < "$GITHUB_WORKSPACE/piiwii-nfc-public/v126/v126.patch"
+          rm -f app/src/main/java/ch/piiwii/nfc/MainActivity.java.orig
+          cd /tmp/piiwii-nfc
+          mv PiiWii-NFC-1.0.25 PiiWii-NFC-1.0.26
+
+      - name: Build APK
+        working-directory: /tmp/piiwii-nfc/PiiWii-NFC-1.0.26
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          AAPT=/usr/local/lib/android/sdk/build-tools/35.0.0/aapt
+          APKSIGNER=/usr/local/lib/android/sdk/build-tools/35.0.0/apksigner
+          ROOT=/tmp/piiwii-nfc/PiiWii-NFC-1.0.26
+          APK=$ROOT/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$AAPT" dump badging "$APK" | head -20
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          grep -q "versionName '1.0.26'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 27" "$ROOT/app/build.gradle"
+          grep -q "applicationId 'ch.piiwii.nfc.v125'" "$ROOT/app/build.gradle"
+          grep -q 'private boolean loadUriIntoEditor' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q 'showPage("copy")' "$ROOT/app/src/main/java/ch/piiwii/nfc/MainActivity.java"
+          grep -q 'PiiWii NFC 1.0.26' "$ROOT/app/src/main/res/layout/activity_main.xml"
+
+      - name: Package deliverables
+        run: |
+          set -euo pipefail
+          rm -rf piiwii-nfc-public/dist-126
+          mkdir -p piiwii-nfc-public/dist-126
+          cp /tmp/piiwii-nfc/PiiWii-NFC-1.0.26/app/build/outputs/apk/debug/app-debug.apk piiwii-nfc-public/dist-126/PiiWii-NFC-1.0.26.apk
+          cd /tmp/piiwii-nfc
+          zip -qr "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-126/PiiWii-NFC-1.0.26-SOURCES.zip" PiiWii-NFC-1.0.26
+          cd "$GITHUB_WORKSPACE/piiwii-nfc-public/dist-126"
+          sha256sum PiiWii-NFC-1.0.26.apk PiiWii-NFC-1.0.26-SOURCES.zip > SHA256SUMS.txt
+          printf '%s\n' "$GITHUB_RUN_ID" > RUN-ID.txt
+
+      - name: Upload deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-NFC-1.0.26
+          path: piiwii-nfc-public/dist-126/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish build marker
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add piiwii-nfc-public/dist-126/RUN-ID.txt piiwii-nfc-public/dist-126/SHA256SUMS.txt
+          git commit -m "PiiWii NFC 1.0.26 build ${GITHUB_RUN_ID}" || exit 0
+          git push
