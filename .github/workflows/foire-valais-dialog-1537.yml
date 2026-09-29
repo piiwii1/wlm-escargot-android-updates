@@ -1,4 +1,4 @@
-name: Foire du Valais 1.5.37 dark appointment dialog
+name: Foire du Valais 1.5.38 Friends filter
 on:
   push:
     branches: [ main ]
@@ -20,24 +20,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Download 1.5.36 source artifact
+      - name: Download 1.5.37 source artifact
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p previous buildsrc
-          gh run download 36554991704 -R piiwii1/wlm-escargot-android-updates -n Foire-du-Valais-2026-1.5.36 -D previous
-          unzip -q previous/Foire-du-Valais-2026-1.5.36-SOURCES.zip -d buildsrc
-      - name: Apply dark appointment dialog improvements
+          gh run download 36556067475 -R piiwii1/wlm-escargot-android-updates -n Foire-du-Valais-2026-1.5.37 -D previous
+          unzip -q previous/Foire-du-Valais-2026-1.5.37-SOURCES.zip -d buildsrc
+      - name: Apply RDV and Friends filters
         shell: bash
         run: |
           set -euo pipefail
-          (cd buildsrc && patch -p1 < ../foire-valais-app/patches/dialog1537/step1537.patch)
-          grep -q 'versionCode = 43' buildsrc/app/build.gradle.kts
-          grep -q 'versionName = "1.5.37"' buildsrc/app/build.gradle.kts
-          grep -q 'appointmentDialogBg=darkMode()?0xFF171A21' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q '0xFFF4F7FC' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
-          grep -q 'setCustomTitle(dialogTitle)' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          sed -i 's/^ diff -ruN /diff -ruN /' foire-valais-app/patches/friends1538/step1538.patch
+          (cd buildsrc && patch -p1 < ../foire-valais-app/patches/friends1538/step1538.patch)
+          grep -q 'versionCode = 44' buildsrc/app/build.gradle.kts
+          grep -q 'versionName = "1.5.38"' buildsrc/app/build.gradle.kts
+          grep -q '"RDV","Friends"' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+          grep -q 'z.equals("FRIENDS")' buildsrc/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
       - name: Install Android SDK 35
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
@@ -53,13 +53,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p deliverables/sign-tools/lib
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 buildsrc/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.37-ALIGNED-UNSIGNED.apk
-          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.37-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 buildsrc/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.38-ALIGNED-UNSIGNED.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.38-ALIGNED-UNSIGNED.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar deliverables/sign-tools/lib/apksigner.jar
           cd buildsrc
-          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.37-SOURCES.zip . -x '*/build/*' '.gradle/*'
+          zip -qr ../deliverables/Foire-du-Valais-2026-1.5.38-SOURCES.zip . -x '*/build/*' '.gradle/*'
       - uses: actions/upload-artifact@v4
         with:
-          name: Foire-du-Valais-2026-1.5.37
+          name: Foire-du-Valais-2026-1.5.38
           path: deliverables/*
           retention-days: 7
