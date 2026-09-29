@@ -62,22 +62,28 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         var titleBlock = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0) };
-        titleBlock.Controls.Add(new Label { Text = "PiiWii Web Asset Extractor", AutoSize = true, Font = new Font("Segoe UI Semibold", 18f), ForeColor = Color.White, Margin = new Padding(0) });
-        titleBlock.Controls.Add(new Label { Text = "Analyse une page et prépare directement les fichiers utiles pour ChatGPT.", AutoSize = true, ForeColor = Color.FromArgb(165, 170, 180), Margin = new Padding(1, 4, 0, 0) });
+        titleBlock.Controls.Add(new Label { Text = "PiiWii Code Capture", AutoSize = true, Font = new Font("Segoe UI Semibold", 18f), ForeColor = Color.White, Margin = new Padding(0) });
+        titleBlock.Controls.Add(new Label { Text = "Ouvre un site, scanne tout ou sélectionne exactement la zone dont tu veux récupérer le code.", AutoSize = true, ForeColor = Color.FromArgb(165, 170, 180), Margin = new Padding(1, 4, 0, 0) });
         header.Controls.Add(titleBlock, 0, 0);
         header.Controls.Add(btnSettings, 1, 0);
 
         var actionCard = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(14), BackColor = Color.FromArgb(25, 28, 34), Margin = new Padding(0, 0, 0, 12) };
-        var urlRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 8) };
+        var urlRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 10) };
         urlRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         urlRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         urlRow.Controls.Add(txtUrl, 0, 0);
-        urlRow.Controls.Add(btnFindCode, 1, 0);
-        var targetRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0, 8, 0, 0) };
-        targetRow.Controls.Add(btnTargetStart);
-        targetRow.Controls.Add(btnTargetDone);
+        urlRow.Controls.Add(btnOpenSite, 1, 0);
+
+        var modeLabel = new Label { Text = "Que veux-tu récupérer ?", AutoSize = true, ForeColor = Color.FromArgb(190, 195, 205), Font = new Font("Segoe UI Semibold", 9.5f), Margin = new Padding(0, 4, 0, 6) };
+        var actionRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0) };
+        actionRow.Controls.Add(btnFindCode);
+        actionRow.Controls.Add(btnTargetStart);
+        actionRow.Controls.Add(btnTargetDone);
+        actionRow.Controls.Add(lblTarget);
+
         actionCard.Controls.Add(urlRow, 0, 0);
-        actionCard.Controls.Add(targetRow, 0, 1);
+        actionCard.Controls.Add(modeLabel, 0, 1);
+        actionCard.Controls.Add(actionRow, 0, 2);
 
         var browserWrap = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 24, 29), Padding = new Padding(1), Margin = new Padding(0, 0, 0, 10) };
         browserWrap.Controls.Add(web);
@@ -89,7 +95,7 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
         statusLeft.Controls.Add(lblStatus);
         statusLeft.Controls.Add(lblStats);
         statusBar.Controls.Add(statusLeft, 0, 0);
-        statusBar.Controls.Add(new Label { Text = "Les captures sont enregistrées dans Documents\\PiiWii Web Extractor", AutoSize = true, ForeColor = Color.FromArgb(120, 125, 135), Padding = new Padding(0, 5, 0, 0) }, 1, 0);
+        statusBar.Controls.Add(new Label { Text = "Résultat : un seul ZIP dans Documents\\PiiWii Code Capture", AutoSize = true, ForeColor = Color.FromArgb(120, 125, 135), Padding = new Padding(0, 5, 0, 0) }, 1, 0);
 
         var advancedTools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 0, 0, 8) };
         advancedTools.Controls.AddRange(new Control[] { btnBack, btnReload, btnNoCache, btnDevTools, chkNoCache, chkContinuous, txtSearch, cmbType, btnAnalyze, btnDownload, btnDownloadAll, btnHar, btnCopyUrl, btnEngine, btnMark, btnPack });
@@ -103,10 +109,7 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
         root.Controls.Add(statusBar, 0, 3);
         root.Controls.Add(advancedPanel, 0, 4);
 
-        advancedPanel.VisibleChanged += (_, _) =>
-        {
-            root.RowStyles[4].Height = advancedPanel.Visible ? 280 : 0;
-        };
+        advancedPanel.VisibleChanged += (_, _) => root.RowStyles[4].Height = advancedPanel.Visible ? 280 : 0;
         return root;
     }
 
@@ -131,22 +134,23 @@ ck.Click += (_, _) => { if (web.CanGoBack) web.GoBack(); };
         try
         {
             Directory.CreateDirectory(Log.Root);
-            var userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiiWii", "WebAssetExtractor", "WebView2");
+            var userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PiiWii", "CodeCapture", "WebView2");
             var env = await CoreWebView2Environment.CreateAsync(null, userData);
             await web.EnsureCoreWebView2Async(env);
             web.CoreWebView2.Settings.AreDevToolsEnabled = true;
             web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             web.CoreWebView2.Settings.IsStatusBarEnabled = false;
-            web.CoreWebView2.NavigationCompleted += (_, e) => SetStatus(e.IsSuccess ? "🟢 Page chargée" : "🔴 Échec de navigation");
+            web.CoreWebView2.NavigationCompleted += (_, e) => SetStatus(e.IsSuccess ? "🟢 Site ouvert — choisis Scanner tout ou Sélectionner une zone" : "🔴 Échec de navigation");
+            web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
             await HookNetworkAsync();
             initialized = true;
-            SetStatus("🟢 Prêt — colle une adresse puis lance l'analyse");
+            SetStatus("🟢 Prêt — colle une adresse puis clique Ouvrir le site");
         }
         catch (Exception ex)
         {
             Log.Write("INIT", ex);
             MessageBox.Show("WebView2 n'a pas pu démarrer. Vérifie que Microsoft Edge WebView2 Runtime est installé.\n\n" + ex.Message,
-                "PiiWii Web Asset Extractor", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                "PiiWii Code Capture", MessageBoxButtons.OK, MessageBoxIcon.Error);
             SetStatus("🔴 WebView2 indisponible");
         }
     }
