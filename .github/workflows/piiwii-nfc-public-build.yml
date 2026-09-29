@@ -4,7 +4,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'piiwii-nfc-public/nfc107.patch'
+      - 'piiwii-nfc-public/nfc107.patch.b64.001'
+      - 'piiwii-nfc-public/nfc107.patch.b64.002'
       - '.github/workflows/piiwii-nfc-public-build.yml'
   workflow_dispatch:
 
@@ -52,7 +53,9 @@ jobs:
           mv PiiWii-NFC-1.0.5 PiiWii-NFC-1.0.6
           cd PiiWii-NFC-1.0.6
           python3 "$GITHUB_WORKSPACE/piiwii-nfc-public/apply106.py"
-          git apply "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc107.patch"
+          cat "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc107.patch.b64.001" "$GITHUB_WORKSPACE/piiwii-nfc-public/nfc107.patch.b64.002" | base64 -d > /tmp/nfc107.patch
+          git apply /tmp/nfc107.patch
+          sed -i "s/applicationId 'ch.piiwii.nfc.v106'/applicationId 'ch.piiwii.nfc.v107'/" app/build.gradle
           cd /tmp/piiwii-nfc
           mv PiiWii-NFC-1.0.6 PiiWii-NFC-1.0.7
       - name: Build APK
@@ -66,6 +69,7 @@ jobs:
           "$AAPT" dump badging "$APK" | head -20
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           grep -q "versionName '1.0.7'" /tmp/piiwii-nfc/PiiWii-NFC-1.0.7/app/build.gradle
+          grep -q "applicationId 'ch.piiwii.nfc.v107'" /tmp/piiwii-nfc/PiiWii-NFC-1.0.7/app/build.gradle
           grep -q 'readContentText' /tmp/piiwii-nfc/PiiWii-NFC-1.0.7/app/src/main/res/layout/activity_main.xml
           grep -q 'PRÊT À ÉCRIRE' /tmp/piiwii-nfc/PiiWii-NFC-1.0.7/app/src/main/res/layout/activity_main.xml
           grep -q 'updateReadResult' /tmp/piiwii-nfc/PiiWii-NFC-1.0.7/app/src/main/java/ch/piiwii/nfc/MainActivity.java
