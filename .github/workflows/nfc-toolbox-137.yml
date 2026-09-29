@@ -1,0 +1,168 @@
+name: NFC Toolbox 1.0.37 Branding
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nfc-toolbox-137.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download 1.0.36 baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nfc137 /tmp/base136 /tmp/base136.zip
+          mkdir -p /tmp/nfc137 /tmp/base136
+          ART_ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts | map(select(.name == "PiiWii-NFC-1.0.36-build" and .expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')
+          test -n "$ART_ID"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$ART_ID/zip" > /tmp/base136.zip
+          unzip -q /tmp/base136.zip -d /tmp/base136
+          SRCZIP=$(find /tmp/base136 -type f -name 'PiiWii-NFC-1.0.36-SOURCES-BUILD.zip' -print -quit)
+          test -n "$SRCZIP"
+          unzip -q "$SRCZIP" -d /tmp/nfc137
+          test -d /tmp/nfc137/PiiWii-NFC-1.0.36
+
+      - name: Apply NFC Toolbox branding
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc137/PiiWii-NFC-1.0.36
+
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/nfc137/PiiWii-NFC-1.0.36')
+
+          p=root/'app/build.gradle'
+          s=p.read_text().replace('versionCode 37','versionCode 38').replace("versionName '1.0.36'","versionName '1.0.37'")
+          p.write_text(s)
+
+          p=root/'app/src/main/AndroidManifest.xml'
+          s=p.read_text().replace('android:label="PiiWii NFC"','android:label="NFC Toolbox"')
+          p.write_text(s)
+
+          p=root/'app/src/main/java/ch/piiwii/nfc/MainActivity.java'
+          s=p.read_text()
+          s=s.replace('screenTitle.setText("PiiWii")','screenTitle.setText("NFC Toolbox")')
+          s=s.replace('"PiiWii-NFC-" + suffix + ".ndef"','"NFC-Toolbox-" + suffix + ".ndef"')
+          s=s.replace('"PiiWii-NFC-backup.pwnfc"','"NFC-Toolbox-backup.pwnfc"')
+          s=s.replace('"\\nPiiWii-NFC-backup.pwnfc"','"\\nNFC-Toolbox-backup.pwnfc"')
+          p.write_text(s)
+
+          p=root/'app/src/main/res/layout/activity_main.xml'
+          s=p.read_text()
+          s=s.replace('android:contentDescription="PiiWii NFC"','android:contentDescription="NFC Toolbox"',1)
+          s=s.replace('android:text="PiiWii"\n                    android:textColor="@color/text"','android:text="NFC"\n                    android:textColor="@color/accent"',1)
+          s=s.replace('android:layout_marginStart="7dp"\n                    android:text="NFC"\n                    android:textColor="@color/accent"','android:layout_marginStart="7dp"\n                    android:text="Toolbox"\n                    android:textColor="@color/text"',1)
+          s=s.replace('Illustration NFC PiiWii','Illustration NFC Toolbox')
+          s=s.replace('android:contentDescription="PiiWii NFC"','android:contentDescription="NFC Toolbox"')
+          s=s.replace('android:text="PiiWii NFC"','android:text="NFC Toolbox"')
+          s=s.replace('android:text="Version 1.0.33"','android:text="Version 1.0.37"')
+          p.write_text(s)
+
+          for fn in ['README.md','CHANGELOG.md']:
+              q=root/fn
+              if q.exists():
+                  t=q.read_text(errors='ignore').replace('PiiWii NFC','NFC Toolbox').replace('PiiWii-NFC','NFC-Toolbox')
+                  q.write_text(t)
+          q=root/'CHANGELOG.md'
+          t=q.read_text() if q.exists() else ''
+          q.write_text('## 1.0.37\n- Renommage public complet en NFC Toolbox.\n- Nouveau logo NFC Toolbox dans l’accueil et les paramètres.\n- Icône NFC retravaillée sur fond transparent hors du carré arrondi.\n- Exports et sauvegardes renommés NFC-Toolbox.\n- Package Android conservé pour assurer les mises à jour.\n\n'+t)
+          PY
+
+          cat > "$ROOT/app/src/main/res/drawable/ic_nfc.xml" <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#06101F" android:pathData="M18,6 H90 C98,6 102,10 102,18 V90 C102,98 98,102 90,102 H18 C10,102 6,98 6,90 V18 C6,10 10,6 18,6 Z" />
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#129BFF" android:strokeWidth="3" android:pathData="M18,7.5 H90 C97,7.5 100.5,11 100.5,18 V90 C100.5,97 97,100.5 90,100.5 H18 C11,100.5 7.5,97 7.5,90 V18 C7.5,11 11,7.5 18,7.5 Z" />
+              <path android:fillColor="#25E8FF" android:pathData="M22,46 C22,41 25,38 30,38 C35,38 38,41 38,46 V62 C38,67 35,70 30,70 C25,70 22,67 22,62 Z" />
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#25E8FF" android:strokeWidth="8" android:strokeLineCap="round" android:pathData="M46,38 C57,47 57,61 46,70" />
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#12C7FF" android:strokeWidth="8" android:strokeLineCap="round" android:pathData="M60,29 C80,44 80,64 60,79" />
+              <path android:fillColor="@android:color/transparent" android:strokeColor="#0787FF" android:strokeWidth="8" android:strokeLineCap="round" android:pathData="M74,20 C101,40 101,68 74,88" />
+          </vector>
+          XML
+
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          ET.parse('/tmp/nfc137/PiiWii-NFC-1.0.36/app/src/main/res/layout/activity_main.xml')
+          ET.parse('/tmp/nfc137/PiiWii-NFC-1.0.36/app/src/main/res/drawable/ic_nfc.xml')
+          ET.parse('/tmp/nfc137/PiiWii-NFC-1.0.36/app/src/main/AndroidManifest.xml')
+          PY
+
+          grep -q "applicationId 'ch.piiwii.nfc.app'" "$ROOT/app/build.gradle"
+          grep -q "versionCode 38" "$ROOT/app/build.gradle"
+          grep -q "versionName '1.0.37'" "$ROOT/app/build.gradle"
+          grep -q 'android:label="NFC Toolbox"' "$ROOT/app/src/main/AndroidManifest.xml"
+          grep -q 'NFC Toolbox' "$ROOT/app/src/main/res/layout/activity_main.xml"
+
+      - name: Build release
+        working-directory: /tmp/nfc137/PiiWii-NFC-1.0.36
+        run: gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Align and verify APK
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/nfc137/PiiWii-NFC-1.0.36
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          IN="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUT=/tmp/NFC-Toolbox-1.0.37-ALIGNED-UNSIGNED.apk
+          test -f "$IN"
+          "$BT/zipalign" -f -p 4 "$IN" "$OUT"
+          "$BT/zipalign" -c -v 4 "$OUT"
+          "$BT/aapt" dump badging "$OUT" | tee /tmp/badging137.txt
+          grep -q "package: name='ch.piiwii.nfc.app'" /tmp/badging137.txt
+          grep -q "versionCode='38'" /tmp/badging137.txt
+          grep -q "versionName='1.0.37'" /tmp/badging137.txt
+          if grep -q 'application-debuggable' /tmp/badging137.txt; then exit 1; fi
+          unzip -t "$OUT" >/dev/null
+
+      - name: Package deliverables
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/out137
+          cp /tmp/NFC-Toolbox-1.0.37-ALIGNED-UNSIGNED.apk /tmp/out137/
+          cd /tmp/nfc137
+          mv PiiWii-NFC-1.0.36 NFC-Toolbox-1.0.37
+          zip -qr /tmp/out137/NFC-Toolbox-1.0.37-SOURCES-BUILD.zip NFC-Toolbox-1.0.37
+          printf 'package=ch.piiwii.nfc.app\nversionCode=38\nversionName=1.0.37\nrelease=true\npublicName=NFC Toolbox\n' > /tmp/out137/BUILD-IDENTITY.txt
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFC-Toolbox-1.0.37-build
+          path: /tmp/out137/
+          retention-days: 7
+          if-no-files-found: error
