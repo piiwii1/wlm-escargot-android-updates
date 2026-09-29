@@ -1,0 +1,69 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 9454c6a..1ebee47 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -7,8 +7,8 @@ android {
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 26
+-        versionName = "1.5.20"
++        versionCode = 27
++        versionName = "1.5.21"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff --git a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+index 6fa504f..c18f887 100644
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
+     static final int BRAND_DARK=Color.rgb(177,0,23), BRAND_SOFT=Color.rgb(255,239,242);
+     static final int BG=Color.rgb(249,249,251), MUTED=Color.rgb(105,112,128), GREEN=Color.rgb(25,125,78), ORANGE=Color.rgb(178,108,0);
+     LinearLayout root, content, dayRow, zoneRow, nav;
++    HeaderBrandView headerBrand;
+     ScrollView scroll;
+     TextView title, subTitle;
+     EditText searchBox;
+@@ -210,8 +211,8 @@ public class MainActivity extends Activity {
+             });
+         }
+ 
+-        HeaderBrandView head=new HeaderBrandView(this);
+-        root.addView(head,new LinearLayout.LayoutParams(-1,dp(170)));
++        headerBrand=new HeaderBrandView(this);
++        root.addView(headerBrand,new LinearLayout.LayoutParams(-1,dp(170)));
+ 
+         title=txt("",24,PURPLE,true); title.setPadding(dp(16),dp(14),dp(16),0); root.addView(title);
+         subTitle=txt("",13,MUTED,false); subTitle.setPadding(dp(16),dp(3),dp(16),dp(8)); root.addView(subTitle);
+@@ -252,7 +253,9 @@ public class MainActivity extends Activity {
+ 
+     void clear(String t,String st,boolean dayTabs,boolean zoneTabs,boolean searchVisible){
+         title.setVisibility(View.VISIBLE); subTitle.setVisibility(View.VISIBLE);
+-        title.setText(t); subTitle.setText(st); content.removeAllViews(); content.setPadding(dp(12),dp(2),dp(12),dp(20)); dayButtons(dayTabs); zoneButtons(zoneTabs); searchBox.setVisibility(searchVisible?View.VISIBLE:View.GONE);
++        title.setText(t); subTitle.setText(st); content.removeAllViews(); content.setPadding(dp(12),dp(2),dp(12),dp(20));
++        if(headerBrand!=null) headerBrand.setVisibility(screen==0?View.VISIBLE:View.GONE);
++        dayButtons(dayTabs); zoneButtons(zoneTabs); searchBox.setVisibility(searchVisible?View.VISIBLE:View.GONE);
+         if(!searchVisible){search=""; searchBox.setText("");}
+         scroll.scrollTo(0,0); refreshNav();
+     }
+@@ -306,10 +309,6 @@ public class MainActivity extends Activity {
+         homeSearch();
+         homeNow();
+         homeQuickAccess();
+-        homeFeatured();
+-        homeToday();
+-        homeUpdateCard();
+-        homeAlertsCard();
+     }
+ 
+     void homeHero(){
+@@ -850,7 +849,7 @@ public class MainActivity extends Activity {
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.20","Foire du Valais 2026 · versionCode 26",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.20 · versionCode 26\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.21","Foire du Valais 2026 · versionCode 27",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.21 · versionCode 27\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
