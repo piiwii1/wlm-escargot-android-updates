@@ -1,0 +1,23 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ch.piiwii.nfc'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ch.piiwii.nfc.v107'
+        minSdk 24
+        targetSdk 34
+        versionCode 8
+        versionName '1.0.7'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
