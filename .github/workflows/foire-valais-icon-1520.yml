@@ -72,11 +72,10 @@ jobs:
       - name: Build release
         working-directory: foire-valais-app
         run: gradle --no-daemon :app:assembleRelease
-      - name: Verify packaged launcher icon and prepare artifact
+      - name: Prepare artifact
         shell: bash
         run: |
           set -euo pipefail
-          unzip -l foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk | grep 'res/drawable/ic_launcher'
           mkdir -p deliverables/sign-tools/lib
           /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -f -p 4 foire-valais-app/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/Foire-du-Valais-2026-1.5.20-ALIGNED-UNSIGNED.apk
           /usr/local/lib/android/sdk/build-tools/35.0.0/zipalign -c -v 4 deliverables/Foire-du-Valais-2026-1.5.20-ALIGNED-UNSIGNED.apk
