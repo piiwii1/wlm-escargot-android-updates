@@ -1,0 +1,115 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 40b3060..a588065 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -7,8 +7,8 @@ android {
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 28
+-        versionName = "1.5.22"
++        versionCode = 29
++        versionName = "1.5.23"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff --git a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+index c54e74f..09a471d 100644
+--- a/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+@@ -38,7 +38,7 @@ public class MainActivity extends Activity {
+     LinearLayout root, content, dayRow, zoneRow, nav;
+     HeaderBrandView headerBrand;
+     ScrollView scroll;
+-    TextView title, subTitle;
++    TextView title, subTitle, programSearchAction;
+     EditText searchBox;
+     int screen=0, selectedDay=0, selectedZone=0;
+     int searchFilter=0;
+@@ -214,8 +214,13 @@ public class MainActivity extends Activity {
+         headerBrand=new HeaderBrandView(this);
+         root.addView(headerBrand,new LinearLayout.LayoutParams(-1,dp(170)));
+ 
+-        title=txt("",24,PURPLE,true); title.setPadding(dp(16),dp(14),dp(16),0); root.addView(title);
+-        subTitle=txt("",13,MUTED,false); subTitle.setPadding(dp(16),dp(3),dp(16),dp(8)); root.addView(subTitle);
++        LinearLayout titleBar=new LinearLayout(this); titleBar.setGravity(Gravity.CENTER_VERTICAL); titleBar.setPadding(dp(16),dp(10),dp(10),0);
++        title=txt("",24,PURPLE,true); titleBar.addView(title,new LinearLayout.LayoutParams(0,dp(42),1));
++        programSearchAction=txt("⌕",28,PURPLE,true); programSearchAction.setGravity(Gravity.CENTER); programSearchAction.setContentDescription("Rechercher"); programSearchAction.setBackground(round(0xFFF1EDF4,20));
++        programSearchAction.setOnClickListener(v->{screen=2;showSearch();new Handler(Looper.getMainLooper()).postDelayed(()->{searchBox.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(searchBox,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);},120);});
++        LinearLayout.LayoutParams ps=new LinearLayout.LayoutParams(dp(42),dp(42)); ps.setMargins(dp(8),0,0,0); titleBar.addView(programSearchAction,ps);
++        root.addView(titleBar,new LinearLayout.LayoutParams(-1,dp(52)));
++        subTitle=txt("",13,MUTED,false); subTitle.setPadding(dp(16),0,dp(16),dp(8)); root.addView(subTitle);
+ 
+         HorizontalScrollView dsv=new HorizontalScrollView(this); dsv.setHorizontalScrollBarEnabled(false); dayRow=new LinearLayout(this); dayRow.setPadding(dp(8),0,dp(8),dp(8)); dsv.addView(dayRow); root.addView(dsv);
+         HorizontalScrollView zsv=new HorizontalScrollView(this); zsv.setHorizontalScrollBarEnabled(false); zoneRow=new LinearLayout(this); zoneRow.setPadding(dp(8),0,dp(8),dp(8)); zsv.addView(zoneRow); root.addView(zsv);
+@@ -255,6 +260,7 @@ public class MainActivity extends Activity {
+         title.setVisibility(View.VISIBLE); subTitle.setVisibility(View.VISIBLE);
+         title.setText(t); subTitle.setText(st); content.removeAllViews(); content.setPadding(dp(12),dp(2),dp(12),dp(20));
+         if(headerBrand!=null) headerBrand.setVisibility(screen==0?View.VISIBLE:View.GONE);
++        if(programSearchAction!=null) programSearchAction.setVisibility(screen==1?View.VISIBLE:View.GONE);
+         dayButtons(dayTabs); zoneButtons(zoneTabs); searchBox.setVisibility(searchVisible?View.VISIBLE:View.GONE);
+         if(!searchVisible){search=""; searchBox.setText("");}
+         scroll.scrollTo(0,0); refreshNav();
+@@ -262,25 +268,33 @@ public class MainActivity extends Activity {
+ 
+     void dayButtons(boolean show){
+         dayRow.removeAllViews(); dayRow.setVisibility(show?View.VISIBLE:View.GONE); if(!show)return;
+-        String[] wd={"Ven.","Sam.","Dim.","Lun.","Mar.","Mer.","Jeu.","Ven.","Sam.","Dim."};
++        dayRow.setPadding(dp(10),dp(2),dp(10),dp(8));
++        String[] wd={"VEN","SAM","DIM","LUN","MAR","MER","JEU","VEN","SAM","DIM"};
+         for(int i=0;i<10;i++){
+-            final int d=i;
+-            TextView b=txt(wd[i]+"\n"+(i+2)+"\noct.",12,i==selectedDay?Color.WHITE:PURPLE,true);
+-            b.setGravity(Gravity.CENTER); b.setLineSpacing(0f,0.92f); b.setPadding(dp(6),dp(7),dp(6),dp(7));
+-            b.setBackground(round(i==selectedDay?PINK:Color.WHITE,16)); b.setElevation(i==selectedDay?dp(2):dp(1));
+-            b.setOnClickListener(v->{selectedDay=d;prefs.edit().putInt("lastDay",d).apply();showProgram();});
+-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(62),dp(70)); lp.setMargins(dp(4),0,dp(4),0); dayRow.addView(b,lp);
++            final int d=i; boolean active=i==selectedDay;
++            LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setGravity(Gravity.CENTER); card.setPadding(dp(5),dp(6),dp(5),dp(5));
++            card.setBackground(programTabBackground(active)); card.setElevation(active?dp(3):dp(1));
++            TextView w=txt(wd[i],10,active?Color.WHITE:MUTED,true); w.setGravity(Gravity.CENTER); card.addView(w,new LinearLayout.LayoutParams(-1,dp(18)));
++            TextView n=txt(String.valueOf(i+2),21,active?Color.WHITE:PURPLE,true); n.setGravity(Gravity.CENTER); card.addView(n,new LinearLayout.LayoutParams(-1,dp(28)));
++            TextView mo=txt("OCT",9,active?0xFFFFD5DB:MUTED,true); mo.setGravity(Gravity.CENTER); card.addView(mo,new LinearLayout.LayoutParams(-1,dp(15)));
++            card.setOnClickListener(v->{selectedDay=d;prefs.edit().putInt("lastDay",d).apply();showProgram();});
++            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(58),dp(66)); lp.setMargins(dp(4),0,dp(4),0); dayRow.addView(card,lp);
+         }
+     }
+     void zoneButtons(boolean show){
+         zoneRow.removeAllViews(); zoneRow.setVisibility(show?View.VISIBLE:View.GONE); if(!show)return;
++        zoneRow.setPadding(dp(10),0,dp(10),dp(10));
++        String[] labels={"Tous","Live","Tribus","Rendez-vous","Foire","Dégustations","Mes choix"};
+         for(int i=0;i<zones.length;i++){
+-            final int z=i; String zname=zones[i];
+-            TextView b=chip(zname,i==selectedZone);
++            final int z=i; boolean active=i==selectedZone;
++            TextView b=txt(labels[i],12,active?Color.WHITE:PURPLE,true);
++            b.setGravity(Gravity.CENTER); b.setPadding(dp(14),0,dp(14),0); b.setBackground(programFilterBackground(active)); b.setElevation(active?dp(2):0);
+             b.setOnClickListener(v->{selectedZone=z;prefs.edit().putInt("lastZone",z).apply();renderProgramList();zoneButtons(true);});
+-            zoneRow.addView(b,chipParams());
++            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(38)); lp.setMargins(dp(4),0,dp(4),0); zoneRow.addView(b,lp);
+         }
+     }
++    GradientDrawable programTabBackground(boolean active){GradientDrawable g=round(active?PINK:Color.WHITE,18); if(!active)g.setStroke(dp(1),0xFFE4DFE8); return g;}
++    GradientDrawable programFilterBackground(boolean active){GradientDrawable g=round(active?PURPLE:0xFFF1EDF4,19); if(!active)g.setStroke(dp(1),0xFFE0DAE5); return g;}
+     int countEvents(int day,String zone){int c=0;for(Event e:events)if(e.day==day&&(zone==null||matchesZone(e,zone)))c++;return c;}
+     int favoriteCount(){int c=0;for(Event e:events)if(prefs.getBoolean("fav"+e.id,false))c++;return c;}
+     int confirmedCount(){int c=0;for(Event e:events)if(e.verified)c++;return c;}
+@@ -566,8 +580,7 @@ public class MainActivity extends Activity {
+ 
+     void showProgram(){
+         screen=1;
+-        clear("Programme","Choisis ton jour et ton espace. Les événements sont classés chronologiquement.",true,true,true);
+-        searchBox.setHint("Rechercher dans le programme…");
++        clear("Programme","Choisis un jour et un espace",true,true,false);
+         renderProgramList();
+     }
+ 
+@@ -845,7 +858,7 @@ public class MainActivity extends Activity {
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.22","Foire du Valais 2026 · versionCode 28",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.22 · versionCode 28\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.23","Foire du Valais 2026 · versionCode 29",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.23 · versionCode 29\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
