@@ -7,7 +7,7 @@ on:
       - '.github/workflows/piiwii-nfc-135-render-check.yml'
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -65,6 +65,8 @@ jobs:
 
       - name: Render app in Android emulator
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -76,6 +78,7 @@ jobs:
             set +e
             OUT="$GITHUB_WORKSPACE/render135out"
             APK="$OUT/app-render.apk"
+            mkdir -p "$OUT"
             echo "APK=$APK" > "$OUT/diagnostic.txt"
             echo "=== DEVICES ===" >> "$OUT/diagnostic.txt"
             adb devices -l >> "$OUT/diagnostic.txt" 2>&1
@@ -88,13 +91,30 @@ jobs:
             adb shell monkey -p ch.piiwii.nfc.app -c android.intent.category.LAUNCHER 1 >> "$OUT/diagnostic.txt" 2>&1
             sleep 7
             adb shell dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp' >> "$OUT/diagnostic.txt" 2>&1
-            adb shell dumpsys activity activities | head -120 >> "$OUT/diagnostic.txt" 2>&1
             adb exec-out screencap -p > "$OUT/home.png" 2>> "$OUT/diagnostic.txt"
             adb shell uiautomator dump /sdcard/window.xml >> "$OUT/diagnostic.txt" 2>&1
             adb pull /sdcard/window.xml "$OUT/window.xml" >> "$OUT/diagnostic.txt" 2>&1
             adb logcat -d -t 500 > "$OUT/logcat.txt" 2>&1
             file "$OUT/home.png" >> "$OUT/diagnostic.txt" 2>&1
             ls -lh "$OUT" >> "$OUT/diagnostic.txt" 2>&1
+
+            publish_file() {
+              local SRC="$1"
+              local DEST="$2"
+              [ -s "$SRC" ] || return 0
+              local B64 SHA
+              B64=$(base64 -w0 "$SRC")
+              SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/${DEST}" --jq '.sha' 2>/dev/null || true)
+              if [ -n "$SHA" ]; then
+                gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${DEST}" -f message="Update PiiWii NFC render check" -f content="$B64" -f sha="$SHA" >/dev/null
+              else
+                gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${DEST}" -f message="Add PiiWii NFC render check" -f content="$B64" >/dev/null
+              fi
+            }
+
+            publish_file "$OUT/home.png" "piiwii-nfc-public/render-check/home.png"
+            publish_file "$OUT/diagnostic.txt" "piiwii-nfc-public/render-check/diagnostic.txt"
+            publish_file "$OUT/window.xml" "piiwii-nfc-public/render-check/window.xml"
             exit 0
 
       - name: Upload render check
