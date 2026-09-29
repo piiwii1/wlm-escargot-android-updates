@@ -1,0 +1,86 @@
+name: Scrape Foire du Valais Espace Live 2026
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/foire-live-scrape.yml'
+  workflow_dispatch:
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scrape Espace Live
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet requests beautifulsoup4 lxml
+          python - <<'PY'
+          import requests, json, os, re
+          from bs4 import BeautifulSoup
+          from urllib.parse import urlencode, urljoin
+          from datetime import date, timedelta
+
+          BASE='https://www.foireduvalais.ch/fr/programme/'
+          filt={"operator":"AND","matches":[{"key":"spaces","operator":"IN","value":[967],"type":"programs","recursive":True}]}
+          headers={'User-Agent':'Mozilla/5.0'}
+          out=[]
+          os.makedirs('scrape',exist_ok=True)
+          d=date(2026,10,2)
+          while d<=date(2026,10,11):
+              ds=d.isoformat()
+              params={
+                'search_programs_1_controls_filters':json.dumps(filt,separators=(',',':')),
+                'search_programs_1_date_start':ds,
+                'search_programs_1_date_end':ds,
+                'search_programs_1_embed':['spaces','categories','tags'],
+                'search_programs_1_count':'100',
+                'search_programs_1_orderByProperty':'dateFrom',
+                'search_programs_1_orderByDirection':'ASC',
+                'search_programs_1_types':'programs',
+                'search_programs_1_date_search_on_period':'true',
+                'search_programs_1_page':'1'
+              }
+              # requests can't encode repeated params via dict reliably with list, build tuples
+              pairs=[]
+              for k,v in params.items():
+                  if isinstance(v,list):
+                      pairs.extend((k,x) for x in v)
+                  else: pairs.append((k,v))
+              url=BASE+'?'+urlencode(pairs)
+              r=requests.get(url,headers=headers,timeout=30)
+              print(ds, r.status_code, len(r.text), url)
+              open(f'scrape/{ds}.html','w',encoding='utf-8').write(r.text)
+              soup=BeautifulSoup(r.text,'lxml')
+              # Dump all likely program links and surrounding card text/images
+              seen=set(); items=[]
+              for a in soup.find_all('a',href=True):
+                  href=urljoin(BASE,a['href'])
+                  if '/fr/programme/' not in href or href.rstrip('/')==BASE.rstrip('/'):
+                      continue
+                  # ignore nav links that are not program detail-ish
+                  txt=' '.join(a.stripped_strings)
+                  parent=a
+                  for _ in range(5):
+                      if parent.parent: parent=parent.parent
+                  ptxt=' '.join(parent.stripped_strings)
+                  if 'Espace Live' not in ptxt and not re.search(r'\b\d{2}:\d{2}\s*-\s*\d{2}:\d{2}\b',ptxt):
+                      continue
+                  key=href
+                  if key in seen: continue
+                  seen.add(key)
+                  imgs=[]
+                  for img in parent.find_all('img'):
+                      src=img.get('src') or img.get('data-src') or img.get('data-lazy-src')
+                      if src: imgs.append(urljoin(BASE,src))
+                  items.append({'url':href,'anchor':txt,'text':ptxt[:2500],'images':list(dict.fromkeys(imgs))})
+              out.append({'date':ds,'url':url,'status':r.status_code,'items':items})
+              d+=timedelta(days=1)
+          open('scrape/results.json','w',encoding='utf-8').write(json.dumps(out,ensure_ascii=False,indent=2))
+          print(json.dumps(out,ensure_ascii=False,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foire-live-scrape
+          path: scrape
+          retention-days: 7
