@@ -1,0 +1,231 @@
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri uri = data.getData();
+        if (requestCode == REQUEST_EXPORT_NDEF) {
+            try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                if (out == null) throw new IllegalStateException("Flux de sortie indisponible");
+                out.write(lastReadMessage.toByteArray());
+                out.flush();
+                statusText.setText("Sauvegarde .ndef créée avec succès.");
+                addHistory("Export NDEF", lastReadUid, lastReadMessage.toByteArray().length + " octets");
+            } catch (Exception e) {
+                statusText.setText("Échec de l’export : " + safeMessage(e));
+            }
+        } else if (requestCode == REQUEST_IMPORT_NDEF) {
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new IllegalStateException("Fichier inaccessible");
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                byte[] chunk = new byte[4096];
+                int read;
+                while ((read = in.read(chunk)) != -1) {
+                    buffer.write(chunk, 0, read);
+                    if (buffer.size() > 1024 * 1024) throw new IllegalArgumentException("Fichier trop volumineux");
+                }
+                byte[] bytes = buffer.toByteArray();
+                NdefMessage imported = new NdefMessage(bytes);
+                if (imported.getRecords().length == 0) throw new IllegalArgumentException("Aucun enregistrement NDEF");
+                copyBuffer = cloneMessage(imported);
+                copySourceUid = null;
+                lastReadMessage = cloneMessage(imported);
+                lastReadUid = "FICHIER";
+                mode = Mode.COPY_TARGET;
+                tagInfoText.setText("Fichier NDEF chargé\nEnregistrements : " + imported.getRecords().length
+                        + "\nTaille : " + bytes.length + " octets\n\nContenu :\n" + decodeMessage(imported));
+                statusText.setText("Fichier .ndef chargé. Approche le tag CIBLE pour l’écrire.");
+                updateCancelVisibility();
+                addHistory("Import NDEF", "FICHIER", summarize(decodeMessage(imported)));
+            } catch (Exception e) {
+                statusText.setText("Fichier NDEF invalide : " + safeMessage(e));
+            }
+        }
+    }
+
+    private void reuseLastReadInEditor() {
+        if (lastReadMessage == null || lastReadMessage.getRecords().length == 0) {
+            Toast.makeText(this, "Aucun contenu NDEF récent à réutiliser.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        NdefRecord r = lastReadMessage.getRecords()[0];
+        try {
+            if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_TEXT)) {
+                typeGroup.check(R.id.typeText);
+                payloadInput.setText(decodeTextValue(r));
+            } else if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_URI)) {
+                String uri = String.valueOf(r.toUri());
+                if (uri.startsWith("tel:")) {
+                    typeGroup.check(R.id.typePhone);
+                    payloadInput.setText(uri.substring(4));
+                } else if (uri.startsWith("mailto:")) {
+                    typeGroup.check(R.id.typeEmail);
+                    payloadInput.setText(uri.substring(7));
+                } else if (uri.startsWith("sms:") || uri.startsWith("smsto:")) {
+                    typeGroup.check(R.id.typeSms);
+                    payloadInput.setText(uri.substring(uri.indexOf(':') + 1));
+                } else {
+                    typeGroup.check(R.id.typeUrl);
+                    payloadInput.setText(uri);
+                }
+            } else {
+                Toast.makeText(this, "Le premier enregistrement ne peut pas être converti dans l’éditeur simple.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            writerPanel.setVisibility(View.VISIBLE);
+            payloadInput.requestFocus();
+            payloadInput.setSelection(payloadInput.getText().length());
+            statusText.setText("Dernier contenu chargé dans l’éditeur. Tu peux le modifier avant écriture.");
+        } catch (Exception e) {
+            statusText.setText("Impossible de réutiliser ce contenu : " + safeMessage(e));
+        }
+    }
+
+    private String decodeTextValue(NdefRecord r) {
+        byte[] payload = r.getPayload();
+        if (payload == null || payload.length == 0) return "";
+        boolean utf16 = (payload[0] & 0x80) != 0;
+        int langLen = payload[0] & 0x3F;
+        int start = 1 + langLen;
+        if (start > payload.length) return "";
+        Charset cs = utf16 ? StandardCharsets.UTF_16 : StandardCharsets.UTF_8;
+        return new String(payload, start, payload.length - start, cs);
+    }
+
+
+    private NdefMessage buildCurrentMessage(String value) {
+        if (typeUrl.isChecked()) {
+            return createUriMessage(value);
+        } else if (typePhone.isChecked()) {
+            return createUriMessage(normalizePhone(value));
+        } else if (typeEmail.isChecked()) {
+            return createUriMessage(normalizeEmail(value));
+        } else if (typeSms.isChecked()) {
+            return createUriMessage(normalizeSms(value));
+        } else {
+            return createTextMessage(value);
+        }
+    }
+
+    private String normalizePhone(String value) {
+        String v = value.trim();
+        return v.startsWith("tel:") ? v : "tel:" + v;
+    }
+
+    private String normalizeEmail(String value) {
+        String v = value.trim();
+        return v.startsWith("mailto:") ? v : "mailto:" + v;
+    }
+
+    private String normalizeSms(String value) {
+        String v = value.trim();
+        return v.startsWith("sms:") || v.startsWith("smsto:") ? v : "sms:" + v;
+    }
+
+    private NdefMessage createTextMessage(String text) {
+        byte[] lang = Locale.getDefault().getLanguage().getBytes(StandardCharsets.US_ASCII);
+        byte[] body = text.getBytes(StandardCharsets.UTF_8);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(lang.length & 0x3F);
+        out.write(lang, 0, lang.length);
+        out.write(body, 0, body.length);
+        NdefRecord record = new NdefRecord(NdefRecord.TNF_WELL_KNOWN, NdefRecord.RTD_TEXT,
+                new byte[0], out.toByteArray());
+        return new NdefMessage(new NdefRecord[]{record});
+    }
+
+    private NdefMessage createUriMessage(String uri) {
+        String normalized = uri;
+        if (!uri.matches("^[a-zA-Z][a-zA-Z0-9+.-]*:.*$")) {
+            normalized = "https://" + uri;
+        }
+        return new NdefMessage(new NdefRecord[]{NdefRecord.createUri(normalized)});
+    }
+
+    private String decodeMessage(NdefMessage message) {
+        if (message == null) return "";
+        List<String> items = new ArrayList<>();
+        for (NdefRecord r : message.getRecords()) {
+            String v = decodeRecord(r);
+            if (!TextUtils.isEmpty(v)) items.add(v);
+        }
+        return TextUtils.join("\n", items);
+    }
+
+    private String decodeRecord(NdefRecord r) {
+        try {
+            if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_TEXT)) {
+                byte[] payload = r.getPayload();
+                if (payload.length == 0) return "";
+                boolean utf16 = (payload[0] & 0x80) != 0;
+                int langLen = payload[0] & 0x3F;
+                Charset cs = utf16 ? StandardCharsets.UTF_16 : StandardCharsets.UTF_8;
+                int start = 1 + langLen;
+                return start <= payload.length ? "Texte : " + new String(payload, start, payload.length - start, cs) : "Texte : (illisible)";
+            }
+            if (r.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(r.getType(), NdefRecord.RTD_URI)) {
+                String uri = String.valueOf(r.toUri());
+                if (uri.startsWith("tel:")) return "Téléphone : " + uri.substring(4);
+                if (uri.startsWith("mailto:")) return "E-mail : " + uri.substring(7);
+                if (uri.startsWith("sms:") || uri.startsWith("smsto:")) return "SMS : " + uri.substring(uri.indexOf(':') + 1);
+                return "URL : " + uri;
+            }
+            if (r.getTnf() == NdefRecord.TNF_MIME_MEDIA) {
+                return "MIME " + new String(r.getType(), StandardCharsets.US_ASCII) + " : " + r.getPayload().length + " octets";
+            }
+            return "Enregistrement NDEF : TNF=" + r.getTnf() + ", type=" + new String(r.getType(), StandardCharsets.US_ASCII) + ", " + r.getPayload().length + " octets";
+        } catch (Exception e) {
+            return "Enregistrement NDEF non décodable (" + r.getPayload().length + " octets)";
+        }
+    }
+
+    private NdefMessage cloneMessage(NdefMessage source) {
+        byte[] bytes = source.toByteArray();
+        try {
+            return new NdefMessage(bytes);
+        } catch (Exception e) {
+            return source;
+        }
+    }
+
+    private String toHex(byte[] data) {
+        if (data == null || data.length == 0) return "—";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < data.length; i++) {
+            if (i > 0) sb.append(':');
+            sb.append(String.format(Locale.ROOT, "%02X", data[i] & 0xFF));
+        }
+        return sb.toString();
+    }
+
+    private void addHistory(String action, String uid, String details) {
+        String now = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date());
+        String line = now + " • " + action + " • " + uid + " • " + details;
+        String old = prefs.getString("items", "");
+        String combined = line + (old.isEmpty() ? "" : "\n" + old);
+        String[] lines = combined.split("\n");
+        if (lines.length > 30) combined = TextUtils.join("\n", Arrays.copyOf(lines, 30));
+        prefs.edit().putString("items", combined).apply();
+        renderHistory();
+    }
+
+    private void renderHistory() {
+        String h = prefs.getString("items", "");
+        historyText.setText(h.isEmpty() ? "Aucun historique." : h);
+    }
+
+    private String summarize(String s) {
+        if (s == null || s.trim().isEmpty()) return "(vide)";
+        String one = s.replace('\n', ' ').trim();
+        return one.length() > 70 ? one.substring(0, 70) + "…" : one;
+    }
+
+    private String safeMessage(Exception e) {
+        String m = e.getMessage();
+        return TextUtils.isEmpty(m) ? e.getClass().getSimpleName() : m;
+    }
+
+    private void closeQuietly(Ndef ndef) {
+        if (ndef != null) {
+            try { ndef.close(); } catch (Exception ignored) { }
+        }
+    }
+}
