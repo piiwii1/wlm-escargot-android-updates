@@ -26,7 +26,7 @@ diff -ruN '--exclude=build' '--exclude=.gradle' foire_current/app/src/main/java/
      }
  
      void add(int id,int day,String start,String end,String name,String place,String zone,String category,String desc,boolean verified){add(id,day,start,end,name,place,zone,category,desc,verified,null);}
-@@ -196,6 +200,46 @@
+@@ -196,6 +200,47 @@
          events.add(new Event(id,day,start,end,name,place,zone,category,desc,verified,sourceUrl));
      }
  
@@ -42,7 +42,7 @@ diff -ruN '--exclude=build' '--exclude=.gradle' foire_current/app/src/main/java/
 +        target.add(new Event(1087,2,"15:00","16:30","Disco Kids avec Linda Rao","Espace Live","LIVE","Animation","La piste de danse appartient aux enfants! Linda Rao fait bouger les plus jeunes avec une sélection festive de tubes connus de toutes les générations.",true,"https://www.foireduvalais.ch/fr/programme/disco-kids-avec-linda-rao-1087"));
 +        target.add(new Event(1090,2,"18:30","21:30","Alpe Raver","Espace Live","LIVE","Concert","Un duo suisse de DJ et producteurs qui mêle hits, remixes tendance et créations originales dans des sets énergiques conçus pour faire vibrer toutes les pistes de danse.",true,"https://www.foireduvalais.ch/fr/programme/alpe-raver-1090"));
 +        target.add(new Event(1587,3,"10:30","12:00","Rendez-Vous des Seniors","Espace Live","LIVE","Rendez-Vous de la Foire du Valais","La cause des femmes est plus que jamais au cœur de l’actualité et rarement en débattre aura paru aussi nécessaire. Yvette Théraulaz en invitée d’honneur.",true,"https://www.foireduvalais.ch/fr/programme/rendez-vous-des-seniors-1587"));
-+        target.add(new Event(2066,3,"13:30","15:15","Jeu de l'Oie Géant des générations","Espace Live","LIVE","Animation","Un moment ludique et convivial où petits et grands, seuls, en duo ou en groupe, se retrouvent autour d’un jeu de l’oie géant.",true,"https://www.foireduvalais.ch/fr/programme/jeu-de-loie-geant-des-generations-2066"));
++        target.add(new Event(2066,3,"13:30","15:15","Jeu de l'Oie Géant des générations","Espace Live","LIVE","Animation","Un moment ludique et convivial où petits et grands, seuls, en duo ou en groupe, se retrouvent autour d’un jeu de l’oie géant.",true,"https://www.foireduvalais.ch/fr/programme/jeu-de-l-oie-geant-des-generations-2066"));
 +        target.add(new Event(2067,3,"15:15","15:35","Le Prix Bravo récompense un engagement exceptionnel","Espace Live","LIVE","Conférence","Une belle occasion de rendre hommage à celles et ceux qui contribuent à améliorer la qualité de vie des seniors.",true,"https://www.foireduvalais.ch/fr/programme/le-prix-bravo-recompense-un-engagement-exceptionnel-2067"));
 +        target.add(new Event(2068,3,"15:45","16:30","Les Gars du Rhône font vivre les traditions musicales","Espace Live","LIVE","Concert","Une prestation authentique et chaleureuse qui promet un moment d'émotion.",true,"https://www.foireduvalais.ch/fr/programme/les-gars-du-rhone-font-vivre-les-traditions-musicales-2068"));
 +        target.add(new Event(1091,3,"19:30","21:30","Dynamite plays ACDC","Espace Live","LIVE","Concert","Du rock, de l’énergie et des riffs légendaires ! Dynamite fait vibrer la scène avec les plus grands classiques d’AC/DC et vous embarque pour un show électrisant.",true,"https://www.foireduvalais.ch/fr/programme/dynamite-plays-acdc-1091"));
@@ -63,7 +63,7 @@ diff -ruN '--exclude=build' '--exclude=.gradle' foire_current/app/src/main/java/
 +        target.add(new Event(1100,8,"19:00","20:00","Brassmaster Flash","Espace Live","LIVE","Concert","Énergique, innovante et audacieuse, la fanfare de rue de hip-hop Brassmaster Flash parcourt les scènes et les rues de Suisse et de l'étranger depuis 2017.",true,"https://www.foireduvalais.ch/fr/programme/brassmaster-flash-1100"));
 +        target.add(new Event(965,8,"20:15","21:30","KT Gorique","Espace Live","LIVE","Concert","Artiste plurielle et engagée, KT Gorique est aujourd’hui l’une des figures les plus influentes du paysage musical suisse.",true,"https://www.foireduvalais.ch/fr/programme/kt-gorique-965"));
 +        target.add(new Event(1121,9,"14:00","17:00","Swiss Mullet Cup","Espace Live","LIVE","Animation","La 2ème édition de la Swiss Mullet Cup se tiendra le dimanche 11 octobre 2026 à Martigny Expo, en plein cœur de la 66ème Foire du Valais.",true,"https://www.foireduvalais.ch/fr/programme/swiss-mullet-cup-1121"));
-+        target.add(new Event(4128,9,"16:00","17:00","Mullet Party avec DJ Cel's","Espace Live","LIVE","Concert","Actif depuis de nombreuses années sur les scènes valaisannes et bien au-delà, DJ CELS s’est imposé comme l’un des DJs qui ont le plus marqué la scène festive valaisanne ces dernières années.",true,"https://www.foireduvalais.ch/fr/programme/mullet-party-avec-dj-cels-4128"));
++        target.add(new Event(4128,9,"16:00","17:00","Mullet Party avec DJ Cel's","Espace Live","LIVE","Concert","Actif depuis de nombreuses années sur les scènes valaisannes et bien au-delà, DJ CELS s’est imposé comme l’un des DJs qui ont le plus marqué la scène festive valaisanne ces dernières années.",true,"https://www.foireduvalais.ch/fr/programme/mullet-party-avec-dj-cel-s-4128"));
 +        target.add(new Event(2608,9,"17:00","21:30","Closing Party avec DJ Gaspari","Espace Live","LIVE","Concert","Gaspari, c’est avant tout une passion pour la musique, la scène et les moments qui rassemblent.",true,"https://www.foireduvalais.ch/fr/programme/closing-party-avec-dj-gaspari-2608"));
 +    }
 +
@@ -74,7 +74,7 @@ diff -ruN '--exclude=build' '--exclude=.gradle' foire_current/app/src/main/java/
      void buildShell(){
          root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(darkMode()?0xFF11131A:BG);
          if(Build.VERSION.SDK_INT>=21){
-@@ -306,6 +350,17 @@
+@@ -304,6 +349,18 @@
  
  
      View eventThumb(Event e,int widthDp,int heightDp){
@@ -93,16 +93,16 @@ diff -ruN '--exclude=build' '--exclude=.gradle' foire_current/app/src/main/java/
          EventThumbView v=new EventThumbView(this,e);
          v.setLayoutParams(new LinearLayout.LayoutParams(dp(widthDp),dp(heightDp)));
          return v;
-@@ -852,7 +907,7 @@
-         content.addView(links);
+@@ -852,7 +909,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
  
-         settingsSection("À propos");
+         settingsSectionHeader("ⓘ","À propos","Version et informations de l’application");
 -        settingsActionRow("i","Version 1.5.26","Foire du Valais 2026 · versionCode 32",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.26 · versionCode 32\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
 +        settingsActionRow("i","Version 1.5.27","Foire du Valais 2026 · versionCode 33",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.27 · versionCode 33\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
-         info("Les favoris et rappels sont enregistrés localement sur cet appareil.");
      }
  
-@@ -1165,6 +1220,8 @@
+     void settingsHero(){
+@@ -1166,8 +1223,11 @@
              ArrayList<Announced> ann=new ArrayList<>();
              JSONArray aa=root.optJSONArray("announced");
              if(aa!=null)for(int i=0;i<aa.length();i++){JSONObject o=aa.getJSONObject(i);ann.add(new Announced(o.optString("zone",""),o.optString("name",""),o.optString("note","")));}
