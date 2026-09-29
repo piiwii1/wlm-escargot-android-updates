@@ -1,5 +1,5 @@
 #define MyAppName "PiiWii Code Capture"
-#define MyAppVersion "1.2.2"
+#define MyAppVersion "1.2.3"
 #define MyAppPublisher "PiiWii"
 #define MyAppExeName "PiiWii-Code-Capture.exe"
 
@@ -12,7 +12,7 @@ DefaultDirName={autopf}\PiiWii\Code Capture
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist
-OutputBaseFilename=PiiWii-Code-Capture-Setup-1.2.2
+OutputBaseFilename=PiiWii-Code-Capture-Setup-1.2.3
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
