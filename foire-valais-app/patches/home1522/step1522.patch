@@ -1,0 +1,97 @@
+diff -ruN --exclude build --exclude .gradle foire1521src/app/build.gradle.kts foire1522src/app/build.gradle.kts
+--- foire1521src/app/build.gradle.kts	2026-09-29 00:16:00.000000000 +0000
++++ foire1522src/app/build.gradle.kts	2026-09-29 00:22:09.855059217 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "ch.piiwii.foirevalais"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 27
+-        versionName = "1.5.21"
++        versionCode = 28
++        versionName = "1.5.22"
+     }
+     buildTypes { getByName("release") { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+diff -ruN --exclude build --exclude .gradle foire1521src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java foire1522src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java
+--- foire1521src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 00:16:00.000000000 +0000
++++ foire1522src/app/src/main/java/ch/piiwii/foirevalais/MainActivity.java	2026-09-29 00:21:50.648363635 +0000
+@@ -305,7 +305,7 @@
+     void showHome(){
+         screen=0; clear("","",false,false,false);
+         title.setVisibility(View.GONE); subTitle.setVisibility(View.GONE);
+-        content.setPadding(dp(12),dp(10),dp(12),dp(24));
++        content.setPadding(dp(12),dp(6),dp(12),dp(8));
+         homeSearch();
+         homeNow();
+         homeQuickAccess();
+@@ -323,7 +323,7 @@
+         TextView hint=txt("Rechercher un concert, une animation…",14,0xFF7D8493,false); hint.setGravity(Gravity.CENTER_VERTICAL); c.addView(hint,new LinearLayout.LayoutParams(0,dp(54),1));
+         TextView arrow=txt("›",26,PINK,true); arrow.setGravity(Gravity.CENTER); c.addView(arrow,new LinearLayout.LayoutParams(dp(30),dp(54)));
+         c.setOnClickListener(v->{screen=2;showSearch(); new Handler(Looper.getMainLooper()).postDelayed(()->{searchBox.requestFocus();((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(searchBox,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);},120);});
+-        content.addView(c,margin(0,0,0,14));
++        content.addView(c,margin(0,0,0,9));
+     }
+ 
+     void homeNow(){
+@@ -336,7 +336,7 @@
+         LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setWeightSum(2f);
+         row.addView(homeNowCard(live,"ESPACE LIVE",PINK,"♪"),weighted(1,0,5));
+         row.addView(homeNowCard(tribus,"ESPACE TRIBUS",0xFFFF8A24,"●"),weighted(1,5,0));
+-        content.addView(row,margin(0,0,0,14));
++        content.addView(row,margin(0,0,0,9));
+     }
+ 
+     Event homeCurrentOrNext(String zone){
+@@ -354,16 +354,16 @@
+     }
+ 
+     View homeNowCard(Event e,String zoneLabel,int accent,String glyph){
+-        LinearLayout c=box(Color.WHITE); c.setPadding(0,0,0,dp(11)); c.setClipToOutline(true);
+-        View art=eventThumb(e,160,92); art.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(92))); c.addView(art);
+-        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(11),dp(9),dp(11),0);
++        LinearLayout c=box(Color.WHITE); c.setPadding(0,0,0,dp(7)); c.setClipToOutline(true);
++        View art=eventThumb(e,160,78); art.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(78))); c.addView(art);
++        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(10),dp(7),dp(10),0);
+         LinearLayout badgeRow=new LinearLayout(this); badgeRow.setGravity(Gravity.CENTER_VERTICAL);
+         TextView badge=txt(zoneLabel,9,Color.WHITE,true); badge.setPadding(dp(7),dp(4),dp(7),dp(4)); badge.setBackground(round(accent,12)); badgeRow.addView(badge);
+         TextView status=txt(homeNowStatus(e),9,homeNowStatus(e).equals("EN COURS")?Color.WHITE:GREEN,true); status.setGravity(Gravity.CENTER); status.setPadding(dp(6),dp(3),dp(6),dp(3));
+         if(homeNowStatus(e).equals("EN COURS"))status.setBackground(round(PINK,10));badgeRow.addView(status,new LinearLayout.LayoutParams(0,-2,1)); body.addView(badgeRow);
+-        TextView name=txt(e==null?"Programme à venir":e.name,15,PURPLE,true); name.setMaxLines(2);name.setPadding(0,dp(7),0,0); body.addView(name);
++        TextView name=txt(e==null?"Programme à venir":e.name,15,PURPLE,true); name.setMaxLines(2);name.setPadding(0,dp(5),0,0); body.addView(name);
+         String meta=e==null?"Consulte le programme":(e.start.equals("—")?e.place:e.start+" · "+e.place);
+-        TextView m=txt(meta,11,MUTED,false);m.setPadding(0,dp(3),0,0);body.addView(m);c.addView(body);
++        TextView m=txt(meta,11,MUTED,false);m.setPadding(0,dp(2),0,0);body.addView(m);c.addView(body);
+         if(e!=null)c.setOnClickListener(v->showEventDetails(e));
+         return c;
+     }
+@@ -380,17 +380,13 @@
+         LinearLayout r1=new LinearLayout(this); r1.setWeightSum(2f);
+         r1.addView(quickTile("♪","Espace Live","Concerts & grands shows",PINK,()->openZone(1)),weighted(1,0,5));
+         r1.addView(quickTile("●","Espace Tribus","Talents & spectacles",0xFFFF8A24,()->openZone(2)),weighted(1,5,0));
+-        content.addView(r1,margin(0,0,0,8));
+-        LinearLayout r2=new LinearLayout(this); r2.setWeightSum(2f);
+-        r2.addView(quickTile("▦","Reste de la Foire","Animations & découvertes",0xFF3778D8,()->openZone(4)),weighted(1,0,5));
+-        r2.addView(quickTile("♡","Mes choix",favoriteCount()+" événement(s)",0xFFD91C63,()->{screen=3;showChoices();}),weighted(1,5,0));
+-        content.addView(r2,margin(0,0,0,14));
++        content.addView(r1,margin(0,0,0,6));
+     }
+ 
+     View quickTile(String icon,String label,String sub,int accent,Runnable action){
+-        LinearLayout c=box(Color.WHITE); c.setPadding(dp(13),dp(12),dp(13),dp(12));
+-        TextView ic=txt(icon,25,accent,true);ic.setGravity(Gravity.CENTER);ic.setBackground(round(lighten(accent),18));c.addView(ic,new LinearLayout.LayoutParams(dp(46),dp(46)));
+-        TextView t=txt(label,14,PURPLE,true);t.setPadding(0,dp(9),0,0);c.addView(t);
++        LinearLayout c=box(Color.WHITE); c.setPadding(dp(12),dp(9),dp(12),dp(9));
++        TextView ic=txt(icon,25,accent,true);ic.setGravity(Gravity.CENTER);ic.setBackground(round(lighten(accent),18));c.addView(ic,new LinearLayout.LayoutParams(dp(40),dp(40)));
++        TextView t=txt(label,14,PURPLE,true);t.setPadding(0,dp(6),0,0);c.addView(t);
+         c.addView(txt(sub,11,MUTED,false)); c.setOnClickListener(v->action.run()); return c;
+     }
+ 
+@@ -849,7 +845,7 @@
+         settingsActionRow("?","FAQ & informations générales","Ouvrir le site officiel de la Foire du Valais",()->openUrl("https://foireduvalais.ch/fr"));
+ 
+         settingsSectionHeader("ⓘ","À propos de l’application","Informations sur cette version");
+-        settingsActionRow("i","Version 1.5.21","Foire du Valais 2026 · versionCode 27",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.21 · versionCode 27\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
++        settingsActionRow("i","Version 1.5.22","Foire du Valais 2026 · versionCode 28",()->new AlertDialog.Builder(this).setTitle("Foire du Valais 2026").setMessage("Version 1.5.22 · versionCode 28\n\nProgramme hors ligne + mise à jour distante · rappels restaurés après redémarrage · mise à jour Android avec signature stable.").setPositiveButton("OK",null).show());
+     }
+ 
+     void settingsHero(){
