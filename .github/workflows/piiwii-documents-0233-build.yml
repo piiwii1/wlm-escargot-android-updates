@@ -1,0 +1,69 @@
+name: PiiWii Documents 0.23.3 Windows Build
+on:
+  push:
+    branches: [build/piiwii-documents-0.23.3]
+    paths:
+      - '.github/workflows/piiwii-documents-0233-build.yml'
+      - 'build-piiwii-documents-0233/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reassemble source candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force build-piiwii-documents-0233\work | Out-Null
+          $parts = Get-ChildItem build-piiwii-documents-0233\chunks\* | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('build-piiwii-documents-0233\source.zip',[Convert]::FromBase64String($b64))
+          Expand-Archive -Path build-piiwii-documents-0233\source.zip -DestinationPath build-piiwii-documents-0233\work -Force
+          if (-not (Test-Path 'build-piiwii-documents-0233\work\src\PiiWii.Documents\PiiWii.Documents.csproj')) { throw 'Source application introuvable.' }
+          if (-not (Test-Path 'build-piiwii-documents-0233\work\src\PiiWii.Documents.Installer\PiiWii.Documents.Installer.csproj')) { throw 'Source installateur introuvable.' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build portable and installer
+        shell: pwsh
+        working-directory: build-piiwii-documents-0233/work
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\Build-Release.ps1
+          if (-not (Test-Path '.\dist\PiiWii-Documents-Setup-0.23.3.exe')) { throw 'Setup 0.23.3 absent.' }
+          if (-not (Test-Path '.\dist\PiiWii-Documents-0.23.3-PORTABLE.exe')) { throw 'Portable 0.23.3 absent.' }
+
+      - name: Run Windows self-test
+        shell: pwsh
+        working-directory: build-piiwii-documents-0233/work
+        run: |
+          $p = Start-Process -FilePath '.\dist\PiiWii-Documents-0.23.3-PORTABLE.exe' -ArgumentList '--self-test-quiet' -Wait -PassThru
+          Write-Host "Self-test exit code: $($p.ExitCode)"
+          if ($p.ExitCode -notin @(0,2)) { throw "Self-test fatal: $($p.ExitCode)" }
+
+      - name: Verify final hashes
+        shell: pwsh
+        working-directory: build-piiwii-documents-0233/work
+        run: |
+          $setup = Get-FileHash '.\dist\PiiWii-Documents-Setup-0.23.3.exe' -Algorithm SHA256
+          $portable = Get-FileHash '.\dist\PiiWii-Documents-0.23.3-PORTABLE.exe' -Algorithm SHA256
+          "$($setup.Hash.ToLower())  PiiWii-Documents-Setup-0.23.3.exe" | Set-Content '.\dist\SETUP-SHA256.txt' -Encoding ascii
+          Write-Host "Setup SHA256: $($setup.Hash.ToLower())"
+          Write-Host "Portable SHA256: $($portable.Hash.ToLower())"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Documents-Setup-0.23.3
+          if-no-files-found: error
+          path: |
+            build-piiwii-documents-0233/work/dist/PiiWii-Documents-Setup-0.23.3.exe
+            build-piiwii-documents-0233/work/dist/SETUP-SHA256.txt
