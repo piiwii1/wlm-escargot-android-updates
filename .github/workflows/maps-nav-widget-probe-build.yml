@@ -33,13 +33,13 @@ jobs:
       - name: Package delivery
         run: |
           mkdir -p delivery
-          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/debug/app-debug.apk delivery/Maps-Nav-Widget-Probe-v1.0.0.apk
-          zip -qr delivery/Maps-Nav-Widget-Probe-v1.0.0-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*'
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/debug/app-debug.apk delivery/Maps-Nav-Widget-Probe-v1.1.0.apk
+          zip -qr delivery/Maps-Nav-Widget-Probe-v1.1.0-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*'
           cd delivery
-          sha256sum Maps-Nav-Widget-Probe-v1.0.0.apk > SHA256.txt
-          sha256sum Maps-Nav-Widget-Probe-v1.0.0-Sources.zip >> SHA256.txt
+          sha256sum Maps-Nav-Widget-Probe-v1.1.0.apk > Maps-Nav-Widget-Probe-v1.1.0-SHA256.txt
+          sha256sum Maps-Nav-Widget-Probe-v1.1.0-Sources.zip >> Maps-Nav-Widget-Probe-v1.1.0-SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Maps-Nav-Widget-Probe-v1.0.0
+          name: Maps-Nav-Widget-Probe-v1.1.0
           path: delivery/*
           retention-days: 7
