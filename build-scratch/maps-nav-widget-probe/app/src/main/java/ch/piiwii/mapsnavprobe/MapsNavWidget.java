@@ -41,7 +41,8 @@ public class MapsNavWidget extends AppWidgetProvider {
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation);
-        int iconPx = Math.round(144f * context.getResources().getDisplayMetrics().density / 2f);
+        float density = context.getResources().getDisplayMetrics().density;
+        int iconPx = Math.max(192, Math.round(96f * density));
         views.setImageViewBitmap(R.id.widget_arrow, NavIconRenderer.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.widget_instruction, primary);
 
