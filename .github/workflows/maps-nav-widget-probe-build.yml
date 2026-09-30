@@ -64,15 +64,15 @@ jobs:
       - name: Package delivery
         run: |
           mkdir -p delivery
-          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/Maps-Nav-Widget-Probe-v1.2.0.apk
-          cp signing-certificate.txt delivery/Maps-Nav-Widget-Probe-v1.2.0-Signing-Certificate.txt
-          zip -qr delivery/Maps-Nav-Widget-Probe-v1.2.0-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/Maps-Nav-Widget-Probe-v1.3.0.apk
+          cp signing-certificate.txt delivery/Maps-Nav-Widget-Probe-v1.3.0-Signing-Certificate.txt
+          zip -qr delivery/Maps-Nav-Widget-Probe-v1.3.0-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
           cd delivery
-          sha256sum Maps-Nav-Widget-Probe-v1.2.0.apk > Maps-Nav-Widget-Probe-v1.2.0-SHA256.txt
-          sha256sum Maps-Nav-Widget-Probe-v1.2.0-Sources.zip >> Maps-Nav-Widget-Probe-v1.2.0-SHA256.txt
+          sha256sum Maps-Nav-Widget-Probe-v1.3.0.apk > Maps-Nav-Widget-Probe-v1.3.0-SHA256.txt
+          sha256sum Maps-Nav-Widget-Probe-v1.3.0-Sources.zip >> Maps-Nav-Widget-Probe-v1.3.0-SHA256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Maps-Nav-Widget-Probe-v1.2.0
+          name: Maps-Nav-Widget-Probe-v1.3.0
           path: delivery/*
           retention-days: 30
