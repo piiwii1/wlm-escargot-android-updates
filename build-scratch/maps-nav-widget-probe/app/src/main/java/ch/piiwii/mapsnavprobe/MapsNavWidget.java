@@ -43,7 +43,7 @@ public class MapsNavWidget extends AppWidgetProvider {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation);
         float density = context.getResources().getDisplayMetrics().density;
         int iconPx = Math.max(192, Math.round(96f * density));
-        views.setImageViewBitmap(R.id.widget_arrow, NavIconRenderer.render(arrow, primary, iconPx));
+        views.setImageViewBitmap(R.id.widget_arrow, NavIconSelector.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.widget_instruction, primary);
         views.setTextViewText(R.id.widget_meta, "GOOGLE MAPS");
         views.setTextViewText(R.id.widget_status, simulated ? "TEST" : (empty ? "PRÊT" : "LIVE"));
