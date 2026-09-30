@@ -20,6 +20,7 @@ public class MapsNavWidget extends AppWidgetProvider {
         AppWidgetManager m = AppWidgetManager.getInstance(context);
         int[] ids = m.getAppWidgetIds(new ComponentName(context, MapsNavWidget.class));
         for (int id : ids) updateOne(context, m, id);
+        MapsNavSquareWidget.updateAll(context);
     }
 
     private static void updateOne(Context context, AppWidgetManager manager, int id) {
