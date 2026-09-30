@@ -1,0 +1,135 @@
+name: Visited beta16 Android toolchain split
+
+on:
+  push:
+    branches:
+      - chatgpt/visited-beta16-toolchain-20261001
+    paths:
+      - '.github/workflows/visited-beta16-toolchain-split.yml'
+  workflow_dispatch:
+
+jobs:
+  export-toolchain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Warm exact Visited dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/visited-warm
+          mkdir -p /tmp/visited-warm/app/src/main/java/ch/piiwii/warm /tmp/visited-warm/app/src/main/res/values
+          cat > /tmp/visited-warm/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'VisitedWarm'
+          include ':app'
+          EOF
+          cat > /tmp/visited-warm/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+          cat > /tmp/visited-warm/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+          cat > /tmp/visited-warm/app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'ch.piiwii.warm'
+              compileSdk 35
+              defaultConfig {
+                  applicationId 'ch.piiwii.warm'
+                  minSdk 24
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'com.google.android.gms:play-services-maps:20.0.0'
+              implementation 'com.google.android.libraries.places:places:5.0.0'
+              implementation 'com.google.android.material:material:1.12.0'
+          }
+          EOF
+          cat > /tmp/visited-warm/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:theme="@style/AppTheme"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>
+          EOF
+          cat > /tmp/visited-warm/app/src/main/res/values/styles.xml <<'EOF'
+          <resources><style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar"/></resources>
+          EOF
+          cat > /tmp/visited-warm/app/src/main/java/ch/piiwii/warm/MainActivity.java <<'EOF'
+          package ch.piiwii.warm;
+          public class MainActivity extends android.app.Activity {
+              @Override public void onCreate(android.os.Bundle b) { super.onCreate(b); }
+          }
+          EOF
+          cd /tmp/visited-warm
+          gradle --no-daemon :app:assembleRelease
+
+      - name: Package and split generic toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          GRADLE_BIN="$(readlink -f "$(command -v gradle)")"
+          GRADLE_HOME="$(dirname "$(dirname "$GRADLE_BIN")")"
+          rm -rf /tmp/visited-toolchain /tmp/visited-toolchain-parts
+          mkdir -p /tmp/visited-toolchain/android-sdk/build-tools /tmp/visited-toolchain/android-sdk/platforms /tmp/visited-toolchain/gradle-user-home /tmp/visited-toolchain-parts/A /tmp/visited-toolchain-parts/B
+          cp -a "$GRADLE_HOME" /tmp/visited-toolchain/gradle-8.9
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/visited-toolchain/android-sdk/build-tools/
+          cp -a "$ANDROID_HOME/platforms/android-35" /tmp/visited-toolchain/android-sdk/platforms/
+          cp -a "$HOME/.gradle/caches" /tmp/visited-toolchain/gradle-user-home/
+          cp -a "$HOME/.gradle/native" /tmp/visited-toolchain/gradle-user-home/ 2>/dev/null || true
+          find /tmp/visited-toolchain/gradle-user-home -name '*.lock' -delete || true
+          tar -C /tmp -czf /tmp/visited-beta16-toolchain.tar.gz visited-toolchain
+          sha256sum /tmp/visited-beta16-toolchain.tar.gz | sed 's#/tmp/##' > /tmp/visited-toolchain-parts/B/SHA256.txt
+          split -b 100m -d -a 3 /tmp/visited-beta16-toolchain.tar.gz /tmp/visited-toolchain-part-
+          for f in /tmp/visited-toolchain-part-000 /tmp/visited-toolchain-part-001 /tmp/visited-toolchain-part-002 /tmp/visited-toolchain-part-003; do [ -f "$f" ] && mv "$f" /tmp/visited-toolchain-parts/A/; done
+          for f in /tmp/visited-toolchain-part-*; do [ -f "$f" ] && mv "$f" /tmp/visited-toolchain-parts/B/; done
+          du -sh /tmp/visited-toolchain-parts/A /tmp/visited-toolchain-parts/B
+          ls -lh /tmp/visited-toolchain-parts/A /tmp/visited-toolchain-parts/B
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visited-beta16-toolchain-A
+          path: /tmp/visited-toolchain-parts/A/*
+          retention-days: 2
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visited-beta16-toolchain-B
+          path: /tmp/visited-toolchain-parts/B/*
+          retention-days: 2
+          if-no-files-found: error
