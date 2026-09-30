@@ -2,6 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
+def stableKeystore = System.getenv('MAPS_PROBE_KEYSTORE')
+
+def stableStorePassword = System.getenv('MAPS_PROBE_STORE_PASSWORD') ?: 'PiiWiiProbe2026!'
+def stableKeyAlias = System.getenv('MAPS_PROBE_KEY_ALIAS') ?: 'mapsprobe'
+def stableKeyPassword = System.getenv('MAPS_PROBE_KEY_PASSWORD') ?: 'PiiWiiProbe2026!'
+
 android {
     namespace 'ch.piiwii.mapsnavprobe'
     compileSdk 35
@@ -10,8 +16,29 @@ android {
         applicationId 'ch.piiwii.mapsnavprobe'
         minSdk 23
         targetSdk 35
-        versionCode 2
-        versionName '1.1.0'
+        versionCode 3
+        versionName '1.2.0'
+    }
+
+    signingConfigs {
+        stableTest {
+            if (stableKeystore != null && !stableKeystore.isEmpty()) {
+                storeFile file(stableKeystore)
+                storePassword stableStorePassword
+                keyAlias stableKeyAlias
+                keyPassword stableKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.stableTest
+            minifyEnabled false
+        }
+        debug {
+            signingConfig signingConfigs.stableTest
+        }
     }
 
     compileOptions {
