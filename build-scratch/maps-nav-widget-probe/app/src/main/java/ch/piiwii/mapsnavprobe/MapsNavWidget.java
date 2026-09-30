@@ -41,7 +41,8 @@ public class MapsNavWidget extends AppWidgetProvider {
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation);
-        views.setTextViewText(R.id.widget_arrow, arrow);
+        int iconPx = Math.round(144f * context.getResources().getDisplayMetrics().density / 2f);
+        views.setImageViewBitmap(R.id.widget_arrow, NavIconRenderer.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.widget_instruction, primary);
 
         String meta = simulated ? "● MODE TEST" : "● GOOGLE MAPS";
