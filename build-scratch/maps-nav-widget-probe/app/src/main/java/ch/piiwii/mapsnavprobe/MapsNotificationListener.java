@@ -6,7 +6,6 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
-import android.text.TextUtils;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -26,17 +25,69 @@ public class MapsNotificationListener extends NotificationListenerService {
         String big = value(e, Notification.EXTRA_BIG_TEXT);
         String sub = value(e, Notification.EXTRA_SUB_TEXT);
         String summary = value(e, Notification.EXTRA_SUMMARY_TEXT);
-        String primary = firstUseful(text, big, title);
-        String secondary = joinNonEmpty(sub, summary, (!title.equals(primary) ? title : ""));
-        String raw = "title=" + title + "\ntext=" + text + "\nbigText=" + big + "\nsubText=" + sub + "\nsummary=" + summary;
+        String[] lines = textLines(e);
+
+        NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
+        String raw = "title=" + title +
+                "\ntext=" + text +
+                "\nbigText=" + big +
+                "\nsubText=" + sub +
+                "\nsummary=" + summary +
+                "\ntextLines=" + joinLines(lines) +
+                "\n\nPARSED" +
+                "\narrow=" + parsed.arrow +
+                "\ndistance=" + parsed.distance +
+                "\ninstruction=" + parsed.instruction +
+                "\nroad=" + parsed.road +
+                "\nsource=" + parsed.source;
+
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-        p.edit().putString("primary", primary).putString("secondary", secondary).putString("raw", raw).putString("timestamp", now()).putBoolean("simulated", false).apply();
+        p.edit()
+                .putString("arrow", parsed.arrow)
+                .putString("distance", parsed.distance)
+                .putString("primary", parsed.instruction)
+                .putString("secondary", parsed.road)
+                .putString("raw", raw)
+                .putString("timestamp", now())
+                .putBoolean("simulated", false)
+                .apply();
         MapsNavWidget.updateAll(this);
         sendBroadcast(new Intent(ACTION_UPDATE).setPackage(getPackageName()));
     }
 
-    private static String value(Bundle b, String key) { if (b == null) return ""; Object v = b.get(key); return v == null ? "" : String.valueOf(v).trim(); }
-    private static String firstUseful(String... values) { for (String v : values) if (!TextUtils.isEmpty(v) && !"Google Maps".equalsIgnoreCase(v) && !"Maps".equalsIgnoreCase(v)) return v; return "Google Maps : notification reçue"; }
-    private static String joinNonEmpty(String... values) { StringBuilder s = new StringBuilder(); for (String v : values) { if (TextUtils.isEmpty(v) || "Google Maps".equalsIgnoreCase(v) || "Maps".equalsIgnoreCase(v)) continue; if (s.length() > 0) s.append(" · "); s.append(v); } return s.toString(); }
-    public static String now() { return new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date()); }
+    @Override public void onNotificationRemoved(StatusBarNotification sbn) {
+        if (sbn == null || !MAPS_PACKAGE.equals(sbn.getPackageName())) return;
+        // On ne vide pas immédiatement la dernière consigne : Google Maps peut remplacer
+        // sa notification pendant une mise à jour. La prochaine notification prend le relais.
+    }
+
+    private static String value(Bundle b, String key) {
+        if (b == null) return "";
+        Object v = b.get(key);
+        return v == null ? "" : String.valueOf(v).trim();
+    }
+
+    private static String[] textLines(Bundle b) {
+        if (b == null) return new String[0];
+        CharSequence[] raw = b.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
+        if (raw == null) return new String[0];
+        String[] out = new String[raw.length];
+        for (int i = 0; i < raw.length; i++) out[i] = raw[i] == null ? "" : raw[i].toString().trim();
+        return out;
+    }
+
+    private static String joinLines(String[] lines) {
+        if (lines == null || lines.length == 0) return "";
+        StringBuilder s = new StringBuilder();
+        for (String line : lines) {
+            if (line == null || line.trim().isEmpty()) continue;
+            if (s.length() > 0) s.append(" | ");
+            s.append(line.trim());
+        }
+        return s.toString();
+    }
+
+    public static String now() {
+        return new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+    }
 }
