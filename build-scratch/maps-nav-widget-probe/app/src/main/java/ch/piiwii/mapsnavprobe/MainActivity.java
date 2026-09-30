@@ -26,12 +26,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private static final int BG = Color.rgb(7,11,17);
-    private static final int CARD = Color.rgb(14,24,35);
+    private static final int BG = Color.rgb(5,9,14);
+    private static final int PANEL = Color.rgb(11,20,30);
     private static final int TEXT = Color.WHITE;
-    private static final int MUTED = Color.rgb(158,176,193);
-    private static final int ACCENT = Color.rgb(111,229,255);
-    private static final int ACCENT_DARK = Color.rgb(28,151,235);
+    private static final int MUTED = Color.rgb(146,166,185);
+    private static final int ACCENT = Color.rgb(103,232,255);
+    private static final int ACCENT_DARK = Color.rgb(15,142,232);
 
     private TextView accessStatus, distanceView, instruction, detail, meta, raw;
     private ImageView arrowView;
@@ -43,129 +43,152 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        configureSystemBars();
 
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
-        int flags = getWindow().getDecorView().getSystemUiVisibility();
-        flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-        if (Build.VERSION.SDK_INT >= 26) flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-        getWindow().getDecorView().setSystemUiVisibility(flags);
+        ScrollView screen = new ScrollView(this);
+        screen.setFillViewport(true);
+        screen.setBackgroundColor(BG);
+        screen.setClipToPadding(false);
+        screen.setVerticalScrollBarEnabled(true);
+        applySystemBarInsets(screen);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG);
-        root.setPadding(dp(18), dp(18), dp(18), dp(16));
-        applySystemBarInsets(root);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(0, 0, 0, dp(8));
+        screen.addView(content, new ScrollView.LayoutParams(-1, -2));
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(0, 0, 0, dp(14));
+        header.setPadding(0, 0, 0, dp(12));
 
         LinearLayout headerText = new LinearLayout(this);
         headerText.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text("Maps Nav Probe", 28, true, TEXT);
-        TextView intro = text("v1.4.0 · navigation visuelle Google Maps", 13, false, MUTED);
+        TextView title = text("Maps Nav Probe", 27, true, TEXT);
+        TextView intro = text("Navigation Google Maps pour Launcher GTI", 12, false, MUTED);
         intro.setPadding(0, dp(2), 0, 0);
         headerText.addView(title);
         headerText.addView(intro);
         header.addView(headerText, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        TextView version = text("1.4", 12, true, ACCENT);
+        TextView version = text("v1.5", 11, true, ACCENT);
         version.setGravity(Gravity.CENTER);
-        version.setBackground(rounded(Color.rgb(11,30,44), 12, Color.rgb(41,119,161)));
+        version.setBackground(rounded(Color.rgb(8,28,42), 14, Color.rgb(36,111,153)));
         version.setPadding(dp(10), dp(6), dp(10), dp(6));
         header.addView(version);
-        root.addView(header);
+        content.addView(header);
 
-        accessStatus = text("", 14, true, MUTED);
-        accessStatus.setPadding(dp(13), dp(11), dp(13), dp(11));
-        accessStatus.setBackground(rounded(Color.rgb(12,25,36), 16, Color.rgb(43,78,104)));
-        root.addView(accessStatus, new LinearLayout.LayoutParams(-1, -2));
+        accessStatus = text("", 13, true, MUTED);
+        accessStatus.setPadding(dp(13), dp(10), dp(13), dp(10));
+        accessStatus.setBackground(rounded(Color.rgb(9,23,34), 16, Color.rgb(37,73,99)));
+        content.addView(accessStatus, new LinearLayout.LayoutParams(-1, -2));
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setPadding(0, dp(10), 0, dp(10));
-        Button permission = button("Notifications");
+        actions.setPadding(0, dp(9), 0, dp(9));
+        Button permission = button("Accès notifications");
         permission.setOnClickListener(v -> openNotificationAccess());
         Button maps = button("Ouvrir Maps");
         maps.setOnClickListener(v -> openMaps());
-        LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
-        actionLp.setMarginEnd(dp(6));
+        LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        actionLp.setMarginEnd(dp(5));
         actions.addView(permission, actionLp);
-        LinearLayout.LayoutParams actionLp2 = new LinearLayout.LayoutParams(0, dp(48), 1f);
-        actionLp2.setMarginStart(dp(6));
+        LinearLayout.LayoutParams actionLp2 = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        actionLp2.setMarginStart(dp(5));
         actions.addView(maps, actionLp2);
-        root.addView(actions);
+        content.addView(actions);
+
+        TextView previewLabel = sectionLabel("APERÇU DU WIDGET");
+        previewLabel.setPadding(dp(2), dp(2), 0, dp(6));
+        content.addView(previewLabel);
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(15), dp(13), dp(15), dp(15));
+        card.setPadding(dp(15), dp(12), dp(15), dp(15));
         card.setBackground(gradientCard());
 
-        meta = text("● GOOGLE MAPS", 11, true, ACCENT);
-        meta.setLetterSpacing(0.08f);
-        card.addView(meta);
+        LinearLayout metaRow = new LinearLayout(this);
+        metaRow.setOrientation(LinearLayout.HORIZONTAL);
+        metaRow.setGravity(Gravity.CENTER_VERTICAL);
+        meta = text("● GOOGLE MAPS", 10, true, ACCENT);
+        meta.setLetterSpacing(0.09f);
+        metaRow.addView(meta, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView live = text("LIVE", 9, true, Color.rgb(176,198,216));
+        live.setGravity(Gravity.CENTER);
+        live.setPadding(dp(8), dp(4), dp(8), dp(4));
+        live.setBackground(rounded(Color.rgb(13,31,45), 10, Color.rgb(43,82,109)));
+        metaRow.addView(live);
+        card.addView(metaRow);
 
         LinearLayout navRow = new LinearLayout(this);
         navRow.setOrientation(LinearLayout.HORIZONTAL);
         navRow.setGravity(Gravity.CENTER_VERTICAL);
-        navRow.setPadding(0, dp(11), 0, 0);
+        navRow.setPadding(0, dp(10), 0, 0);
 
         arrowView = new ImageView(this);
         arrowView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        arrowView.setPadding(dp(8), dp(8), dp(8), dp(8));
-        arrowView.setBackground(rounded(Color.rgb(10,25,38), 22, Color.rgb(56,124,166)));
-        arrowView.setImageBitmap(NavIconRenderer.render("↑", "Continuez tout droit", dp(160)));
-        navRow.addView(arrowView, new LinearLayout.LayoutParams(dp(96), dp(96)));
+        arrowView.setPadding(dp(7), dp(7), dp(7), dp(7));
+        arrowView.setBackground(iconPlate());
+        arrowView.setImageBitmap(NavIconRenderer.render("↑", "Continuez tout droit", dp(184)));
+        navRow.addView(arrowView, new LinearLayout.LayoutParams(dp(94), dp(94)));
 
         LinearLayout navText = new LinearLayout(this);
         navText.setOrientation(LinearLayout.VERTICAL);
-        navText.setPadding(dp(15), 0, 0, 0);
-        distanceView = text("", 27, true, ACCENT);
-        instruction = text("En attente d’un trajet", 22, true, TEXT);
-        detail = text("Lance Google Maps et démarre la navigation", 14, false, MUTED);
+        navText.setPadding(dp(14), 0, 0, 0);
+        distanceView = text("", 28, true, ACCENT);
+        instruction = text("En attente d’un trajet", 21, true, TEXT);
+        instruction.setMaxLines(2);
+        detail = text("Lance Google Maps et démarre la navigation", 13, false, MUTED);
         detail.setPadding(0, dp(4), 0, 0);
         navText.addView(distanceView);
         navText.addView(instruction);
         navText.addView(detail);
         navRow.addView(navText, new LinearLayout.LayoutParams(0, -2, 1f));
         card.addView(navRow);
-        root.addView(card);
+        content.addView(card);
 
-        Button simulate = button("Tester la manœuvre suivante");
+        Button simulate = secondaryButton("Tester la manœuvre suivante");
         simulate.setOnClickListener(v -> simulateNext());
-        LinearLayout.LayoutParams simLp = new LinearLayout.LayoutParams(-1, dp(48));
-        simLp.setMargins(0, dp(10), 0, 0);
-        root.addView(simulate, simLp);
+        LinearLayout.LayoutParams simLp = new LinearLayout.LayoutParams(-1, dp(46));
+        simLp.setMargins(0, dp(9), 0, 0);
+        content.addView(simulate, simLp);
 
-        TextView rawTitle = text("Diagnostic Google Maps", 13, true, MUTED);
-        rawTitle.setPadding(0, dp(14), 0, dp(6));
-        root.addView(rawTitle);
+        TextView diagLabel = sectionLabel("DIAGNOSTIC GOOGLE MAPS");
+        diagLabel.setPadding(dp(2), dp(14), 0, dp(6));
+        content.addView(diagLabel);
 
-        ScrollView scroll = new ScrollView(this);
-        raw = text("Aucune donnée reçue.", 12, false, Color.rgb(194,207,219));
+        raw = text("Aucune donnée reçue.", 12, false, Color.rgb(190,204,217));
         raw.setTextIsSelectable(true);
-        raw.setPadding(dp(12), dp(10), dp(12), dp(10));
-        raw.setBackground(rounded(Color.rgb(10,17,24), 14, Color.rgb(37,65,86)));
-        scroll.addView(raw);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        raw.setPadding(dp(12), dp(11), dp(12), dp(11));
+        raw.setMinHeight(dp(130));
+        raw.setBackground(rounded(Color.rgb(8,15,22), 15, Color.rgb(32,62,83)));
+        content.addView(raw, new LinearLayout.LayoutParams(-1, -2));
 
-        Button clear = button("Effacer les données du test");
+        Button clear = secondaryButton("Effacer les données du test");
         clear.setOnClickListener(v -> {
             getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE).edit().clear().apply();
             MapsNavWidget.updateAll(this);
             refresh();
         });
-        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(-1, dp(46));
-        clearLp.setMargins(0, dp(10), 0, 0);
-        root.addView(clear, clearLp);
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(-1, dp(44));
+        clearLp.setMargins(0, dp(9), 0, dp(4));
+        content.addView(clear, clearLp);
 
-        setContentView(root);
+        setContentView(screen);
+    }
+
+    private void configureSystemBars() {
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        int flags = getWindow().getDecorView().getSystemUiVisibility();
+        flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (Build.VERSION.SDK_INT >= 26) flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        getWindow().getDecorView().setSystemUiVisibility(flags);
+        if (Build.VERSION.SDK_INT >= 28) getWindow().setNavigationBarDividerColor(BG);
     }
 
     private void applySystemBarInsets(final View root) {
-        final int left = dp(18), top = dp(18), right = dp(18), bottom = dp(16);
+        final int baseLeft = dp(18), baseTop = dp(14), baseRight = dp(18), baseBottom = dp(14);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             int l, t, r, b;
             if (Build.VERSION.SDK_INT >= 30) {
@@ -177,7 +200,7 @@ public class MainActivity extends Activity {
                 r = insets.getSystemWindowInsetRight();
                 b = insets.getSystemWindowInsetBottom();
             }
-            v.setPadding(left + l, top + t, right + r, bottom + b);
+            v.setPadding(baseLeft + l, baseTop + t, baseRight + r, baseBottom + b);
             return insets;
         });
         root.requestApplyInsets();
@@ -197,8 +220,8 @@ public class MainActivity extends Activity {
 
     private void refresh() {
         boolean enabled = listenerEnabled();
-        accessStatus.setText(enabled ? "● Accès notifications activé" : "● Active l’accès aux notifications");
-        accessStatus.setTextColor(enabled ? ACCENT : Color.rgb(255,184,92));
+        accessStatus.setText(enabled ? "● Prêt · Google Maps peut envoyer ses consignes" : "● Accès aux notifications requis");
+        accessStatus.setTextColor(enabled ? ACCENT : Color.rgb(255,188,92));
 
         SharedPreferences p = getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE);
         String arrow = p.getString("arrow", "");
@@ -210,13 +233,13 @@ public class MainActivity extends Activity {
         boolean simulated = p.getBoolean("simulated", false);
 
         if (TextUtils.isEmpty(primary)) {
-            arrowView.setImageBitmap(NavIconRenderer.render("↑", "Continuez tout droit", dp(160)));
+            arrowView.setImageBitmap(NavIconRenderer.render("↑", "Continuez tout droit", dp(184)));
             distanceView.setText("");
             instruction.setText("En attente d’un trajet");
             detail.setText("Lance Google Maps et démarre la navigation");
             meta.setText("● GOOGLE MAPS");
         } else {
-            arrowView.setImageBitmap(NavIconRenderer.render(arrow, primary, dp(160)));
+            arrowView.setImageBitmap(NavIconRenderer.render(arrow, primary, dp(184)));
             distanceView.setText(distance);
             instruction.setText(primary);
             detail.setText(TextUtils.isEmpty(secondary) ? "Google Maps" : secondary);
@@ -258,6 +281,8 @@ public class MainActivity extends Activity {
                 {"↖", "350 m", "Légèrement à gauche", "Route cantonale"},
                 {"↗", "450 m", "Restez à droite", "Direction Sion"},
                 {"↶", "80 m", "Faites demi-tour", "Route principale"},
+                {"⟳", "120 m", "Prenez la 1re sortie", "Rond-point"},
+                {"⟳", "120 m", "Prenez la 2e sortie", "Rond-point"},
                 {"⟳", "120 m", "Prenez la 3e sortie", "Rond-point"},
                 {"⚑", "", "Vous êtes arrivé", "Destination"}
         };
@@ -269,11 +294,17 @@ public class MainActivity extends Activity {
                 .putString("primary", t[2])
                 .putString("secondary", t[3])
                 .putString("timestamp", MapsNotificationListener.now())
-                .putString("raw", "SIMULATION v1.4.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3])
+                .putString("raw", "SIMULATION v1.5.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3])
                 .putBoolean("simulated", true)
                 .apply();
         MapsNavWidget.updateAll(this);
         refresh();
+    }
+
+    private TextView sectionLabel(String value) {
+        TextView t = text(value, 10, true, Color.rgb(106,139,166));
+        t.setLetterSpacing(.10f);
+        return t;
     }
 
     private TextView text(String value, float size, boolean bold, int color) {
@@ -290,21 +321,44 @@ public class MainActivity extends Activity {
         b.setText(value);
         b.setAllCaps(false);
         b.setTextColor(Color.rgb(3,17,25));
-        b.setTextSize(14);
+        b.setTextSize(13);
         b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(116,238,255), ACCENT_DARK});
+                new int[]{Color.rgb(120,240,255), ACCENT_DARK});
         g.setCornerRadius(dp(15));
-        g.setStroke(dp(1), Color.rgb(147,243,255));
+        g.setStroke(dp(1), Color.rgb(157,246,255));
         b.setBackground(g);
         return b;
     }
 
+    private Button secondaryButton(String value) {
+        Button b = new Button(this);
+        b.setText(value);
+        b.setAllCaps(false);
+        b.setTextColor(Color.rgb(206,232,248));
+        b.setTextSize(13);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(15,34,49), Color.rgb(8,20,31)});
+        g.setCornerRadius(dp(15));
+        g.setStroke(dp(1), Color.rgb(46,100,135));
+        b.setBackground(g);
+        return b;
+    }
+
+    private GradientDrawable iconPlate() {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(18,47,68), Color.rgb(6,18,29)});
+        g.setCornerRadius(dp(23));
+        g.setStroke(dp(1), Color.rgb(67,151,197));
+        return g;
+    }
+
     private GradientDrawable gradientCard() {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(16,31,45), Color.rgb(8,15,23)});
+                new int[]{Color.rgb(14,31,45), Color.rgb(6,13,20)});
         g.setCornerRadius(dp(24));
-        g.setStroke(dp(1), Color.rgb(48,103,139));
+        g.setStroke(dp(1), Color.rgb(44,101,137));
         return g;
     }
 
