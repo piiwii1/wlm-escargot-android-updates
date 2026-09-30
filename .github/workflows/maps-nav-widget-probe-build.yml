@@ -1,0 +1,42 @@
+name: Maps Nav Widget Probe Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'build-scratch/maps-nav-widget-probe/**'
+      - '.github/workflows/maps-nav-widget-probe-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build APK
+        working-directory: build-scratch/maps-nav-widget-probe
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Package delivery
+        run: |
+          mkdir -p delivery
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/debug/app-debug.apk delivery/Maps-Nav-Widget-Probe-v1.0.0.apk
+          zip -qr delivery/Maps-Nav-Widget-Probe-v1.0.0-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*'
+          cd delivery
+          sha256sum Maps-Nav-Widget-Probe-v1.0.0.apk > SHA256.txt
+          sha256sum Maps-Nav-Widget-Probe-v1.0.0-Sources.zip >> SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Maps-Nav-Widget-Probe-v1.0.0
+          path: delivery/*
+          retention-days: 7
