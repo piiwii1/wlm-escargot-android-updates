@@ -9,6 +9,7 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.text.TextUtils;
+
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,52 +44,47 @@ public final class NavIconRenderer {
         return out;
     }
 
-    private static Paint edgePaint(int s) {
+    private static Paint bodyStroke(int s) {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeCap(Paint.Cap.ROUND);
         p.setStrokeJoin(Paint.Join.ROUND);
-        p.setStrokeWidth(s * .150f);
-        p.setColor(Color.rgb(0, 54, 116));
+        p.setStrokeWidth(s * .145f);
+        p.setShader(blueGradient(s));
+        p.setShadowLayer(s * .020f, 0, s * .014f, Color.argb(115, 0, 42, 92));
         return p;
     }
 
-    private static Paint routePaint(int s) {
+    private static Paint subtleHighlight(int s) {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeCap(Paint.Cap.ROUND);
         p.setStrokeJoin(Paint.Join.ROUND);
-        p.setStrokeWidth(s * .124f);
-        p.setShader(new LinearGradient(0, s * .10f, 0, s * .90f,
-                new int[]{Color.rgb(141, 248, 255), Color.rgb(48, 195, 255), Color.rgb(7, 125, 238), Color.rgb(0, 83, 199)},
-                new float[]{0f, .32f, .70f, 1f}, Shader.TileMode.CLAMP));
-        return p;
-    }
-
-    private static Paint shinePaint(int s) {
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeCap(Paint.Cap.ROUND);
-        p.setStrokeJoin(Paint.Join.ROUND);
-        p.setStrokeWidth(s * .010f);
-        p.setColor(Color.argb(165, 240, 254, 255));
+        p.setStrokeWidth(s * .018f);
+        p.setColor(Color.argb(110, 220, 250, 255));
         return p;
     }
 
     private static Paint fillPaint(int s) {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.FILL);
-        p.setShader(new LinearGradient(0, s * .10f, 0, s * .90f,
-                new int[]{Color.rgb(145, 249, 255), Color.rgb(48, 195, 255), Color.rgb(7, 125, 238), Color.rgb(0, 83, 199)},
-                new float[]{0f, .32f, .70f, 1f}, Shader.TileMode.CLAMP));
+        p.setShader(blueGradient(s));
+        p.setShadowLayer(s * .018f, 0, s * .012f, Color.argb(105, 0, 42, 92));
         return p;
     }
 
-    private static Paint edgeFill() {
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(Color.rgb(0, 54, 116));
-        return p;
+    private static Shader blueGradient(int s) {
+        return new LinearGradient(
+                0, s * .08f, 0, s * .92f,
+                new int[]{
+                        Color.rgb(103, 220, 255),
+                        Color.rgb(42, 157, 246),
+                        Color.rgb(20, 108, 224),
+                        Color.rgb(15, 78, 177)
+                },
+                new float[]{0f, .36f, .72f, 1f},
+                Shader.TileMode.CLAMP
+        );
     }
 
     private static Paint dimPaint(int s) {
@@ -96,121 +92,189 @@ public final class NavIconRenderer {
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeCap(Paint.Cap.ROUND);
         p.setStrokeJoin(Paint.Join.ROUND);
-        p.setStrokeWidth(s * .050f);
-        p.setColor(Color.argb(88, 108, 137, 165));
+        p.setStrokeWidth(s * .052f);
+        p.setColor(Color.argb(92, 118, 143, 166));
         return p;
     }
 
-    private static void route(Canvas c, Path path, int s) {
-        c.drawPath(path, edgePaint(s));
-        c.drawPath(path, routePaint(s));
+    private static void drawRoute(Canvas c, Path path, int s) {
+        c.drawPath(path, bodyStroke(s));
         c.save();
-        c.translate(-s * .008f, -s * .010f);
-        c.drawPath(path, shinePaint(s));
+        c.translate(-s * .018f, -s * .014f);
+        c.drawPath(path, subtleHighlight(s));
         c.restore();
     }
 
-    private static void head(Canvas c, int s, float x, float y, float angle) {
-        Path outer = headPath(s, x, y, angle, 1f);
-        c.drawPath(outer, edgeFill());
-        Path inner = headPath(s, x, y, angle, .88f);
-        c.drawPath(inner, fillPaint(s));
+    /**
+     * GPS-style arrow head with a real neck. The neck overlaps the route body so the symbol reads
+     * as one continuous silhouette instead of a line with a triangle pasted on top.
+     */
+    private static void drawHead(Canvas c, int s, float tipX, float tipY, float angleDeg) {
+        c.drawPath(headPath(s, tipX, tipY, angleDeg), fillPaint(s));
     }
 
-    private static Path headPath(int s, float x, float y, float angle, float scale) {
-        float len = s * .175f * scale;
-        float half = s * .102f * scale;
-        double a = Math.toRadians(angle);
+    private static Path headPath(int s, float x, float y, float angleDeg) {
+        float len = s * .235f;
+        float half = s * .155f;
+        float neck = s * .071f;
+        float neckBack = s * .070f;
+
+        double a = Math.toRadians(angleDeg);
         float dx = (float)Math.cos(a), dy = (float)Math.sin(a);
         float px = -dy, py = dx;
-        float bx = x - dx * len, by = y - dy * len;
+
+        float bx = x - dx * len;
+        float by = y - dy * len;
+        float tx = bx - dx * neckBack;
+        float ty = by - dy * neckBack;
+
         Path p = new Path();
         p.moveTo(x, y);
-        p.lineTo(bx + px * half, by + py * half);
-        p.quadTo(bx - dx * s * .010f, by - dy * s * .010f, bx - px * half, by - py * half);
+        p.quadTo(
+                bx + px * half * .72f, by + py * half * .72f,
+                bx + px * half, by + py * half
+        );
+        p.quadTo(
+                bx + px * neck, by + py * neck,
+                tx + px * neck, ty + py * neck
+        );
+        p.lineTo(tx - px * neck, ty - py * neck);
+        p.quadTo(
+                bx - px * neck, by - py * neck,
+                bx - px * half, by - py * half
+        );
+        p.quadTo(
+                bx - px * half * .72f, by - py * half * .72f,
+                x, y
+        );
         p.close();
         return p;
     }
 
     private static void drawStraight(Canvas c, int s) {
+        // One-piece silhouette: rounded shaft and broad GPS arrow head.
+        float cx = s * .50f;
+        float left = s * .425f;
+        float right = s * .575f;
+        float bottom = s * .88f;
+        float shoulderY = s * .34f;
+        float tipY = s * .095f;
+        float shoulderOut = s * .205f;
+
         Path p = new Path();
-        p.moveTo(s*.50f, s*.87f); p.lineTo(s*.50f, s*.27f);
-        route(c,p,s); head(c,s,s*.50f,s*.105f,-90f);
+        p.moveTo(cx, tipY);
+        p.lineTo(cx + shoulderOut, shoulderY);
+        p.quadTo(cx + s * .175f, shoulderY + s * .025f, right, shoulderY + s * .020f);
+        p.lineTo(right, bottom - s * .050f);
+        p.quadTo(right, bottom, cx + s * .025f, bottom);
+        p.quadTo(left, bottom, left, bottom - s * .050f);
+        p.lineTo(left, shoulderY + s * .020f);
+        p.quadTo(cx - s * .175f, shoulderY + s * .025f, cx - shoulderOut, shoulderY);
+        p.close();
+        c.drawPath(p, fillPaint(s));
+
+        Paint gloss = new Paint(Paint.ANTI_ALIAS_FLAG);
+        gloss.setStyle(Paint.Style.STROKE);
+        gloss.setStrokeWidth(s * .014f);
+        gloss.setStrokeCap(Paint.Cap.ROUND);
+        gloss.setColor(Color.argb(95, 225, 251, 255));
+        c.drawLine(cx - s*.025f, s*.39f, cx - s*.025f, s*.79f, gloss);
     }
 
     private static void drawTurn(Canvas c, int s, boolean right) {
         Path p = new Path();
-        p.moveTo(s*.50f,s*.88f); p.lineTo(s*.50f,s*.58f);
-        p.cubicTo(s*.50f,s*.40f, right?s*.59f:s*.41f, s*.31f, right?s*.75f:s*.25f, s*.31f);
-        route(c,p,s); head(c,s,right?s*.91f:s*.09f,s*.31f,right?0f:180f);
+        p.moveTo(s*.50f,s*.88f);
+        p.lineTo(s*.50f,s*.59f);
+        p.cubicTo(s*.50f,s*.40f, right?s*.59f:s*.41f, s*.31f, right?s*.71f:s*.29f, s*.31f);
+        drawRoute(c,p,s);
+        drawHead(c,s,right?s*.925f:s*.075f,s*.31f,right?0f:180f);
     }
 
     private static void drawSlight(Canvas c, int s, boolean right) {
         Path p = new Path();
         p.moveTo(s*.50f,s*.88f);
-        p.cubicTo(s*.50f,s*.65f, right?s*.57f:s*.43f, s*.48f, right?s*.72f:s*.28f, s*.29f);
-        route(c,p,s); head(c,s,right?s*.84f:s*.16f,s*.16f,right?-45f:-135f);
+        p.cubicTo(s*.50f,s*.67f, right?s*.57f:s*.43f, s*.49f, right?s*.69f:s*.31f, s*.33f);
+        drawRoute(c,p,s);
+        drawHead(c,s,right?s*.845f:s*.155f,s*.15f,right?-46f:-134f);
     }
 
     private static void drawSharp(Canvas c, int s, boolean right) {
         Path p = new Path();
-        p.moveTo(s*.50f,s*.88f); p.lineTo(s*.50f,s*.48f);
-        p.cubicTo(s*.50f,s*.32f, right?s*.60f:s*.40f, s*.27f, right?s*.69f:s*.31f, s*.34f);
-        p.lineTo(right?s*.78f:s*.22f,s*.42f);
-        route(c,p,s); head(c,s,right?s*.87f:s*.13f,s*.53f,right?45f:135f);
+        p.moveTo(s*.50f,s*.88f);
+        p.lineTo(s*.50f,s*.49f);
+        p.cubicTo(s*.50f,s*.34f, right?s*.60f:s*.40f, s*.28f, right?s*.67f:s*.33f, s*.35f);
+        p.lineTo(right?s*.75f:s*.25f,s*.43f);
+        drawRoute(c,p,s);
+        drawHead(c,s,right?s*.875f:s*.125f,s*.555f,right?46f:134f);
     }
 
     private static void drawUTurn(Canvas c, int s, boolean right) {
         float d = right ? 1f : -1f;
         Path p = new Path();
-        p.moveTo(s*.47f,s*.89f); p.lineTo(s*.47f,s*.49f);
-        p.cubicTo(s*.47f,s*.22f, s*(.47f+.28f*d), s*.19f, s*(.47f+.28f*d), s*.43f);
-        p.lineTo(s*(.47f+.28f*d),s*.59f);
-        route(c,p,s); head(c,s,s*(.47f+.28f*d),s*.75f,90f);
+        p.moveTo(s*.45f,s*.89f);
+        p.lineTo(s*.45f,s*.49f);
+        p.cubicTo(s*.45f,s*.22f, s*(.45f+.30f*d), s*.18f, s*(.45f+.30f*d), s*.43f);
+        p.lineTo(s*(.45f+.30f*d),s*.56f);
+        drawRoute(c,p,s);
+        drawHead(c,s,s*(.45f+.30f*d),s*.77f,90f);
     }
 
     private static void drawKeep(Canvas c, int s, boolean right) {
         Path ghost = new Path();
-        ghost.moveTo(s*.48f,s*.86f); ghost.lineTo(s*.48f,s*.19f);
+        ghost.moveTo(s*.48f,s*.86f);
+        ghost.lineTo(s*.48f,s*.18f);
         c.drawPath(ghost, dimPaint(s));
+
         Path p = new Path();
         p.moveTo(s*.48f,s*.86f);
-        p.cubicTo(s*.48f,s*.62f,right?s*.58f:s*.38f,s*.49f,right?s*.72f:s*.28f,s*.30f);
-        route(c,p,s); head(c,s,right?s*.84f:s*.16f,s*.16f,right?-45f:-135f);
+        p.cubicTo(s*.48f,s*.64f,right?s*.57f:s*.39f,s*.49f,right?s*.69f:s*.31f,s*.33f);
+        drawRoute(c,p,s);
+        drawHead(c,s,right?s*.845f:s*.155f,s*.15f,right?-46f:-134f);
     }
 
     private static void drawExit(Canvas c, int s, boolean right) {
-        Path ghost = new Path();
-        ghost.moveTo(s*.42f,s*.88f); ghost.lineTo(s*.42f,s*.14f);
-        c.drawPath(ghost, dimPaint(s));
+        Path main = new Path();
+        main.moveTo(s*.42f,s*.88f);
+        main.lineTo(s*.42f,s*.14f);
+        c.drawPath(main, dimPaint(s));
+
         Path p = new Path();
-        p.moveTo(s*.42f,s*.88f); p.lineTo(s*.42f,s*.57f);
-        p.cubicTo(s*.42f,s*.45f,right?s*.57f:s*.27f,s*.42f,right?s*.71f:s*.29f,s*.31f);
-        route(c,p,s); head(c,s,right?s*.87f:s*.13f,s*.20f,right?-28f:-152f);
+        p.moveTo(s*.42f,s*.88f);
+        p.lineTo(s*.42f,s*.58f);
+        p.cubicTo(s*.42f,s*.46f,right?s*.56f:s*.28f,s*.42f,right?s*.68f:s*.32f,s*.32f);
+        drawRoute(c,p,s);
+        drawHead(c,s,right?s*.885f:s*.115f,s*.19f,right?-30f:-150f);
     }
 
     private static void drawMerge(Canvas c, int s, boolean fromRight) {
-        Path p = new Path();
-        p.moveTo(s*.48f,s*.88f); p.lineTo(s*.48f,s*.28f);
-        route(c,p,s); head(c,s,s*.48f,s*.105f,-90f);
-        Path ghost = new Path();
-        float x = fromRight ? s*.82f : s*.18f;
-        ghost.moveTo(x,s*.87f);
-        ghost.cubicTo(x,s*.66f,fromRight?s*.65f:s*.31f,s*.57f,s*.49f,s*.49f);
-        c.drawPath(ghost, dimPaint(s));
+        Path main = new Path();
+        main.moveTo(s*.48f,s*.88f);
+        main.lineTo(s*.48f,s*.30f);
+        drawRoute(c,main,s);
+        drawHead(c,s,s*.48f,s*.09f,-90f);
+
+        Path branch = new Path();
+        float x = fromRight ? s*.83f : s*.17f;
+        branch.moveTo(x,s*.87f);
+        branch.cubicTo(x,s*.67f,fromRight?s*.64f:s*.32f,s*.57f,s*.49f,s*.49f);
+        c.drawPath(branch, dimPaint(s));
     }
 
     private static void drawRoundabout(Canvas c, int s, int exit) {
         int e = exit <= 0 ? 2 : Math.min(exit,8);
-        float cx=s*.50f, cy=s*.48f, r=s*.210f;
-        Paint guide=dimPaint(s); guide.setStrokeWidth(s*.044f);
+        float cx=s*.50f, cy=s*.48f, r=s*.205f;
+
+        Paint guide = dimPaint(s);
+        guide.setStrokeWidth(s*.040f);
         c.drawCircle(cx,cy,r,guide);
 
         int arms = e <= 4 ? 4 : 8;
         for (int i=0;i<arms;i++) {
             double a=Math.toRadians(90 - i*(360f/arms));
-            float x1=cx+(float)Math.cos(a)*(r+s*.014f), y1=cy+(float)Math.sin(a)*(r+s*.014f);
-            float x2=cx+(float)Math.cos(a)*(r+s*.090f), y2=cy+(float)Math.sin(a)*(r+s*.090f);
+            float x1=cx+(float)Math.cos(a)*(r+s*.012f);
+            float y1=cy+(float)Math.sin(a)*(r+s*.012f);
+            float x2=cx+(float)Math.cos(a)*(r+s*.082f);
+            float y2=cy+(float)Math.sin(a)*(r+s*.082f);
             c.drawLine(x1,y1,x2,y2,guide);
         }
 
@@ -218,25 +282,30 @@ public final class NavIconRenderer {
         float exitAngle=90f-e*step;
         RectF oval=new RectF(cx-r,cy-r,cx+r,cy+r);
         Path p=new Path();
-        p.moveTo(cx,s*.91f); p.lineTo(cx,cy+r);
+        p.moveTo(cx,s*.91f);
+        p.lineTo(cx,cy+r);
         p.arcTo(oval,90f,exitAngle-90f,false);
+
         double rad=Math.toRadians(exitAngle);
-        float tx=cx+(float)Math.cos(rad)*(r+s*.155f), ty=cy+(float)Math.sin(rad)*(r+s*.155f);
+        float tx=cx+(float)Math.cos(rad)*(r+s*.145f);
+        float ty=cy+(float)Math.sin(rad)*(r+s*.145f);
         p.lineTo(tx,ty);
-        route(c,p,s); head(c,s,tx,ty,exitAngle);
+        drawRoute(c,p,s);
+        drawHead(c,s,tx,ty,exitAngle);
     }
 
     private static void drawArrival(Canvas c, int s) {
-        Paint edge = edgePaint(s); edge.setStrokeWidth(s*.078f);
-        Paint body = routePaint(s); body.setStrokeWidth(s*.060f);
-        c.drawLine(s*.31f,s*.82f,s*.31f,s*.24f,edge);
-        c.drawLine(s*.31f,s*.82f,s*.31f,s*.24f,body);
+        Paint pole = bodyStroke(s);
+        pole.setStrokeWidth(s*.060f);
+        c.drawLine(s*.31f,s*.82f,s*.31f,s*.25f,pole);
+
         Path flag=new Path();
-        flag.moveTo(s*.34f,s*.22f); flag.lineTo(s*.78f,s*.29f); flag.lineTo(s*.61f,s*.47f); flag.lineTo(s*.34f,s*.40f); flag.close();
-        c.drawPath(flag,edgeFill());
-        Path inner=new Path();
-        inner.moveTo(s*.36f,s*.25f); inner.lineTo(s*.73f,s*.31f); inner.lineTo(s*.59f,s*.43f); inner.lineTo(s*.36f,s*.37f); inner.close();
-        c.drawPath(inner,fillPaint(s));
+        flag.moveTo(s*.34f,s*.23f);
+        flag.lineTo(s*.78f,s*.30f);
+        flag.lineTo(s*.61f,s*.47f);
+        flag.lineTo(s*.34f,s*.40f);
+        flag.close();
+        c.drawPath(flag,fillPaint(s));
     }
 
     private static int extractExit(String text) {
