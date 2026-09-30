@@ -29,7 +29,7 @@ public class MainActivity extends Activity {
     private static final int BG = Color.rgb(5,9,14);
     private static final int TEXT = Color.rgb(248,251,255);
     private static final int MUTED = Color.rgb(135,154,172);
-    private static final int ACCENT = Color.rgb(130,244,255);
+    private static final int ACCENT = Color.rgb(139,244,255);
     private static final int ACCENT_DARK = Color.rgb(14,135,226);
 
     private TextView accessStatus, distanceView, instruction, detail, meta, raw;
@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         headerText.addView(intro);
         header.addView(headerText,new LinearLayout.LayoutParams(0,-2,1f));
 
-        TextView version = text("v1.6",11,true,ACCENT);
+        TextView version = text("v1.7",11,true,ACCENT);
         version.setGravity(Gravity.CENTER);
         version.setBackground(rounded(Color.rgb(8,26,39),14,Color.rgb(42,96,124)));
         version.setPadding(dp(10),dp(6),dp(10),dp(6));
@@ -103,42 +103,42 @@ public class MainActivity extends Activity {
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(15),dp(13),dp(15),dp(16));
+        card.setPadding(dp(14),dp(12),dp(14),dp(13));
         card.setBackground(gradientCard());
 
         LinearLayout metaRow = new LinearLayout(this);
         metaRow.setOrientation(LinearLayout.HORIZONTAL);
         metaRow.setGravity(Gravity.CENTER_VERTICAL);
-        meta = text("● GOOGLE MAPS",10,true,Color.rgb(142,164,184));
-        meta.setLetterSpacing(.05f);
+        meta = text("GOOGLE MAPS",9,true,Color.rgb(146,168,186));
+        meta.setLetterSpacing(.08f);
         metaRow.addView(meta,new LinearLayout.LayoutParams(0,-2,1f));
-        TextView live = text("LIVE",9,true,Color.rgb(156,245,255));
+        TextView live = text("LIVE",8,true,Color.rgb(165,247,255));
         live.setGravity(Gravity.CENTER);
-        live.setPadding(dp(9),dp(4),dp(9),dp(4));
-        live.setBackground(rounded(Color.rgb(14,31,43),12,Color.rgb(45,101,119)));
+        live.setPadding(dp(8),dp(3),dp(8),dp(3));
+        live.setBackground(rounded(Color.rgb(12,28,39),10,Color.rgb(38,84,102)));
         metaRow.addView(live);
         card.addView(metaRow);
 
         LinearLayout navRow = new LinearLayout(this);
         navRow.setOrientation(LinearLayout.HORIZONTAL);
         navRow.setGravity(Gravity.CENTER_VERTICAL);
-        navRow.setPadding(0,dp(9),0,0);
+        navRow.setPadding(0,dp(10),0,0);
 
         arrowView = new ImageView(this);
         arrowView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        arrowView.setPadding(dp(5),dp(5),dp(5),dp(5));
+        arrowView.setPadding(dp(7),dp(7),dp(7),dp(7));
         arrowView.setBackground(iconPlate());
-        arrowView.setImageBitmap(NavIconRenderer.render("↑","Continuez tout droit",dp(196)));
-        navRow.addView(arrowView,new LinearLayout.LayoutParams(dp(100),dp(100)));
+        arrowView.setImageBitmap(NavIconRenderer.render("↑","Continuez tout droit",dp(180)));
+        navRow.addView(arrowView,new LinearLayout.LayoutParams(dp(82),dp(82)));
 
         LinearLayout navText = new LinearLayout(this);
         navText.setOrientation(LinearLayout.VERTICAL);
-        navText.setPadding(dp(15),0,0,0);
-        distanceView = text("",30,true,ACCENT);
-        instruction = text("En attente d’un trajet",20,true,TEXT);
+        navText.setPadding(dp(13),0,0,0);
+        distanceView = text("",28,true,ACCENT);
+        instruction = text("En attente d’un trajet",18,true,TEXT);
         instruction.setMaxLines(2);
-        detail = text("Lance Google Maps et démarre la navigation",12,false,MUTED);
-        detail.setPadding(0,dp(6),0,0);
+        detail = text("Ouvre Google Maps et démarre la navigation",11,false,MUTED);
+        detail.setPadding(0,dp(5),0,0);
         navText.addView(distanceView);
         navText.addView(instruction);
         navText.addView(detail);
@@ -225,24 +225,21 @@ public class MainActivity extends Activity {
         String distance=p.getString("distance","");
         String primary=p.getString("primary","");
         String secondary=p.getString("secondary","");
-        String stamp=p.getString("timestamp","");
         String rawText=p.getString("raw","");
         boolean simulated=p.getBoolean("simulated",false);
 
         if (TextUtils.isEmpty(primary)) {
-            arrowView.setImageBitmap(NavIconRenderer.render("↑","Continuez tout droit",dp(196)));
+            arrowView.setImageBitmap(NavIconRenderer.render("↑","Continuez tout droit",dp(180)));
             distanceView.setText("");
             instruction.setText("En attente d’un trajet");
-            detail.setText("Lance Google Maps et démarre la navigation");
-            meta.setText("● GOOGLE MAPS");
+            detail.setText("Ouvre Google Maps et démarre la navigation");
+            meta.setText("GOOGLE MAPS");
         } else {
-            arrowView.setImageBitmap(NavIconRenderer.render(arrow,primary,dp(196)));
+            arrowView.setImageBitmap(NavIconRenderer.render(arrow,primary,dp(180)));
             distanceView.setText(distance);
             instruction.setText(primary);
             detail.setText(TextUtils.isEmpty(secondary) ? "Google Maps" : secondary);
-            String metaText=simulated ? "● MODE TEST" : "● GOOGLE MAPS";
-            if (!TextUtils.isEmpty(stamp)) metaText += "   •   " + stamp;
-            meta.setText(metaText);
+            meta.setText(simulated ? "MODE TEST" : "GOOGLE MAPS");
         }
         raw.setText(TextUtils.isEmpty(rawText) ? "Aucune donnée reçue de Google Maps." : rawText);
     }
@@ -287,7 +284,7 @@ public class MainActivity extends Activity {
         getSharedPreferences(MapsNotificationListener.PREFS,MODE_PRIVATE).edit()
                 .putString("arrow",t[0]).putString("distance",t[1]).putString("primary",t[2]).putString("secondary",t[3])
                 .putString("timestamp",MapsNotificationListener.now())
-                .putString("raw","SIMULATION v1.6.0\narrow="+t[0]+"\ndistance="+t[1]+"\ninstruction="+t[2]+"\nroad="+t[3])
+                .putString("raw","SIMULATION v1.7.0\narrow="+t[0]+"\ndistance="+t[1]+"\ninstruction="+t[2]+"\nroad="+t[3])
                 .putBoolean("simulated",true).apply();
         MapsNavWidget.updateAll(this);
         refresh();
@@ -323,14 +320,14 @@ public class MainActivity extends Activity {
     }
 
     private GradientDrawable iconPlate() {
-        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{Color.rgb(19,43,58),Color.rgb(7,16,25)});
-        g.setCornerRadius(dp(24));g.setStroke(dp(1),Color.rgb(54,89,108));
+        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{Color.rgb(15,35,49),Color.rgb(6,14,22)});
+        g.setCornerRadius(dp(20));g.setStroke(dp(1),Color.rgb(31,61,78));
         return g;
     }
 
     private GradientDrawable gradientCard() {
-        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{Color.rgb(15,24,34),Color.rgb(5,10,15)});
-        g.setCornerRadius(dp(28));g.setStroke(dp(1),Color.rgb(43,67,80));
+        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{Color.rgb(12,21,30),Color.rgb(4,8,12)});
+        g.setCornerRadius(dp(26));g.setStroke(dp(1),Color.rgb(30,55,68));
         return g;
     }
 
