@@ -28,7 +28,6 @@ public class MapsNavWidget extends AppWidgetProvider {
         String distance = p.getString("distance", "");
         String primary = p.getString("primary", "");
         String secondary = p.getString("secondary", "");
-        String stamp = p.getString("timestamp", "");
         boolean simulated = p.getBoolean("simulated", false);
 
         boolean empty = TextUtils.isEmpty(primary);
@@ -36,20 +35,17 @@ public class MapsNavWidget extends AppWidgetProvider {
             arrow = "↑";
             distance = "";
             primary = "En attente d’un trajet";
-            secondary = "Lance Google Maps et démarre la navigation";
+            secondary = "Ouvre Google Maps et démarre la navigation";
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation);
         float density = context.getResources().getDisplayMetrics().density;
-        int iconPx = Math.max(224, Math.round(112f * density));
+        int iconPx = Math.max(192, Math.round(96f * density));
         views.setImageViewBitmap(R.id.widget_arrow, NavIconRenderer.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.widget_instruction, primary);
-        views.setTextViewText(R.id.widget_meta, "● GOOGLE MAPS");
-
-        String status = simulated ? "TEST" : (empty ? "PRÊT" : "LIVE");
-        if (!TextUtils.isEmpty(stamp) && !empty) status += "  " + stamp;
-        views.setTextViewText(R.id.widget_status, status);
+        views.setTextViewText(R.id.widget_meta, "GOOGLE MAPS");
+        views.setTextViewText(R.id.widget_status, simulated ? "TEST" : (empty ? "PRÊT" : "LIVE"));
 
         if (TextUtils.isEmpty(distance)) {
             views.setViewVisibility(R.id.widget_distance, View.GONE);
