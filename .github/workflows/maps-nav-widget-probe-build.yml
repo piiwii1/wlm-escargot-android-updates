@@ -19,27 +19,60 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Restore stable signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.piiwii-maps-probe
+          key: maps-nav-probe-signing-v1
+
+      - name: Prepare stable signing key
+        run: |
+          mkdir -p "$HOME/.piiwii-maps-probe"
+          KEYSTORE="$HOME/.piiwii-maps-probe/maps-nav-probe.jks"
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -storepass 'PiiWiiProbe2026!' \
+              -keypass 'PiiWiiProbe2026!' \
+              -alias mapsprobe \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10950 \
+              -dname 'CN=PiiWii Maps Probe Test,O=PiiWii,C=CH'
+          fi
+          echo "MAPS_PROBE_KEYSTORE=$KEYSTORE" >> "$GITHUB_ENV"
+          echo "MAPS_PROBE_STORE_PASSWORD=PiiWiiProbe2026!" >> "$GITHUB_ENV"
+          echo "MAPS_PROBE_KEY_ALIAS=mapsprobe" >> "$GITHUB_ENV"
+          echo "MAPS_PROBE_KEY_PASSWORD=PiiWiiProbe2026!" >> "$GITHUB_ENV"
+          keytool -list -v -keystore "$KEYSTORE" -storepass 'PiiWiiProbe2026!' | grep 'SHA256:' | head -1 > signing-certificate.txt
+
       - name: Install Android SDK 35
         run: |
           SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build APK
+
+      - name: Build signed APK
         working-directory: build-scratch/maps-nav-widget-probe
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
+
       - name: Package delivery
         run: |
           mkdir -p delivery
-          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/debug/app-debug.apk delivery/Maps-Nav-Widget-Probe-v1.1.0.apk
-          zip -qr delivery/Maps-Nav-Widget-Probe-v1.1.0-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*'
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/Maps-Nav-Widget-Probe-v1.2.0.apk
+          cp signing-certificate.txt delivery/Maps-Nav-Widget-Probe-v1.2.0-Signing-Certificate.txt
+          zip -qr delivery/Maps-Nav-Widget-Probe-v1.2.0-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
           cd delivery
-          sha256sum Maps-Nav-Widget-Probe-v1.1.0.apk > Maps-Nav-Widget-Probe-v1.1.0-SHA256.txt
-          sha256sum Maps-Nav-Widget-Probe-v1.1.0-Sources.zip >> Maps-Nav-Widget-Probe-v1.1.0-SHA256.txt
+          sha256sum Maps-Nav-Widget-Probe-v1.2.0.apk > Maps-Nav-Widget-Probe-v1.2.0-SHA256.txt
+          sha256sum Maps-Nav-Widget-Probe-v1.2.0-Sources.zip >> Maps-Nav-Widget-Probe-v1.2.0-SHA256.txt
+
       - uses: actions/upload-artifact@v4
         with:
-          name: Maps-Nav-Widget-Probe-v1.1.0
+          name: Maps-Nav-Widget-Probe-v1.2.0
           path: delivery/*
-          retention-days: 7
+          retention-days: 30
