@@ -42,13 +42,14 @@ public class MapsNavWidget extends AppWidgetProvider {
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation);
         float density = context.getResources().getDisplayMetrics().density;
-        int iconPx = Math.max(192, Math.round(96f * density));
+        int iconPx = Math.max(224, Math.round(112f * density));
         views.setImageViewBitmap(R.id.widget_arrow, NavIconRenderer.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.widget_instruction, primary);
+        views.setTextViewText(R.id.widget_meta, "● GOOGLE MAPS");
 
-        String meta = simulated ? "● MODE TEST" : "● GOOGLE MAPS";
-        if (!TextUtils.isEmpty(stamp)) meta += "   •   " + stamp;
-        views.setTextViewText(R.id.widget_meta, meta);
+        String status = simulated ? "TEST" : (empty ? "PRÊT" : "LIVE");
+        if (!TextUtils.isEmpty(stamp) && !empty) status += "  " + stamp;
+        views.setTextViewText(R.id.widget_status, status);
 
         if (TextUtils.isEmpty(distance)) {
             views.setViewVisibility(R.id.widget_distance, View.GONE);
