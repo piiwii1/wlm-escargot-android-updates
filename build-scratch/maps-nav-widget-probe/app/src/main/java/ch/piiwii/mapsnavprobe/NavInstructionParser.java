@@ -30,8 +30,10 @@ public final class NavInstructionParser {
             "(?iu)(?:\\b(?:dans|à|a|in)\\s+)?(\\d+(?:[.,]\\d+)?\\s*(?:m|km|mètre(?:s)?|metre(?:s)?|kilomètre(?:s)?|kilometre(?:s)?|meter(?:s)?|metre(?:s)?|kilometer(?:s)?|kilometre(?:s)?))\\b");
     private static final Pattern FRENCH_EXIT = Pattern.compile("(?iu)\\b(\\d{1,2})(?:re|er|e|ème|eme)?\\s+sortie\\b");
     private static final Pattern ENGLISH_EXIT = Pattern.compile("(?iu)\\b(?:take\\s+)?(?:the\\s+)?(1st|2nd|3rd|[4-9]th|1[0-9]th)\\s+exit\\b");
+    private static final Pattern ETA = Pattern.compile(
+            "(?iu)^(?:arrivée|arrivee|arrival|eta)\\s*(?:à|a|at)?\\s*\\d{1,2}(?::|h)\\d{2}(?:\\s.*)?$");
     private static final Pattern CARDINAL_START = Pattern.compile(
-            "(?iu)^(?:prenez|prendre|continuez|continue|head|proceed)\\s+(?:en\\s+)?(?:direction\\s+)?(?:nord|sud|est|ouest|nord[- ]est|nord[- ]ouest|sud[- ]est|sud[- ]ouest|north|south|east|west|northeast|northwest|southeast|southwest)\\b.*");
+            "(?iu)^(?:prenez|prendre|continuez|continue|head|proceed)\\s+(?:en\\s+)?(?:la\\s+)?(?:direction\\s+)?(?:nord|sud|est|ouest|nord[- ]est|nord[- ]ouest|sud[- ]est|sud[- ]ouest|north|south|east|west|northeast|northwest|southeast|southwest)\\b.*");
 
     public static Result parse(String title, String text, String bigText, String subText, String summary, String[] textLines) {
         List<String> values = new ArrayList<>();
@@ -117,7 +119,7 @@ public final class NavInstructionParser {
             instruction = "Continuez tout droit";
         } else if (CARDINAL_START.matcher(lower).matches() || containsAny(lower, "direction nord", "direction sud", "direction est", "direction ouest", "head north", "head south", "head east", "head west")) {
             arrow = "↑";
-            instruction = "Continuez";
+            instruction = cardinalInstruction(lower);
         } else if (containsAny(lower, "continuez", "continuer", "continue", "follow", "suivez")) {
             arrow = "↑";
             instruction = "Continuez";
@@ -133,12 +135,13 @@ public final class NavInstructionParser {
         if (TextUtils.isEmpty(s)) return -1000;
         String l = norm(s).toLowerCase(Locale.ROOT);
         if (isGeneric(l)) return -500;
+        if (isEta(l)) return -400;
         int score = 0;
-        if (containsAny(l, "arrivé", "arrive", "destination", "demi-tour", "u-turn", "rond-point", "roundabout")) score += 120;
+        if (containsAny(l, "vous êtes arrivé", "vous etes arrive", "destination atteinte", "arrivé à destination", "arrive a destination", "demi-tour", "u-turn", "rond-point", "roundabout")) score += 120;
         if (containsAny(l, "tournez", "tourner", "turn left", "turn right", "restez", "keep left", "keep right", "sortie", "exit", "fusionnez", "merge")) score += 100;
         if (containsAny(l, "continuez tout droit", "tout droit", "continue straight")) score += 80;
+        if (CARDINAL_START.matcher(l).matches() || containsAny(l, "direction nord", "direction sud", "direction est", "direction ouest", "head north", "head south", "head east", "head west")) score += 75;
         if (!TextUtils.isEmpty(extractDistance(s))) score += 45;
-        if (containsAny(l, "direction nord", "direction sud", "direction est", "direction ouest", "head north", "head south", "head east", "head west")) score += 15;
         if (s.length() > 120) score -= 10;
         return score;
     }
@@ -148,7 +151,7 @@ public final class NavInstructionParser {
         for (String s : candidates) {
             if (TextUtils.isEmpty(s) || s.equals(chosen)) continue;
             String l = norm(s).toLowerCase(Locale.ROOT);
-            if (isGeneric(l) || score(s) >= 80 || !TextUtils.isEmpty(extractDistance(s))) continue;
+            if (isGeneric(l) || isEta(l) || score(s) >= 70 || !TextUtils.isEmpty(extractDistance(s))) continue;
             if (s.length() <= 80) return s;
         }
         return "";
@@ -188,6 +191,22 @@ public final class NavInstructionParser {
             return num + suffixFrench(num);
         }
         return "";
+    }
+
+    private static String cardinalInstruction(String lower) {
+        if (containsAny(lower, "nord-est", "nord est", "northeast")) return "Prenez la direction nord-est";
+        if (containsAny(lower, "nord-ouest", "nord ouest", "northwest")) return "Prenez la direction nord-ouest";
+        if (containsAny(lower, "sud-est", "sud est", "southeast")) return "Prenez la direction sud-est";
+        if (containsAny(lower, "sud-ouest", "sud ouest", "southwest")) return "Prenez la direction sud-ouest";
+        if (containsAny(lower, "nord", "north")) return "Prenez la direction nord";
+        if (containsAny(lower, "sud", "south")) return "Prenez la direction sud";
+        if (containsAny(lower, "ouest", "west")) return "Prenez la direction ouest";
+        if (containsAny(lower, "est", "east")) return "Prenez la direction est";
+        return "Continuez";
+    }
+
+    private static boolean isEta(String l) {
+        return ETA.matcher(norm(l)).matches();
     }
 
     private static String suffixFrench(String n) { return "1".equals(n) ? "re" : "e"; }
