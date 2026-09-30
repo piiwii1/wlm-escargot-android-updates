@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         headerText.addView(intro);
         header.addView(headerText,new LinearLayout.LayoutParams(0,-2,1f));
 
-        TextView version = text("v1.10",11,true,ACCENT);
+        TextView version = text("v1.11",11,true,ACCENT);
         version.setGravity(Gravity.CENTER);
         version.setBackground(rounded(Color.rgb(8,26,39),14,Color.rgb(42,96,124)));
         version.setPadding(dp(10),dp(6),dp(10),dp(6));
@@ -284,7 +284,7 @@ public class MainActivity extends Activity {
         getSharedPreferences(MapsNotificationListener.PREFS,MODE_PRIVATE).edit()
                 .putString("arrow",t[0]).putString("distance",t[1]).putString("primary",t[2]).putString("secondary",t[3])
                 .putString("timestamp",MapsNotificationListener.now())
-                .putString("raw","SIMULATION v1.10.0\narrow="+t[0]+"\ndistance="+t[1]+"\ninstruction="+t[2]+"\nroad="+t[3])
+                .putString("raw","SIMULATION v1.11.0\narrow="+t[0]+"\ndistance="+t[1]+"\ninstruction="+t[2]+"\nroad="+t[3])
                 .putBoolean("simulated",true).apply();
         MapsNavWidget.updateAll(this);
         refresh();
