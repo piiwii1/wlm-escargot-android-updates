@@ -17,6 +17,7 @@ import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -29,7 +30,9 @@ public class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(174,184,196);
     private static final int ACCENT = Color.rgb(121,227,138);
 
-    private TextView accessStatus, arrowView, distanceView, instruction, detail, meta, raw;
+    private TextView accessStatus, distanceView, instruction, detail, meta, raw;
+    private ImageView arrowView;
+    private int testIndex = 0;
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) { refresh(); }
@@ -45,7 +48,7 @@ public class MainActivity extends Activity {
 
         TextView title = text("Maps Nav Probe", 27, true, TEXT);
         root.addView(title);
-        TextView intro = text("v1.2.0 · aperçu navigation simplifié depuis Google Maps", 14, false, MUTED);
+        TextView intro = text("v1.3.0 · icônes vectorielles dessinées directement par l’application", 14, false, MUTED);
         intro.setPadding(0, dp(3), 0, dp(13));
         root.addView(intro);
 
@@ -83,10 +86,12 @@ public class MainActivity extends Activity {
         navRow.setGravity(Gravity.CENTER_VERTICAL);
         navRow.setPadding(0, dp(10), 0, 0);
 
-        arrowView = text("↑", 43, true, Color.rgb(13,20,26));
-        arrowView.setGravity(Gravity.CENTER);
-        arrowView.setBackground(rounded(ACCENT, 100, Color.rgb(167,242,178)));
-        navRow.addView(arrowView, new LinearLayout.LayoutParams(dp(78), dp(78)));
+        arrowView = new ImageView(this);
+        arrowView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        arrowView.setPadding(dp(5), dp(5), dp(5), dp(5));
+        arrowView.setBackground(rounded(Color.rgb(16,26,40), 100, Color.rgb(46,95,142)));
+        arrowView.setImageBitmap(NavIconRenderer.render("↑", "Continuez tout droit", dp(128)));
+        navRow.addView(arrowView, new LinearLayout.LayoutParams(dp(82), dp(82)));
 
         LinearLayout navText = new LinearLayout(this);
         navText.setOrientation(LinearLayout.VERTICAL);
@@ -102,8 +107,8 @@ public class MainActivity extends Activity {
         card.addView(navRow);
         root.addView(card);
 
-        Button simulate = button("Tester une consigne : gauche à 100 m");
-        simulate.setOnClickListener(v -> simulate());
+        Button simulate = button("Tester l’icône suivante");
+        simulate.setOnClickListener(v -> simulateNext());
         LinearLayout.LayoutParams simLp = new LinearLayout.LayoutParams(-1, dp(48));
         simLp.setMargins(0, dp(10), 0, 0);
         root.addView(simulate, simLp);
@@ -160,13 +165,13 @@ public class MainActivity extends Activity {
         boolean simulated = p.getBoolean("simulated", false);
 
         if (TextUtils.isEmpty(primary)) {
-            arrowView.setText("↑");
+            arrowView.setImageBitmap(NavIconRenderer.render("↑", "Continuez tout droit", dp(128)));
             distanceView.setText("");
             instruction.setText("En attente d’un trajet");
             detail.setText("Lance Google Maps et démarre la navigation");
             meta.setText("● GOOGLE MAPS");
         } else {
-            arrowView.setText(TextUtils.isEmpty(arrow) ? "↑" : arrow);
+            arrowView.setImageBitmap(NavIconRenderer.render(arrow, primary, dp(128)));
             distanceView.setText(distance);
             instruction.setText(primary);
             detail.setText(TextUtils.isEmpty(secondary) ? "Google Maps" : secondary);
@@ -200,19 +205,30 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void simulate() {
+    private void simulateNext() {
+        String[][] tests = {
+                {"↑", "600 m", "Continuez tout droit", "Route de Lausanne"},
+                {"←", "100 m", "Tournez à gauche", "Rue du Rhône"},
+                {"→", "200 m", "Tournez à droite", "Avenue de France"},
+                {"↖", "350 m", "Légèrement à gauche", "Route cantonale"},
+                {"↗", "450 m", "Restez à droite", "Direction Sion"},
+                {"↶", "80 m", "Faites demi-tour", "Route principale"},
+                {"⟳", "120 m", "Prenez la 3e sortie", "Rond-point"},
+                {"⚑", "", "Vous êtes arrivé", "Destination"}
+        };
+        String[] t = tests[testIndex % tests.length];
+        testIndex++;
         getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE).edit()
-                .putString("arrow", "←")
-                .putString("distance", "100 m")
-                .putString("primary", "Tournez à gauche")
-                .putString("secondary", "Rue de Lausanne")
+                .putString("arrow", t[0])
+                .putString("distance", t[1])
+                .putString("primary", t[2])
+                .putString("secondary", t[3])
                 .putString("timestamp", MapsNotificationListener.now())
-                .putString("raw", "SIMULATION\ntext=À 100 m, tournez à gauche sur Rue de Lausanne\n\nPARSED\narrow=←\ndistance=100 m\ninstruction=Tournez à gauche\nroad=Rue de Lausanne")
+                .putString("raw", "SIMULATION v1.3.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3])
                 .putBoolean("simulated", true)
                 .apply();
         MapsNavWidget.updateAll(this);
         refresh();
-        Toast.makeText(this, "Simulation envoyée au widget", Toast.LENGTH_SHORT).show();
     }
 
     private TextView text(String value, float size, boolean bold, int color) {
