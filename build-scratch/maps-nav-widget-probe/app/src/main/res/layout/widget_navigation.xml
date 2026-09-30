@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="13dp"
+    android:padding="12dp"
     android:background="@drawable/widget_bg">
 
     <LinearLayout
@@ -19,35 +19,43 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="● GOOGLE MAPS"
-            android:textColor="#6FE5FF"
+            android:textColor="#67E8FF"
             android:textStyle="bold"
             android:textSize="10sp"
-            android:letterSpacing="0.08"
+            android:letterSpacing="0.09"
             android:maxLines="1" />
 
         <TextView
+            android:id="@+id/widget_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="NAV"
-            android:textColor="#70859A"
+            android:minWidth="42dp"
+            android:gravity="center"
+            android:paddingLeft="7dp"
+            android:paddingRight="7dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:background="@drawable/widget_chip"
+            android:text="LIVE"
+            android:textColor="#BFEFFF"
             android:textStyle="bold"
             android:textSize="9sp"
-            android:letterSpacing="0.10" />
+            android:letterSpacing="0.08" />
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="7dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
         <FrameLayout
-            android:layout_width="92dp"
-            android:layout_height="92dp"
+            android:layout_width="90dp"
+            android:layout_height="90dp"
             android:background="@drawable/nav_icon_plate"
-            android:padding="8dp">
+            android:padding="6dp">
 
             <ImageView
                 android:id="@+id/widget_arrow"
@@ -61,7 +69,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="15dp"
+            android:layout_marginStart="13dp"
             android:orientation="vertical"
             android:gravity="center_vertical">
 
@@ -70,33 +78,33 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="100 m"
-                android:textColor="#6FE5FF"
+                android:textColor="#67E8FF"
                 android:textStyle="bold"
-                android:textSize="27sp"
+                android:textSize="29sp"
                 android:maxLines="1" />
 
             <TextView
                 android:id="@+id/widget_instruction"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="0dp"
                 android:maxLines="2"
                 android:ellipsize="end"
                 android:text="Tournez à gauche"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold"
-                android:textSize="20sp" />
+                android:textSize="19sp"
+                android:lineSpacingExtra="-1dp" />
 
             <TextView
                 android:id="@+id/widget_detail"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+                android:layout_marginTop="4dp"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:text="Rue de Lausanne"
-                android:textColor="#9EB0C1"
-                android:textSize="13sp" />
+                android:textColor="#91A8BB"
+                android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
