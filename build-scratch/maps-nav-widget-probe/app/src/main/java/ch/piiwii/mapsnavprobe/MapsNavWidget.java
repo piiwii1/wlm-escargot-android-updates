@@ -33,15 +33,20 @@ public class MapsNavWidget extends AppWidgetProvider {
 
         boolean empty = TextUtils.isEmpty(primary);
         if (empty) {
-            arrow = "·";
-            primary = "Aucune consigne";
-            secondary = "Lance un trajet Google Maps";
+            arrow = "↑";
+            distance = "";
+            primary = "En attente d’un trajet";
+            secondary = "Lance Google Maps et démarre la navigation";
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation);
         views.setTextViewText(R.id.widget_arrow, arrow);
         views.setTextViewText(R.id.widget_instruction, primary);
+
+        String meta = simulated ? "● MODE TEST" : "● GOOGLE MAPS";
+        if (!TextUtils.isEmpty(stamp)) meta += "   •   " + stamp;
+        views.setTextViewText(R.id.widget_meta, meta);
 
         if (TextUtils.isEmpty(distance)) {
             views.setViewVisibility(R.id.widget_distance, View.GONE);
@@ -50,11 +55,12 @@ public class MapsNavWidget extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_distance, distance);
         }
 
-        String detail = secondary;
-        if (TextUtils.isEmpty(detail) && !empty) detail = "Google Maps";
-        if (simulated) detail = "TEST · " + detail;
-        if (!TextUtils.isEmpty(stamp)) detail += "  ·  " + stamp;
-        views.setTextViewText(R.id.widget_detail, detail);
+        if (TextUtils.isEmpty(secondary)) {
+            views.setViewVisibility(R.id.widget_detail, View.GONE);
+        } else {
+            views.setViewVisibility(R.id.widget_detail, View.VISIBLE);
+            views.setTextViewText(R.id.widget_detail, secondary);
+        }
 
         Intent open = new Intent(context, MainActivity.class);
         PendingIntent pi = PendingIntent.getActivity(context, 100, open,
