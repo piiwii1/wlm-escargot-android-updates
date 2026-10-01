@@ -18,10 +18,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Extracts Google Maps' destination summary from the app's own notification
- * layout. Google Maps often renders the footer (duration · distance · ETA)
- * in resource ids such as nav_time/header_text instead of exposing each value
- * as a normal Notification extra.
+ * Reads Google Maps' own navigation notification layout. A total remaining
+ * distance is accepted only from a real trip-summary field, never from a
+ * standalone next-manoeuvre value such as "300 m".
  */
 public final class GoogleMapsTripInfoExtractor {
     private GoogleMapsTripInfoExtractor() {}
@@ -97,6 +96,7 @@ public final class GoogleMapsTripInfoExtractor {
         String distance = "";
         String duration = "";
         String eta = "";
+        int bestScore = -1;
         final StringBuilder debug = new StringBuilder();
 
         Collector(Context mapsContext) { this.mapsContext = mapsContext; }
@@ -124,12 +124,8 @@ public final class GoogleMapsTripInfoExtractor {
                     String name = resourceName(view.getId());
                     appendDebug(TextUtils.isEmpty(name) ? "text" : name, text);
 
-                    if (isSummaryResource(name)) {
-                        parseSummary(text);
-                    } else if (isEtaResource(name) && TextUtils.isEmpty(eta)) {
-                        String foundEta = extractEta(text);
-                        if (!TextUtils.isEmpty(foundEta)) eta = foundEta;
-                    }
+                    int score = summaryResourceScore(name);
+                    if (score >= 0) parseVerifiedSummary(name, text, score);
                 }
             }
 
@@ -147,50 +143,37 @@ public final class GoogleMapsTripInfoExtractor {
             catch (Throwable ignored) { return ""; }
         }
 
-        boolean isSummaryResource(String name) {
-            if (TextUtils.isEmpty(name)) return false;
+        int summaryResourceScore(String name) {
+            if (TextUtils.isEmpty(name)) return -1;
             String n = name.toLowerCase(Locale.ROOT);
-            return "nav_time".equals(n)
-                    || "header_text".equals(n)
-                    || n.contains("nav_time")
-                    || n.contains("eta_card")
-                    || n.contains("trip_summary")
-                    || n.contains("remaining_time");
+            if ("nav_time".equals(n) || n.contains("nav_time")) return 100;
+            if (n.contains("trip_summary")) return 95;
+            if (n.contains("eta_card")) return 90;
+            if ("header_text".equals(n)) return 80;
+            if (n.contains("remaining_time")) return 60;
+            return -1;
         }
 
-        boolean isEtaResource(String name) {
-            if (TextUtils.isEmpty(name)) return false;
-            String n = name.toLowerCase(Locale.ROOT);
-            return n.contains("eta") || "text".equals(n) || n.contains("oneliner");
-        }
+        void parseVerifiedSummary(String resourceName, String text, int resourceScore) {
+            String foundDistance = extractDistance(text);
+            String foundDuration = extractDuration(text);
+            String foundEta = extractEta(text);
+            if (TextUtils.isEmpty(foundDistance) || TextUtils.isEmpty(foundDuration)) return;
 
-        void parseSummary(String text) {
-            if (TextUtils.isEmpty(text)) return;
+            String n = resourceName == null ? "" : resourceName.toLowerCase(Locale.ROOT);
+            // header_text is reused by Android for many things. Only trust it
+            // when it really looks like Maps' full footer (duration + distance + ETA).
+            if ("header_text".equals(n) && TextUtils.isEmpty(foundEta)) return;
 
-            if (TextUtils.isEmpty(distance)) {
-                Matcher dm = DISTANCE.matcher(text);
-                String found = "";
-                while (dm.find()) found = normalizeDistance(dm.group(1), dm.group(2));
-                if (!TextUtils.isEmpty(found)) distance = found;
-            }
+            // A lone "300 m" can never reach here because a duration is required.
+            int score = resourceScore + (TextUtils.isEmpty(foundEta) ? 0 : 10);
+            if (score < bestScore) return;
 
-            if (TextUtils.isEmpty(duration)) {
-                Matcher dur = DURATION.matcher(text);
-                if (dur.find()) {
-                    int h = parseInt(dur.group(1));
-                    int m = parseInt(dur.group(2));
-                    int total = h * 60 + m;
-                    if (total > 0) duration = formatDuration(total);
-                } else {
-                    Matcher hour = HOUR_ONLY.matcher(text);
-                    if (hour.find()) {
-                        int h = parseInt(hour.group(1));
-                        if (h > 0) duration = h + " h";
-                    }
-                }
-            }
-
-            if (TextUtils.isEmpty(eta)) eta = extractEta(text);
+            bestScore = score;
+            distance = foundDistance;
+            duration = foundDuration;
+            if (!TextUtils.isEmpty(foundEta)) eta = foundEta;
+            appendDebug("VERIFIED_TRIP", text);
         }
 
         Result finish() {
@@ -203,7 +186,35 @@ public final class GoogleMapsTripInfoExtractor {
         }
     }
 
-    private static String extractEta(String text) {
+    static String extractDistance(String text) {
+        if (TextUtils.isEmpty(text)) return "";
+        Matcher dm = DISTANCE.matcher(text);
+        String found = "";
+        while (dm.find()) {
+            if (isSpeed(text, dm.end(), dm.group(2))) continue;
+            found = normalizeDistance(dm.group(1), dm.group(2));
+        }
+        return found;
+    }
+
+    static String extractDuration(String text) {
+        if (TextUtils.isEmpty(text)) return "";
+        Matcher dur = DURATION.matcher(text);
+        if (dur.find()) {
+            int h = parseInt(dur.group(1));
+            int m = parseInt(dur.group(2));
+            int total = h * 60 + m;
+            if (total > 0) return formatDuration(total);
+        }
+        Matcher hour = HOUR_ONLY.matcher(text);
+        if (hour.find()) {
+            int h = parseInt(hour.group(1));
+            if (h > 0) return h + " h";
+        }
+        return "";
+    }
+
+    static String extractEta(String text) {
         if (TextUtils.isEmpty(text)) return "";
         Matcher m = ETA.matcher(text);
         String result = "";
@@ -220,6 +231,15 @@ public final class GoogleMapsTripInfoExtractor {
             }
         }
         return result;
+    }
+
+    private static boolean isSpeed(String source, int matchEnd, String unit) {
+        if (TextUtils.isEmpty(unit)) return false;
+        String u = unit.toLowerCase(Locale.ROOT);
+        if (!("km".equals(u) || u.startsWith("kilom"))) return false;
+        int end = Math.min(source.length(), matchEnd + 10);
+        String tail = source.substring(matchEnd, end).toLowerCase(Locale.ROOT);
+        return tail.matches("^\\s*(?:/\\s*h|/\\s*heure|par\\s+heure).*" );
     }
 
     private static String normalizeDistance(String number, String unit) {
