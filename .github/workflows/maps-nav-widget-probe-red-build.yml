@@ -5,6 +5,7 @@ on:
     branches: [ restore-piiwii-nav-1.17.15-keyexport ]
     paths:
       - 'build-scratch/maps-nav-widget-probe/**'
+      - '.github/recovery-assets/**'
       - '.github/workflows/maps-nav-widget-probe-red-build.yml'
 
 jobs:
@@ -41,25 +42,19 @@ jobs:
           test "$(head -c 8 "$OUT" | xxd -p)" = "89504e470d0a1a0a"
           test "$(sha256sum "$OUT" | cut -d' ' -f1)" = "977c4d8cd83aec50ea73bb269d4e5d971fa74805a35a7a43a55fd380396e9888"
 
-      - name: Repair compass PNG encoding only
+      - name: Restore valid approved compass PNG
         run: |
           REF=build-scratch/maps-nav-widget-probe/app/src/main/res/drawable-nodpi/piiwii_compass_reference.png
-          python3 -m pip install --disable-pip-version-check --quiet pillow
-          python3 - "$REF" <<'PY'
-          from PIL import Image
-          import os, sys, tempfile
-          src = sys.argv[1]
-          with Image.open(src) as im:
-              im.load()
-              rgba = im.convert('RGBA')
-              fd, tmp = tempfile.mkstemp(suffix='.png')
-              os.close(fd)
-              rgba.save(tmp, format='PNG', optimize=True, compress_level=9)
-          os.replace(tmp, src)
-          with Image.open(src) as check:
-              check.verify()
-          PY
+          cat \
+            .github/recovery-assets/compass.b64.part00 \
+            .github/recovery-assets/compass.b64.part01 \
+            .github/recovery-assets/compass.b64.part02 \
+            .github/recovery-assets/compass.b64.part03 \
+            .github/recovery-assets/compass.b64.part04 \
+            .github/recovery-assets/compass.b64.part05 \
+            | base64 --decode > "$REF"
           test "$(head -c 8 "$REF" | xxd -p)" = "89504e470d0a1a0a"
+          test "$(sha256sum "$REF" | cut -d' ' -f1)" = "719e0d38fc025a178d0bd23043f9251514fc153169c0bd1b3eff73ac671a1b9e"
 
       - uses: actions/setup-java@v4
         with:
