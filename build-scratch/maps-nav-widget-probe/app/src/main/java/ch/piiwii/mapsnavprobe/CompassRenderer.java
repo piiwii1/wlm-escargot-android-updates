@@ -3,182 +3,250 @@ package ch.piiwii.mapsnavprobe;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RectF;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 
-/** Draws the idle GTI compass used by the launcher widget. */
+/**
+ * GTI idle compass. The visual is intentionally matched to the approved
+ * flat black/red reference: red outer ring, white scale, red major marks,
+ * N/E/S/O cardinals and the red/silver eight-point compass rose.
+ */
 public final class CompassRenderer {
     private CompassRenderer() {}
 
-    private static final int GTI_RED = Color.rgb(226, 0, 26);
-    private static final int GTI_RED_LIGHT = Color.rgb(255, 50, 66);
-    private static final int GTI_RED_DARK = Color.rgb(92, 0, 10);
-    private static final int GRAPHITE = Color.rgb(10, 12, 15);
-    private static final int GRAPHITE_2 = Color.rgb(21, 24, 28);
-    private static final int TEXT = Color.rgb(242, 244, 247);
-    private static final int MUTED = Color.rgb(128, 134, 141);
-    private static final int TICK = Color.rgb(91, 97, 104);
-    private static final int TICK_MINOR = Color.rgb(47, 51, 56);
+    private static final int RED = Color.rgb(244, 0, 31);
+    private static final int RED_LIGHT = Color.rgb(255, 37, 49);
+    private static final int RED_DARK = Color.rgb(116, 0, 15);
+    private static final int BLACK = Color.rgb(8, 9, 11);
+    private static final int BLACK_2 = Color.rgb(19, 21, 24);
+    private static final int BLACK_3 = Color.rgb(31, 34, 38);
+    private static final int WHITE = Color.rgb(238, 240, 243);
+    private static final int SILVER = Color.rgb(184, 188, 193);
+    private static final int SILVER_DARK = Color.rgb(91, 95, 101);
+    private static final int GREY_DARK = Color.rgb(54, 58, 63);
 
     public static Bitmap render(float headingDegrees, int requestedSizePx) {
-        int size = Math.max(240, Math.min(400, requestedSizePx));
-        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        float c = size / 2f;
+        int size = Math.max(240, Math.min(420, requestedSizePx));
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        float c = size * 0.5f;
         float heading = normalize(headingDegrees);
 
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setStrokeCap(Paint.Cap.ROUND);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        p.setStrokeCap(Paint.Cap.BUTT);
+        p.setStrokeJoin(Paint.Join.ROUND);
 
-        // Clean dark GTI dial, intentionally flat and sober.
-        float outerRadius = size * 0.395f;
+        float outerR = size * 0.468f;
+        float frameInnerR = size * 0.420f;
+        float scaleOuterR = size * 0.392f;
+        float scaleInnerR = size * 0.306f;
+
+        // Transparent outside; sober black GTI frame inside the circle.
         p.setStyle(Paint.Style.FILL);
-        p.setColor(Color.argb(245, 5, 7, 9));
-        canvas.drawCircle(c, c - size * 0.025f, outerRadius + size * 0.030f, p);
+        p.setShader(new RadialGradient(c, c, outerR,
+                new int[]{Color.rgb(15, 17, 20), Color.rgb(20, 22, 25), Color.rgb(8, 9, 11)},
+                new float[]{0f, 0.76f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawCircle(c, c, outerR, p);
+        p.setShader(null);
 
+        // Outer red contour from the approved reference.
         p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(Math.max(2f, size * 0.010f));
-        p.setColor(Color.rgb(44, 48, 53));
-        canvas.drawCircle(c, c - size * 0.025f, outerRadius + size * 0.014f, p);
-        p.setStrokeWidth(Math.max(2f, size * 0.006f));
-        p.setColor(GTI_RED_DARK);
-        canvas.drawCircle(c, c - size * 0.025f, outerRadius, p);
+        p.setStrokeWidth(Math.max(2f, size * 0.0048f));
+        p.setColor(RED);
+        canvas.drawCircle(c, c, outerR, p);
 
-        float dialCenterY = c - size * 0.025f;
+        // Dark frame band and fine inner edge.
+        p.setStrokeWidth(size * 0.038f);
+        p.setColor(Color.rgb(24, 26, 29));
+        canvas.drawCircle(c, c, outerR - size * 0.020f, p);
+        p.setStrokeWidth(Math.max(1f, size * 0.003f));
+        p.setColor(Color.rgb(44, 47, 51));
+        canvas.drawCircle(c, c, frameInnerR, p);
+
+        // Four fixed red frame bars + inward red triangles.
+        drawFrameMarker(canvas, p, c, c, outerR, 0f, size);
+        drawFrameMarker(canvas, p, c, c, outerR, 90f, size);
+        drawFrameMarker(canvas, p, c, c, outerR, 180f, size);
+        drawFrameMarker(canvas, p, c, c, outerR, 270f, size);
+
+        // Rotating compass card. At heading 0 this reproduces the reference.
         canvas.save();
-        canvas.rotate(-heading, c, dialCenterY);
+        canvas.rotate(-heading, c, c);
 
-        // 5-degree scale. The longer 30-degree marks make orientation readable at a glance.
+        p.setStyle(Paint.Style.FILL);
+        p.setShader(new RadialGradient(c, c, scaleOuterR,
+                new int[]{Color.rgb(27, 29, 32), Color.rgb(17, 19, 22), Color.rgb(9, 10, 12)},
+                new float[]{0f, 0.70f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawCircle(c, c, frameInnerR - size * 0.010f, p);
+        p.setShader(null);
+
+        // White 5° scale with the same red 30° accents as the reference.
         for (int deg = 0; deg < 360; deg += 5) {
-            boolean cardinal = deg % 90 == 0;
             boolean major = deg % 30 == 0;
-            boolean medium = deg % 10 == 0;
-            double a = Math.toRadians(deg - 90);
-            float outer = outerRadius - size * 0.020f;
-            float len = cardinal ? size * 0.052f : (major ? size * 0.043f : (medium ? size * 0.030f : size * 0.017f));
+            boolean cardinal = deg % 90 == 0;
+            double a = Math.toRadians(deg - 90f);
+            float outer = scaleOuterR;
+            float len;
+            if (cardinal) len = size * 0.047f;
+            else if (major) len = size * 0.044f;
+            else len = size * 0.017f;
             float inner = outer - len;
 
             p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(cardinal ? Math.max(2f, size * 0.010f)
-                    : (major ? Math.max(1.7f, size * 0.007f)
-                    : (medium ? Math.max(1.2f, size * 0.005f) : Math.max(1f, size * 0.003f))));
-            p.setColor(deg == 0 ? GTI_RED_LIGHT : (major || cardinal ? TICK : TICK_MINOR));
+            p.setStrokeWidth(major || cardinal ? Math.max(2.2f, size * 0.009f)
+                    : Math.max(1.2f, size * 0.0040f));
+            p.setColor(major || cardinal ? RED : WHITE);
             canvas.drawLine(
                     c + (float) Math.cos(a) * inner,
-                    dialCenterY + (float) Math.sin(a) * inner,
+                    c + (float) Math.sin(a) * inner,
                     c + (float) Math.cos(a) * outer,
-                    dialCenterY + (float) Math.sin(a) * outer,
+                    c + (float) Math.sin(a) * outer,
                     p);
         }
 
-        // Cardinal points rotate with the compass card, while the phone heading marker stays fixed.
+        // Cardinal letters only: N red, E/S/O silver-white.
         p.setStyle(Paint.Style.FILL);
         p.setTextAlign(Paint.Align.CENTER);
         p.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-        p.setTextSize(size * 0.086f);
-        float textRadius = outerRadius - size * 0.094f;
-        drawCardinal(canvas, p, "N", c, dialCenterY - textRadius, GTI_RED_LIGHT);
-        drawCardinal(canvas, p, "E", c + textRadius, dialCenterY + size * 0.029f, TEXT);
-        drawCardinal(canvas, p, "S", c, dialCenterY + textRadius + size * 0.030f, TEXT);
-        drawCardinal(canvas, p, "O", c - textRadius, dialCenterY + size * 0.029f, TEXT);
+        p.setTextSize(size * 0.076f);
+        float labelR = size * 0.290f;
+        drawCenteredText(canvas, p, "N", c, c - labelR, RED_LIGHT);
+        drawCenteredText(canvas, p, "E", c + labelR, c, WHITE);
+        drawCenteredText(canvas, p, "S", c, c + labelR, WHITE);
+        drawCenteredText(canvas, p, "O", c - labelR, c, WHITE);
 
-        // Small inter-cardinal labels improve precision without cluttering the dial.
-        p.setTextSize(size * 0.034f);
-        p.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-        p.setColor(MUTED);
-        drawAtAngle(canvas, p, "NE", c, dialCenterY, textRadius, 45);
-        drawAtAngle(canvas, p, "SE", c, dialCenterY, textRadius, 135);
-        drawAtAngle(canvas, p, "SO", c, dialCenterY, textRadius, 225);
-        drawAtAngle(canvas, p, "NO", c, dialCenterY, textRadius, 315);
+        // Inner segmented red ring.
+        float innerRingR = size * 0.225f;
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(Math.max(2f, size * 0.0065f));
+        p.setColor(RED);
+        for (int q = 0; q < 4; q++) {
+            float start = q * 90f - 70f;
+            canvas.drawArc(c - innerRingR, c - innerRingR,
+                    c + innerRingR, c + innerRingR,
+                    start, 50f, false, p);
+        }
+        p.setStrokeWidth(Math.max(1f, size * 0.003f));
+        p.setColor(Color.rgb(54, 57, 62));
+        canvas.drawCircle(c, c, innerRingR + size * 0.020f, p);
+
+        // Eight-point compass rose. North is red, E/W/S silver, diagonals graphite.
+        drawNeedle(canvas, c, c, 0f, size * 0.272f, size * 0.074f,
+                RED_LIGHT, RED_DARK, size);
+        drawNeedle(canvas, c, c, 90f, size * 0.248f, size * 0.064f,
+                Color.rgb(224, 226, 229), SILVER_DARK, size);
+        drawNeedle(canvas, c, c, 180f, size * 0.260f, size * 0.066f,
+                Color.rgb(194, 198, 202), SILVER_DARK, size);
+        drawNeedle(canvas, c, c, 270f, size * 0.248f, size * 0.064f,
+                Color.rgb(224, 226, 229), SILVER_DARK, size);
+
+        drawNeedle(canvas, c, c, 45f, size * 0.165f, size * 0.040f,
+                Color.rgb(95, 99, 104), Color.rgb(36, 39, 43), size);
+        drawNeedle(canvas, c, c, 135f, size * 0.165f, size * 0.040f,
+                Color.rgb(95, 99, 104), Color.rgb(36, 39, 43), size);
+        drawNeedle(canvas, c, c, 225f, size * 0.165f, size * 0.040f,
+                Color.rgb(95, 99, 104), Color.rgb(36, 39, 43), size);
+        drawNeedle(canvas, c, c, 315f, size * 0.165f, size * 0.040f,
+                Color.rgb(95, 99, 104), Color.rgb(36, 39, 43), size);
+
+        // Central hub.
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(BLACK_2);
+        canvas.drawCircle(c, c, size * 0.061f, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(Math.max(2f, size * 0.006f));
+        p.setColor(RED);
+        canvas.drawCircle(c, c, size * 0.061f, p);
+        p.setStrokeWidth(Math.max(1f, size * 0.0025f));
+        p.setColor(Color.rgb(70, 73, 77));
+        canvas.drawCircle(c, c, size * 0.050f, p);
 
         canvas.restore();
-
-        // Fixed top marker = direction in which the phone / head unit is pointing.
-        Path marker = new Path();
-        float markerTop = dialCenterY - outerRadius - size * 0.010f;
-        marker.moveTo(c, markerTop);
-        marker.lineTo(c - size * 0.030f, markerTop + size * 0.058f);
-        marker.lineTo(c + size * 0.030f, markerTop + size * 0.058f);
-        marker.close();
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(GTI_RED_LIGHT);
-        canvas.drawPath(marker, p);
-
-        // Minimal centre hub and fixed heading line.
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(Math.max(1.5f, size * 0.005f));
-        p.setColor(Color.rgb(54, 59, 65));
-        canvas.drawCircle(c, dialCenterY, size * 0.044f, p);
-        p.setStrokeWidth(Math.max(2f, size * 0.008f));
-        p.setColor(GTI_RED);
-        canvas.drawCircle(c, dialCenterY, size * 0.024f, p);
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(GRAPHITE_2);
-        canvas.drawCircle(c, dialCenterY, size * 0.015f, p);
-
-        // Heading readout in a restrained lower plate.
-        float plateLeft = size * 0.225f;
-        float plateRight = size * 0.775f;
-        float plateTop = size * 0.865f;
-        float plateBottom = size * 0.982f;
-        RectF plate = new RectF(plateLeft, plateTop, plateRight, plateBottom);
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(Color.rgb(12, 14, 17));
-        canvas.drawRoundRect(plate, size * 0.030f, size * 0.030f, p);
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(Math.max(1f, size * 0.004f));
-        p.setColor(Color.rgb(48, 52, 57));
-        canvas.drawRoundRect(plate, size * 0.030f, size * 0.030f, p);
-
-        int rounded = Math.round(heading) % 360;
-        String dir = direction16(rounded);
-
-        p.setStyle(Paint.Style.FILL);
-        p.setTextAlign(Paint.Align.CENTER);
-        p.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-        p.setTextSize(size * 0.054f);
-        p.setColor(TEXT);
-        drawCenteredBaseline(canvas, p, rounded + "°  " + dir, c, size * 0.930f);
-
-        p.setTextSize(size * 0.026f);
-        p.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-        p.setLetterSpacing(0.16f);
-        p.setColor(GTI_RED_LIGHT);
-        drawCenteredBaseline(canvas, p, "CAP", c, size * 0.885f);
-        p.setLetterSpacing(0f);
-
-        return bitmap;
+        return out;
     }
 
-    private static void drawAtAngle(Canvas canvas, Paint p, String text, float cx, float cy, float radius, float degrees) {
+    private static void drawFrameMarker(Canvas canvas, Paint p, float cx, float cy,
+                                        float radius, float degrees, int size) {
         double a = Math.toRadians(degrees - 90f);
-        float x = cx + (float) Math.cos(a) * radius;
-        float y = cy + (float) Math.sin(a) * radius + p.getTextSize() * 0.34f;
-        canvas.drawText(text, x, y, p);
+        float ux = (float) Math.cos(a);
+        float uy = (float) Math.sin(a);
+        float px = -uy;
+        float py = ux;
+
+        float r1 = radius - size * 0.020f;
+        float r2 = radius + size * 0.018f;
+        float half = size * 0.008f;
+        Path bar = new Path();
+        bar.moveTo(cx + ux * r1 + px * half, cy + uy * r1 + py * half);
+        bar.lineTo(cx + ux * r2 + px * half, cy + uy * r2 + py * half);
+        bar.lineTo(cx + ux * r2 - px * half, cy + uy * r2 - py * half);
+        bar.lineTo(cx + ux * r1 - px * half, cy + uy * r1 - py * half);
+        bar.close();
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(RED);
+        canvas.drawPath(bar, p);
+
+        float tipR = radius - size * 0.072f;
+        float baseR = radius - size * 0.030f;
+        float triHalf = size * 0.022f;
+        Path tri = new Path();
+        tri.moveTo(cx + ux * tipR, cy + uy * tipR);
+        tri.lineTo(cx + ux * baseR + px * triHalf, cy + uy * baseR + py * triHalf);
+        tri.lineTo(cx + ux * baseR - px * triHalf, cy + uy * baseR - py * triHalf);
+        tri.close();
+        canvas.drawPath(tri, p);
     }
 
-    private static void drawCardinal(Canvas canvas, Paint p, String text, float x, float y, int color) {
+    private static void drawNeedle(Canvas canvas, float cx, float cy, float degrees,
+                                   float length, float halfWidth, int light, int dark, int size) {
+        double a = Math.toRadians(degrees - 90f);
+        float ux = (float) Math.cos(a);
+        float uy = (float) Math.sin(a);
+        float px = -uy;
+        float py = ux;
+
+        float tipX = cx + ux * length;
+        float tipY = cy + uy * length;
+        float leftX = cx + px * halfWidth;
+        float leftY = cy + py * halfWidth;
+        float rightX = cx - px * halfWidth;
+        float rightY = cy - py * halfWidth;
+
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(Paint.Style.FILL);
+
+        Path left = new Path();
+        left.moveTo(cx, cy);
+        left.lineTo(leftX, leftY);
+        left.lineTo(tipX, tipY);
+        left.close();
+        p.setShader(new LinearGradient(cx, cy, tipX, tipY, light, dark, Shader.TileMode.CLAMP));
+        canvas.drawPath(left, p);
+
+        Path right = new Path();
+        right.moveTo(cx, cy);
+        right.lineTo(tipX, tipY);
+        right.lineTo(rightX, rightY);
+        right.close();
+        p.setShader(new LinearGradient(cx, cy, tipX, tipY, dark, light, Shader.TileMode.CLAMP));
+        canvas.drawPath(right, p);
+        p.setShader(null);
+    }
+
+    private static void drawCenteredText(Canvas canvas, Paint p, String text,
+                                         float x, float centerY, int color) {
         p.setColor(color);
-        canvas.drawText(text, x, y, p);
-    }
-
-    private static void drawCenteredBaseline(Canvas canvas, Paint p, String text, float x, float centerY) {
         Paint.FontMetrics fm = p.getFontMetrics();
-        float baseline = centerY - (fm.ascent + fm.descent) / 2f;
+        float baseline = centerY - (fm.ascent + fm.descent) * 0.5f;
         canvas.drawText(text, x, baseline, p);
     }
 
     private static float normalize(float value) {
         float n = value % 360f;
         return n < 0f ? n + 360f : n;
-    }
-
-    private static String direction16(int degrees) {
-        String[] d = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                "S", "SSO", "SO", "OSO", "O", "ONO", "NO", "NNO"};
-        int index = (int) Math.floor((degrees + 11.25) / 22.5) & 15;
-        return d[index];
     }
 }
