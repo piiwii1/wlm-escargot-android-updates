@@ -7,6 +7,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -39,10 +40,28 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         String tripDistance = p.getString("trip_distance", "");
         String tripDuration = p.getString("trip_duration", "");
         boolean simulated = p.getBoolean("simulated", false);
+        boolean idleArtEnabled = p.getBoolean("idle_art_enabled", true);
 
         NavStateExpiry.ensureScheduled(context, p, simulated);
 
         boolean empty = TextUtils.isEmpty(primary);
+        Bitmap idleArt = null;
+        boolean showIdleArt = empty && idleArtEnabled;
+        if (showIdleArt) {
+            idleArt = WidgetIdleArtwork.get();
+            if (idleArt == null) showIdleArt = false;
+        }
+
+        if (showIdleArt) {
+            RemoteViews idleViews = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_idle);
+            idleViews.setImageViewBitmap(R.id.widget_idle_art, idleArt);
+            PendingIntent maps = PendingIntent.getActivity(context, 3000 + id, mapsIntent(context),
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            idleViews.setOnClickPendingIntent(R.id.widget_root, maps);
+            manager.updateAppWidget(id, idleViews);
+            return;
+        }
+
         if (empty) {
             arrow = "↑";
             distance = "";
