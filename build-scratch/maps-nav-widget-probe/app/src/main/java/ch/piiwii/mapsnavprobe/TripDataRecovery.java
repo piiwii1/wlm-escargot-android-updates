@@ -6,80 +6,78 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Recovers total remaining distance from every textual value exposed by
- * Google Maps' notification. This is deliberately independent from the
- * manoeuvre parser so a distance placed in an unusual notification field
- * can still be displayed.
+ * Conservative fallback for total remaining distance. A distance is accepted
+ * only when it appears in the same text as a trip duration and an ETA.
+ * Standalone values such as "300 m" are therefore never promoted to the
+ * journey distance.
  */
 public final class TripDataRecovery {
     private TripDataRecovery() {}
 
     private static final Pattern DISTANCE = Pattern.compile(
             "(?iu)(\\d+(?:[.,]\\d+)?)\\s*(km|m|kilomètre(?:s)?|kilometre(?:s)?|kilometer(?:s)?|kilometre(?:s)?|meter(?:s)?|metre(?:s)?|mètre(?:s)?)\\b");
+    private static final Pattern DURATION = Pattern.compile(
+            "(?iu)\\b(?:(\\d{1,2})\\s*(?:h|hr|hrs|heure|heures|hour|hours)\\s*)?(\\d{1,3})\\s*(?:min|mins|minute|minutes)\\b|\\b\\d{1,2}\\s*(?:h|hr|hrs|heure|heures|hour|hours)\\b");
+    private static final Pattern ETA = Pattern.compile(
+            "(?iu)(?<!\\d)([01]?\\d|2[0-3])[:h.]([0-5]\\d)(?:\\s*(?:AM|PM))?(?!\\d)");
 
-    /**
-     * Returns the most plausible TOTAL remaining distance.
-     * The total must normally be greater than the distance to the next
-     * manoeuvre, which prevents e.g. \"600 m\" from being reused as the
-     * trip distance when Google Maps did not expose a total.
-     */
     public static String recoverTripDistance(String[] values, String maneuverDistance, String parsedTripDistance) {
+        if (values == null || values.length == 0) return "";
+
         double maneuverKm = parseKm(maneuverDistance);
+        String best = "";
         double bestKm = -1d;
 
-        // Keep the parser result as a candidate, but do not trust it blindly:
-        // older heuristics could accidentally capture the manoeuvre distance.
-        double parsedKm = parseKm(parsedTripDistance);
-        if (isPlausibleTotal(parsedKm, maneuverKm)) bestKm = parsedKm;
+        for (String raw : values) {
+            if (TextUtils.isEmpty(raw)) continue;
+            String clean = raw.replace('\u00A0', ' ').replace('\u202F', ' ');
 
-        if (values != null) {
-            for (String raw : values) {
-                if (TextUtils.isEmpty(raw)) continue;
-                String clean = raw.replace('\u00A0', ' ').replace('\u202F', ' ');
-                Matcher m = DISTANCE.matcher(clean);
-                while (m.find()) {
-                    if (isSpeed(clean, m.end(), m.group(2))) continue;
+            // This is the key safety rule: a trip total must come from a
+            // footer/summary containing both remaining time and arrival time.
+            if (!DURATION.matcher(clean).find() || !ETA.matcher(clean).find()) continue;
 
-                    double value;
-                    try {
-                        value = Double.parseDouble(m.group(1).replace(',', '.'));
-                    } catch (Throwable ignored) {
-                        continue;
-                    }
+            Matcher m = DISTANCE.matcher(clean);
+            while (m.find()) {
+                if (isSpeed(clean, m.end(), m.group(2))) continue;
 
-                    String unit = m.group(2).toLowerCase(Locale.ROOT);
-                    double km = isKmUnit(unit) ? value : value / 1000d;
-                    if (!isPlausibleTotal(km, maneuverKm)) continue;
-                    if (km > bestKm) bestKm = km;
+                double km = toKm(m.group(1), m.group(2));
+                if (km <= 0d || km > 5000d) continue;
+
+                // If the same value as the next manoeuvre leaks into a summary,
+                // do not use it as a fallback total. The dedicated Maps-layout
+                // extractor is allowed to accept it when it is truly verified.
+                if (maneuverKm > 0d) {
+                    double delta = Math.abs(km - maneuverKm);
+                    if (delta < Math.max(0.03d, maneuverKm * 0.01d)) continue;
+                    if (km + 0.02d < maneuverKm) continue;
+                }
+
+                if (km > bestKm) {
+                    bestKm = km;
+                    best = format(km);
                 }
             }
         }
-
-        if (bestKm < 0d) return "";
-        return format(bestKm);
+        return best;
     }
 
-    // Compatibility with older callers.
     public static String recoverTripDistance(String[] values, String maneuverDistance) {
         return recoverTripDistance(values, maneuverDistance, "");
     }
 
-    private static boolean isPlausibleTotal(double km, double maneuverKm) {
-        if (km <= 0d || km > 5000d) return false;
-        if (maneuverKm <= 0d) return true;
-
-        // The route total cannot be below the next-manoeuvre distance. Also
-        // reject an exact duplicate of the manoeuvre value: that is almost
-        // always the same field seen twice rather than a real trip total.
-        if (km + 0.02d < maneuverKm) return false;
-        double delta = Math.abs(km - maneuverKm);
-        if (delta < Math.max(0.03d, maneuverKm * 0.01d)) return false;
-        return true;
+    private static double toKm(String number, String unit) {
+        try {
+            double value = Double.parseDouble(number.replace(',', '.'));
+            String u = unit.toLowerCase(Locale.ROOT);
+            return isKmUnit(u) ? value : value / 1000d;
+        } catch (Throwable ignored) {
+            return -1d;
+        }
     }
 
     private static boolean isSpeed(String source, int matchEnd, String unit) {
-        if (!isKmUnit(unit)) return false;
-        int end = Math.min(source.length(), matchEnd + 8);
+        if (!isKmUnit(unit.toLowerCase(Locale.ROOT))) return false;
+        int end = Math.min(source.length(), matchEnd + 10);
         String tail = source.substring(matchEnd, end).toLowerCase(Locale.ROOT);
         return tail.matches("^\\s*(?:/\\s*h|/\\s*heure|par\\s+heure).*" );
     }
@@ -101,12 +99,6 @@ public final class TripDataRecovery {
         String clean = value.replace('\u00A0', ' ').replace('\u202F', ' ');
         Matcher m = DISTANCE.matcher(clean);
         if (!m.find()) return -1d;
-        try {
-            double number = Double.parseDouble(m.group(1).replace(',', '.'));
-            String unit = m.group(2).toLowerCase(Locale.ROOT);
-            return isKmUnit(unit) ? number : number / 1000d;
-        } catch (Throwable ignored) {
-            return -1d;
-        }
+        return toKm(m.group(1), m.group(2));
     }
 }
