@@ -4,6 +4,8 @@ import android.app.Notification;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.text.TextUtils;
@@ -17,10 +19,17 @@ public class MapsNotificationListener extends NotificationListenerService {
     public static final String PREFS = "maps_nav_probe";
     public static final String ACTION_UPDATE = "ch.piiwii.mapsnavprobe.NAV_UPDATE";
 
+    private final Handler navEndHandler = new Handler(Looper.getMainLooper());
+    private final Runnable clearIfNavigationEnded = () -> {
+        if (hasActiveMapsNavigation()) return;
+        clearNavigationState();
+    };
+
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn == null || !MAPS_PACKAGE.equals(sbn.getPackageName())) return;
         Notification n = sbn.getNotification();
-        if (n == null) return;
+        if (n == null || !isNavigationNotification(n)) return;
+        navEndHandler.removeCallbacks(clearIfNavigationEnded);
         Bundle e = n.extras;
         String title = value(e, Notification.EXTRA_TITLE);
         String text = value(e, Notification.EXTRA_TEXT);
@@ -91,9 +100,6 @@ public class MapsNotificationListener extends NotificationListenerService {
         if (!TextUtils.isEmpty(finalEta)) edit.putString("eta", finalEta);
         if (!TextUtils.isEmpty(finalDuration)) edit.putString("trip_duration", finalDuration);
 
-        // Never keep a previous false total (for example the 300 m to the next
-        // manoeuvre). Either this notification provides a verified trip total,
-        // or the distance field is cleared.
         if (!TextUtils.isEmpty(recoveredTripDistance)) {
             edit.putString("trip_distance", recoveredTripDistance);
         } else {
@@ -111,8 +117,56 @@ public class MapsNotificationListener extends NotificationListenerService {
 
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
         if (sbn == null || !MAPS_PACKAGE.equals(sbn.getPackageName())) return;
-        // Google Maps remplace souvent sa notification pendant une mise à jour.
-        // On garde la dernière consigne jusqu'à la suivante.
+        navEndHandler.removeCallbacks(clearIfNavigationEnded);
+        navEndHandler.postDelayed(clearIfNavigationEnded, 2500L);
+    }
+
+    private boolean hasActiveMapsNavigation() {
+        try {
+            StatusBarNotification[] active = getActiveNotifications();
+            if (active == null) return false;
+            for (StatusBarNotification item : active) {
+                if (item == null || !MAPS_PACKAGE.equals(item.getPackageName())) continue;
+                if (isNavigationNotification(item.getNotification())) return true;
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
+    private static boolean isNavigationNotification(Notification n) {
+        if (n == null) return false;
+        Bundle e = n.extras;
+        String template = value(e, "android.template").toLowerCase(Locale.ROOT);
+        if (template.contains("progressstyle")) return true;
+
+        String sub = value(e, Notification.EXTRA_SUB_TEXT).toLowerCase(Locale.ROOT);
+        if (sub.contains("arrivée") || sub.contains("arrivee") || sub.contains("arrival") || sub.contains("eta")) return true;
+
+        if (n.actions != null) {
+            for (Notification.Action action : n.actions) {
+                if (action == null || action.title == null) continue;
+                String title = action.title.toString().toLowerCase(Locale.ROOT);
+                if (title.contains("quitter la navigation") || title.contains("exit navigation") || title.contains("stop navigation")) return true;
+            }
+        }
+        return false;
+    }
+
+    private void clearNavigationState() {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .remove("arrow")
+                .remove("distance")
+                .remove("primary")
+                .remove("secondary")
+                .remove("eta")
+                .remove("trip_distance")
+                .remove("trip_duration")
+                .putBoolean("simulated", false)
+                .putString("timestamp", now())
+                .apply();
+
+        MapsNavWidget.updateAll(this);
+        sendBroadcast(new Intent(ACTION_UPDATE).setPackage(getPackageName()));
     }
 
     private static String value(Bundle b, String key) {
