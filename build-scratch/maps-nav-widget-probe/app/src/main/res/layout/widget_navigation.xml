@@ -229,4 +229,13 @@
                 android:includeFontPadding="false" />
         </LinearLayout>
     </LinearLayout>
+
+    <ImageView
+        android:id="@+id/widget_idle_art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:src="@drawable/piiwii_nav_idle"
+        android:visibility="gone"
+        android:contentDescription="Navigation inactive" />
 </FrameLayout>
