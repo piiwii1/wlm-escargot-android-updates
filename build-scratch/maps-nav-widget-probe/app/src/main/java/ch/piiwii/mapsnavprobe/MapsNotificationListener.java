@@ -30,6 +30,11 @@ public class MapsNotificationListener extends NotificationListenerService {
         String[] lines = allTextValues(e);
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
+        String recoveredTripDistance = parsed.tripDistance;
+        if (TextUtils.isEmpty(recoveredTripDistance)) {
+            recoveredTripDistance = TripDataRecovery.recoverTripDistance(lines, parsed.distance);
+        }
+
         String raw = "title=" + title +
                 "\ntext=" + text +
                 "\nbigText=" + big +
@@ -42,7 +47,7 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\ninstruction=" + parsed.instruction +
                 "\nroad=" + parsed.road +
                 "\neta=" + parsed.eta +
-                "\ntripDistance=" + parsed.tripDistance +
+                "\ntripDistance=" + recoveredTripDistance +
                 "\ntripDuration=" + parsed.tripDuration +
                 "\nsource=" + parsed.source;
 
@@ -57,7 +62,7 @@ public class MapsNotificationListener extends NotificationListenerService {
                 .putBoolean("simulated", false);
 
         if (!TextUtils.isEmpty(parsed.eta)) edit.putString("eta", parsed.eta);
-        if (!TextUtils.isEmpty(parsed.tripDistance)) edit.putString("trip_distance", parsed.tripDistance);
+        if (!TextUtils.isEmpty(recoveredTripDistance)) edit.putString("trip_distance", recoveredTripDistance);
         if (!TextUtils.isEmpty(parsed.tripDuration)) edit.putString("trip_duration", parsed.tripDuration);
 
         if ("Vous êtes arrivé".equals(parsed.instruction)) {
