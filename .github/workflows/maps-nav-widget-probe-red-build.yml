@@ -1,8 +1,8 @@
-name: Maps Nav Widget Red Build
+name: Maps Nav Widget 1.17.15 Recovery Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ restore-piiwii-nav-1.17.15-keyexport ]
     paths:
       - 'build-scratch/maps-nav-widget-probe/**'
       - '.github/workflows/maps-nav-widget-probe-red-build.yml'
@@ -41,6 +41,26 @@ jobs:
           test "$(head -c 8 "$OUT" | xxd -p)" = "89504e470d0a1a0a"
           test "$(sha256sum "$OUT" | cut -d' ' -f1)" = "977c4d8cd83aec50ea73bb269d4e5d971fa74805a35a7a43a55fd380396e9888"
 
+      - name: Repair compass PNG encoding only
+        run: |
+          REF=build-scratch/maps-nav-widget-probe/app/src/main/res/drawable-nodpi/piiwii_compass_reference.png
+          python3 -m pip install --disable-pip-version-check --quiet pillow
+          python3 - "$REF" <<'PY'
+          from PIL import Image
+          import os, sys, tempfile
+          src = sys.argv[1]
+          with Image.open(src) as im:
+              im.load()
+              rgba = im.convert('RGBA')
+              fd, tmp = tempfile.mkstemp(suffix='.png')
+              os.close(fd)
+              rgba.save(tmp, format='PNG', optimize=True, compress_level=9)
+          os.replace(tmp, src)
+          with Image.open(src) as check:
+              check.verify()
+          PY
+          test "$(head -c 8 "$REF" | xxd -p)" = "89504e470d0a1a0a"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -75,14 +95,14 @@ jobs:
       - name: Package delivery
         run: |
           mkdir -p delivery
-          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.15-compass-fixed-dial.apk
-          zip -qr delivery/PiiWii-Nav-v1.17.15-compass-fixed-dial-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.15.apk
+          zip -qr delivery/PiiWii-Nav-v1.17.15-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
           cd delivery
-          sha256sum PiiWii-Nav-v1.17.15-compass-fixed-dial.apk > PiiWii-Nav-v1.17.15-compass-fixed-dial-SHA256.txt
-          sha256sum PiiWii-Nav-v1.17.15-compass-fixed-dial-Sources.zip >> PiiWii-Nav-v1.17.15-compass-fixed-dial-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.15.apk > PiiWii-Nav-v1.17.15-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.15-Sources.zip >> PiiWii-Nav-v1.17.15-SHA256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Nav-v1.17.15-compass-fixed-dial
+          name: PiiWii-Nav-v1.17.15-RECOVERY
           path: delivery/*
           retention-days: 30
