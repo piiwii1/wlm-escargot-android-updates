@@ -29,6 +29,16 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         for (int id : ids) updateOne(context, manager, id);
     }
 
+    public static void updateCompassWidgets(Context context, float heading) {
+        SharedPreferences p = context.getSharedPreferences(MapsNotificationListener.PREFS, Context.MODE_PRIVATE);
+        if (p.getBoolean("idle_art_enabled", true)) return;
+        if (!TextUtils.isEmpty(p.getString("primary", ""))) return;
+
+        AppWidgetManager manager = AppWidgetManager.getInstance(context);
+        int[] ids = manager.getAppWidgetIds(new ComponentName(context, MapsNavSquareWidget.class));
+        for (int id : ids) updateCompassOne(context, manager, id, heading);
+    }
+
     private static void updateOne(Context context, AppWidgetManager manager, int id) {
         SharedPreferences p = context.getSharedPreferences(MapsNotificationListener.PREFS, Context.MODE_PRIVATE);
         String arrow = p.getString("arrow", "");
@@ -45,6 +55,15 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
 
         boolean empty = TextUtils.isEmpty(primary);
         boolean showIdleArt = empty && idleArtEnabled;
+        boolean showCompass = empty && !idleArtEnabled;
+
+        if (showCompass) {
+            CompassController.start(context);
+            updateCompassOne(context, manager, id, CompassController.getLastHeading(context));
+            return;
+        }
+
+        CompassController.stop();
 
         if (showIdleArt) {
             RemoteViews idleViews = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_idle);
@@ -113,6 +132,15 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         views.setOnClickPendingIntent(R.id.square_root, maps);
         views.setOnClickPendingIntent(R.id.square_status, settings);
         views.setOnClickPendingIntent(R.id.square_meta, settings);
+        manager.updateAppWidget(id, views);
+    }
+
+    private static void updateCompassOne(Context context, AppWidgetManager manager, int id, float heading) {
+        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_compass);
+        views.setImageViewBitmap(R.id.widget_compass, CompassRenderer.render(heading, 350));
+        PendingIntent maps = PendingIntent.getActivity(context, 3000 + id, mapsIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        views.setOnClickPendingIntent(R.id.widget_root, maps);
         manager.updateAppWidget(id, views);
     }
 
