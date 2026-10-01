@@ -2,6 +2,7 @@ package ch.piiwii.mapsnavprobe;
 
 import android.text.TextUtils;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -16,13 +17,20 @@ public final class NavInstructionParser {
         public final String instruction;
         public final String road;
         public final String source;
+        public final String eta;
+        public final String tripDistance;
+        public final String tripDuration;
 
-        Result(String arrow, String distance, String instruction, String road, String source) {
+        Result(String arrow, String distance, String instruction, String road, String source,
+               String eta, String tripDistance, String tripDuration) {
             this.arrow = arrow;
             this.distance = distance;
             this.instruction = instruction;
             this.road = road;
             this.source = source;
+            this.eta = eta;
+            this.tripDistance = tripDistance;
+            this.tripDuration = tripDuration;
         }
     }
 
@@ -30,8 +38,16 @@ public final class NavInstructionParser {
             "(?iu)(?:\\b(?:dans|à|a|in)\\s+)?(\\d+(?:[.,]\\d+)?\\s*(?:m|km|mètre(?:s)?|metre(?:s)?|kilomètre(?:s)?|kilometre(?:s)?|meter(?:s)?|metre(?:s)?|kilometer(?:s)?|kilometre(?:s)?))\\b");
     private static final Pattern FRENCH_EXIT = Pattern.compile("(?iu)\\b(\\d{1,2})(?:re|er|e|ème|eme)?\\s+sortie\\b");
     private static final Pattern ENGLISH_EXIT = Pattern.compile("(?iu)\\b(?:take\\s+)?(?:the\\s+)?(1st|2nd|3rd|[4-9]th|1[0-9]th)\\s+exit\\b");
-    private static final Pattern ETA = Pattern.compile(
+    private static final Pattern ETA_LINE = Pattern.compile(
             "(?iu)^(?:arrivée|arrivee|arrival|eta)\\s*(?:à|a|at)?\\s*\\d{1,2}(?::|h)\\d{2}(?:\\s.*)?$");
+    private static final Pattern ETA_VALUE = Pattern.compile(
+            "(?iu)\\b(?:arrivée|arrivee|arrival|eta)\\s*(?:à|a|at)?\\s*(\\d{1,2})(?::|h)(\\d{2})\\b");
+    private static final Pattern BARE_TIME = Pattern.compile("(?<!\\d)([01]?\\d|2[0-3])(?::|h)([0-5]\\d)(?!\\d)");
+    private static final Pattern DURATION_HM = Pattern.compile(
+            "(?iu)\\b(?:(\\d{1,2})\\s*(?:h|hr|hrs|heure|heures|hour|hours)\\s*)?(\\d{1,3})\\s*(?:min|mins|minute|minutes)\\b");
+    private static final Pattern DURATION_COMPACT = Pattern.compile("(?iu)\\b(\\d{1,2})\\s*h\\s*(\\d{1,2})\\b");
+    private static final Pattern TRIP_KM = Pattern.compile("(?iu)\\b(\\d+(?:[.,]\\d+)?)\\s*km\\b");
+    private static final Pattern TRIP_M = Pattern.compile("(?iu)\\b(\\d{2,4})\\s*m\\b");
     private static final Pattern CARDINAL_START = Pattern.compile(
             "(?iu)^(?:prenez|prendre|continuez|continue|head|proceed)\\s+(?:en\\s+)?(?:la\\s+)?(?:direction\\s+)?(?:nord|sud|est|ouest|nord[- ]est|nord[- ]ouest|sud[- ]est|sud[- ]ouest|north|south|east|west|northeast|northwest|southeast|southwest)\\b.*");
 
@@ -44,6 +60,8 @@ public final class NavInstructionParser {
         add(values, subText);
         add(values, summary);
 
+        TripInfo trip = extractTripInfo(values);
+
         String best = "";
         int bestScore = Integer.MIN_VALUE;
         for (String candidate : values) {
@@ -55,7 +73,8 @@ public final class NavInstructionParser {
         }
 
         if (TextUtils.isEmpty(best)) {
-            return new Result("·", "", "Aucune consigne", "", "");
+            return new Result("·", "", "Aucune consigne", "", "",
+                    trip.eta, trip.distance, trip.duration);
         }
 
         String lower = norm(best).toLowerCase(Locale.ROOT);
@@ -128,7 +147,143 @@ public final class NavInstructionParser {
             instruction = simplifyFallback(best, distance);
         }
 
-        return new Result(arrow, normalizeDistance(distance), instruction, cleanRoad(road), best);
+        return new Result(arrow, normalizeDistance(distance), instruction, cleanRoad(road), best,
+                trip.eta, trip.distance, trip.duration);
+    }
+
+    private static final class TripInfo {
+        String eta = "";
+        String distance = "";
+        String duration = "";
+    }
+
+    private static TripInfo extractTripInfo(List<String> values) {
+        TripInfo out = new TripInfo();
+        int durationMinutes = -1;
+        int etaMinutes = -1;
+
+        for (String candidate : values) {
+            if (TextUtils.isEmpty(candidate)) continue;
+            String l = norm(candidate).toLowerCase(Locale.ROOT);
+
+            if (TextUtils.isEmpty(out.eta)) {
+                Matcher explicit = ETA_VALUE.matcher(candidate);
+                if (explicit.find()) {
+                    etaMinutes = toMinutes(explicit.group(1), explicit.group(2));
+                    out.eta = formatClock(etaMinutes);
+                }
+            }
+
+            int candidateDuration = extractDurationMinutes(candidate);
+            if (durationMinutes < 0 && candidateDuration >= 0) durationMinutes = candidateDuration;
+
+            boolean summaryLike = ETA_VALUE.matcher(candidate).find()
+                    || candidateDuration >= 0
+                    || containsAny(l, "restant", "restante", "remaining", "distance", "trajet", "trip")
+                    || candidate.contains("·") || candidate.contains("•");
+
+            if (TextUtils.isEmpty(out.distance) && summaryLike) {
+                String d = extractTripDistance(candidate);
+                if (!TextUtils.isEmpty(d)) out.distance = d;
+            }
+
+            if (TextUtils.isEmpty(out.eta) && summaryLike) {
+                Matcher bare = BARE_TIME.matcher(candidate);
+                if (bare.find()) {
+                    etaMinutes = toMinutes(bare.group(1), bare.group(2));
+                    out.eta = formatClock(etaMinutes);
+                }
+            }
+        }
+
+        Calendar now = Calendar.getInstance();
+        int nowMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+
+        if (durationMinutes < 0 && etaMinutes >= 0) {
+            durationMinutes = etaMinutes - nowMinutes;
+            if (durationMinutes < 0) durationMinutes += 24 * 60;
+        }
+        if (etaMinutes < 0 && durationMinutes >= 0) {
+            etaMinutes = (nowMinutes + durationMinutes) % (24 * 60);
+            out.eta = formatClock(etaMinutes);
+        }
+        if (durationMinutes >= 0) out.duration = formatDuration(durationMinutes);
+        return out;
+    }
+
+    private static int extractDurationMinutes(String s) {
+        if (TextUtils.isEmpty(s)) return -1;
+        String l = norm(s).toLowerCase(Locale.ROOT);
+        if (ETA_VALUE.matcher(s).find() && !containsAny(l, "min", "minute", "hr", "hour", "heure")) return -1;
+
+        Matcher m = DURATION_HM.matcher(s);
+        if (m.find()) {
+            int h = safeInt(m.group(1));
+            int min = safeInt(m.group(2));
+            int total = h * 60 + min;
+            return total > 0 ? total : -1;
+        }
+        Matcher compact = DURATION_COMPACT.matcher(s);
+        if (compact.find() && !containsAny(l, "arrivée", "arrivee", "arrival", "eta")) {
+            int h = safeInt(compact.group(1));
+            int min = safeInt(compact.group(2));
+            int total = h * 60 + min;
+            return total > 0 ? total : -1;
+        }
+        return -1;
+    }
+
+    private static String extractTripDistance(String s) {
+        Matcher km = TRIP_KM.matcher(norm(s));
+        String last = "";
+        while (km.find()) last = km.group(1);
+        if (!TextUtils.isEmpty(last)) {
+            try {
+                double value = Double.parseDouble(last.replace(',', '.'));
+                if (Math.abs(value - Math.rint(value)) < 0.05) return String.format(Locale.FRANCE, "%.0f km", value);
+                return String.format(Locale.FRANCE, "%.1f km", value);
+            } catch (Throwable ignored) {
+                return last + " km";
+            }
+        }
+        Matcher meters = TRIP_M.matcher(norm(s));
+        String metersValue = "";
+        while (meters.find()) metersValue = meters.group(1);
+        if (!TextUtils.isEmpty(metersValue)) {
+            try {
+                double kmValue = Integer.parseInt(metersValue) / 1000.0;
+                return String.format(Locale.FRANCE, "%.1f km", kmValue);
+            } catch (Throwable ignored) {}
+        }
+        return "";
+    }
+
+    private static int toMinutes(String h, String m) {
+        int hour = safeInt(h);
+        int minute = safeInt(m);
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return -1;
+        return hour * 60 + minute;
+    }
+
+    private static int safeInt(String value) {
+        if (TextUtils.isEmpty(value)) return 0;
+        try { return Integer.parseInt(value); } catch (Throwable ignored) { return 0; }
+    }
+
+    private static String formatClock(int totalMinutes) {
+        if (totalMinutes < 0) return "";
+        totalMinutes %= (24 * 60);
+        int h = totalMinutes / 60;
+        int m = totalMinutes % 60;
+        return String.format(Locale.FRANCE, "%02d:%02d", h, m);
+    }
+
+    private static String formatDuration(int minutes) {
+        if (minutes < 0) return "";
+        if (minutes < 60) return minutes + " min";
+        int h = minutes / 60;
+        int m = minutes % 60;
+        return m == 0 ? h + " h" : String.format(Locale.FRANCE, "%d h %02d min", h, m);
     }
 
     private static int score(String s) {
@@ -206,7 +361,7 @@ public final class NavInstructionParser {
     }
 
     private static boolean isEta(String l) {
-        return ETA.matcher(norm(l)).matches();
+        return ETA_LINE.matcher(norm(l)).matches();
     }
 
     private static String suffixFrench(String n) { return "1".equals(n) ? "re" : "e"; }
