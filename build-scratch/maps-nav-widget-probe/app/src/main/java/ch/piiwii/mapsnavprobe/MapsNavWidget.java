@@ -49,8 +49,6 @@ public class MapsNavWidget extends AppWidgetProvider {
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
-        String tripSummary = TripSummaryFormatter.build(eta, tripDistance, tripDuration);
-
         Bundle options = manager.getAppWidgetOptions(id);
         int minHeight = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
         boolean compact = minHeight > 0 && minHeight < 120;
@@ -73,7 +71,8 @@ public class MapsNavWidget extends AppWidgetProvider {
         }
 
         if (compact) {
-            String compactDetail = !TextUtils.isEmpty(tripSummary) ? tripSummary : secondary;
+            String compactTrip = buildCompactTrip(eta, tripDistance, tripDuration);
+            String compactDetail = !TextUtils.isEmpty(compactTrip) ? compactTrip : secondary;
             if (TextUtils.isEmpty(compactDetail)) {
                 views.setViewVisibility(R.id.widget_detail, View.GONE);
             } else {
@@ -88,11 +87,13 @@ public class MapsNavWidget extends AppWidgetProvider {
                 views.setTextViewText(R.id.widget_detail, secondary);
             }
 
-            if (TextUtils.isEmpty(tripSummary)) {
-                views.setViewVisibility(R.id.widget_trip_summary, View.GONE);
+            if (empty) {
+                views.setViewVisibility(R.id.widget_trip_metrics, View.GONE);
             } else {
-                views.setViewVisibility(R.id.widget_trip_summary, View.VISIBLE);
-                views.setTextViewText(R.id.widget_trip_summary, tripSummary);
+                views.setViewVisibility(R.id.widget_trip_metrics, View.VISIBLE);
+                views.setTextViewText(R.id.widget_eta_value, TextUtils.isEmpty(eta) ? "—" : eta);
+                views.setTextViewText(R.id.widget_trip_distance_value, TextUtils.isEmpty(tripDistance) ? "— km" : tripDistance);
+                views.setTextViewText(R.id.widget_trip_duration_value, TextUtils.isEmpty(tripDuration) ? "—" : tripDuration);
             }
         }
 
@@ -105,6 +106,14 @@ public class MapsNavWidget extends AppWidgetProvider {
         views.setOnClickPendingIntent(R.id.widget_meta, settings);
 
         manager.updateAppWidget(id, views);
+    }
+
+    private static String buildCompactTrip(String eta, String distance, String duration) {
+        if (TextUtils.isEmpty(eta) && TextUtils.isEmpty(distance) && TextUtils.isEmpty(duration)) return "";
+        String a = TextUtils.isEmpty(eta) ? "—" : eta;
+        String d = TextUtils.isEmpty(distance) ? "— km" : distance;
+        String t = TextUtils.isEmpty(duration) ? "—" : duration;
+        return a + "  •  " + d + "  •  " + t;
     }
 
     private static Intent mapsIntent(Context context) {
