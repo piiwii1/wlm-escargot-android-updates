@@ -32,9 +32,12 @@ public class MainActivity extends Activity {
     private static final int ACCENT = Color.rgb(119, 238, 255);
     private static final int ACCENT_DARK = Color.rgb(18, 126, 226);
 
+    private static final String PREF_IDLE_ART_ENABLED = "idle_art_enabled";
+
     private TextView accessStatus, distanceView, instruction, detail, tripSummaryView, meta, liveStatus, raw;
+    private TextView idleArtValue, idleArtDescription;
     private ImageView arrowView;
-    private Button diagnosticButton, clearButton;
+    private Button diagnosticButton, clearButton, idleArtToggleButton;
     private int testIndex = 0;
     private boolean diagnosticVisible = false;
 
@@ -176,6 +179,46 @@ public class MainActivity extends Activity {
         wiLp.setMargins(0, dp(10), 0, 0);
         content.addView(widgetInfo, wiLp);
 
+        TextView settingsLabel = sectionLabel("PARAMÈTRES DU WIDGET");
+        settingsLabel.setPadding(dp(2), dp(12), 0, dp(7));
+        content.addView(settingsLabel);
+
+        LinearLayout idleArtCard = new LinearLayout(this);
+        idleArtCard.setOrientation(LinearLayout.VERTICAL);
+        idleArtCard.setPadding(dp(14), dp(12), dp(14), dp(12));
+        idleArtCard.setBackground(rounded(Color.rgb(7, 16, 24), 17, Color.rgb(26, 50, 66)));
+
+        LinearLayout idleArtHeader = new LinearLayout(this);
+        idleArtHeader.setOrientation(LinearLayout.HORIZONTAL);
+        idleArtHeader.setGravity(Gravity.CENTER_VERTICAL);
+        TextView idleArtTitle = text("Image d’attente", 13, true, TEXT);
+        idleArtHeader.addView(idleArtTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        idleArtValue = text("", 12, true, ACCENT);
+        idleArtHeader.addView(idleArtValue);
+        idleArtCard.addView(idleArtHeader);
+
+        idleArtDescription = text("", 11, false, MUTED);
+        idleArtDescription.setPadding(0, dp(5), 0, 0);
+        idleArtCard.addView(idleArtDescription);
+
+        idleArtToggleButton = secondaryButton("");
+        idleArtToggleButton.setOnClickListener(v -> {
+            boolean enabledPref = isIdleArtworkEnabled();
+            getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(PREF_IDLE_ART_ENABLED, !enabledPref)
+                    .apply();
+            MapsNavWidget.updateAll(this);
+            refresh();
+        });
+        LinearLayout.LayoutParams idleToggleLp = new LinearLayout.LayoutParams(-1, dp(44));
+        idleToggleLp.setMargins(0, dp(10), 0, 0);
+        idleArtCard.addView(idleArtToggleButton, idleToggleLp);
+
+        LinearLayout.LayoutParams idleCardLp = new LinearLayout.LayoutParams(-1, -2);
+        idleCardLp.setMargins(0, 0, 0, 0);
+        content.addView(idleArtCard, idleCardLp);
+
         Button simulate = secondaryButton("Tester la manœuvre suivante");
         simulate.setOnClickListener(v -> simulateNext());
         LinearLayout.LayoutParams simLp = new LinearLayout.LayoutParams(-1, dp(46));
@@ -200,7 +243,9 @@ public class MainActivity extends Activity {
 
         clearButton = secondaryButton("Effacer les données de test");
         clearButton.setOnClickListener(v -> {
-            getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE).edit().clear().apply();
+            SharedPreferences prefs = getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE);
+            boolean keepIdleArtwork = prefs.getBoolean(PREF_IDLE_ART_ENABLED, true);
+            prefs.edit().clear().putBoolean(PREF_IDLE_ART_ENABLED, keepIdleArtwork).apply();
             MapsNavWidget.updateAll(this);
             refresh();
         });
@@ -297,7 +342,29 @@ public class MainActivity extends Activity {
                 tripSummaryView.setVisibility(View.VISIBLE);
             }
         }
+        refreshIdleArtPreference();
         raw.setText(TextUtils.isEmpty(rawText) ? "Aucune donnée reçue de Google Maps." : rawText);
+    }
+
+    private boolean isIdleArtworkEnabled() {
+        return getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE)
+                .getBoolean(PREF_IDLE_ART_ENABLED, true);
+    }
+
+    private void refreshIdleArtPreference() {
+        boolean enabled = isIdleArtworkEnabled();
+        if (idleArtValue != null) {
+            idleArtValue.setText(enabled ? "Activée" : "Désactivée");
+            idleArtValue.setTextColor(enabled ? ACCENT : Color.rgb(255, 198, 112));
+        }
+        if (idleArtDescription != null) {
+            idleArtDescription.setText(enabled
+                    ? "Sans trajet actif, le widget affiche l’image prédéfinie."
+                    : "Sans trajet actif, le widget affiche la flèche bleue et “En attente d’un trajet”.");
+        }
+        if (idleArtToggleButton != null) {
+            idleArtToggleButton.setText(enabled ? "Désactiver l’image d’attente" : "Activer l’image d’attente");
+        }
     }
 
     private boolean listenerEnabled() {
