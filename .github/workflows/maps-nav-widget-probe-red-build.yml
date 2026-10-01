@@ -1,0 +1,88 @@
+name: Maps Nav Widget Red Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'build-scratch/maps-nav-widget-probe/**'
+      - '.github/workflows/maps-nav-widget-probe-red-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare selected red navigation PNG
+        run: |
+          ART=build-scratch/maps-nav-widget-probe/app/src/main/red-art
+          OUT=build-scratch/maps-nav-widget-probe/app/src/main/res/drawable-nodpi/piiwii_nav_red.png
+          cat \
+            "$ART/red512.b64.part00" \
+            "$ART/red512.b64.part01a" \
+            "$ART/red512.b64.part01b" \
+            "$ART/red512.b64.part02" \
+            "$ART/red512.b64.part03" \
+            "$ART/red512.b64.part04a" \
+            "$ART/red512.b64.part04b1_00" \
+            "$ART/red512.b64.part04b1_01" \
+            "$ART/red512.b64.part04b1_02" \
+            "$ART/red512.b64.part04b2" \
+            "$ART/red512.b64.part05a" \
+            "$ART/red512.b64.part05b" \
+            "$ART/red512.b64.part06_00" \
+            "$ART/red512.b64.part06_01" \
+            "$ART/red512.b64.part06_02" \
+            "$ART/red512.b64.part06_03" \
+            | base64 --decode > "$OUT"
+          test "$(head -c 8 "$OUT" | xxd -p)" = "89504e470d0a1a0a"
+          test "$(sha256sum "$OUT" | cut -d' ' -f1)" = "977c4d8cd83aec50ea73bb269d4e5d971fa74805a35a7a43a55fd380396e9888"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Restore stable signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.piiwii-maps-probe
+          key: maps-nav-probe-signing-v1
+
+      - name: Configure signing path
+        run: |
+          KEYSTORE="$HOME/.piiwii-maps-probe/maps-nav-probe.jks"
+          test -f "$KEYSTORE"
+          echo "MAPS_PROBE_KEYSTORE=$KEYSTORE" >> "$GITHUB_ENV"
+
+      - name: Install Android SDK 35
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build signed APK
+        working-directory: build-scratch/maps-nav-widget-probe
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Package delivery
+        run: |
+          mkdir -p delivery
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.11-red-icon.apk
+          zip -qr delivery/PiiWii-Nav-v1.17.11-red-icon-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
+          cd delivery
+          sha256sum PiiWii-Nav-v1.17.11-red-icon.apk > PiiWii-Nav-v1.17.11-red-icon-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.11-red-icon-Sources.zip >> PiiWii-Nav-v1.17.11-red-icon-SHA256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Nav-v1.17.11-red-icon
+          path: delivery/*
+          retention-days: 30
