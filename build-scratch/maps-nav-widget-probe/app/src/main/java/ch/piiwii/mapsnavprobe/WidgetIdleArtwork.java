@@ -14,7 +14,7 @@ public final class WidgetIdleArtwork {
         Bitmap source = IdleArtwork.get();
         if (source == null || source.isRecycled()) return null;
 
-        final int maxWidth = 480;
+        final int maxWidth = 640;
         if (source.getWidth() <= maxWidth) {
             cached = source;
             return cached;
