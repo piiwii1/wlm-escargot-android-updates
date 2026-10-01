@@ -7,6 +7,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -47,6 +48,23 @@ public class MapsNavWidget extends AppWidgetProvider {
         NavStateExpiry.ensureScheduled(context, p, simulated);
 
         boolean empty = TextUtils.isEmpty(primary);
+        Bitmap idleArt = null;
+        boolean showIdleArt = empty && idleArtEnabled;
+        if (showIdleArt) {
+            idleArt = WidgetIdleArtwork.get();
+            if (idleArt == null) showIdleArt = false;
+        }
+
+        if (showIdleArt) {
+            RemoteViews idleViews = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_idle);
+            idleViews.setImageViewBitmap(R.id.widget_idle_art, idleArt);
+            PendingIntent maps = PendingIntent.getActivity(context, 1000 + id, mapsIntent(context),
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            idleViews.setOnClickPendingIntent(R.id.widget_root, maps);
+            manager.updateAppWidget(id, idleViews);
+            return;
+        }
+
         if (empty) {
             arrow = "↑";
             distance = "";
@@ -60,8 +78,6 @@ public class MapsNavWidget extends AppWidgetProvider {
         boolean compact = minHeight > 0 && minHeight < 120;
         int layout = compact ? R.layout.widget_navigation_compact : R.layout.widget_navigation;
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
-        if (empty && idleArtEnabled) views.setImageViewBitmap(R.id.widget_idle_art, IdleArtwork.get());
-        views.setViewVisibility(R.id.widget_idle_art, (empty && idleArtEnabled) ? View.VISIBLE : View.GONE);
 
         float density = context.getResources().getDisplayMetrics().density;
         int iconDp = compact ? 78 : 104;
