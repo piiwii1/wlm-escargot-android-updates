@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Maps Nav Probe</string>
-    <string name="widget_description">Affiche la dernière indication détectée dans la notification Google Maps.</string>
-    <string name="widget_square_description">Widget carré 4×4 pour la navigation Google Maps.</string>
-    <string name="widget_horizontal_name">Maps Nav horizontal</string>
-    <string name="widget_square_name">Maps Nav carré 4×4</string>
+    <string name="app_name">PiiWii Nav</string>
+    <string name="widget_description">Navigation Google Maps en direct, optimisée pour Launcher GTI.</string>
+    <string name="widget_square_description">PiiWii Nav carré 4×4 pour la navigation Google Maps.</string>
+    <string name="widget_horizontal_name">PiiWii Nav · Horizontal</string>
+    <string name="widget_square_name">PiiWii Nav · Carré 4×4</string>
 </resources>
