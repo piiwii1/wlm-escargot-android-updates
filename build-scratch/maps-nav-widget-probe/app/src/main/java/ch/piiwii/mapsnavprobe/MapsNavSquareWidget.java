@@ -40,6 +40,8 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         String tripDuration = p.getString("trip_duration", "");
         boolean simulated = p.getBoolean("simulated", false);
 
+        NavStateExpiry.ensureScheduled(context, p, simulated);
+
         boolean empty = TextUtils.isEmpty(primary);
         if (empty) {
             arrow = "↑";
