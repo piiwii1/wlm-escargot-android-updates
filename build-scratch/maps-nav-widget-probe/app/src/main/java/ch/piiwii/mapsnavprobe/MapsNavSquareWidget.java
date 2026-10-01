@@ -35,6 +35,9 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         String distance = p.getString("distance", "");
         String primary = p.getString("primary", "");
         String secondary = p.getString("secondary", "");
+        String eta = p.getString("eta", "");
+        String tripDistance = p.getString("trip_distance", "");
+        String tripDuration = p.getString("trip_duration", "");
         boolean simulated = p.getBoolean("simulated", false);
 
         boolean empty = TextUtils.isEmpty(primary);
@@ -45,6 +48,8 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
             secondary = "Démarre une navigation dans Google Maps";
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
+
+        String tripSummary = TripSummaryFormatter.build(eta, tripDistance, tripDuration);
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_square);
         Bundle options = manager.getAppWidgetOptions(id);
@@ -62,6 +67,7 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         views.setTextViewTextSize(R.id.square_distance, TypedValue.COMPLEX_UNIT_SP, small ? 29f : 36f);
         views.setTextViewTextSize(R.id.square_instruction, TypedValue.COMPLEX_UNIT_SP, small ? 17f : 21f);
         views.setTextViewTextSize(R.id.square_detail, TypedValue.COMPLEX_UNIT_SP, small ? 10f : 12f);
+        views.setTextViewTextSize(R.id.square_trip_summary, TypedValue.COMPLEX_UNIT_SP, small ? 9f : 10f);
 
         if (TextUtils.isEmpty(distance)) {
             views.setViewVisibility(R.id.square_distance, View.GONE);
@@ -75,6 +81,13 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         } else {
             views.setViewVisibility(R.id.square_detail, View.VISIBLE);
             views.setTextViewText(R.id.square_detail, secondary);
+        }
+
+        if (TextUtils.isEmpty(tripSummary)) {
+            views.setViewVisibility(R.id.square_trip_summary, View.GONE);
+        } else {
+            views.setViewVisibility(R.id.square_trip_summary, View.VISIBLE);
+            views.setTextViewText(R.id.square_trip_summary, tripSummary);
         }
 
         PendingIntent maps = PendingIntent.getActivity(context, 3000 + id, mapsIntent(context),
