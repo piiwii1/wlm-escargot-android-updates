@@ -6,10 +6,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Conservative fallback for total remaining distance. A distance is accepted
- * only when it appears in the same text as a trip duration and an ETA.
- * Standalone values such as "300 m" are therefore never promoted to the
- * journey distance.
+ * Conservative fallback for total remaining distance.
+ *
+ * The parser's own trip-distance result is now retained when it is plausible
+ * and different from the next manoeuvre. If Maps split duration, distance and
+ * ETA over different text fields, we also aggregate those fields globally.
  */
 public final class TripDataRecovery {
     private TripDataRecovery() {}
@@ -22,35 +23,45 @@ public final class TripDataRecovery {
             "(?iu)(?<!\\d)([01]?\\d|2[0-3])[:h.]([0-5]\\d)(?:\\s*(?:AM|PM))?(?!\\d)");
 
     public static String recoverTripDistance(String[] values, String maneuverDistance, String parsedTripDistance) {
-        if (values == null || values.length == 0) return "";
-
         double maneuverKm = parseKm(maneuverDistance);
         String best = "";
         double bestKm = -1d;
 
+        // The main parser only fills parsedTripDistance from text that already
+        // looks like a trip summary. Keep it when it cannot be the next-turn
+        // distance. Previous code received this argument but ignored it.
+        double parsedKm = parseKm(parsedTripDistance);
+        if (isPlausibleTotal(parsedKm, maneuverKm)) {
+            bestKm = parsedKm;
+            best = format(parsedKm);
+        }
+
+        if (values == null || values.length == 0) return best;
+
+        boolean hasDuration = false;
+        boolean hasEta = false;
         for (String raw : values) {
             if (TextUtils.isEmpty(raw)) continue;
             String clean = raw.replace('\u00A0', ' ').replace('\u202F', ' ');
+            if (DURATION.matcher(clean).find()) hasDuration = true;
+            if (ETA.matcher(clean).find()) hasEta = true;
+        }
 
-            // This is the key safety rule: a trip total must come from a
-            // footer/summary containing both remaining time and arrival time.
-            if (!DURATION.matcher(clean).find() || !ETA.matcher(clean).find()) continue;
+        // Only scan standalone distance fields when the same notification also
+        // exposes explicit duration AND ETA somewhere. They may be in separate
+        // TextViews; requiring one combined line was the old failure mode.
+        if (!(hasDuration && hasEta)) return best;
+
+        for (String raw : values) {
+            if (TextUtils.isEmpty(raw)) continue;
+            String clean = raw.replace('\u00A0', ' ').replace('\u202F', ' ');
 
             Matcher m = DISTANCE.matcher(clean);
             while (m.find()) {
                 if (isSpeed(clean, m.end(), m.group(2))) continue;
 
                 double km = toKm(m.group(1), m.group(2));
-                if (km <= 0d || km > 5000d) continue;
-
-                // If the same value as the next manoeuvre leaks into a summary,
-                // do not use it as a fallback total. The dedicated Maps-layout
-                // extractor is allowed to accept it when it is truly verified.
-                if (maneuverKm > 0d) {
-                    double delta = Math.abs(km - maneuverKm);
-                    if (delta < Math.max(0.03d, maneuverKm * 0.01d)) continue;
-                    if (km + 0.02d < maneuverKm) continue;
-                }
+                if (!isPlausibleTotal(km, maneuverKm)) continue;
 
                 if (km > bestKm) {
                     bestKm = km;
@@ -63,6 +74,18 @@ public final class TripDataRecovery {
 
     public static String recoverTripDistance(String[] values, String maneuverDistance) {
         return recoverTripDistance(values, maneuverDistance, "");
+    }
+
+    private static boolean isPlausibleTotal(double km, double maneuverKm) {
+        if (km <= 0d || km > 5000d) return false;
+        if (maneuverKm <= 0d) return true;
+
+        // A journey total cannot normally be below the distance to the next
+        // manoeuvre, and an exact duplicate is almost always that same field.
+        if (km + 0.02d < maneuverKm) return false;
+        double delta = Math.abs(km - maneuverKm);
+        if (delta < Math.max(0.03d, maneuverKm * 0.01d)) return false;
+        return true;
     }
 
     private static double toKm(String number, String unit) {
