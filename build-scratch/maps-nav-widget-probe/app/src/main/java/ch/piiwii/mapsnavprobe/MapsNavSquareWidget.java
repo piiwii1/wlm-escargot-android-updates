@@ -49,37 +49,25 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
+        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_square);
         Bundle options = manager.getAppWidgetOptions(id);
         int minW = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
         int minH = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
-
-        // A 4x4 cell on TS18/LEHX can be much shorter than the nominal Android
-        // size. Use dedicated layouts so the bottom metrics can never be pushed
-        // outside the host bounds.
-        boolean tiny = minH > 0 && minH < 220;
-        boolean compact = minH <= 0 || (!tiny && minH < 380);
-        int layout = tiny ? R.layout.widget_navigation_square_tiny
-                : (compact ? R.layout.widget_navigation_square_compact : R.layout.widget_navigation_square);
-        RemoteViews views = new RemoteViews(context.getPackageName(), layout);
+        boolean small = (minW > 0 && minW < 230) || (minH > 0 && minH < 230);
 
         float density = context.getResources().getDisplayMetrics().density;
-        int iconDp = tiny ? 72 : (compact ? 96 : 150);
-        int iconPx = Math.max(192, Math.round(iconDp * density));
+        int iconDp = small ? 112 : 150;
+        int iconPx = Math.max(256, Math.round(iconDp * density));
         views.setImageViewBitmap(R.id.square_arrow, NavIconSelector.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.square_instruction, primary);
-        views.setTextViewText(R.id.square_meta, compact || tiny ? "MAPS" : "GOOGLE MAPS");
+        views.setTextViewText(R.id.square_meta, "GOOGLE MAPS");
         views.setTextViewText(R.id.square_status, simulated ? "TEST" : (empty ? "PRÊT" : "LIVE"));
-
-        float distanceSp = tiny ? 23f : (compact ? 28f : 36f);
-        float instructionSp = tiny ? 14f : (compact ? 16f : 21f);
-        float detailSp = tiny ? 8f : (compact ? 9f : 12f);
-        float metricSp = tiny ? 11f : (compact ? 13f : 16f);
-        views.setTextViewTextSize(R.id.square_distance, TypedValue.COMPLEX_UNIT_SP, distanceSp);
-        views.setTextViewTextSize(R.id.square_instruction, TypedValue.COMPLEX_UNIT_SP, instructionSp);
-        views.setTextViewTextSize(R.id.square_detail, TypedValue.COMPLEX_UNIT_SP, detailSp);
-        views.setTextViewTextSize(R.id.square_eta_value, TypedValue.COMPLEX_UNIT_SP, metricSp);
-        views.setTextViewTextSize(R.id.square_trip_distance_value, TypedValue.COMPLEX_UNIT_SP, metricSp);
-        views.setTextViewTextSize(R.id.square_trip_duration_value, TypedValue.COMPLEX_UNIT_SP, metricSp);
+        views.setTextViewTextSize(R.id.square_distance, TypedValue.COMPLEX_UNIT_SP, small ? 29f : 36f);
+        views.setTextViewTextSize(R.id.square_instruction, TypedValue.COMPLEX_UNIT_SP, small ? 17f : 21f);
+        views.setTextViewTextSize(R.id.square_detail, TypedValue.COMPLEX_UNIT_SP, small ? 10f : 12f);
+        views.setTextViewTextSize(R.id.square_eta_value, TypedValue.COMPLEX_UNIT_SP, small ? 13f : 16f);
+        views.setTextViewTextSize(R.id.square_trip_distance_value, TypedValue.COMPLEX_UNIT_SP, small ? 13f : 16f);
+        views.setTextViewTextSize(R.id.square_trip_duration_value, TypedValue.COMPLEX_UNIT_SP, small ? 13f : 16f);
 
         if (TextUtils.isEmpty(distance)) {
             views.setViewVisibility(R.id.square_distance, View.GONE);
@@ -88,9 +76,7 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
             views.setTextViewText(R.id.square_distance, distance);
         }
 
-        boolean hideDetail = tiny || TextUtils.isEmpty(secondary)
-                || (compact && ((minH > 0 && minH < 280) || primary.length() > 28));
-        if (hideDetail) {
+        if (TextUtils.isEmpty(secondary) || (small && primary.length() > 28)) {
             views.setViewVisibility(R.id.square_detail, View.GONE);
         } else {
             views.setViewVisibility(R.id.square_detail, View.VISIBLE);
