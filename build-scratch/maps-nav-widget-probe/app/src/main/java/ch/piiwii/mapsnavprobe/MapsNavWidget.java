@@ -51,21 +51,16 @@ public class MapsNavWidget extends AppWidgetProvider {
 
         Bundle options = manager.getAppWidgetOptions(id);
         int minHeight = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
-
-        // Some car launchers report 0 or an optimistic height. Default to the
-        // safer medium layout when the host does not give us a trustworthy size.
-        boolean compact = minHeight > 0 && minHeight < 105;
-        boolean medium = minHeight <= 0 || (!compact && minHeight < 180);
-        int layout = compact ? R.layout.widget_navigation_compact
-                : (medium ? R.layout.widget_navigation_medium : R.layout.widget_navigation);
+        boolean compact = minHeight > 0 && minHeight < 120;
+        int layout = compact ? R.layout.widget_navigation_compact : R.layout.widget_navigation;
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
 
         float density = context.getResources().getDisplayMetrics().density;
-        int iconDp = compact ? 62 : (medium ? 78 : 104);
+        int iconDp = compact ? 78 : 104;
         int iconPx = Math.max(192, Math.round(iconDp * density));
         views.setImageViewBitmap(R.id.widget_arrow, NavIconSelector.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.widget_instruction, primary);
-        views.setTextViewText(R.id.widget_meta, compact || medium ? "MAPS" : "GOOGLE MAPS");
+        views.setTextViewText(R.id.widget_meta, compact ? "MAPS" : "GOOGLE MAPS");
         views.setTextViewText(R.id.widget_status, simulated ? "TEST" : (empty ? "PRÊT" : "LIVE"));
 
         if (TextUtils.isEmpty(distance)) {
