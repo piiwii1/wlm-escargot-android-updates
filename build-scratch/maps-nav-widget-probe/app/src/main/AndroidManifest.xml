@@ -30,6 +30,10 @@
         </service>
 
         <receiver
+            android:name=".NavStateExpiry"
+            android:exported="false" />
+
+        <receiver
             android:name=".MapsNavWidget"
             android:exported="true"
             android:label="@string/widget_horizontal_name">
