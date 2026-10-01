@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(128, 149, 168);
     private static final int ACCENT = Color.rgb(119, 238, 255);
     private static final int ACCENT_DARK = Color.rgb(18, 126, 226);
+    private static final int GTI_RED = Color.rgb(226, 0, 26);
 
     private static final String PREF_IDLE_ART_ENABLED = "idle_art_enabled";
 
@@ -191,7 +192,7 @@ public class MainActivity extends Activity {
         LinearLayout idleArtHeader = new LinearLayout(this);
         idleArtHeader.setOrientation(LinearLayout.HORIZONTAL);
         idleArtHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView idleArtTitle = text("Image d’attente", 13, true, TEXT);
+        TextView idleArtTitle = text("Affichage sans trajet", 13, true, TEXT);
         idleArtHeader.addView(idleArtTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         idleArtValue = text("", 12, true, ACCENT);
         idleArtHeader.addView(idleArtValue);
@@ -203,10 +204,10 @@ public class MainActivity extends Activity {
 
         idleArtToggleButton = secondaryButton("");
         idleArtToggleButton.setOnClickListener(v -> {
-            boolean enabledPref = isIdleArtworkEnabled();
+            boolean imageMode = isIdleArtworkEnabled();
             getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE)
                     .edit()
-                    .putBoolean(PREF_IDLE_ART_ENABLED, !enabledPref)
+                    .putBoolean(PREF_IDLE_ART_ENABLED, !imageMode)
                     .apply();
             MapsNavWidget.updateAll(this);
             refresh();
@@ -352,18 +353,18 @@ public class MainActivity extends Activity {
     }
 
     private void refreshIdleArtPreference() {
-        boolean enabled = isIdleArtworkEnabled();
+        boolean imageMode = isIdleArtworkEnabled();
         if (idleArtValue != null) {
-            idleArtValue.setText(enabled ? "Activée" : "Désactivée");
-            idleArtValue.setTextColor(enabled ? ACCENT : Color.rgb(255, 198, 112));
+            idleArtValue.setText(imageMode ? "IMAGE" : "BOUSSOLE");
+            idleArtValue.setTextColor(imageMode ? ACCENT : GTI_RED);
         }
         if (idleArtDescription != null) {
-            idleArtDescription.setText(enabled
-                    ? "Sans trajet actif, le widget affiche l’image prédéfinie."
-                    : "Sans trajet actif, le widget affiche la flèche bleue et “En attente d’un trajet”.");
+            idleArtDescription.setText(imageMode
+                    ? "Sans trajet actif, le widget affiche l’image GTI prédéfinie."
+                    : "Sans trajet actif, le widget affiche une vraie boussole N / E / S / O qui suit l’orientation du téléphone.");
         }
         if (idleArtToggleButton != null) {
-            idleArtToggleButton.setText(enabled ? "Désactiver l’image d’attente" : "Activer l’image d’attente");
+            idleArtToggleButton.setText(imageMode ? "Utiliser la boussole" : "Utiliser l’image");
         }
     }
 
