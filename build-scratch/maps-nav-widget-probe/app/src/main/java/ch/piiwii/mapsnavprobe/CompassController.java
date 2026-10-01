@@ -12,9 +12,9 @@ import android.view.WindowManager;
 /** Lightweight sensor listener used only while an idle widget is in compass mode. */
 public final class CompassController implements SensorEventListener {
     private static final CompassController INSTANCE = new CompassController();
-    private static final long MIN_UPDATE_MS = 160L;
-    private static final long FORCE_UPDATE_MS = 900L;
-    private static final float MIN_VISIBLE_CHANGE = 0.35f;
+    private static final long MIN_UPDATE_MS = 100L;
+    private static final long FORCE_UPDATE_MS = 700L;
+    private static final float MIN_VISIBLE_CHANGE = 0.25f;
 
     private Context appContext;
     private SensorManager sensorManager;
@@ -109,10 +109,10 @@ public final class CompassController implements SensorEventListener {
             float delta = shortestDelta(smoothedHeading, heading);
             float abs = Math.abs(delta);
             float alpha;
-            if (abs < 2f) alpha = 0.20f;
-            else if (abs < 8f) alpha = 0.30f;
-            else if (abs < 25f) alpha = 0.45f;
-            else alpha = 0.62f;
+            if (abs < 1.5f) alpha = 0.18f;
+            else if (abs < 6f) alpha = 0.32f;
+            else if (abs < 18f) alpha = 0.48f;
+            else alpha = 0.68f;
             smoothedHeading = normalize(smoothedHeading + delta * alpha);
         }
 
