@@ -6,7 +6,9 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import android.text.TextUtils;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
@@ -25,7 +27,7 @@ public class MapsNotificationListener extends NotificationListenerService {
         String big = value(e, Notification.EXTRA_BIG_TEXT);
         String sub = value(e, Notification.EXTRA_SUB_TEXT);
         String summary = value(e, Notification.EXTRA_SUMMARY_TEXT);
-        String[] lines = textLines(e);
+        String[] lines = allTextValues(e);
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
         String raw = "title=" + title +
@@ -33,32 +35,44 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\nbigText=" + big +
                 "\nsubText=" + sub +
                 "\nsummary=" + summary +
-                "\ntextLines=" + joinLines(lines) +
+                "\nallText=" + joinLines(lines) +
                 "\n\nPARSED" +
                 "\narrow=" + parsed.arrow +
                 "\ndistance=" + parsed.distance +
                 "\ninstruction=" + parsed.instruction +
                 "\nroad=" + parsed.road +
+                "\neta=" + parsed.eta +
+                "\ntripDistance=" + parsed.tripDistance +
+                "\ntripDuration=" + parsed.tripDuration +
                 "\nsource=" + parsed.source;
 
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-        p.edit()
+        SharedPreferences.Editor edit = p.edit()
                 .putString("arrow", parsed.arrow)
                 .putString("distance", parsed.distance)
                 .putString("primary", parsed.instruction)
                 .putString("secondary", parsed.road)
                 .putString("raw", raw)
                 .putString("timestamp", now())
-                .putBoolean("simulated", false)
-                .apply();
+                .putBoolean("simulated", false);
+
+        if (!TextUtils.isEmpty(parsed.eta)) edit.putString("eta", parsed.eta);
+        if (!TextUtils.isEmpty(parsed.tripDistance)) edit.putString("trip_distance", parsed.tripDistance);
+        if (!TextUtils.isEmpty(parsed.tripDuration)) edit.putString("trip_duration", parsed.tripDuration);
+
+        if ("Vous êtes arrivé".equals(parsed.instruction)) {
+            edit.remove("eta").remove("trip_distance").remove("trip_duration");
+        }
+        edit.apply();
+
         MapsNavWidget.updateAll(this);
         sendBroadcast(new Intent(ACTION_UPDATE).setPackage(getPackageName()));
     }
 
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
         if (sbn == null || !MAPS_PACKAGE.equals(sbn.getPackageName())) return;
-        // On ne vide pas immédiatement la dernière consigne : Google Maps peut remplacer
-        // sa notification pendant une mise à jour. La prochaine notification prend le relais.
+        // Google Maps remplace souvent sa notification pendant une mise à jour.
+        // On garde donc la dernière consigne et le résumé trajet jusqu'à la suivante.
     }
 
     private static String value(Bundle b, String key) {
@@ -67,13 +81,26 @@ public class MapsNotificationListener extends NotificationListenerService {
         return v == null ? "" : String.valueOf(v).trim();
     }
 
-    private static String[] textLines(Bundle b) {
+    private static String[] allTextValues(Bundle b) {
         if (b == null) return new String[0];
-        CharSequence[] raw = b.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
-        if (raw == null) return new String[0];
-        String[] out = new String[raw.length];
-        for (int i = 0; i < raw.length; i++) out[i] = raw[i] == null ? "" : raw[i].toString().trim();
-        return out;
+        ArrayList<String> out = new ArrayList<>();
+        for (String key : b.keySet()) {
+            Object v;
+            try { v = b.get(key); } catch (Throwable ignored) { continue; }
+            if (v instanceof CharSequence) addUnique(out, v.toString());
+            else if (v instanceof CharSequence[]) {
+                for (CharSequence s : (CharSequence[]) v) if (s != null) addUnique(out, s.toString());
+            }
+        }
+        return out.toArray(new String[0]);
+    }
+
+    private static void addUnique(ArrayList<String> out, String value) {
+        if (value == null) return;
+        String clean = value.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
+        if (clean.isEmpty()) return;
+        for (String existing : out) if (existing.equals(clean)) return;
+        out.add(clean);
     }
 
     private static String joinLines(String[] lines) {
