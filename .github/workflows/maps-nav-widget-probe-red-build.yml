@@ -75,14 +75,14 @@ jobs:
       - name: Package delivery
         run: |
           mkdir -p delivery
-          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.14-compass-reference.apk
-          zip -qr delivery/PiiWii-Nav-v1.17.14-compass-reference-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.15-compass-fixed-dial.apk
+          zip -qr delivery/PiiWii-Nav-v1.17.15-compass-fixed-dial-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
           cd delivery
-          sha256sum PiiWii-Nav-v1.17.14-compass-reference.apk > PiiWii-Nav-v1.17.14-compass-reference-SHA256.txt
-          sha256sum PiiWii-Nav-v1.17.14-compass-reference-Sources.zip >> PiiWii-Nav-v1.17.14-compass-reference-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.15-compass-fixed-dial.apk > PiiWii-Nav-v1.17.15-compass-fixed-dial-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.15-compass-fixed-dial-Sources.zip >> PiiWii-Nav-v1.17.15-compass-fixed-dial-SHA256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Nav-v1.17.14-compass-reference
+          name: PiiWii-Nav-v1.17.15-compass-fixed-dial
           path: delivery/*
           retention-days: 30

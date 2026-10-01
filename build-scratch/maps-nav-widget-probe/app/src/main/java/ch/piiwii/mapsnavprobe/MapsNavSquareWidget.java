@@ -137,7 +137,7 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
 
     private static void updateCompassOne(Context context, AppWidgetManager manager, int id, float heading) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_compass);
-        views.setImageViewBitmap(R.id.widget_compass, CompassRenderer.render(heading, 350));
+        views.setImageViewBitmap(R.id.widget_compass, CompassRenderer.render(context, heading, 350));
         PendingIntent maps = PendingIntent.getActivity(context, 3000 + id, mapsIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         views.setOnClickPendingIntent(R.id.widget_root, maps);
