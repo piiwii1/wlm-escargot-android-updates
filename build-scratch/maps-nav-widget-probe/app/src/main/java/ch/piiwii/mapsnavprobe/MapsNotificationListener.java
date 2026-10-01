@@ -33,15 +33,13 @@ public class MapsNotificationListener extends NotificationListenerService {
         String[] lines = mergeUnique(extraLines, renderedLines);
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
-
-        // Strongest source: Google Maps' own notification layout. On many
-        // versions nav_time/header_text contains "duration · distance · ETA".
         GoogleMapsTripInfoExtractor.Result mapsTrip = GoogleMapsTripInfoExtractor.extract(this, sbn);
 
         String recoveredTripDistance = mapsTrip.distance;
+        String distanceSource = TextUtils.isEmpty(recoveredTripDistance) ? "none" : "maps-layout";
         if (TextUtils.isEmpty(recoveredTripDistance)) {
-            recoveredTripDistance = TripDataRecovery.recoverTripDistance(
-                    lines, parsed.distance, parsed.tripDistance);
+            recoveredTripDistance = TripDataRecovery.recoverTripDistance(lines, parsed.distance, parsed.tripDistance);
+            if (!TextUtils.isEmpty(recoveredTripDistance)) distanceSource = "verified-text-summary";
         }
 
         String finalEta = !TextUtils.isEmpty(mapsTrip.eta) ? mapsTrip.eta : parsed.eta;
@@ -67,6 +65,7 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\ntripDistanceParser=" + parsed.tripDistance +
                 "\ntripDistanceLayout=" + mapsTrip.distance +
                 "\ntripDistanceFinal=" + recoveredTripDistance +
+                "\ntripDistanceSource=" + distanceSource +
                 "\ntripDurationParser=" + parsed.tripDuration +
                 "\ntripDurationLayout=" + mapsTrip.duration +
                 "\ntripDurationFinal=" + finalDuration +
@@ -83,8 +82,16 @@ public class MapsNotificationListener extends NotificationListenerService {
                 .putBoolean("simulated", false);
 
         if (!TextUtils.isEmpty(finalEta)) edit.putString("eta", finalEta);
-        if (!TextUtils.isEmpty(recoveredTripDistance)) edit.putString("trip_distance", recoveredTripDistance);
         if (!TextUtils.isEmpty(finalDuration)) edit.putString("trip_duration", finalDuration);
+
+        // Never keep a previous false total (for example the 300 m to the next
+        // manoeuvre). Either this notification provides a verified trip total,
+        // or the distance field is cleared.
+        if (!TextUtils.isEmpty(recoveredTripDistance)) {
+            edit.putString("trip_distance", recoveredTripDistance);
+        } else {
+            edit.remove("trip_distance");
+        }
 
         if ("Vous êtes arrivé".equals(parsed.instruction)) {
             edit.remove("eta").remove("trip_distance").remove("trip_duration");
@@ -98,7 +105,7 @@ public class MapsNotificationListener extends NotificationListenerService {
     @Override public void onNotificationRemoved(StatusBarNotification sbn) {
         if (sbn == null || !MAPS_PACKAGE.equals(sbn.getPackageName())) return;
         // Google Maps remplace souvent sa notification pendant une mise à jour.
-        // On garde donc la dernière consigne et le résumé trajet jusqu'à la suivante.
+        // On garde la dernière consigne jusqu'à la suivante.
     }
 
     private static String value(Bundle b, String key) {
