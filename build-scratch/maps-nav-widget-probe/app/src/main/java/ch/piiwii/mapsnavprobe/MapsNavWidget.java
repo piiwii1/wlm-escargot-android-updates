@@ -107,7 +107,7 @@ public class MapsNavWidget extends AppWidgetProvider {
 
         PendingIntent maps = PendingIntent.getActivity(context, 1000 + id, mapsIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        PendingIntent settings = PendingIntent.getActivity(context, 2000 + id, new Intent(context, MainActivity.class),
+        PendingIntent settings = PendingIntent.getActivity(context, 2000 + id, new Intent(context, WidgetSettingsActivity.class),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         views.setOnClickPendingIntent(R.id.widget_root, maps);
         views.setOnClickPendingIntent(R.id.widget_status, settings);
