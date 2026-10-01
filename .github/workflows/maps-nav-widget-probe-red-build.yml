@@ -75,14 +75,14 @@ jobs:
       - name: Package delivery
         run: |
           mkdir -p delivery
-          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.11-red-icon.apk
-          zip -qr delivery/PiiWii-Nav-v1.17.11-red-icon-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.12-live-compass.apk
+          zip -qr delivery/PiiWii-Nav-v1.17.12-live-compass-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
           cd delivery
-          sha256sum PiiWii-Nav-v1.17.11-red-icon.apk > PiiWii-Nav-v1.17.11-red-icon-SHA256.txt
-          sha256sum PiiWii-Nav-v1.17.11-red-icon-Sources.zip >> PiiWii-Nav-v1.17.11-red-icon-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.12-live-compass.apk > PiiWii-Nav-v1.17.12-live-compass-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.12-live-compass-Sources.zip >> PiiWii-Nav-v1.17.12-live-compass-SHA256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Nav-v1.17.11-red-icon
+          name: PiiWii-Nav-v1.17.12-live-compass
           path: delivery/*
           retention-days: 30
