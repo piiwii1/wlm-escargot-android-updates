@@ -27,13 +27,11 @@ public class MapsNotificationListener extends NotificationListenerService {
         String big = value(e, Notification.EXTRA_BIG_TEXT);
         String sub = value(e, Notification.EXTRA_SUB_TEXT);
         String summary = value(e, Notification.EXTRA_SUMMARY_TEXT);
-        String[] lines = allTextValues(e);
+        String[] lines = allTextValues(n);
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
-        String recoveredTripDistance = parsed.tripDistance;
-        if (TextUtils.isEmpty(recoveredTripDistance)) {
-            recoveredTripDistance = TripDataRecovery.recoverTripDistance(lines, parsed.distance);
-        }
+        String recoveredTripDistance = TripDataRecovery.recoverTripDistance(
+                lines, parsed.distance, parsed.tripDistance);
 
         String raw = "title=" + title +
                 "\ntext=" + text +
@@ -47,7 +45,8 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\ninstruction=" + parsed.instruction +
                 "\nroad=" + parsed.road +
                 "\neta=" + parsed.eta +
-                "\ntripDistance=" + recoveredTripDistance +
+                "\ntripDistanceParser=" + parsed.tripDistance +
+                "\ntripDistanceFinal=" + recoveredTripDistance +
                 "\ntripDuration=" + parsed.tripDuration +
                 "\nsource=" + parsed.source;
 
@@ -86,23 +85,66 @@ public class MapsNotificationListener extends NotificationListenerService {
         return v == null ? "" : String.valueOf(v).trim();
     }
 
-    private static String[] allTextValues(Bundle b) {
-        if (b == null) return new String[0];
+    /**
+     * Google Maps ne place pas toujours toutes les informations dans
+     * EXTRA_TEXT / EXTRA_BIG_TEXT. On parcourt donc tous les champs texte,
+     * y compris les Bundle/listes imbriqués, le ticker et la version publique.
+     */
+    private static String[] allTextValues(Notification n) {
         ArrayList<String> out = new ArrayList<>();
-        for (String key : b.keySet()) {
-            Object v;
-            try { v = b.get(key); } catch (Throwable ignored) { continue; }
-            if (v instanceof CharSequence) addUnique(out, v.toString());
-            else if (v instanceof CharSequence[]) {
-                for (CharSequence s : (CharSequence[]) v) if (s != null) addUnique(out, s.toString());
+        if (n == null) return new String[0];
+
+        collectValue(out, n.extras, 0);
+        if (n.tickerText != null) addUnique(out, n.tickerText.toString());
+
+        if (n.actions != null) {
+            for (Notification.Action action : n.actions) {
+                if (action != null && action.title != null) addUnique(out, action.title.toString());
             }
         }
+
+        if (n.publicVersion != null && n.publicVersion != n) {
+            collectValue(out, n.publicVersion.extras, 0);
+            if (n.publicVersion.tickerText != null) addUnique(out, n.publicVersion.tickerText.toString());
+        }
+
         return out.toArray(new String[0]);
+    }
+
+    private static void collectValue(ArrayList<String> out, Object value, int depth) {
+        if (value == null || depth > 4) return;
+
+        if (value instanceof CharSequence) {
+            addUnique(out, value.toString());
+            return;
+        }
+        if (value instanceof Bundle) {
+            Bundle b = (Bundle) value;
+            for (String key : b.keySet()) {
+                try { collectValue(out, b.get(key), depth + 1); }
+                catch (Throwable ignored) {}
+            }
+            return;
+        }
+        if (value instanceof CharSequence[]) {
+            for (CharSequence item : (CharSequence[]) value) collectValue(out, item, depth + 1);
+            return;
+        }
+        if (value instanceof Object[]) {
+            for (Object item : (Object[]) value) collectValue(out, item, depth + 1);
+            return;
+        }
+        if (value instanceof Iterable) {
+            try {
+                for (Object item : (Iterable<?>) value) collectValue(out, item, depth + 1);
+            } catch (Throwable ignored) {}
+        }
     }
 
     private static void addUnique(ArrayList<String> out, String value) {
         if (value == null) return;
-        String clean = value.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
+        String clean = value.replace('\u00A0', ' ').replace('\u202F', ' ')
+                .replaceAll("\\s+", " ").trim();
         if (clean.isEmpty()) return;
         for (String existing : out) if (existing.equals(clean)) return;
         out.add(clean);
