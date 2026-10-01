@@ -18,9 +18,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Reads Google Maps' own navigation notification layout. A total remaining
- * distance is accepted only from a real trip-summary field, never from a
- * standalone next-manoeuvre value such as "300 m".
+ * Reads Google Maps' own navigation notification layout.
+ *
+ * Some Maps builds put duration, total distance and ETA in one TextView, while
+ * others split them across several TextViews. We therefore aggregate the
+ * values at notification level, while explicitly rejecting the next-manoeuvre
+ * distance when it leaks into the same notification.
  */
 public final class GoogleMapsTripInfoExtractor {
     private GoogleMapsTripInfoExtractor() {}
@@ -49,6 +52,10 @@ public final class GoogleMapsTripInfoExtractor {
             "(?iu)(?<!\\d)([01]?\\d|2[0-3])[:h.]([0-5]\\d)(?:\\s*(AM|PM))?(?!\\d)");
 
     public static Result extract(Context hostContext, StatusBarNotification sbn) {
+        return extract(hostContext, sbn, "");
+    }
+
+    public static Result extract(Context hostContext, StatusBarNotification sbn, String maneuverDistance) {
         if (hostContext == null || sbn == null || sbn.getNotification() == null) {
             return new Result("", "", "", "");
         }
@@ -75,31 +82,53 @@ public final class GoogleMapsTripInfoExtractor {
             } catch (Throwable ignored) {}
         }
 
-        Collector collector = new Collector(mapsContext);
+        Collector collector = new Collector(mapsContext, parseDistanceKm(maneuverDistance));
         for (RemoteViews rv : views) collector.inspect(rv);
         return collector.finish();
     }
 
     private static void addView(List<RemoteViews> out, RemoteViews rv) {
         if (rv == null) return;
+        // Do NOT deduplicate by layout id. Normal and expanded notifications can
+        // use the same XML layout while carrying different text values.
         for (RemoteViews existing : out) {
             if (existing == rv) return;
-            try {
-                if (existing.getLayoutId() == rv.getLayoutId()) return;
-            } catch (Throwable ignored) {}
         }
         out.add(rv);
     }
 
+    private static final class DistanceCandidate {
+        final String value;
+        final double km;
+        final int score;
+        final boolean fullSummary;
+        final String resource;
+
+        DistanceCandidate(String value, double km, int score, boolean fullSummary, String resource) {
+            this.value = value;
+            this.km = km;
+            this.score = score;
+            this.fullSummary = fullSummary;
+            this.resource = resource;
+        }
+    }
+
     private static final class Collector {
         final Context mapsContext;
+        final double maneuverKm;
+        final List<DistanceCandidate> candidates = new ArrayList<>();
         String distance = "";
         String duration = "";
         String eta = "";
+        String seenDuration = "";
+        String seenEta = "";
         int bestScore = -1;
         final StringBuilder debug = new StringBuilder();
 
-        Collector(Context mapsContext) { this.mapsContext = mapsContext; }
+        Collector(Context mapsContext, double maneuverKm) {
+            this.mapsContext = mapsContext;
+            this.maneuverKm = maneuverKm;
+        }
 
         void inspect(RemoteViews rv) {
             if (rv == null) return;
@@ -123,9 +152,7 @@ public final class GoogleMapsTripInfoExtractor {
                 if (!TextUtils.isEmpty(text)) {
                     String name = resourceName(view.getId());
                     appendDebug(TextUtils.isEmpty(name) ? "text" : name, text);
-
-                    int score = summaryResourceScore(name);
-                    if (score >= 0) parseVerifiedSummary(name, text, score);
+                    inspectText(name, text);
                 }
             }
 
@@ -133,6 +160,41 @@ public final class GoogleMapsTripInfoExtractor {
                 ViewGroup group = (ViewGroup) view;
                 for (int i = 0; i < group.getChildCount(); i++) {
                     walk(group.getChildAt(i), depth + 1);
+                }
+            }
+        }
+
+        void inspectText(String resourceName, String text) {
+            int summaryScore = summaryResourceScore(resourceName);
+            String foundDistance = extractDistance(text);
+            String foundDuration = extractDuration(text);
+            String foundEta = extractEta(text);
+
+            boolean summaryish = summaryScore >= 0 || isTripResource(resourceName);
+            if (summaryish && !TextUtils.isEmpty(foundDuration) && TextUtils.isEmpty(seenDuration)) {
+                seenDuration = foundDuration;
+            }
+            if ((summaryish || isEtaResource(resourceName)) && !TextUtils.isEmpty(foundEta) && TextUtils.isEmpty(seenEta)) {
+                seenEta = foundEta;
+            }
+
+            // Preserve the strongest legacy case: all trip values in one Maps
+            // summary field. This is trusted even when total == next manoeuvre.
+            if (summaryScore >= 0) {
+                parseVerifiedSummary(resourceName, text, summaryScore);
+            }
+
+            if (!TextUtils.isEmpty(foundDistance) && !isManeuverResource(resourceName)) {
+                int score = distanceResourceScore(resourceName);
+                boolean full = !TextUtils.isEmpty(foundDuration) && !TextUtils.isEmpty(foundEta);
+                if (summaryScore >= 0) score = Math.max(score, summaryScore);
+                if (!TextUtils.isEmpty(foundDuration)) score += 15;
+                if (!TextUtils.isEmpty(foundEta)) score += 15;
+                if (full) score += 25;
+                double km = parseDistanceKm(foundDistance);
+                if (km > 0d) {
+                    candidates.add(new DistanceCandidate(foundDistance, km, score, full,
+                            TextUtils.isEmpty(resourceName) ? "?" : resourceName));
                 }
             }
         }
@@ -154,6 +216,37 @@ public final class GoogleMapsTripInfoExtractor {
             return -1;
         }
 
+        int distanceResourceScore(String name) {
+            if (TextUtils.isEmpty(name)) return 5;
+            String n = name.toLowerCase(Locale.ROOT);
+            if (n.contains("remaining_distance") || n.contains("trip_distance")) return 100;
+            if (n.contains("distance")) return 85;
+            if (n.contains("nav_time") || n.contains("trip_summary")) return 80;
+            if (n.contains("eta") || n.contains("remaining") || n.contains("header")) return 60;
+            return 10;
+        }
+
+        boolean isTripResource(String name) {
+            if (TextUtils.isEmpty(name)) return false;
+            String n = name.toLowerCase(Locale.ROOT);
+            return n.contains("trip") || n.contains("remaining") || n.contains("eta")
+                    || n.contains("nav_time") || n.contains("header");
+        }
+
+        boolean isEtaResource(String name) {
+            if (TextUtils.isEmpty(name)) return false;
+            String n = name.toLowerCase(Locale.ROOT);
+            return n.contains("eta") || n.contains("oneliner") || n.contains("time");
+        }
+
+        boolean isManeuverResource(String name) {
+            if (TextUtils.isEmpty(name)) return false;
+            String n = name.toLowerCase(Locale.ROOT);
+            return "nav_title".equals(n) || "nav_description".equals(n)
+                    || "lockscreen_directions".equals(n) || "title".equals(n)
+                    || n.contains("directions") || n.contains("instruction");
+        }
+
         void parseVerifiedSummary(String resourceName, String text, int resourceScore) {
             String foundDistance = extractDistance(text);
             String foundDuration = extractDuration(text);
@@ -161,11 +254,8 @@ public final class GoogleMapsTripInfoExtractor {
             if (TextUtils.isEmpty(foundDistance) || TextUtils.isEmpty(foundDuration)) return;
 
             String n = resourceName == null ? "" : resourceName.toLowerCase(Locale.ROOT);
-            // header_text is reused by Android for many things. Only trust it
-            // when it really looks like Maps' full footer (duration + distance + ETA).
             if ("header_text".equals(n) && TextUtils.isEmpty(foundEta)) return;
 
-            // A lone "300 m" can never reach here because a duration is required.
             int score = resourceScore + (TextUtils.isEmpty(foundEta) ? 0 : 10);
             if (score < bestScore) return;
 
@@ -177,6 +267,27 @@ public final class GoogleMapsTripInfoExtractor {
         }
 
         Result finish() {
+            if (TextUtils.isEmpty(duration) && !TextUtils.isEmpty(seenDuration)) duration = seenDuration;
+            if (TextUtils.isEmpty(eta) && !TextUtils.isEmpty(seenEta)) eta = seenEta;
+
+            // New Maps layouts may split ETA, duration and distance over several
+            // TextViews. Only aggregate a standalone distance when both other
+            // trip facts were seen somewhere in the notification.
+            if (TextUtils.isEmpty(distance) && !TextUtils.isEmpty(seenDuration) && !TextUtils.isEmpty(seenEta)) {
+                DistanceCandidate best = null;
+                for (DistanceCandidate c : candidates) {
+                    if (!c.fullSummary && sameAsManeuver(c.km, maneuverKm)) continue;
+                    if (maneuverKm > 0d && c.km + 0.02d < maneuverKm) continue;
+                    if (best == null || c.score > best.score || (c.score == best.score && c.km > best.km)) {
+                        best = c;
+                    }
+                }
+                if (best != null) {
+                    distance = best.value;
+                    appendDebug("AGGREGATED_DISTANCE", best.resource + ":" + best.value);
+                }
+            }
+
             return new Result(distance, duration, eta, debug.toString());
         }
 
@@ -240,6 +351,30 @@ public final class GoogleMapsTripInfoExtractor {
         int end = Math.min(source.length(), matchEnd + 10);
         String tail = source.substring(matchEnd, end).toLowerCase(Locale.ROOT);
         return tail.matches("^\\s*(?:/\\s*h|/\\s*heure|par\\s+heure).*" );
+    }
+
+    private static boolean sameAsManeuver(double candidateKm, double maneuverKm) {
+        if (candidateKm <= 0d || maneuverKm <= 0d) return false;
+        double delta = Math.abs(candidateKm - maneuverKm);
+        return delta < Math.max(0.03d, maneuverKm * 0.01d);
+    }
+
+    private static double parseDistanceKm(String text) {
+        if (TextUtils.isEmpty(text)) return -1d;
+        Matcher m = DISTANCE.matcher(text.replace('\u00A0', ' ').replace('\u202F', ' '));
+        if (!m.find()) return -1d;
+        try {
+            double value = Double.parseDouble(m.group(1).replace(',', '.'));
+            String u = m.group(2).toLowerCase(Locale.ROOT);
+            if ("km".equals(u) || u.startsWith("kilom")) return value;
+            if ("m".equals(u)) return value / 1000d;
+            if ("mi".equals(u) || u.startsWith("mile")) return value * 1.609344d;
+            if ("ft".equals(u)) return value * 0.0003048d;
+            if ("yd".equals(u)) return value * 0.0009144d;
+            return -1d;
+        } catch (Throwable ignored) {
+            return -1d;
+        }
     }
 
     private static String normalizeDistance(String number, String unit) {
