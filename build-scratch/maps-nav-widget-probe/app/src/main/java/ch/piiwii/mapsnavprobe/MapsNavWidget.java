@@ -42,6 +42,7 @@ public class MapsNavWidget extends AppWidgetProvider {
         String tripDistance = p.getString("trip_distance", "");
         String tripDuration = p.getString("trip_duration", "");
         boolean simulated = p.getBoolean("simulated", false);
+        boolean idleArtEnabled = p.getBoolean("idle_art_enabled", true);
 
         NavStateExpiry.ensureScheduled(context, p, simulated);
 
@@ -59,10 +60,8 @@ public class MapsNavWidget extends AppWidgetProvider {
         boolean compact = minHeight > 0 && minHeight < 120;
         int layout = compact ? R.layout.widget_navigation_compact : R.layout.widget_navigation;
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
-        if (!compact) {
-            if (empty) views.setImageViewBitmap(R.id.widget_idle_art, IdleArtwork.get());
-            views.setViewVisibility(R.id.widget_idle_art, empty ? View.VISIBLE : View.GONE);
-        }
+        if (empty && idleArtEnabled) views.setImageViewBitmap(R.id.widget_idle_art, IdleArtwork.get());
+        views.setViewVisibility(R.id.widget_idle_art, (empty && idleArtEnabled) ? View.VISIBLE : View.GONE);
 
         float density = context.getResources().getDisplayMetrics().density;
         int iconDp = compact ? 78 : 104;
