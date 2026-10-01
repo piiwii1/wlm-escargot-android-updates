@@ -55,6 +55,7 @@ public class MapsNavWidget extends AppWidgetProvider {
         int layout = compact ? R.layout.widget_navigation_compact : R.layout.widget_navigation;
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
         if (!compact) {
+            if (empty) views.setImageViewBitmap(R.id.widget_idle_art, IdleArtwork.get());
             views.setViewVisibility(R.id.widget_idle_art, empty ? View.VISIBLE : View.GONE);
         }
 
