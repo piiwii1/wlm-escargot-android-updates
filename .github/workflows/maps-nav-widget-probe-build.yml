@@ -15,6 +15,26 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Prepare selected red navigation PNG
+        run: |
+          ART=build-scratch/maps-nav-widget-probe/app/src/main/red-art
+          OUT=build-scratch/maps-nav-widget-probe/app/src/main/res/drawable-nodpi/piiwii_nav_red.png
+          cat \
+            "$ART/red512.b64.part00" \
+            "$ART/red512.b64.part01a" \
+            "$ART/red512.b64.part01b" \
+            "$ART/red512.b64.part02" \
+            "$ART/red512.b64.part03" \
+            "$ART/red512.b64.part04a" \
+            "$ART/red512.b64.part04b" \
+            "$ART/red512.b64.part05a" \
+            "$ART/red512.b64.part05b" \
+            "$ART/red512.b64.part06" \
+            | base64 -d > "$OUT"
+          test "$(head -c 8 "$OUT" | xxd -p)" = "89504e470d0a1a0a"
+          test -s "$OUT"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
