@@ -49,8 +49,6 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
-        String tripSummary = TripSummaryFormatter.build(eta, tripDistance, tripDuration);
-
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation_square);
         Bundle options = manager.getAppWidgetOptions(id);
         int minW = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
@@ -58,16 +56,18 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
         boolean small = (minW > 0 && minW < 230) || (minH > 0 && minH < 230);
 
         float density = context.getResources().getDisplayMetrics().density;
-        int iconDp = small ? 112 : 150;
+        int iconDp = small ? 108 : 132;
         int iconPx = Math.max(256, Math.round(iconDp * density));
         views.setImageViewBitmap(R.id.square_arrow, NavIconSelector.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.square_instruction, primary);
         views.setTextViewText(R.id.square_meta, "GOOGLE MAPS");
         views.setTextViewText(R.id.square_status, simulated ? "TEST" : (empty ? "PRÊT" : "LIVE"));
-        views.setTextViewTextSize(R.id.square_distance, TypedValue.COMPLEX_UNIT_SP, small ? 29f : 36f);
-        views.setTextViewTextSize(R.id.square_instruction, TypedValue.COMPLEX_UNIT_SP, small ? 17f : 21f);
+        views.setTextViewTextSize(R.id.square_distance, TypedValue.COMPLEX_UNIT_SP, small ? 27f : 34f);
+        views.setTextViewTextSize(R.id.square_instruction, TypedValue.COMPLEX_UNIT_SP, small ? 16f : 20f);
         views.setTextViewTextSize(R.id.square_detail, TypedValue.COMPLEX_UNIT_SP, small ? 10f : 12f);
-        views.setTextViewTextSize(R.id.square_trip_summary, TypedValue.COMPLEX_UNIT_SP, small ? 9f : 10f);
+        views.setTextViewTextSize(R.id.square_eta_value, TypedValue.COMPLEX_UNIT_SP, small ? 13f : 16f);
+        views.setTextViewTextSize(R.id.square_trip_distance_value, TypedValue.COMPLEX_UNIT_SP, small ? 13f : 16f);
+        views.setTextViewTextSize(R.id.square_trip_duration_value, TypedValue.COMPLEX_UNIT_SP, small ? 13f : 16f);
 
         if (TextUtils.isEmpty(distance)) {
             views.setViewVisibility(R.id.square_distance, View.GONE);
@@ -76,18 +76,20 @@ public class MapsNavSquareWidget extends AppWidgetProvider {
             views.setTextViewText(R.id.square_distance, distance);
         }
 
-        if (TextUtils.isEmpty(secondary) || (small && primary.length() > 28)) {
+        if (TextUtils.isEmpty(secondary) || (small && primary.length() > 34)) {
             views.setViewVisibility(R.id.square_detail, View.GONE);
         } else {
             views.setViewVisibility(R.id.square_detail, View.VISIBLE);
             views.setTextViewText(R.id.square_detail, secondary);
         }
 
-        if (TextUtils.isEmpty(tripSummary)) {
-            views.setViewVisibility(R.id.square_trip_summary, View.GONE);
+        if (empty) {
+            views.setViewVisibility(R.id.square_trip_metrics, View.GONE);
         } else {
-            views.setViewVisibility(R.id.square_trip_summary, View.VISIBLE);
-            views.setTextViewText(R.id.square_trip_summary, tripSummary);
+            views.setViewVisibility(R.id.square_trip_metrics, View.VISIBLE);
+            views.setTextViewText(R.id.square_eta_value, TextUtils.isEmpty(eta) ? "—" : eta);
+            views.setTextViewText(R.id.square_trip_distance_value, TextUtils.isEmpty(tripDistance) ? "— km" : tripDistance);
+            views.setTextViewText(R.id.square_trip_duration_value, TextUtils.isEmpty(tripDuration) ? "—" : tripDuration);
         }
 
         PendingIntent maps = PendingIntent.getActivity(context, 3000 + id, mapsIntent(context),
