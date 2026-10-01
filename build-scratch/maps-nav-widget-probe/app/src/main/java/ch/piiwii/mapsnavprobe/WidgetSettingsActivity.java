@@ -7,7 +7,6 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -18,6 +17,7 @@ public class WidgetSettingsActivity extends Activity {
     private static final int TEXT = Color.rgb(248, 251, 255);
     private static final int MUTED = Color.rgb(128, 149, 168);
     private static final int ACCENT = Color.rgb(119, 238, 255);
+    private static final int GTI_RED = Color.rgb(226, 0, 26);
 
     private SharedPreferences prefs;
     private TextView stateView;
@@ -52,7 +52,7 @@ public class WidgetSettingsActivity extends Activity {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView settingTitle = text("Image d’attente", 15, true, TEXT);
+        TextView settingTitle = text("Affichage sans trajet", 15, true, TEXT);
         header.addView(settingTitle, new LinearLayout.LayoutParams(0, -2, 1f));
 
         stateView = text("", 12, true, ACCENT);
@@ -66,8 +66,8 @@ public class WidgetSettingsActivity extends Activity {
 
         toggleButton = button("");
         toggleButton.setOnClickListener(v -> {
-            boolean enabled = isIdleArtworkEnabled();
-            prefs.edit().putBoolean(PREF_IDLE_ART_ENABLED, !enabled).apply();
+            boolean imageMode = isImageMode();
+            prefs.edit().putBoolean(PREF_IDLE_ART_ENABLED, !imageMode).apply();
             MapsNavWidget.updateAll(this);
             refreshSetting();
         });
@@ -91,18 +91,18 @@ public class WidgetSettingsActivity extends Activity {
         refreshSetting();
     }
 
-    private boolean isIdleArtworkEnabled() {
+    private boolean isImageMode() {
         return prefs.getBoolean(PREF_IDLE_ART_ENABLED, true);
     }
 
     private void refreshSetting() {
-        boolean enabled = isIdleArtworkEnabled();
-        stateView.setText(enabled ? "ACTIVÉE" : "DÉSACTIVÉE");
-        stateView.setTextColor(enabled ? ACCENT : Color.rgb(255, 194, 101));
-        descriptionView.setText(enabled
-                ? "Sans trajet actif, le widget affiche l’image prédéfinie."
-                : "Sans trajet actif, le widget affiche la flèche bleue avec « En attente d’un trajet ».");
-        toggleButton.setText(enabled ? "Désactiver l’image" : "Activer l’image");
+        boolean imageMode = isImageMode();
+        stateView.setText(imageMode ? "IMAGE" : "BOUSSOLE");
+        stateView.setTextColor(imageMode ? ACCENT : GTI_RED);
+        descriptionView.setText(imageMode
+                ? "Sans trajet actif, le widget affiche l’image GTI prédéfinie."
+                : "Sans trajet actif, le widget affiche une vraie boussole N / E / S / O qui suit l’orientation du téléphone.");
+        toggleButton.setText(imageMode ? "Utiliser la boussole" : "Utiliser l’image");
     }
 
     private TextView text(String value, float size, boolean bold, int color) {
