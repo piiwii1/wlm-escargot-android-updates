@@ -34,12 +34,17 @@ public class MapsNotificationListener extends NotificationListenerService {
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
         GoogleMapsTripInfoExtractor.Result mapsTrip = GoogleMapsTripInfoExtractor.extract(this, sbn, parsed.distance);
+        ProgressStyleDistanceExtractor.Result progressTrip = ProgressStyleDistanceExtractor.extract(n, parsed.distance);
 
         String recoveredTripDistance = mapsTrip.distance;
         String distanceSource = TextUtils.isEmpty(recoveredTripDistance) ? "none" : "maps-layout";
         if (TextUtils.isEmpty(recoveredTripDistance)) {
             recoveredTripDistance = TripDataRecovery.recoverTripDistance(lines, parsed.distance, parsed.tripDistance);
             if (!TextUtils.isEmpty(recoveredTripDistance)) distanceSource = "verified-text-summary";
+        }
+        if (TextUtils.isEmpty(recoveredTripDistance) && !TextUtils.isEmpty(progressTrip.distance)) {
+            recoveredTripDistance = progressTrip.distance;
+            distanceSource = "progress-style";
         }
 
         String finalEta = !TextUtils.isEmpty(mapsTrip.eta) ? mapsTrip.eta : parsed.eta;
@@ -53,6 +58,7 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\nextraText=" + joinLines(extraLines) +
                 "\nrenderedText=" + joinLines(renderedLines) +
                 "\nlayoutText=" + mapsTrip.debug +
+                "\nprogressStyle=" + progressTrip.debug +
                 "\nallText=" + joinLines(lines) +
                 "\n\nPARSED" +
                 "\narrow=" + parsed.arrow +
@@ -64,6 +70,7 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\netaFinal=" + finalEta +
                 "\ntripDistanceParser=" + parsed.tripDistance +
                 "\ntripDistanceLayout=" + mapsTrip.distance +
+                "\ntripDistanceProgress=" + progressTrip.distance +
                 "\ntripDistanceFinal=" + recoveredTripDistance +
                 "\ntripDistanceSource=" + distanceSource +
                 "\ntripDurationParser=" + parsed.tripDuration +
