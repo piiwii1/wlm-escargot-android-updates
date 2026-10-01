@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
         headerText.addView(intro);
         header.addView(headerText, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        TextView version = text("v1.14", 11, true, ACCENT);
+        TextView version = text("v1.15", 11, true, ACCENT);
         version.setGravity(Gravity.CENTER);
         version.setPadding(dp(11), dp(6), dp(11), dp(6));
         version.setBackground(rounded(Color.rgb(8, 28, 42), 14, Color.rgb(35, 93, 121)));
@@ -150,11 +150,13 @@ public class MainActivity extends Activity {
         navRow.addView(navText, new LinearLayout.LayoutParams(0, -2, 1f));
         card.addView(navRow);
 
-        tripSummaryView = text("", 11, true, Color.rgb(199, 246, 255));
-        tripSummaryView.setGravity(Gravity.CENTER);
-        tripSummaryView.setPadding(dp(10), dp(6), dp(10), dp(6));
-        tripSummaryView.setBackground(rounded(Color.rgb(9, 25, 36), 13, Color.rgb(31, 72, 91)));
+        tripSummaryView = text("", 16, true, Color.rgb(220, 249, 255));
+        tripSummaryView.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        tripSummaryView.setLineSpacing(dp(3), 1f);
+        tripSummaryView.setPadding(dp(14), dp(10), dp(14), dp(10));
+        tripSummaryView.setBackground(rounded(Color.rgb(9, 25, 36), 14, Color.rgb(31, 72, 91)));
         tripSummaryView.setVisibility(View.GONE);
+        tripSummaryView.setMaxLines(3);
         LinearLayout.LayoutParams tripLp = new LinearLayout.LayoutParams(-1, -2);
         tripLp.setMargins(0, dp(10), 0, 0);
         card.addView(tripSummaryView, tripLp);
@@ -357,7 +359,7 @@ public class MainActivity extends Activity {
                 .putString("arrow", t[0]).putString("distance", t[1]).putString("primary", t[2]).putString("secondary", t[3])
                 .putString("eta", "15:42").putString("trip_distance", "18,6 km").putString("trip_duration", "24 min")
                 .putString("timestamp", MapsNotificationListener.now())
-                .putString("raw", "SIMULATION v1.14.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3] + "\neta=15:42\ntripDistance=18,6 km\ntripDuration=24 min")
+                .putString("raw", "SIMULATION v1.15.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3] + "\neta=15:42\ntripDistance=18,6 km\ntripDuration=24 min")
                 .putBoolean("simulated", true).apply();
         MapsNavWidget.updateAll(this);
         refresh();
