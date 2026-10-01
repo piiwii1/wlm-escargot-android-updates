@@ -23,6 +23,9 @@ public class MapsNavWidget extends AppWidgetProvider {
     }
 
     public static void updateAll(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(MapsNotificationListener.PREFS, Context.MODE_PRIVATE);
+        NavStateExpiry.ensureScheduled(context, prefs, prefs.getBoolean("simulated", false));
+
         AppWidgetManager m = AppWidgetManager.getInstance(context);
         int[] ids = m.getAppWidgetIds(new ComponentName(context, MapsNavWidget.class));
         for (int id : ids) updateOne(context, m, id);
