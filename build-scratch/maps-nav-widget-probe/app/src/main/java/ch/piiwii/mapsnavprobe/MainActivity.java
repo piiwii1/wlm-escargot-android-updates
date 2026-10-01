@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
         headerText.addView(intro);
         header.addView(headerText, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        TextView version = text("v1.12", 11, true, ACCENT);
+        TextView version = text("v1.13", 11, true, ACCENT);
         version.setGravity(Gravity.CENTER);
         version.setPadding(dp(11), dp(6), dp(11), dp(6));
         version.setBackground(rounded(Color.rgb(8, 28, 42), 14, Color.rgb(35, 93, 121)));
@@ -313,7 +313,21 @@ public class MainActivity extends Activity {
                 {"↖", "300 m", "Restez à gauche", "Deux voies"},
                 {"↗", "300 m", "Restez à droite", "Deux voies"},
                 {"↑", "500 m", "Restez au centre", "Trois voies"},
+                {"↑", "400 m", "Continuez tout droit sur la voie", "Voie centrale"},
+                {"↖", "300 m", "Rejoignez la voie de gauche", "Deux voies"},
+                {"↗", "300 m", "Rejoignez la voie de droite", "Deux voies"},
+                {"↑", "280 m", "Fusion par la gauche", "Insertion"},
+                {"↑", "280 m", "Fusion par la droite", "Insertion"},
+                {"↖", "220 m", "Bifurcation à gauche", "Échangeur"},
+                {"↗", "220 m", "Bifurcation à droite", "Échangeur"},
+                {"←", "500 m", "Prenez la sortie à gauche", "Autoroute"},
+                {"→", "500 m", "Prenez la sortie à droite", "Autoroute"},
+                {"↑", "1,2 km", "Rejoignez l'autoroute", "A9"},
+                {"→", "600 m", "Quitter l'autoroute", "Sortie 27"},
+                {"⟳", "120 m", "Prenez la 1re sortie", "Rond-point"},
                 {"⟳", "120 m", "Prenez la 2e sortie", "Rond-point"},
+                {"⟳", "120 m", "Prenez la 3e sortie", "Rond-point"},
+                {"⚠", "", "Travaux", "Route principale"},
                 {"⚑", "", "Vous êtes arrivé", "Destination"}
         };
         String[] t = tests[testIndex % tests.length];
@@ -321,7 +335,7 @@ public class MainActivity extends Activity {
         getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE).edit()
                 .putString("arrow", t[0]).putString("distance", t[1]).putString("primary", t[2]).putString("secondary", t[3])
                 .putString("timestamp", MapsNotificationListener.now())
-                .putString("raw", "SIMULATION v1.12.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3])
+                .putString("raw", "SIMULATION v1.13.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3])
                 .putBoolean("simulated", true).apply();
         MapsNavWidget.updateAll(this);
         refresh();
