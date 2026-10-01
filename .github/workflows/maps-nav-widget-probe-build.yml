@@ -31,9 +31,9 @@ jobs:
             "$ART/red512.b64.part05a" \
             "$ART/red512.b64.part05b" \
             "$ART/red512.b64.part06" \
-            | base64 -d > "$OUT"
+            | base64 --decode --ignore-garbage > "$OUT"
           test "$(head -c 8 "$OUT" | xxd -p)" = "89504e470d0a1a0a"
-          test -s "$OUT"
+          file "$OUT" | grep -q 'PNG image data'
 
       - uses: actions/setup-java@v4
         with:
