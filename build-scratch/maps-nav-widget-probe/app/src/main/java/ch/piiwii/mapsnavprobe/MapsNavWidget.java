@@ -54,6 +54,9 @@ public class MapsNavWidget extends AppWidgetProvider {
         boolean compact = minHeight > 0 && minHeight < 120;
         int layout = compact ? R.layout.widget_navigation_compact : R.layout.widget_navigation;
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
+        if (!compact) {
+            views.setViewVisibility(R.id.widget_idle_art, empty ? View.VISIBLE : View.GONE);
+        }
 
         float density = context.getResources().getDisplayMetrics().density;
         int iconDp = compact ? 78 : 104;
