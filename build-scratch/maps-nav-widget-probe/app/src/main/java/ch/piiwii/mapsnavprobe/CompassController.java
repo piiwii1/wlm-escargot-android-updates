@@ -1,0 +1,172 @@
+package ch.piiwii.mapsnavprobe;
+
+import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.os.SystemClock;
+import android.view.Surface;
+import android.view.WindowManager;
+
+/** Lightweight sensor listener used only while an idle widget is in compass mode. */
+public final class CompassController implements SensorEventListener {
+    private static final CompassController INSTANCE = new CompassController();
+    private static final long MIN_UPDATE_MS = 350L;
+
+    private Context appContext;
+    private SensorManager sensorManager;
+    private Sensor rotationVector;
+    private Sensor accelerometer;
+    private Sensor magneticField;
+    private boolean running;
+    private final float[] gravity = new float[3];
+    private final float[] geomagnetic = new float[3];
+    private boolean haveGravity;
+    private boolean haveGeomagnetic;
+    private float smoothedHeading = Float.NaN;
+    private long lastWidgetUpdate;
+
+    private CompassController() {}
+
+    public static synchronized void start(Context context) {
+        INSTANCE.startInternal(context.getApplicationContext());
+    }
+
+    public static synchronized void stop() {
+        INSTANCE.stopInternal();
+    }
+
+    public static float getLastHeading(Context context) {
+        return context.getSharedPreferences(MapsNotificationListener.PREFS, Context.MODE_PRIVATE)
+                .getFloat("compass_heading", 0f);
+    }
+
+    private void startInternal(Context context) {
+        if (running) return;
+        appContext = context;
+        sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+        if (sensorManager == null) return;
+
+        rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+        if (rotationVector != null) {
+            running = sensorManager.registerListener(this, rotationVector, SensorManager.SENSOR_DELAY_UI);
+            return;
+        }
+
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        magneticField = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        if (accelerometer != null && magneticField != null) {
+            boolean a = sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
+            boolean m = sensorManager.registerListener(this, magneticField, SensorManager.SENSOR_DELAY_UI);
+            running = a && m;
+        }
+    }
+
+    private void stopInternal() {
+        if (sensorManager != null) {
+            try { sensorManager.unregisterListener(this); } catch (Throwable ignored) {}
+        }
+        running = false;
+        haveGravity = false;
+        haveGeomagnetic = false;
+        smoothedHeading = Float.NaN;
+        lastWidgetUpdate = 0L;
+    }
+
+    @Override public void onSensorChanged(SensorEvent event) {
+        if (appContext == null || event == null || event.sensor == null) return;
+
+        float heading;
+        int type = event.sensor.getType();
+        if (type == Sensor.TYPE_ROTATION_VECTOR) {
+            heading = headingFromRotationVector(event.values);
+        } else {
+            if (type == Sensor.TYPE_ACCELEROMETER) {
+                lowPass(event.values, gravity);
+                haveGravity = true;
+            } else if (type == Sensor.TYPE_MAGNETIC_FIELD) {
+                lowPass(event.values, geomagnetic);
+                haveGeomagnetic = true;
+            }
+            if (!haveGravity || !haveGeomagnetic) return;
+            heading = headingFromAccelMag();
+        }
+
+        if (Float.isNaN(heading)) return;
+        heading = normalize(heading);
+
+        if (Float.isNaN(smoothedHeading)) {
+            smoothedHeading = heading;
+        } else {
+            float delta = shortestDelta(smoothedHeading, heading);
+            smoothedHeading = normalize(smoothedHeading + delta * 0.28f);
+        }
+
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastWidgetUpdate < MIN_UPDATE_MS) return;
+        lastWidgetUpdate = now;
+
+        appContext.getSharedPreferences(MapsNotificationListener.PREFS, Context.MODE_PRIVATE)
+                .edit().putFloat("compass_heading", smoothedHeading).apply();
+        MapsNavWidget.updateCompassWidgets(appContext, smoothedHeading);
+        MapsNavSquareWidget.updateCompassWidgets(appContext, smoothedHeading);
+    }
+
+    private float headingFromRotationVector(float[] values) {
+        float[] rotation = new float[9];
+        SensorManager.getRotationMatrixFromVector(rotation, values);
+        return headingFromMatrix(rotation);
+    }
+
+    private float headingFromAccelMag() {
+        float[] rotation = new float[9];
+        if (!SensorManager.getRotationMatrix(rotation, null, gravity, geomagnetic)) return Float.NaN;
+        return headingFromMatrix(rotation);
+    }
+
+    private float headingFromMatrix(float[] rotation) {
+        float[] adjusted = new float[9];
+        int screenRotation = Surface.ROTATION_0;
+        try {
+            WindowManager wm = (WindowManager) appContext.getSystemService(Context.WINDOW_SERVICE);
+            if (wm != null) screenRotation = wm.getDefaultDisplay().getRotation();
+        } catch (Throwable ignored) {}
+
+        int x = SensorManager.AXIS_X;
+        int y = SensorManager.AXIS_Y;
+        if (screenRotation == Surface.ROTATION_90) {
+            x = SensorManager.AXIS_Y;
+            y = SensorManager.AXIS_MINUS_X;
+        } else if (screenRotation == Surface.ROTATION_180) {
+            x = SensorManager.AXIS_MINUS_X;
+            y = SensorManager.AXIS_MINUS_Y;
+        } else if (screenRotation == Surface.ROTATION_270) {
+            x = SensorManager.AXIS_MINUS_Y;
+            y = SensorManager.AXIS_X;
+        }
+
+        if (!SensorManager.remapCoordinateSystem(rotation, x, y, adjusted)) return Float.NaN;
+        float[] orientation = new float[3];
+        SensorManager.getOrientation(adjusted, orientation);
+        return (float) Math.toDegrees(orientation[0]);
+    }
+
+    private static void lowPass(float[] input, float[] output) {
+        final float alpha = 0.18f;
+        for (int i = 0; i < 3 && i < input.length; i++) {
+            output[i] = output[i] == 0f ? input[i] : output[i] + alpha * (input[i] - output[i]);
+        }
+    }
+
+    private static float shortestDelta(float from, float to) {
+        return ((to - from + 540f) % 360f) - 180f;
+    }
+
+    private static float normalize(float value) {
+        float n = value % 360f;
+        return n < 0f ? n + 360f : n;
+    }
+
+    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+}
