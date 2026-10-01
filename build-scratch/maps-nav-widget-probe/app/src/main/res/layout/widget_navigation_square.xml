@@ -100,4 +100,23 @@
         android:textColor="#8297AA"
         android:textSize="12sp"
         android:includeFontPadding="false" />
+
+    <TextView
+        android:id="@+id/square_trip_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:paddingLeft="8dp"
+        android:paddingRight="8dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:background="@drawable/widget_chip"
+        android:text="Arrivée 13:54  •  18,6 km  •  24 min"
+        android:textColor="#C7F6FF"
+        android:textStyle="bold"
+        android:textSize="10sp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
 </LinearLayout>
