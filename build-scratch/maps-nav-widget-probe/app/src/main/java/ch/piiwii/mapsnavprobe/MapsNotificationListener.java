@@ -27,7 +27,10 @@ public class MapsNotificationListener extends NotificationListenerService {
         String big = value(e, Notification.EXTRA_BIG_TEXT);
         String sub = value(e, Notification.EXTRA_SUB_TEXT);
         String summary = value(e, Notification.EXTRA_SUMMARY_TEXT);
-        String[] lines = allTextValues(n);
+
+        String[] extraLines = allTextValues(n);
+        String[] renderedLines = NotificationViewTextExtractor.extract(this, n);
+        String[] lines = mergeUnique(extraLines, renderedLines);
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
         String recoveredTripDistance = TripDataRecovery.recoverTripDistance(
@@ -38,6 +41,8 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\nbigText=" + big +
                 "\nsubText=" + sub +
                 "\nsummary=" + summary +
+                "\nextraText=" + joinLines(extraLines) +
+                "\nrenderedText=" + joinLines(renderedLines) +
                 "\nallText=" + joinLines(lines) +
                 "\n\nPARSED" +
                 "\narrow=" + parsed.arrow +
@@ -100,6 +105,7 @@ public class MapsNotificationListener extends NotificationListenerService {
         if (n.actions != null) {
             for (Notification.Action action : n.actions) {
                 if (action != null && action.title != null) addUnique(out, action.title.toString());
+                if (action != null && action.getExtras() != null) collectValue(out, action.getExtras(), 0);
             }
         }
 
@@ -112,7 +118,7 @@ public class MapsNotificationListener extends NotificationListenerService {
     }
 
     private static void collectValue(ArrayList<String> out, Object value, int depth) {
-        if (value == null || depth > 4) return;
+        if (value == null || depth > 6) return;
 
         if (value instanceof CharSequence) {
             addUnique(out, value.toString());
@@ -139,6 +145,13 @@ public class MapsNotificationListener extends NotificationListenerService {
                 for (Object item : (Iterable<?>) value) collectValue(out, item, depth + 1);
             } catch (Throwable ignored) {}
         }
+    }
+
+    private static String[] mergeUnique(String[] first, String[] second) {
+        ArrayList<String> out = new ArrayList<>();
+        if (first != null) for (String s : first) addUnique(out, s);
+        if (second != null) for (String s : second) addUnique(out, s);
+        return out.toArray(new String[0]);
     }
 
     private static void addUnique(ArrayList<String> out, String value) {
