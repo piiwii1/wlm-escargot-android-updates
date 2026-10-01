@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/square_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="6dp"
+    android:background="@drawable/widget_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <TextView
+            android:id="@+id/square_meta"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="MAPS"
+            android:textColor="#90A7BA"
+            android:textStyle="bold"
+            android:textSize="7sp"
+            android:maxLines="1"
+            android:includeFontPadding="false" />
+        <TextView
+            android:id="@+id/square_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingLeft="5dp"
+            android:paddingRight="5dp"
+            android:paddingTop="1dp"
+            android:paddingBottom="1dp"
+            android:background="@drawable/widget_chip"
+            android:text="LIVE"
+            android:textColor="#A3F6FF"
+            android:textStyle="bold"
+            android:textSize="7sp"
+            android:includeFontPadding="false" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="58dp"
+        android:layout_height="58dp"
+        android:layout_marginTop="2dp"
+        android:background="@drawable/nav_icon_plate"
+        android:padding="3dp">
+        <ImageView
+            android:id="@+id/square_arrow"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:contentDescription="Manœuvre de navigation" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/square_distance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:gravity="center"
+        android:text="100 m"
+        android:textColor="#86F4FF"
+        android:textStyle="bold"
+        android:textSize="23sp"
+        android:maxLines="1"
+        android:includeFontPadding="false" />
+
+    <TextView
+        android:id="@+id/square_instruction"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="Tournez à gauche"
+        android:textColor="#FAFCFF"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:includeFontPadding="false" />
+
+    <TextView
+        android:id="@+id/square_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:text="" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:id="@+id/square_trip_metrics"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingTop="2dp" android:paddingBottom="2dp" android:background="@drawable/trip_metric_bg">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ARRIVÉE" android:textColor="#7E9AAF" android:textStyle="bold" android:textSize="6sp" android:includeFontPadding="false" />
+            <TextView android:id="@+id/square_eta_value" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="13:54" android:textColor="#F8FCFF" android:textStyle="bold" android:textSize="11sp" android:maxLines="1" android:includeFontPadding="false" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="3dp" android:layout_marginEnd="3dp" android:orientation="vertical" android:gravity="center" android:paddingTop="2dp" android:paddingBottom="2dp" android:background="@drawable/trip_metric_bg">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DISTANCE" android:textColor="#7E9AAF" android:textStyle="bold" android:textSize="6sp" android:includeFontPadding="false" />
+            <TextView android:id="@+id/square_trip_distance_value" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="18,6 km" android:textColor="#86F4FF" android:textStyle="bold" android:textSize="11sp" android:maxLines="1" android:includeFontPadding="false" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:paddingTop="2dp" android:paddingBottom="2dp" android:background="@drawable/trip_metric_bg">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DURÉE" android:textColor="#7E9AAF" android:textStyle="bold" android:textSize="6sp" android:includeFontPadding="false" />
+            <TextView android:id="@+id/square_trip_duration_value" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="24 min" android:textColor="#F8FCFF" android:textStyle="bold" android:textSize="11sp" android:maxLines="1" android:includeFontPadding="false" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
