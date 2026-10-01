@@ -33,7 +33,7 @@ public class MapsNotificationListener extends NotificationListenerService {
         String[] lines = mergeUnique(extraLines, renderedLines);
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
-        GoogleMapsTripInfoExtractor.Result mapsTrip = GoogleMapsTripInfoExtractor.extract(this, sbn);
+        GoogleMapsTripInfoExtractor.Result mapsTrip = GoogleMapsTripInfoExtractor.extract(this, sbn, parsed.distance);
 
         String recoveredTripDistance = mapsTrip.distance;
         String distanceSource = TextUtils.isEmpty(recoveredTripDistance) ? "none" : "maps-layout";
