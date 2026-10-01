@@ -32,7 +32,7 @@ public class MainActivity extends Activity {
     private static final int ACCENT = Color.rgb(119, 238, 255);
     private static final int ACCENT_DARK = Color.rgb(18, 126, 226);
 
-    private TextView accessStatus, distanceView, instruction, detail, meta, liveStatus, raw;
+    private TextView accessStatus, distanceView, instruction, detail, tripSummaryView, meta, liveStatus, raw;
     private ImageView arrowView;
     private Button diagnosticButton, clearButton;
     private int testIndex = 0;
@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
         headerText.addView(intro);
         header.addView(headerText, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        TextView version = text("v1.13", 11, true, ACCENT);
+        TextView version = text("v1.14", 11, true, ACCENT);
         version.setGravity(Gravity.CENTER);
         version.setPadding(dp(11), dp(6), dp(11), dp(6));
         version.setBackground(rounded(Color.rgb(8, 28, 42), 14, Color.rgb(35, 93, 121)));
@@ -149,6 +149,16 @@ public class MainActivity extends Activity {
         navText.addView(detail);
         navRow.addView(navText, new LinearLayout.LayoutParams(0, -2, 1f));
         card.addView(navRow);
+
+        tripSummaryView = text("", 11, true, Color.rgb(199, 246, 255));
+        tripSummaryView.setGravity(Gravity.CENTER);
+        tripSummaryView.setPadding(dp(10), dp(6), dp(10), dp(6));
+        tripSummaryView.setBackground(rounded(Color.rgb(9, 25, 36), 13, Color.rgb(31, 72, 91)));
+        tripSummaryView.setVisibility(View.GONE);
+        LinearLayout.LayoutParams tripLp = new LinearLayout.LayoutParams(-1, -2);
+        tripLp.setMargins(0, dp(10), 0, 0);
+        card.addView(tripSummaryView, tripLp);
+
         content.addView(card);
 
         LinearLayout widgetInfo = new LinearLayout(this);
@@ -256,8 +266,12 @@ public class MainActivity extends Activity {
         String distance = p.getString("distance", "");
         String primary = p.getString("primary", "");
         String secondary = p.getString("secondary", "");
+        String eta = p.getString("eta", "");
+        String tripDistance = p.getString("trip_distance", "");
+        String tripDuration = p.getString("trip_duration", "");
         String rawText = p.getString("raw", "");
         boolean simulated = p.getBoolean("simulated", false);
+        String tripSummary = TripSummaryFormatter.build(eta, tripDistance, tripDuration);
 
         if (TextUtils.isEmpty(primary)) {
             arrowView.setImageBitmap(NavIconSelector.render("↑", "Continuez tout droit", dp(200)));
@@ -266,6 +280,7 @@ public class MainActivity extends Activity {
             detail.setText("Démarre une navigation dans Google Maps");
             meta.setText("GOOGLE MAPS");
             liveStatus.setText(enabled ? "PRÊT" : "OFF");
+            tripSummaryView.setVisibility(View.GONE);
         } else {
             arrowView.setImageBitmap(NavIconSelector.render(arrow, primary, dp(200)));
             distanceView.setText(distance);
@@ -273,6 +288,12 @@ public class MainActivity extends Activity {
             detail.setText(TextUtils.isEmpty(secondary) ? "Google Maps" : secondary);
             meta.setText(simulated ? "MODE TEST" : "GOOGLE MAPS");
             liveStatus.setText(simulated ? "TEST" : "LIVE");
+            if (TextUtils.isEmpty(tripSummary)) {
+                tripSummaryView.setVisibility(View.GONE);
+            } else {
+                tripSummaryView.setText(tripSummary);
+                tripSummaryView.setVisibility(View.VISIBLE);
+            }
         }
         raw.setText(TextUtils.isEmpty(rawText) ? "Aucune donnée reçue de Google Maps." : rawText);
     }
@@ -334,8 +355,9 @@ public class MainActivity extends Activity {
         testIndex++;
         getSharedPreferences(MapsNotificationListener.PREFS, MODE_PRIVATE).edit()
                 .putString("arrow", t[0]).putString("distance", t[1]).putString("primary", t[2]).putString("secondary", t[3])
+                .putString("eta", "15:42").putString("trip_distance", "18,6 km").putString("trip_duration", "24 min")
                 .putString("timestamp", MapsNotificationListener.now())
-                .putString("raw", "SIMULATION v1.13.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3])
+                .putString("raw", "SIMULATION v1.14.0\narrow=" + t[0] + "\ndistance=" + t[1] + "\ninstruction=" + t[2] + "\nroad=" + t[3] + "\neta=15:42\ntripDistance=18,6 km\ntripDuration=24 min")
                 .putBoolean("simulated", true).apply();
         MapsNavWidget.updateAll(this);
         refresh();
