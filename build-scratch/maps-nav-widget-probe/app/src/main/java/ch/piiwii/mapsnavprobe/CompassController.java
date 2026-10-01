@@ -12,9 +12,9 @@ import android.view.WindowManager;
 /** Lightweight sensor listener used only while an idle widget is in compass mode. */
 public final class CompassController implements SensorEventListener {
     private static final CompassController INSTANCE = new CompassController();
-    private static final long MIN_UPDATE_MS = 280L;
-    private static final long FORCE_UPDATE_MS = 1200L;
-    private static final float MIN_VISIBLE_CHANGE = 0.7f;
+    private static final long MIN_UPDATE_MS = 140L;
+    private static final long FORCE_UPDATE_MS = 800L;
+    private static final float MIN_VISIBLE_CHANGE = 0.25f;
 
     private Context appContext;
     private SensorManager sensorManager;
@@ -51,7 +51,6 @@ public final class CompassController implements SensorEventListener {
         sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager == null) return;
 
-        // Best source first: fused rotation vector gives a stable north-referenced heading.
         rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         if (rotationVector == null) {
             rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);
@@ -61,7 +60,6 @@ public final class CompassController implements SensorEventListener {
             if (running) return;
         }
 
-        // Fallback for hardware without a fused rotation vector.
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         magneticField = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         if (accelerometer != null && magneticField != null) {
@@ -92,10 +90,10 @@ public final class CompassController implements SensorEventListener {
             heading = headingFromRotationVector(event.values);
         } else {
             if (type == Sensor.TYPE_ACCELEROMETER) {
-                lowPass(event.values, gravity, 0.14f);
+                lowPass(event.values, gravity, 0.16f);
                 haveGravity = true;
             } else if (type == Sensor.TYPE_MAGNETIC_FIELD) {
-                lowPass(event.values, geomagnetic, 0.12f);
+                lowPass(event.values, geomagnetic, 0.14f);
                 haveGeomagnetic = true;
             }
             if (!haveGravity || !haveGeomagnetic) return;
@@ -111,12 +109,12 @@ public final class CompassController implements SensorEventListener {
             float delta = shortestDelta(smoothedHeading, heading);
             float abs = Math.abs(delta);
 
-            // Dynamic circular smoothing: calm when the phone is still, responsive while turning.
+            // Faster adaptive circular filter: smooth when still, quick when the phone turns.
             float alpha;
-            if (abs < 2f) alpha = 0.16f;
-            else if (abs < 8f) alpha = 0.26f;
-            else if (abs < 25f) alpha = 0.40f;
-            else alpha = 0.58f;
+            if (abs < 1.2f) alpha = 0.22f;
+            else if (abs < 5f) alpha = 0.38f;
+            else if (abs < 15f) alpha = 0.58f;
+            else alpha = 0.78f;
             smoothedHeading = normalize(smoothedHeading + delta * alpha);
         }
 
