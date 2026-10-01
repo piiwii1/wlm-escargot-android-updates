@@ -33,8 +33,19 @@ public class MapsNotificationListener extends NotificationListenerService {
         String[] lines = mergeUnique(extraLines, renderedLines);
 
         NavInstructionParser.Result parsed = NavInstructionParser.parse(title, text, big, sub, summary, lines);
-        String recoveredTripDistance = TripDataRecovery.recoverTripDistance(
-                lines, parsed.distance, parsed.tripDistance);
+
+        // Strongest source: Google Maps' own notification layout. On many
+        // versions nav_time/header_text contains "duration · distance · ETA".
+        GoogleMapsTripInfoExtractor.Result mapsTrip = GoogleMapsTripInfoExtractor.extract(this, sbn);
+
+        String recoveredTripDistance = mapsTrip.distance;
+        if (TextUtils.isEmpty(recoveredTripDistance)) {
+            recoveredTripDistance = TripDataRecovery.recoverTripDistance(
+                    lines, parsed.distance, parsed.tripDistance);
+        }
+
+        String finalEta = !TextUtils.isEmpty(mapsTrip.eta) ? mapsTrip.eta : parsed.eta;
+        String finalDuration = !TextUtils.isEmpty(mapsTrip.duration) ? mapsTrip.duration : parsed.tripDuration;
 
         String raw = "title=" + title +
                 "\ntext=" + text +
@@ -43,16 +54,22 @@ public class MapsNotificationListener extends NotificationListenerService {
                 "\nsummary=" + summary +
                 "\nextraText=" + joinLines(extraLines) +
                 "\nrenderedText=" + joinLines(renderedLines) +
+                "\nlayoutText=" + mapsTrip.debug +
                 "\nallText=" + joinLines(lines) +
                 "\n\nPARSED" +
                 "\narrow=" + parsed.arrow +
                 "\ndistance=" + parsed.distance +
                 "\ninstruction=" + parsed.instruction +
                 "\nroad=" + parsed.road +
-                "\neta=" + parsed.eta +
+                "\netaParser=" + parsed.eta +
+                "\netaLayout=" + mapsTrip.eta +
+                "\netaFinal=" + finalEta +
                 "\ntripDistanceParser=" + parsed.tripDistance +
+                "\ntripDistanceLayout=" + mapsTrip.distance +
                 "\ntripDistanceFinal=" + recoveredTripDistance +
-                "\ntripDuration=" + parsed.tripDuration +
+                "\ntripDurationParser=" + parsed.tripDuration +
+                "\ntripDurationLayout=" + mapsTrip.duration +
+                "\ntripDurationFinal=" + finalDuration +
                 "\nsource=" + parsed.source;
 
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -65,9 +82,9 @@ public class MapsNotificationListener extends NotificationListenerService {
                 .putString("timestamp", now())
                 .putBoolean("simulated", false);
 
-        if (!TextUtils.isEmpty(parsed.eta)) edit.putString("eta", parsed.eta);
+        if (!TextUtils.isEmpty(finalEta)) edit.putString("eta", finalEta);
         if (!TextUtils.isEmpty(recoveredTripDistance)) edit.putString("trip_distance", recoveredTripDistance);
-        if (!TextUtils.isEmpty(parsed.tripDuration)) edit.putString("trip_duration", parsed.tripDuration);
+        if (!TextUtils.isEmpty(finalDuration)) edit.putString("trip_duration", finalDuration);
 
         if ("Vous êtes arrivé".equals(parsed.instruction)) {
             edit.remove("eta").remove("trip_distance").remove("trip_duration");
@@ -90,11 +107,6 @@ public class MapsNotificationListener extends NotificationListenerService {
         return v == null ? "" : String.valueOf(v).trim();
     }
 
-    /**
-     * Google Maps ne place pas toujours toutes les informations dans
-     * EXTRA_TEXT / EXTRA_BIG_TEXT. On parcourt donc tous les champs texte,
-     * y compris les Bundle/listes imbriqués, le ticker et la version publique.
-     */
     private static String[] allTextValues(Notification n) {
         ArrayList<String> out = new ArrayList<>();
         if (n == null) return new String[0];
