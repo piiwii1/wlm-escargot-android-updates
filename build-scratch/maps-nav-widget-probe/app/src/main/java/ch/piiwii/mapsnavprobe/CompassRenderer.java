@@ -8,8 +8,8 @@ import android.graphics.Paint;
 import android.graphics.Path;
 
 /**
- * Renders the approved GTI compass artwork. The outer dial stays fixed;
- * only the inner compass rose rotates with the live device heading.
+ * Renders the approved GTI compass artwork.
+ * The complete dial stays fixed; only the red north needle moves.
  */
 public final class CompassRenderer {
     private CompassRenderer() {}
@@ -25,24 +25,60 @@ public final class CompassRenderer {
         Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(out);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        float c = size * 0.5f;
 
-        // Exact approved artwork as the fixed compass body.
+        // Exact approved artwork: frame, graduations, N/E/S/O and the whole rose stay fixed.
         canvas.drawBitmap(reference, 0f, 0f, paint);
 
-        // Only the central rose / inner ring moves. N/E/S/O, graduations and
-        // the outer GTI frame remain perfectly still on the launcher.
-        float c = size * 0.5f;
-        float movingRadius = size * 0.274f;
-        Path movingArea = new Path();
-        movingArea.addCircle(c, c, movingRadius, Path.Direction.CW);
-
+        // Remove only the original fixed red north needle by replacing it with the
+        // exact silver south point from the same reference, mirrored 180 degrees.
+        Path northReplacement = needleMask(size, true);
         canvas.save();
-        canvas.clipPath(movingArea);
+        canvas.clipPath(northReplacement);
+        canvas.rotate(180f, c, c);
+        canvas.drawBitmap(reference, 0f, 0f, paint);
+        canvas.restore();
+
+        // Draw only the original red needle and rotate that one element according
+        // to the live heading. The rest of the compass never moves.
+        canvas.save();
         canvas.rotate(-normalize(headingDegrees), c, c);
+        canvas.clipPath(needleMask(size, false));
+        canvas.drawBitmap(reference, 0f, 0f, paint);
+        canvas.restore();
+
+        // Repaint the centre hub from the untouched reference so it remains fixed,
+        // perfectly round and visually identical to the approved image.
+        Path hub = new Path();
+        hub.addCircle(c, c, size * 0.075f, Path.Direction.CW);
+        canvas.save();
+        canvas.clipPath(hub);
         canvas.drawBitmap(reference, 0f, 0f, paint);
         canvas.restore();
 
         return out;
+    }
+
+    private static Path needleMask(int size, boolean replacement) {
+        float c = size * 0.5f;
+        Path p = new Path();
+        if (replacement) {
+            // Slightly wider mask removes the original red edge/shadow completely.
+            p.moveTo(c, size * 0.190f);
+            p.lineTo(size * 0.430f, size * 0.468f);
+            p.lineTo(size * 0.466f, size * 0.515f);
+            p.lineTo(size * 0.534f, size * 0.515f);
+            p.lineTo(size * 0.570f, size * 0.468f);
+        } else {
+            // Exact moving needle area from the approved reference.
+            p.moveTo(c, size * 0.198f);
+            p.lineTo(size * 0.438f, size * 0.458f);
+            p.lineTo(size * 0.470f, size * 0.505f);
+            p.lineTo(size * 0.530f, size * 0.505f);
+            p.lineTo(size * 0.562f, size * 0.458f);
+        }
+        p.close();
+        return p;
     }
 
     private static synchronized Bitmap getScaledReference(Context context, int size) {
