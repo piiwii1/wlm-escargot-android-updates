@@ -35,6 +35,9 @@ public class MapsNavWidget extends AppWidgetProvider {
         String distance = p.getString("distance", "");
         String primary = p.getString("primary", "");
         String secondary = p.getString("secondary", "");
+        String eta = p.getString("eta", "");
+        String tripDistance = p.getString("trip_distance", "");
+        String tripDuration = p.getString("trip_duration", "");
         boolean simulated = p.getBoolean("simulated", false);
 
         boolean empty = TextUtils.isEmpty(primary);
@@ -45,6 +48,8 @@ public class MapsNavWidget extends AppWidgetProvider {
             secondary = "Démarre une navigation dans Google Maps";
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
+
+        String tripSummary = TripSummaryFormatter.build(eta, tripDistance, tripDuration);
 
         Bundle options = manager.getAppWidgetOptions(id);
         int minHeight = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
@@ -67,11 +72,28 @@ public class MapsNavWidget extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_distance, distance);
         }
 
-        if (TextUtils.isEmpty(secondary)) {
-            views.setViewVisibility(R.id.widget_detail, View.GONE);
+        if (compact) {
+            String compactDetail = !TextUtils.isEmpty(tripSummary) ? tripSummary : secondary;
+            if (TextUtils.isEmpty(compactDetail)) {
+                views.setViewVisibility(R.id.widget_detail, View.GONE);
+            } else {
+                views.setViewVisibility(R.id.widget_detail, View.VISIBLE);
+                views.setTextViewText(R.id.widget_detail, compactDetail);
+            }
         } else {
-            views.setViewVisibility(R.id.widget_detail, View.VISIBLE);
-            views.setTextViewText(R.id.widget_detail, secondary);
+            if (TextUtils.isEmpty(secondary)) {
+                views.setViewVisibility(R.id.widget_detail, View.GONE);
+            } else {
+                views.setViewVisibility(R.id.widget_detail, View.VISIBLE);
+                views.setTextViewText(R.id.widget_detail, secondary);
+            }
+
+            if (TextUtils.isEmpty(tripSummary)) {
+                views.setViewVisibility(R.id.widget_trip_summary, View.GONE);
+            } else {
+                views.setViewVisibility(R.id.widget_trip_summary, View.VISIBLE);
+                views.setTextViewText(R.id.widget_trip_summary, tripSummary);
+            }
         }
 
         PendingIntent maps = PendingIntent.getActivity(context, 1000 + id, mapsIntent(context),
