@@ -9,15 +9,15 @@
     android:paddingBottom="10dp"
     android:background="@drawable/widget_bg">
 
-    <!-- Corps de navigation : mêmes proportions/position qu'avant.
-         Le padding bas invisible reproduit l'espace qu'occupait l'ancien résumé,
-         pendant que les nouvelles métriques sont réellement ancrées au fond. -->
+    <!-- Zone navigation indépendante du bandeau trajet : elle peut varier
+         sans déplacer ARRIVÉE / DISTANCE / DURÉE. -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
+        android:layout_height="match_parent"
+        android:layout_gravity="top"
         android:orientation="vertical"
-        android:paddingBottom="38dp">
+        android:paddingTop="7dp"
+        android:paddingBottom="54dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -129,14 +129,14 @@
     <LinearLayout
         android:id="@+id/widget_trip_metrics"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:layout_gravity="bottom"
         android:orientation="horizontal"
         android:baselineAligned="false">
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="vertical"
             android:gravity="center"
@@ -167,7 +167,7 @@
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginStart="6dp"
             android:layout_marginEnd="6dp"
@@ -200,7 +200,7 @@
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="vertical"
             android:gravity="center"
