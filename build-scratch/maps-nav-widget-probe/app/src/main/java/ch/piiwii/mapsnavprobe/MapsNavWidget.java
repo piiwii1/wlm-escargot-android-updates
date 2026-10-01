@@ -7,6 +7,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -14,6 +16,10 @@ import android.widget.RemoteViews;
 public class MapsNavWidget extends AppWidgetProvider {
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
         for (int id : ids) updateOne(context, manager, id);
+    }
+
+    @Override public void onAppWidgetOptionsChanged(Context context, AppWidgetManager manager, int id, Bundle newOptions) {
+        updateOne(context, manager, id);
     }
 
     public static void updateAll(Context context) {
@@ -36,16 +42,22 @@ public class MapsNavWidget extends AppWidgetProvider {
             arrow = "↑";
             distance = "";
             primary = "En attente d’un trajet";
-            secondary = "Ouvre Google Maps et démarre la navigation";
+            secondary = "Démarre une navigation dans Google Maps";
         }
         if (TextUtils.isEmpty(arrow)) arrow = "↑";
 
-        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_navigation);
+        Bundle options = manager.getAppWidgetOptions(id);
+        int minHeight = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
+        boolean compact = minHeight > 0 && minHeight < 120;
+        int layout = compact ? R.layout.widget_navigation_compact : R.layout.widget_navigation;
+        RemoteViews views = new RemoteViews(context.getPackageName(), layout);
+
         float density = context.getResources().getDisplayMetrics().density;
-        int iconPx = Math.max(192, Math.round(96f * density));
+        int iconDp = compact ? 78 : 104;
+        int iconPx = Math.max(192, Math.round(iconDp * density));
         views.setImageViewBitmap(R.id.widget_arrow, NavIconSelector.render(arrow, primary, iconPx));
         views.setTextViewText(R.id.widget_instruction, primary);
-        views.setTextViewText(R.id.widget_meta, "GOOGLE MAPS");
+        views.setTextViewText(R.id.widget_meta, compact ? "MAPS" : "GOOGLE MAPS");
         views.setTextViewText(R.id.widget_status, simulated ? "TEST" : (empty ? "PRÊT" : "LIVE"));
 
         if (TextUtils.isEmpty(distance)) {
@@ -62,10 +74,20 @@ public class MapsNavWidget extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_detail, secondary);
         }
 
-        Intent open = new Intent(context, MainActivity.class);
-        PendingIntent pi = PendingIntent.getActivity(context, 100, open,
+        PendingIntent maps = PendingIntent.getActivity(context, 1000 + id, mapsIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        views.setOnClickPendingIntent(R.id.widget_root, pi);
+        PendingIntent settings = PendingIntent.getActivity(context, 2000 + id, new Intent(context, MainActivity.class),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        views.setOnClickPendingIntent(R.id.widget_root, maps);
+        views.setOnClickPendingIntent(R.id.widget_status, settings);
+        views.setOnClickPendingIntent(R.id.widget_meta, settings);
+
         manager.updateAppWidget(id, views);
+    }
+
+    private static Intent mapsIntent(Context context) {
+        Intent i = context.getPackageManager().getLaunchIntentForPackage(MapsNotificationListener.MAPS_PACKAGE);
+        if (i != null) return i;
+        return new Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com"));
     }
 }
