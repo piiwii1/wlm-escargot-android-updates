@@ -75,14 +75,14 @@ jobs:
       - name: Package delivery
         run: |
           mkdir -p delivery
-          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.15-compass-fixed-dial.apk
-          zip -qr delivery/PiiWii-Nav-v1.17.15-compass-fixed-dial-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
+          cp build-scratch/maps-nav-widget-probe/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Nav-v1.17.16-compass-needle-only.apk
+          zip -qr delivery/PiiWii-Nav-v1.17.16-compass-needle-only-Sources.zip build-scratch/maps-nav-widget-probe -x '*/build/*' '*/.gradle/*' '*.jks'
           cd delivery
-          sha256sum PiiWii-Nav-v1.17.15-compass-fixed-dial.apk > PiiWii-Nav-v1.17.15-compass-fixed-dial-SHA256.txt
-          sha256sum PiiWii-Nav-v1.17.15-compass-fixed-dial-Sources.zip >> PiiWii-Nav-v1.17.15-compass-fixed-dial-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.16-compass-needle-only.apk > PiiWii-Nav-v1.17.16-compass-needle-only-SHA256.txt
+          sha256sum PiiWii-Nav-v1.17.16-compass-needle-only-Sources.zip >> PiiWii-Nav-v1.17.16-compass-needle-only-SHA256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Nav-v1.17.15-compass-fixed-dial
+          name: PiiWii-Nav-v1.17.16-compass-needle-only
           path: delivery/*
           retention-days: 30
