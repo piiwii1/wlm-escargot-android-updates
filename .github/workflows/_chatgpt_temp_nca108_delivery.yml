@@ -1,0 +1,28 @@
+name: Temporary NCA 1.0.8 delivery
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/_chatgpt_temp_nca108_delivery.yml'
+permissions:
+  contents: write
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download verified APK
+        run: |
+          set -euo pipefail
+          mkdir -p tmp-chatgpt-delivery
+          curl --fail --location --silent --show-error 'https://tmpfiles.org/dl/wHAsfmkYG3j2/nouvelliste-concours-assistant-1.0.8.apk' -o tmp-chatgpt-delivery/Nouvelliste-Concours-Assistant-1.0.8.apk
+          echo '6878688540651ffdd0c7c59616e27f46fcd38be03b26d35142334143b9ea042a  tmp-chatgpt-delivery/Nouvelliste-Concours-Assistant-1.0.8.apk' | sha256sum -c -
+      - name: Commit temporary APK
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tmp-chatgpt-delivery/Nouvelliste-Concours-Assistant-1.0.8.apk
+          git commit -m 'Temporary NCA 1.0.8 APK delivery'
+          git push origin HEAD:main
