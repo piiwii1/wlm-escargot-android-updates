@@ -1,0 +1,26 @@
+name: Decode APK Installer PiiWii delivery
+
+on:
+  push:
+    branches: [apk-installer-piiwii-133-delivery]
+
+permissions:
+  contents: write
+
+jobs:
+  decode:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode APK
+        run: |
+          set -euo pipefail
+          test -f APK-Installer-PiiWii-1.3.3.apk.b64
+          base64 -d APK-Installer-PiiWii-1.3.3.apk.b64 > APK-Installer-PiiWii-1.3.3.apk
+          echo '538f0f49ba149ae11657a5f1efb8e14c34de36e1e105d4e343d2d9d7336756fa  APK-Installer-PiiWii-1.3.3.apk' | sha256sum -c -
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add APK-Installer-PiiWii-1.3.3.apk
+          git commit -m 'Decoded APK Installer PiiWii 1.3.3 [skip ci]'
+          git push origin HEAD:apk-installer-piiwii-133-delivery
