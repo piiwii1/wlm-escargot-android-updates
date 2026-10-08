@@ -1,4 +1,4 @@
-name: Temporary NCA 1.0.8 delivery
+name: Temporary PiiWii Files 1.3.34 delivery
 on:
   push:
     branches: [ main ]
@@ -13,17 +13,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Download verified APK
+      - name: Decode verified APK
         run: |
           set -euo pipefail
-          mkdir -p tmp-chatgpt-delivery
-          curl --fail --location --silent --show-error 'https://tmpfiles.org/dl/wHAsfmkYG3j2/nouvelliste-concours-assistant-1.0.8.apk' -o tmp-chatgpt-delivery/Nouvelliste-Concours-Assistant-1.0.8.apk
-          echo '0837d5545a982df1592f0f925cf41f8bc2250e4143ee7b7ac1a137ac80d4a11e  tmp-chatgpt-delivery/Nouvelliste-Concours-Assistant-1.0.8.apk' | sha256sum -c -
+          base64 -d delivery/PiiWii-Files-1.3.34.apk.b64 > delivery/PiiWii-Files-1.3.34.apk
+          unzip -t delivery/PiiWii-Files-1.3.34.apk >/dev/null
+          sha256sum delivery/PiiWii-Files-1.3.34.apk
       - name: Commit temporary APK
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add tmp-chatgpt-delivery/Nouvelliste-Concours-Assistant-1.0.8.apk
-          git commit -m 'Temporary NCA 1.0.8 APK delivery' || exit 0
+          git add -f delivery/PiiWii-Files-1.3.34.apk
+          git commit -m 'Temporary PiiWii Files 1.3.34 APK delivery' || exit 0
           git pull --rebase origin main
           git push origin HEAD:main
