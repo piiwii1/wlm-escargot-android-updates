@@ -19,6 +19,13 @@ jobs:
           base64 -d delivery/PiiWii-Files-1.3.34.apk.b64 > delivery/PiiWii-Files-1.3.34.apk
           unzip -t delivery/PiiWii-Files-1.3.34.apk >/dev/null
           sha256sum delivery/PiiWii-Files-1.3.34.apk
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Files-1.3.34-APK
+          path: delivery/PiiWii-Files-1.3.34.apk
+          retention-days: 1
+
       - name: Commit temporary APK
         run: |
           git config user.name 'github-actions[bot]'
