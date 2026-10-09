@@ -1,0 +1,32 @@
+name: Deliver Verified PiiWii PDF 1.6.4
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/deliver-verified-piiwii-pdf-1.6.4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decode verified files
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          base64 -d _temp/PiiWii-PDF-1.6.4.apk.b64.txt > delivery/PiiWii-PDF-1.6.4.apk
+          base64 -d _temp/PiiWii-PDF-1.6.4-SOURCES-COMPLETE.zip.b64.txt > delivery/PiiWii-PDF-1.6.4-SOURCES-COMPLETE.zip
+          sha256sum delivery/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-PDF-1.6.4-VERIFIED
+          path: delivery/
+          retention-days: 1
+          compression-level: 0
