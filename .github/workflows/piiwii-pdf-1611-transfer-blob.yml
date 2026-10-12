@@ -1,0 +1,24 @@
+name: Temporary PiiWii PDF APK encrypted delivery
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/piiwii-pdf-1611-transfer-blob.yml']
+permissions:
+  contents: read
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate encrypted transfer payload
+        run: |
+          set -euo pipefail
+          test "$(wc -c < temp-transport/piiwii-pdf-1611-encrypted.txt)" = 914440
+          base64 -d temp-transport/piiwii-pdf-1611-encrypted.txt > /tmp/delta.enc
+          echo 'd3cb697e9a8e7f78afeb29f548d75e97ddedcc7eeb29fab42293116a34e4375f  /tmp/delta.enc' | sha256sum -c -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-1.6.11-encrypted-transport
+          path: temp-transport/piiwii-pdf-1611-encrypted.txt
+          retention-days: 1
+          if-no-files-found: error
