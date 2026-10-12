@@ -1,0 +1,17 @@
+name: Temporary APK delivery transport probe
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/piiwii-pdf-transport-probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transport-probe
+          path: README.md
+          retention-days: 1
