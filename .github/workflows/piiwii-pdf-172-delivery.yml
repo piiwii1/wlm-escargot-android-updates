@@ -1,0 +1,46 @@
+name: PiiWii PDF 1.7.2 public APK delivery
+
+on:
+  push:
+    branches: ['piiwii-pdf-1.7.2-delivery']
+    paths: ['.github/workflows/piiwii-pdf-172-delivery.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and verify signed APK
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,hashlib,pathlib,zipfile
+          base=pathlib.Path('piiwii-pdf-172-transfer')
+          b64=''.join((base/f'piece-{i:02d}.txt').read_text().strip() for i in range(9))
+          assert len(b64)==4025364, f'Unexpected encoded length {len(b64)}'
+          binary=base64.b64decode(b64,validate=True)
+          checksum=hashlib.sha256(binary).hexdigest()
+          assert checksum=='f1fcfcc8601e7773f0c091cb9cf4ba83ddac1706a6654ec430a23fbcb6a51c58', checksum
+          assert len(binary)==3019021
+          target=pathlib.Path('piiwii-pdf-download/PiiWii-PDF-1.7.2.apk')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          target.write_bytes(binary)
+          with zipfile.ZipFile(target) as f:
+            assert f.testzip() is None
+            assert 'classes.dex' in f.namelist()
+          print('Verified signed APK:',target,'bytes:',len(binary),'SHA-256:',checksum)
+          PY
+      - name: Commit verified APK on isolated delivery branch
+        run: |
+          set -euo pipefail
+          git config user.name github-actions-bot
+          git config user.email github-actions-bot@users.noreply.github.com
+          git add piiwii-pdf-download/PiiWii-PDF-1.7.2.apk
+          git diff --cached --quiet && exit 0
+          git commit -m 'Publish verified PiiWii PDF 1.7.2 installable APK'
+          git push origin HEAD:piiwii-pdf-1.7.2-delivery
