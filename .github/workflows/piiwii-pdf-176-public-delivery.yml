@@ -1,0 +1,73 @@
+name: Deliver verified PiiWii PDF 1.7.6 APK
+
+on:
+  push:
+    branches: ['piiwii-pdf-1.7.6-delivery']
+    paths: ['.github/workflows/piiwii-pdf-176-public-delivery.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebuild byte-identical signed APK from 1.7.2 and verified delta
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q --break-system-packages bsdiff4
+          python3 - <<'PY'
+          import base64, hashlib, io, lzma, pathlib, struct, zipfile, zlib, bsdiff4
+          old_file=pathlib.Path('piiwii-pdf-download/PiiWii-PDF-1.7.5.apk')
+          old=old_file.read_bytes()
+          assert hashlib.sha256(old).hexdigest()=='8649ce38c9bdea6755afe1562107bce558c3184cd6788c4c3e4c5912b4739b60','Invalid signed base APK'
+          code=''.join(pathlib.Path('piiwii-pdf-176-transfer/segment-%02d.b64' % i).read_text().strip() for i in range(3))
+          assert len(code)==935196,'Transfer data incomplete'
+          binary=lzma.decompress(base64.b64decode(code,validate=True))
+          assert binary[:5]==b'PW176'
+          flag, p_len, d_len, s_len=struct.unpack_from('<BIII',binary,5)
+          offset=5+struct.calcsize('<BIII')
+          prefix_diff=binary[offset:offset+p_len];offset+=p_len
+          dex_diff=binary[offset:offset+d_len];offset+=d_len
+          suffix_diff=binary[offset:offset+s_len];offset+=s_len
+          assert offset==len(binary)
+          with zipfile.ZipFile(io.BytesIO(old)) as z:
+            old_dex=z.read('classes.dex')
+            info=z.getinfo('classes.dex')
+            old_start=info.header_offset
+            name_len, extra_len=struct.unpack_from('<HH',old,old_start+26)
+            old_start+=30+name_len+extra_len
+            old_end=old_start+info.compress_size
+          prefix=bsdiff4.patch(old[:old_start],prefix_diff)
+          if flag==0:
+            new_dex=bsdiff4.patch(old_dex,dex_diff)
+            comp=zlib.compressobj(level=6,wbits=-15)
+            compressed_dex=comp.compress(new_dex)+comp.flush()
+          else:
+            compressed_dex=dex_diff
+          suffix=bsdiff4.patch(old[old_end:],suffix_diff)
+          result=prefix+compressed_dex+suffix
+          sha=hashlib.sha256(result).hexdigest()
+          assert sha=='11536d1bdd9d91c8b82b8909f95aa38be0724de3b3692c356a774bde18d05e81',sha
+          with zipfile.ZipFile(io.BytesIO(result)) as archive:
+            assert archive.testzip() is None
+            assert 'classes.dex' in archive.namelist()
+          output=pathlib.Path('piiwii-pdf-download/PiiWii-PDF-1.7.6.apk')
+          output.write_bytes(result)
+          print('SUCCESS: Signed original APK reconstructed byte-for-byte: sha256='+sha+' bytes='+str(len(result)))
+          PY
+      - name: Publish direct public downloadable APK
+        run: |
+          set -euo pipefail
+          echo "11536d1bdd9d91c8b82b8909f95aa38be0724de3b3692c356a774bde18d05e81  piiwii-pdf-download/PiiWii-PDF-1.7.6.apk" | sha256sum -c -
+          git config user.name github-actions-bot
+          git config user.email github-actions-bot@users.noreply.github.com
+          git add piiwii-pdf-download/PiiWii-PDF-1.7.6.apk
+          git diff --cached --quiet && exit 0
+          git commit -m 'Publish signed PiiWii PDF 1.7.3 installable APK'
+          git push origin HEAD:piiwii-pdf-1.7.6-delivery
