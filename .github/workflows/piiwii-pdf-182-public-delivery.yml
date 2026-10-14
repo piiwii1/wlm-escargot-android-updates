@@ -1,0 +1,40 @@
+name: Deliver signed PiiWii PDF 1.8.2
+on:
+  push:
+    branches: [piiwii-pdf-1.8.2-delivery]
+    paths:
+      - '.github/workflows/piiwii-pdf-182-public-delivery.yml'
+      - 'piiwii-pdf-182-transfer/SHA256.txt'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode and validate signed APK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,base64,io,zipfile
+          folder=Path('piiwii-pdf-182-transfer')
+          expected=(folder/'SHA256.txt').read_text().strip()
+          assert len(expected)==64
+          b64=''.join((folder/f'PART{i:02d}.b64').read_text().strip() for i in range(9))
+          binary=base64.b64decode(b64,validate=True)
+          sha=hashlib.sha256(binary).hexdigest()
+          assert sha==expected,(sha,expected)
+          with zipfile.ZipFile(io.BytesIO(binary)) as z:
+            assert z.testzip() is None and 'classes.dex' in z.namelist()
+          target=Path('piiwii-pdf-download/PiiWii-PDF-1.8.2.apk')
+          target.parent.mkdir(exist_ok=True)
+          target.write_bytes(binary)
+          print('APK verified:',len(binary),'bytes, SHA-256:',sha)
+          PY
+      - name: Publish verified APK
+        run: |
+          git config user.name github-actions-bot
+          git config user.email github-actions-bot@users.noreply.github.com
+          git add piiwii-pdf-download/PiiWii-PDF-1.8.2.apk
+          git diff --cached --quiet || (git commit -m 'Release verified PiiWii PDF 1.8.2 APK' && git push origin HEAD:piiwii-pdf-1.8.2-delivery)
