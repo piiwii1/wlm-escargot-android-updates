@@ -26,13 +26,15 @@ public final class Notify {
    if(id<0||id>=Route.ALL.length)return;
    if(Build.VERSION.SDK_INT>=33&&c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
    init(c);Route.Stop s=Route.ALL[id];
+   String reminderTime=String.format(Locale.FRANCE,"%02d:%02d",s.hour,s.minute);
+   String whenText=reminderTime.equals(s.time)?"Étape à "+s.time:"Rappel "+reminderTime+" · étape "+s.time;
    Intent view=new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP).putExtra("focus_step",id).setAction("show_step_"+id);
    PendingIntent open=PendingIntent.getActivity(c,500+id,view,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
    Intent nav=new Intent(c,Gps.class).setAction("nav_"+id).putExtra("id",id);
    PendingIntent go=PendingIntent.getActivity(c,700+id,nav,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
    Notification.Builder n=new Notification.Builder(c,CHANNEL).setSmallIcon(android.R.drawable.ic_dialog_info)
-     .setContentTitle(test?"✅ Rappel de test : OK":"À prévoir : "+s.title)
-     .setContentText("À "+s.time+" · "+s.place).setStyle(new Notification.BigTextStyle().bigText(s.note))
+     .setContentTitle(test?"✅ Rappel de test : OK":"C’est le moment : "+s.title)
+     .setContentText(whenText+" · "+s.place).setStyle(new Notification.BigTextStyle().bigText(whenText+" · "+s.note))
      .setContentIntent(open).setAutoCancel(true).setColor(MainActivity.PINK)
      .setCategory(Notification.CATEGORY_REMINDER);
    if(!s.destination.isEmpty())n.addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_directions,"Y ALLER",go).build());
