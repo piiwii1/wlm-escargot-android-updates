@@ -27,7 +27,7 @@ final class Cards {
    preview.setBackground(MainActivity.bg(a,0xffead8cf,10));preview.setClipToOutline(true);
    LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(MainActivity.dp(a,76),MainActivity.dp(a,73));
    pp.leftMargin=MainActivity.dp(a,8);row.addView(preview,pp);
-   preview.setOnClickListener(v->{if(i==2||i==3)Hero.openPoster(a);});
+   preview.setOnClickListener(v->{if(i==2||i==3)a.startActivity(new android.content.Intent(a,PosterActivity.class));});
   }
   MainActivity.gap(a,card,9);
   TextView note=MainActivity.txt(a,s.note,12,MainActivity.GRAY,false);
