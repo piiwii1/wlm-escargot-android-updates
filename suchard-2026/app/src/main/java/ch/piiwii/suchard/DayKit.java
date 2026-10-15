@@ -40,7 +40,8 @@ final class DayKit {
   String[] items={
    "🧳 Checklist avant le départ ("+checkedCount(a)+"/"+ITEMS.length+")",
    "🖼 Affiche officielle du jubilé",
-   "🅿️ Itinéraire vers le parking",
+   "🚶 Retour à pied au parking du Seyon",
+   "🚗 Itinéraire voiture vers le parking",
    "🌐 Site officiel Suchard 2026"
   };
   new AlertDialog.Builder(a)
@@ -49,8 +50,9 @@ final class DayKit {
     switch(which){
      case 0:checklist(a);break;
      case 1:a.startActivity(new Intent(a,PosterActivity.class));break;
-     case 2:Gps.start(a,0);break;
-     case 3:
+     case 2:Gps.walkingToParking(a);break;
+     case 3:Gps.start(a,0);break;
+     case 4:
       try{a.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.suchard2026.ch/")));}
       catch(Exception ex){Toast.makeText(a,"Site non disponible",Toast.LENGTH_SHORT).show();}
       break;
