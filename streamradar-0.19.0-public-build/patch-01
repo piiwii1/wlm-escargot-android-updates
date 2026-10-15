@@ -1,0 +1,110 @@
+                     Text(release.relativeLabel(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+@@ -349,7 +424,7 @@ private fun PosterRail(releases: List<Release>, followed: Set<String>, onFollow:
+                             Spacer(Modifier.height(4.dp))
+                         }
+                         Row(verticalAlignment = Alignment.CenterVertically) {
+-                            Text(release.platform, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
++                            Text(release.platform, style = MaterialTheme.typography.labelSmall, color = platformAccent(release.platform), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                             IconButton(onClick = { onFollow(release.id) }, modifier = Modifier.size(34.dp)) {
+                                 Icon(if (release.id in followed) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, null, Modifier.size(19.dp))
+                             }
+@@ -720,14 +795,19 @@ private fun ReleaseCard(release: Release, followed: Boolean, onFollow: (String)
+                 release.season?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                 Spacer(Modifier.height(7.dp))
+                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+-                    MiniBadge(release.platform)
+-                    MiniBadge(release.typeLabel())
+-                    MiniBadge(release.swissBadgeLabel())
++                    PlatformBadge(release.platform)
++                    TypeBadge(release.typeLabel())
+                 }
++                Spacer(Modifier.height(5.dp))
++                SwissBadge(release)
+                 Spacer(Modifier.height(7.dp))
+                 Text(release.dateLabel(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                 Text(release.relativeLabel(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+-                imminentLabel(release)?.let { Text("⚡ $it", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) }
++                imminentLabel(release)?.let { label ->
++                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f)) {
++                        Text("⚡ $label", Modifier.padding(horizontal = 8.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
++                    }
++                }
+                 if (release.genres.isNotEmpty()) Text(release.genres.take(2).joinToString(" • "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                 Text(release.reliabilityLabel(), style = MaterialTheme.typography.labelSmall)
+                 if (followed) {
+@@ -741,6 +821,49 @@ private fun ReleaseCard(release: Release, followed: Boolean, onFollow: (String)
+     }
+ }
+ 
++private fun platformAccent(platform: String): Color = when (platform) {
++    "Netflix" -> Color(0xFFFF4E61)
++    "Disney+" -> Color(0xFF55A8FF)
++    "Prime Video" -> Color(0xFF38C9FF)
++    else -> Color(0xFF8FA8BA)
++}
++
++@Composable
++private fun PlatformBadge(platform: String) {
++    val accent = platformAccent(platform)
++    Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.16f)) {
++        Text(platform, modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = accent, fontWeight = FontWeight.Bold)
++    }
++}
++
++@Composable
++private fun TypeBadge(type: String) {
++    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f)) {
++        Text(type, modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
++    }
++}
++
++@Composable
++private fun SwissBadge(release: Release) {
++    val confirmed = release.region == "CH" && release.releaseDate != null
++    val global = release.region == "GLOBAL"
++    val accent = when {
++        confirmed -> MaterialTheme.colorScheme.primary
++        global -> MaterialTheme.colorScheme.secondary
++        else -> MaterialTheme.colorScheme.tertiary
++    }
++    Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.14f)) {
++        Text(release.swissBadgeLabel(), modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = accent, fontWeight = FontWeight.SemiBold)
++    }
++}
++
++@Composable
++private fun FollowBadge() {
++    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
++        Text("🔔 Suivi", modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
++    }
++}
++
+ @Composable
+ private fun MiniBadge(text: String) {
+     Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondaryContainer) {
+@@ -790,7 +913,9 @@ private fun ReleaseDetailScreen(
+                         if (!release.originalTitle.isNullOrBlank() && !release.originalTitle.equals(release.title, true)) Text(release.originalTitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                         release.season?.let { Text(it, fontWeight = FontWeight.SemiBold) }
+                         Spacer(Modifier.height(10.dp))
+-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { MiniBadge(release.platform); MiniBadge(release.typeLabel()) }
++                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { PlatformBadge(release.platform); TypeBadge(release.typeLabel()) }
++                        Spacer(Modifier.height(5.dp))
++                        SwissBadge(release)
+                         Spacer(Modifier.height(8.dp))
+                         Text(release.dateLabel(), fontWeight = FontWeight.SemiBold)
+                         Text(release.relativeLabel(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+diff --git a/android/app/src/main/res/values/styles.xml b/android/app/src/main/res/values/styles.xml
+index c7d887d..9a5fe8b 100644
+--- a/android/app/src/main/res/values/styles.xml
++++ b/android/app/src/main/res/values/styles.xml
+@@ -2,7 +2,8 @@
+     <style name="Theme.StreamRadar" parent="android:style/Theme.Material.NoActionBar">
+         <item name="android:fontFamily">sans</item>
+         <item name="android:windowLightStatusBar">false</item>
+-        <item name="android:navigationBarColor">#0B0D10</item>
+-        <item name="android:statusBarColor">#0B0D10</item>
++        <item name="android:navigationBarColor">#07111C</item>
++        <item name="android:statusBarColor">#07111C</item>
++        <item name="android:windowBackground">#07111C</item>
+     </style>
+ </resources>
