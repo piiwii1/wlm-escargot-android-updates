@@ -29,8 +29,10 @@ public class MainActivity extends Activity {
  @Override public void onCreate(Bundle b){
   super.onCreate(b);
   if(b!=null)showAll=b.getBoolean("expanded",false);
-  getWindow().setStatusBarColor(BROWN);getWindow().setNavigationBarColor(CREAM);
-  getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+  getWindow().setStatusBarColor(CREAM);getWindow().setNavigationBarColor(CREAM);
+  getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+  if(Build.VERSION.SDK_INT>=29)getWindow().setNavigationBarContrastEnforced(false);
+  getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
   if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
   Notify.init(this);Notify.schedule(this);render();
   int focus=getIntent().getIntExtra("focus_step",-1);if(focus>=0)focusStep(focus);
@@ -82,11 +84,11 @@ public class MainActivity extends Activity {
  @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);focusStep(intent.getIntExtra("focus_step",-1));}
  private void setupInsets(ScrollView view){
   if(Build.VERSION.SDK_INT>=30){
-   view.setClipToPadding(false);
+   view.setClipToPadding(true);view.setClipChildren(true);
    view.setOnApplyWindowInsetsListener((v,insets)->{
     android.graphics.Insets upper=insets.getInsets(WindowInsets.Type.statusBars()|WindowInsets.Type.displayCutout());
     android.graphics.Insets lower=insets.getInsets(WindowInsets.Type.navigationBars());
-    v.setPadding(0,Math.max(upper.top,dp(this,8)),0,Math.max(lower.bottom,dp(this,8)));
+    v.setPadding(0,Math.max(upper.top,dp(this,10)),0,Math.max(lower.bottom,dp(this,16)));
     return insets;
    });
    view.requestApplyInsets();
