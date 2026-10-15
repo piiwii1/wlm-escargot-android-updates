@@ -1,37 +1,63 @@
 package ch.piiwii.suchard;
-import android.app.Activity;import android.content.*;import android.graphics.*;import android.graphics.drawable.*;import android.view.*;import android.widget.*;
+import android.app.Activity;
+import android.content.*;
+import android.graphics.Color;
+import android.view.*;
+import android.widget.*;
 final class Hero {
- static void draw(Activity a,LinearLayout page,int next){
-   LinearLayout top=new LinearLayout(a);top.setOrientation(1);top.setBackgroundColor(0xff412820);top.setPadding(MainActivity.dp(a,20),MainActivity.dp(a,20),MainActivity.dp(a,20),MainActivity.dp(a,22));page.addView(top);
-   TextView eyebrow=MainActivity.txt(a,"PIIWII  •  SORTIE CHOCOLATÉE",11,0xffeabb94,true);top.addView(eyebrow);
-   MainActivity.gap(a,top,10);
-   TextView title=MainActivity.txt(a,"SUCHARD 200 ANS",28,0xffffffff,true);top.addView(title);
-   top.addView(MainActivity.txt(a,"SAMEDI 17 OCTOBRE 2026  ·  NEUCHÂTEL",12,0xfff4cfba,false));
-   MainActivity.gap(a,top,15);
-   ImageView photo=new ImageView(a);photo.setImageResource(R.drawable.hero_history);photo.setScaleType(ImageView.ScaleType.CENTER_CROP);photo.setBackgroundColor(0xff754e3e);
-   top.addView(photo,new LinearLayout.LayoutParams(-1,MainActivity.dp(a,178)));photo.setOnClickListener(v->openPoster(a));
-   MainActivity.gap(a,top,12);
-   LinearLayout action=new LinearLayout(a);action.setOrientation(0);top.addView(action);
-   TextView poster=MainActivity.btn(a,"▧  VOIR L'AFFICHE",0xfff9dfd6,0xff512c27);
-   action.addView(poster,new LinearLayout.LayoutParams(0,MainActivity.dp(a,44),1));poster.setOnClickListener(v->openPoster(a));
-   TextView site=MainActivity.btn(a,"↗ SITE OFFICIEL",0xff85584d,0xffffffff);LinearLayout.LayoutParams r=new LinearLayout.LayoutParams(0,MainActivity.dp(a,44),1);r.leftMargin=MainActivity.dp(a,9);action.addView(site,r);
-   site.setOnClickListener(v->{try{a.startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://www.suchard2026.ch/")));}catch(Exception e){Toast.makeText(a,"Site officiel indisponible",Toast.LENGTH_SHORT).show();}});
-   LinearLayout summary=new LinearLayout(a);summary.setOrientation(1);summary.setPadding(MainActivity.dp(a,16),MainActivity.dp(a,16),MainActivity.dp(a,16),MainActivity.dp(a,16));summary.setBackground(MainActivity.bg(a,0xffffffff,17));
-   LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);sp.setMargins(MainActivity.dp(a,15),MainActivity.dp(a,14),MainActivity.dp(a,15),0);page.addView(summary,sp);
-   int doneCount=0;for(int i=0;i<Route.ALL.length;i++)if(a.getSharedPreferences("suchard",0).getBoolean("done"+i,false))doneCount++;
-   LinearLayout stats=new LinearLayout(a);stats.setGravity(Gravity.CENTER_VERTICAL);summary.addView(stats);
-   stats.addView(MainActivity.txt(a,"TON AVANCEMENT",12,MainActivity.BROWN,true));
-   TextView count=MainActivity.txt(a,doneCount+" / "+Route.ALL.length+" étapes",13,MainActivity.GRAY,true);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1);count.setGravity(Gravity.RIGHT);stats.addView(count,cp);
-   MainActivity.gap(a,summary,8);
-   ProgressBar progress=new ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(Route.ALL.length);progress.setProgress(doneCount);
-   progress.setProgressTintList(android.content.res.ColorStateList.valueOf(MainActivity.PINK));progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xffeee3de));summary.addView(progress,new LinearLayout.LayoutParams(-1,MainActivity.dp(a,8)));
-   MainActivity.gap(a,summary,14);
-   if(next>=0){Route.Stop st=Route.ALL[next];
-     summary.addView(MainActivity.txt(a,"PROCHAINE ÉTAPE  ·  "+st.time,12,MainActivity.PINK,true));MainActivity.gap(a,summary,4);
-     summary.addView(MainActivity.txt(a,st.emoji+"  "+st.title,19,MainActivity.DARK,true));
-     summary.addView(MainActivity.txt(a,st.place,13,MainActivity.GRAY,false));MainActivity.gap(a,summary,10);
-     if(!st.destination.isEmpty()){TextView go=MainActivity.btn(a,"↗  Y ALLER MAINTENANT",MainActivity.BROWN,0xffffffff);summary.addView(go);go.setOnClickListener(v->Gps.start(a,next));}
-   }else{summary.addView(MainActivity.txt(a,"🎉 Journée terminée, profite des souvenirs !",17,MainActivity.BROWN,true));}
+ static void draw(Activity a,LinearLayout page,int next,Runnable programme,Runnable reminders){
+  LinearLayout hero=new LinearLayout(a);
+  hero.setOrientation(1);hero.setPadding(MainActivity.dp(a,18),MainActivity.dp(a,18),MainActivity.dp(a,18),MainActivity.dp(a,19));
+  hero.setBackgroundColor(MainActivity.BROWN);page.addView(hero);
+  LinearLayout header=new LinearLayout(a);header.setGravity(Gravity.CENTER_VERTICAL);hero.addView(header);
+  ImageView logo=new ImageView(a);logo.setImageResource(R.drawable.icon_suchard);
+  logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+  header.addView(logo,new LinearLayout.LayoutParams(MainActivity.dp(a,60),MainActivity.dp(a,60)));
+  LinearLayout name=new LinearLayout(a);name.setOrientation(1);
+  LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-2,1);np.leftMargin=MainActivity.dp(a,12);header.addView(name,np);
+  name.addView(MainActivity.txt(a,"PIIWII  ·  17 OCTOBRE 2026",11,0xfff9d4bc,true));
+  name.addView(MainActivity.txt(a,"Suchard 200 ans",23,Color.WHITE,true));
+  TextView poster=MainActivity.btn(a,"AFFICHE",0xff865748,Color.WHITE);
+  poster.setTextSize(11);poster.setPadding(MainActivity.dp(a,9),MainActivity.dp(a,5),MainActivity.dp(a,9),MainActivity.dp(a,5));header.addView(poster);
+  poster.setOnClickListener(v->a.startActivity(new Intent(a,PosterActivity.class)));
+  MainActivity.gap(a,hero,16);
+  LinearLayout card=new LinearLayout(a);card.setOrientation(1);card.setPadding(MainActivity.dp(a,16),MainActivity.dp(a,15),MainActivity.dp(a,16),MainActivity.dp(a,16));
+  card.setBackground(MainActivity.bg(a,0xfffff6ef,19));hero.addView(card);
+  int complete=0;
+  for(int i=0;i<Route.ALL.length;i++)if(a.getSharedPreferences("suchard",0).getBoolean("done"+i,false))complete++;
+  LinearLayout progressRow=new LinearLayout(a);progressRow.setGravity(Gravity.CENTER_VERTICAL);card.addView(progressRow);
+  progressRow.addView(MainActivity.txt(a,"TA JOURNÉE À NEUCHÂTEL",12,MainActivity.BROWN,true));
+  TextView progressLabel=MainActivity.txt(a,complete+" / "+Route.ALL.length,12,MainActivity.GRAY,true);
+  progressLabel.setGravity(Gravity.RIGHT);progressRow.addView(progressLabel,new LinearLayout.LayoutParams(0,-2,1));
+  MainActivity.gap(a,card,7);
+  ProgressBar progress=new ProgressBar(a,null,android.R.attr.progressBarStyleHorizontal);
+  progress.setMax(Route.ALL.length);progress.setProgress(complete);
+  progress.setProgressTintList(android.content.res.ColorStateList.valueOf(MainActivity.PINK));
+  progress.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xffe9dad1));
+  card.addView(progress,new LinearLayout.LayoutParams(-1,MainActivity.dp(a,7)));
+  MainActivity.gap(a,card,15);
+  if(next>=0){
+   Route.Stop step=Route.ALL[next];
+   card.addView(MainActivity.txt(a,"PROCHAINE ÉTAPE  •  "+step.time,12,MainActivity.PINK,true));
+   MainActivity.gap(a,card,5);
+   card.addView(MainActivity.txt(a,step.emoji+"  "+step.title,21,MainActivity.DARK,true));
+   MainActivity.gap(a,card,2);
+   card.addView(MainActivity.txt(a,step.place,14,MainActivity.GRAY,false));
+   MainActivity.gap(a,card,13);
+   TextView gps=MainActivity.btn(a,step.destination.isEmpty()?"☀  TEMPS LIBRE":"↗  Y ALLER",MainActivity.PINK,Color.WHITE);
+   card.addView(gps);
+   gps.setOnClickListener(v->{if(!step.destination.isEmpty())Gps.start(a,next);else Toast.makeText(a,"Promenade au volant libre, à votre rythme.",Toast.LENGTH_SHORT).show();});
+  }else{
+   card.addView(MainActivity.txt(a,"🎉 Le parcours est terminé !",19,MainActivity.DARK,true));
+  }
+  MainActivity.gap(a,hero,11);
+  LinearLayout quick=new LinearLayout(a);quick.setGravity(Gravity.CENTER_VERTICAL);hero.addView(quick);
+  TextView schedule=MainActivity.btn(a,"☷  PROGRAMME",0xffffe5d7,MainActivity.BROWN);
+  quick.addView(schedule,new LinearLayout.LayoutParams(0,MainActivity.dp(a,45),1));
+  schedule.setOnClickListener(v->programme.run());
+  TextView alerts=MainActivity.btn(a,"🔔  RAPPELS",0xff785247,Color.WHITE);
+  LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,MainActivity.dp(a,45),1);
+  ap.leftMargin=MainActivity.dp(a,8);quick.addView(alerts,ap);
+  alerts.setOnClickListener(v->reminders.run());
  }
- static void openPoster(Activity a){a.startActivity(new Intent(a,PosterActivity.class));}
 }
