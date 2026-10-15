@@ -6,9 +6,9 @@ d.mkdir(parents=True,exist_ok=True)
 assets={
 "poster":"139bd4_1468059667b74942aee49e6d4c8859d6~mv2.jpg",
 "hero_history":"139bd4_b7e355daf6774ec1a862ff00b69ff821~mv2.png",
-"fresco":"139bd4_bf7a13af8eb34d34ab75ec4f40e74eef~mv2.jpg",
-"factory":"0c8f50_13f5279b8f02429e88f4c3cc70c665bc~mv2.jpg",
-"milka":"0c8f50_7751762d4a7c4263a82094e2f4e13c64~mv2.png"
+"fresco":"0c8f50_13f5279b8f02429e88f4c3cc70c665bc~mv2.jpg",
+"factory":"139bd4_46d17acc7bfb409080cd1aa00f80e729~mv2.jpg",
+"milka":"0c8f50_83a6fab30d96466487d6e6fca1841042~mv2.jpg"
 }
 with open("OFFICIAL-ASSETS.txt","w") as out:
  for name,filename in assets.items():
