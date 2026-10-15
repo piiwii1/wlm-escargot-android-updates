@@ -32,6 +32,8 @@ final class Cards {
   MainActivity.gap(a,card,9);
   TextView note=MainActivity.txt(a,s.note,12,MainActivity.GRAY,false);
   note.setMaxLines(3);note.setLineSpacing(MainActivity.dp(a,1),1);
+  note.setContentDescription("Détails de "+s.title+". Toucher pour déplier ou replier.");
+  note.setOnClickListener(v->note.setMaxLines(note.getMaxLines()==3?100:3));
   card.addView(note);
   MainActivity.gap(a,card,11);
   LinearLayout actions=new LinearLayout(a);actions.setGravity(Gravity.CENTER_VERTICAL);card.addView(actions);
