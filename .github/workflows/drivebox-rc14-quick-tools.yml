@@ -1,0 +1,238 @@
+name: Build DriveBox RC14 Quick Tools APK
+
+on:
+  push:
+    branches: [ drivebox-ci-temp ]
+    paths:
+      - '.github/workflows/drivebox-rc14-quick-tools.yml'
+      - 'drivebox-ci/rc14-trigger.txt'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct verified RC13 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc11b.yml').read_text()
+          def extract(step_name, out):
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('Reconstruct pinned verified RC9 source', '/tmp/prepare-rc9.sh')
+          extract('Apply final RC13 improvements', '/tmp/apply-rc13.sh')
+          PY
+          bash /tmp/prepare-rc9.sh
+          bash /tmp/apply-rc13.sh
+          grep -q "DriveBox 1.0.0 RC13" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 22" /tmp/drivebox-src/app/build.gradle
+
+      - name: Apply RC14 quick tools favorites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+
+          def replace_method(src, signature_start, new_method):
+              a = src.index(signature_start)
+              brace = src.index('{', a)
+              depth = 0
+              i = brace
+              while i < len(src):
+                  if src[i] == '{': depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return src[:a] + new_method + src[i+1:]
+                  i += 1
+              raise RuntimeError('Unbalanced method: ' + signature_start)
+
+          s = s.replace('DriveBox 1.0.0 RC13', 'DriveBox 1.0.0 RC14')
+          s = s.replace('Version : 1.0.0 RC13 (versionCode 22)', 'Version : 1.0.0 RC14 (versionCode 23)')
+
+          prefs_marker = 'private static final String PREF_FAV_PREFIX = "fav_";'
+          if 'PREF_QUICK_PREFIX' not in s:
+              s = s.replace(prefs_marker, prefs_marker + '\n    private static final String PREF_QUICK_PREFIX = "quick_tool_";', 1)
+
+          tools = r'''private void toolsScreen() {
+              LinearLayout root = page("🧰", "Outils", "Conversions et calculs utiles.");
+              root.addView(infoStrip("★", "Touchez l’étoile ou maintenez un outil pour l’épingler sur l’accueil.", ORANGE), lp(-1, -2, 0, 0, 0, 12));
+              root.addView(quickToolCard("km_miles", "⇄", "km / miles", "Distance et vitesse", BLUE, this::converterScreen, false));
+              root.addView(quickToolCard("bar_psi", "💨", "bar / psi", "Pression des pneus", BLUE, this::pressureConverterScreen, false));
+              root.addView(quickToolCard("road_cost", "⛽", "Frais de route", "Carburant et partage du coût", GREEN, this::costCalculatorScreen, false));
+              root.addView(quickToolCard("range", "⛽", "Autonomie", "Estimation à partir du carburant restant", PURPLE, this::rangeCalculatorScreen, false));
+              root.addView(quickToolCard("tyre_size", "🛞", "Dimensions de pneus", "Comparer diamètre et circonférence", BLUE, this::tyreSizeComparatorScreen, false));
+              setScrollablePage(root);
+          }'''
+          s = replace_method(s, 'private void toolsScreen() {', tools)
+
+          helper = r'''
+          private String quickKey(String id) {
+              return PREF_QUICK_PREFIX + id;
+          }
+
+          private boolean isQuickTool(String id) {
+              return prefs.getBoolean(quickKey(id), false);
+          }
+
+          private void setQuickTool(String id, boolean value) {
+              prefs.edit().putBoolean(quickKey(id), value).apply();
+          }
+
+          private int quickToolCount() {
+              String[] ids = {"km_miles", "bar_psi", "road_cost", "range", "tyre_size"};
+              int count = 0;
+              for (String id : ids) if (isQuickTool(id)) count++;
+              return count;
+          }
+
+          private View quickToolCard(String id, String icon, String title, String subtitle, int accent, Runnable action, boolean homeContext) {
+              LinearLayout c = row(Gravity.CENTER_VERTICAL);
+              c.setPadding(dp(14), dp(13), dp(12), dp(13));
+              c.setBackground(round(PANEL, 16));
+
+              TextView ic = text(icon, 24, accent, true);
+              ic.setGravity(Gravity.CENTER);
+              GradientDrawable ib = round(Color.argb(35, Color.red(accent), Color.green(accent), Color.blue(accent)), 13);
+              ic.setBackground(ib);
+              c.addView(ic, lp(dp(48), dp(48), 0, 0, 12, 0));
+
+              LinearLayout texts = column();
+              texts.addView(text(title, 16, TEXT, true));
+              texts.addView(text(subtitle, 12, MUTED, false), lp(-1, -2, 0, 3, 0, 0));
+              c.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+
+              TextView star = pill(isQuickTool(id) ? "★" : "☆", isQuickTool(id) ? ORANGE : MUTED, PANEL_2);
+              star.setTextSize(20);
+              star.setGravity(Gravity.CENTER);
+              star.setContentDescription(isQuickTool(id) ? "Retirer des outils rapides" : "Ajouter aux outils rapides");
+              c.addView(star, lp(dp(42), dp(42), 8, 0, 0, 0));
+
+              Runnable toggle = () -> {
+                  boolean next = !isQuickTool(id);
+                  setQuickTool(id, next);
+                  Toast.makeText(this, next ? "Ajouté aux outils rapides" : "Retiré des outils rapides", Toast.LENGTH_SHORT).show();
+                  if (homeContext) {
+                      showHome(false);
+                  } else {
+                      star.setText(next ? "★" : "☆");
+                      star.setTextColor(next ? ORANGE : MUTED);
+                      star.setContentDescription(next ? "Retirer des outils rapides" : "Ajouter aux outils rapides");
+                  }
+              };
+
+              star.setOnClickListener(v -> toggle.run());
+              c.setOnLongClickListener(v -> { toggle.run(); return true; });
+              c.setClickable(true);
+              c.setFocusable(true);
+              c.setContentDescription(title + ". " + subtitle + ". Appui long pour épingler ou retirer de l’accueil.");
+              c.setOnClickListener(v -> action.run());
+              return withMargins(c, 0, 0, 0, 8);
+          }
+
+          private void renderQuickTools(LinearLayout parent) {
+              if (quickToolCount() == 0) return;
+              parent.addView(sectionTitle("OUTILS RAPIDES"), lp(-1, -2, 0, 0, 0, 8));
+              if (isQuickTool("km_miles")) parent.addView(quickToolCard("km_miles", "⇄", "km / miles", "Distance et vitesse", BLUE, this::converterScreen, true));
+              if (isQuickTool("bar_psi")) parent.addView(quickToolCard("bar_psi", "💨", "bar / psi", "Pression des pneus", BLUE, this::pressureConverterScreen, true));
+              if (isQuickTool("road_cost")) parent.addView(quickToolCard("road_cost", "⛽", "Frais de route", "Carburant et partage du coût", GREEN, this::costCalculatorScreen, true));
+              if (isQuickTool("range")) parent.addView(quickToolCard("range", "⛽", "Autonomie", "Carburant restant → distance", PURPLE, this::rangeCalculatorScreen, true));
+              if (isQuickTool("tyre_size")) parent.addView(quickToolCard("tyre_size", "🛞", "Dimensions de pneus", "Comparer diamètre et circonférence", BLUE, this::tyreSizeComparatorScreen, true));
+          }
+
+          '''
+          marker = 'private void converterScreen() {'
+          if 'private View quickToolCard(' not in s:
+              s = s.replace(marker, helper + marker, 1)
+
+          home_marker = 'Runnable renderDefault = () -> {\n              results.removeAllViews();'
+          if home_marker not in s:
+              raise RuntimeError('Home renderDefault marker not found')
+          s = s.replace(home_marker, home_marker + '\n              renderQuickTools(results);', 1)
+
+          java.write_text(s)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text().replace('versionCode 22', 'versionCode 23').replace("versionName '1.0.0-rc13'", "versionName '1.0.0-rc14'")
+          gradle.write_text(g)
+          PY
+
+          grep -q "DriveBox 1.0.0 RC14" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 23" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc14'" /tmp/drivebox-src/app/build.gradle
+          grep -q 'private View quickToolCard' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'renderQuickTools(results)' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'PREF_QUICK_PREFIX' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC14
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC14
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='23'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc14'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'resources.arsc'
+          unzip -l "$APK" | grep -q 'classes.dex'
+          for f in ch fr de it at; do unzip -l "$APK" | grep -q "res/drawable-nodpi-v4/motorway_${f}.png"; done
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | grep -q 'android.permission.INTERNET'; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC14-QUICK-TOOLS
+          path: |
+            DriveBox-1.0.0-RC14.apk
+            DriveBox-1.0.0-RC14.apk.sha256.txt
+            DriveBox-1.0.0-RC14-source.zip
+            DriveBox-1.0.0-RC14-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7

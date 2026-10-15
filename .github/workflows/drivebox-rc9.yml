@@ -1,0 +1,233 @@
+name: Build DriveBox RC9 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/rc9-trigger.txt'
+      - '.github/workflows/drivebox-rc9.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct RC8 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/drivebox-src
+          mkdir -p /tmp/drivebox-src
+          cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
+          unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
+          python3 - <<'PY'
+          from pathlib import Path
+          def extract(path, step_name, out):
+              text = Path(path).read_text()
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - name:', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('.github/workflows/drivebox-build.yml', 'Apply DriveBox RC2 cleanup', '/tmp/rc2.sh')
+          extract('.github/workflows/drivebox-rc4-build.yml', 'Apply RC4 cleanup, exact icon, stable signing', '/tmp/rc4.sh')
+          extract('.github/workflows/drivebox-rc7.yml', 'Apply RC7 simplified app and exact official icon', '/tmp/rc7.sh')
+          extract('.github/workflows/drivebox-rc8.yml', 'Apply RC8 country redesign', '/tmp/rc8.sh')
+          PY
+          bash /tmp/rc2.sh
+          bash /tmp/rc4.sh
+          bash /tmp/rc7.sh
+          bash /tmp/rc8.sh
+
+      - name: Download official motorway sign artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq librsvg2-bin
+          mkdir -p /tmp/signs
+          curl -fL --retry 3 'https://commons.wikimedia.org/wiki/Special:Redirect/file/CH-Hinweissignal-Autobahn.svg' -o /tmp/signs/ch.svg
+          curl -fL --retry 3 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Autoroute_F.svg' -o /tmp/signs/fr.svg
+          curl -fL --retry 3 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Zeichen_330.1_-_Autobahn%2C_StVO_2013.svg' -o /tmp/signs/de.svg
+          curl -fL --retry 3 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Italian_traffic_signs_-_autostrada.svg' -o /tmp/signs/it.svg
+          curl -fL --retry 3 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Hinweiszeichen_8a.svg' -o /tmp/signs/at.svg
+          for f in ch fr de it at; do
+            grep -qi '<svg' /tmp/signs/$f.svg
+            rsvg-convert -w 512 -h 512 --keep-aspect-ratio /tmp/signs/$f.svg -o /tmp/signs/$f.png
+            file /tmp/signs/$f.png | grep -qi PNG
+          done
+          RES=/tmp/drivebox-src/app/src/main/res/drawable-nodpi
+          mkdir -p "$RES"
+          cp /tmp/signs/ch.png "$RES/motorway_ch.png"
+          cp /tmp/signs/fr.png "$RES/motorway_fr.png"
+          cp /tmp/signs/de.png "$RES/motorway_de.png"
+          cp /tmp/signs/it.png "$RES/motorway_it.png"
+          cp /tmp/signs/at.png "$RES/motorway_at.png"
+
+      - name: Apply RC9 Route and Countries polish
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+
+          def replace_method(src, signature_start, new_method):
+              a = src.index(signature_start)
+              brace = src.index('{', a)
+              depth = 0
+              i = brace
+              while i < len(src):
+                  if src[i] == '{': depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return src[:a] + new_method + src[i+1:]
+                  i += 1
+              raise RuntimeError('Unbalanced method: ' + signature_start)
+
+          s = s.replace('DriveBox 1.0.0 RC8', 'DriveBox 1.0.0 RC9')
+          s = s.replace('root.addView(countrySignCard(signColorName, signColor));', 'root.addView(countrySignCard(country));')
+
+          country_sign = r'''private View countrySignCard(String country) {
+              LinearLayout c = column();
+              c.setGravity(Gravity.CENTER);
+              c.setPadding(dp(16), dp(14), dp(16), dp(14));
+              c.setBackground(round(PANEL, 18));
+              android.widget.ImageView sign = new android.widget.ImageView(this);
+              sign.setImageResource(countryMotorwayRes(country));
+              sign.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+              sign.setAdjustViewBounds(true);
+              sign.setContentDescription("Panneau officiel d'autoroute - " + country);
+              c.addView(sign, lp(-1, dp(165), 0, 0, 0, 0));
+              return c;
+          }'''
+          s = replace_method(s, 'private View countrySignCard(', country_sign)
+
+          country_card = r'''private View countryCard(String flag, String name, String signColorName, String speedSummary, int accent, Runnable action) {
+              LinearLayout c = row(Gravity.CENTER_VERTICAL);
+              c.setPadding(dp(14), dp(12), dp(14), dp(12));
+              c.setBackground(round(PANEL, 18));
+              c.setClickable(true);
+              c.setFocusable(true);
+              c.setOnClickListener(v -> action.run());
+
+              TextView f = text(flag, 28, TEXT, false);
+              f.setGravity(Gravity.CENTER);
+              c.addView(f, lp(dp(42), dp(54), 0, 0, 10, 0));
+
+              LinearLayout labels = column();
+              labels.addView(text(name, 17, TEXT, true));
+              labels.addView(text(speedSummary, 12, MUTED, false), lp(-2, -2, 0, 3, 0, 0));
+              c.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+
+              android.widget.ImageView sign = new android.widget.ImageView(this);
+              sign.setImageResource(countryMotorwayRes(name));
+              sign.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+              sign.setAdjustViewBounds(true);
+              sign.setContentDescription("Panneau officiel d'autoroute - " + name);
+              c.addView(sign, lp(dp(70), dp(70), 10, 0, 0, 0));
+              return withMargins(c, 0, 0, 0, 10);
+          }'''
+          s = replace_method(s, 'private View countryCard(', country_card)
+
+          equipment = r'''private View equipmentRow(String status, String title, String detail) {
+              LinearLayout c = column();
+              c.setPadding(dp(13), dp(11), dp(13), dp(11));
+              c.setBackground(round(PANEL, 14));
+              TextView state = pill(status, TEXT, Color.rgb(49, 55, 65));
+              state.setContentDescription("Statut : " + status);
+              c.addView(state, lp(-2, -2, 0, 0, 0, 6));
+              c.addView(text(title, 15, TEXT, true));
+              c.addView(text(detail, 12, MUTED, false), lp(-1, -2, 0, 4, 0, 0));
+              return withMargins(c, 0, 0, 0, 8);
+          }'''
+          s = replace_method(s, 'private View equipmentRow(', equipment)
+
+          helper_marker = 'private View countrySignCard(String country) {'
+          helper = r'''private int countryMotorwayRes(String country) {
+              if ("Suisse".equals(country)) return R.drawable.motorway_ch;
+              if ("France".equals(country)) return R.drawable.motorway_fr;
+              if ("Allemagne".equals(country)) return R.drawable.motorway_de;
+              if ("Italie".equals(country)) return R.drawable.motorway_it;
+              if ("Autriche".equals(country)) return R.drawable.motorway_at;
+              return R.drawable.motorway_de;
+          }
+
+          '''
+          s = s.replace(helper_marker, helper + helper_marker, 1)
+
+          # Remove redundant colour wording and duplicate motorway speed badge from the country-detail page.
+          s = s.replace('root.addView(infoStrip("🛣", motorwayBadge + " • " + toll, signColor));', 'root.addView(infoStrip("🛣", toll, BLUE));')
+          s = s.replace('"Vitesses, autoroutes et obligations utiles."', '"Panneaux, vitesses et obligations utiles."')
+          s = s.replace('"Données de voyage revues le 26.08.2026 • résumé pratique, la signalisation locale prime."', '"Panneaux réglementaires intégrés hors ligne • données revues le 26.08.2026."')
+          java.write_text(s)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text()
+          g = g.replace('versionCode 17', 'versionCode 18')
+          g = g.replace("versionName '1.0.0-rc8'", "versionName '1.0.0-rc9'")
+          gradle.write_text(g)
+          PY
+
+          grep -q "versionCode 18" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc9'" /tmp/drivebox-src/app/build.gradle
+          grep -q "DriveBox 1.0.0 RC9" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "countryMotorwayRes" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          ! grep -q 'SIGNALISATION AUTOROUTE' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify RC9
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='18'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc9'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          for f in ch fr de it at; do unzip -l "$APK" | grep -q "res/drawable-nodpi-v4/motorway_${f}.png"; done
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon-from-apk.webp
+          test "$(sha256sum /tmp/icon-from-apk.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC9.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC9.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC9.apk.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC9
+          path: |
+            DriveBox-1.0.0-RC9.apk
+            DriveBox-1.0.0-RC9.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7

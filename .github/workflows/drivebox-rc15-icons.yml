@@ -1,0 +1,135 @@
+name: Build DriveBox RC15 Restored Motorway Icons
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/drivebox-rc15-icons.yml'
+      - '.github/workflows/drivebox-rc14-pr.yml'
+      - 'drivebox-ci/rc15-tab-motorway-blue.webp.b64'
+      - 'drivebox-ci/rc15-tab-motorway-green.webp.b64'
+      - 'drivebox-ci/rc15-icons-trigger.txt'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct validated RC14 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc14-pr.yml').read_text()
+          marker = '      - name: Prepare fixed RC14 source\n'
+          start = text.index(marker)
+          run_start = text.index('        run: |\n', start) + len('        run: |\n')
+          end = text.find('\n      - uses:', run_start)
+          if end < 0:
+              end = text.find('\n      - name:', run_start)
+          if end < 0:
+              end = len(text)
+          block = text[run_start:end]
+          lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+          Path('/tmp/rc14-base.sh').write_text('\n'.join(lines) + '\n')
+          PY
+          bash /tmp/rc14-base.sh
+          test -f /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 23" /tmp/drivebox-src/app/build.gradle
+
+      - name: Restore motorway icons only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivebox-src/app/src/main/res/drawable-nodpi
+          base64 -d drivebox-ci/rc15-tab-motorway-blue.webp.b64 > /tmp/drivebox-src/app/src/main/res/drawable-nodpi/tab_motorway_blue.webp
+          base64 -d drivebox-ci/rc15-tab-motorway-green.webp.b64 > /tmp/drivebox-src/app/src/main/res/drawable-nodpi/tab_motorway_green.webp
+          test -s /tmp/drivebox-src/app/src/main/res/drawable-nodpi/tab_motorway_blue.webp
+          test -s /tmp/drivebox-src/app/src/main/res/drawable-nodpi/tab_motorway_green.webp
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+          pattern = re.compile(r'''    boolean green = "Suisse"\.equals\(country\) \|\| "Italie"\.equals\(country\);\n    int tabColor = green \? Color\.rgb\(18, 132, 72\) : Color\.rgb\(24, 93, 188\);\n    TextView colorBlock = text\("", 1, Color\.TRANSPARENT, false\);\n    colorBlock\.setBackground\(round\(tabColor, 12\)\);\n    colorBlock\.setContentDescription\("Signalisation autoroute " \+ \(green \? "verte" : "bleue"\) \+ " - " \+ country\);\n    c\.addView\(colorBlock, lp\(dp\(72\), dp\(44\), 10, 0, 0, 0\)\);''')
+          replacement = '''    boolean green = "Suisse".equals(country) || "Italie".equals(country);\n    ImageView motorwayTab = new ImageView(this);\n    motorwayTab.setImageResource(green ? R.drawable.tab_motorway_green : R.drawable.tab_motorway_blue);\n    motorwayTab.setScaleType(ImageView.ScaleType.CENTER_INSIDE);\n    motorwayTab.setAdjustViewBounds(true);\n    motorwayTab.setContentDescription("Panneau autoroute " + (green ? "vert" : "bleu") + " - " + country);\n    c.addView(motorwayTab, lp(dp(58), dp(58), 10, 0, 0, 0));'''
+          s2, n = pattern.subn(replacement, s, count=1)
+          if n != 1:
+              raise RuntimeError('RC14 country tab placeholder block not found exactly once')
+          s2 = s2.replace('DriveBox 1.0.0 RC14', 'DriveBox 1.0.0 RC15')
+          java.write_text(s2)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text()
+          g = g.replace('versionCode 23', 'versionCode 24')
+          g = g.replace("versionName '1.0.0-rc14'", "versionName '1.0.0-rc15'")
+          gradle.write_text(g)
+          PY
+
+          grep -q 'R.drawable.tab_motorway_green' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'R.drawable.tab_motorway_blue' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "versionCode 24" /tmp/drivebox-src/app/build.gradle
+          grep -q "1.0.0-rc15" /tmp/drivebox-src/app/build.gradle
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC15
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC15
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='24'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc15'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'classes.dex'
+          unzip -l "$APK" | grep -q 'resources.arsc'
+          unzip -l "$APK" | grep -q 'res/drawable-nodpi-v4/tab_motorway_blue.webp'
+          unzip -l "$APK" | grep -q 'res/drawable-nodpi-v4/tab_motorway_green.webp'
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | grep -q 'android.permission.INTERNET'; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC15.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC15-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC15.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC15.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC15-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC15-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC15-RESTORED-ICONS
+          path: |
+            DriveBox-1.0.0-RC15.apk
+            DriveBox-1.0.0-RC15.apk.sha256.txt
+            DriveBox-1.0.0-RC15-source.zip
+            DriveBox-1.0.0-RC15-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7

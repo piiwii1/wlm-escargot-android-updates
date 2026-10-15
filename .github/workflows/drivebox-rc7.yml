@@ -1,0 +1,109 @@
+name: Build DriveBox RC8 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare RC8 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/drivebox-src
+          mkdir -p /tmp/drivebox-src
+          cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
+          unzip -t /tmp/drivebox-source.zip
+          unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+          curl -fsSL https://raw.githubusercontent.com/piiwii1/wlm-escargot-android-updates/2c2572d232667d228ffb123a44ca2d2b1d333c7b/.github/workflows/drivebox-rc7.yml -o /tmp/rc7-base.yml
+
+          python3 - <<'PY'
+          from pathlib import Path
+          def extract(path, step_name, out):
+              text = Path(path).read_text()
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('.github/workflows/drivebox-build.yml', 'Apply DriveBox RC2 cleanup', '/tmp/rc2.sh')
+          extract('.github/workflows/drivebox-rc4-build.yml', 'Apply RC4 cleanup, exact icon, stable signing', '/tmp/rc4.sh')
+          extract('/tmp/rc7-base.yml', 'Apply RC7 simplified app and exact official icon', '/tmp/rc7.sh')
+          extract('.github/workflows/drivebox-rc8.yml', 'Apply RC8 country redesign', '/tmp/rc8.sh')
+          PY
+
+          bash /tmp/rc2.sh
+          bash /tmp/rc4.sh
+          bash /tmp/rc7.sh
+          bash /tmp/rc8.sh
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = p.read_text()
+          s = s.replace('lpFlex(1, dp(132), 8, 0, 0, 0)', 'new LinearLayout.LayoutParams(0, dp(132), 1)')
+          s = s.replace('dp(3.5f)', 'dp(4)')
+          p.write_text(s)
+          PY
+
+          keytool -list -keystore /tmp/drivebox-src/drivebox-dev.keystore -storepass DriveBoxDev2026 -alias drivebox | grep -qi drivebox
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify RC8
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='17'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc8'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon-from-apk.webp
+          test "$(sha256sum /tmp/icon-from-apk.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC8.apk.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC8
+          path: |
+            DriveBox-1.0.0-RC8.apk
+            DriveBox-1.0.0-RC8.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7

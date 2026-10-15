@@ -1,0 +1,99 @@
+name: Build DriveBox RC6 Final APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/rc6d-trigger.txt'
+      - '.github/workflows/drivebox-rc6d.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply validated RC6 transformation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc6c.yml').read_text()
+          marker = '      - name: Reconstruct and transform\n'
+          start = text.index(marker)
+          run_start = text.index('        run: |\n', start) + len('        run: |\n')
+          end = text.find('\n      - uses:', run_start)
+          if end < 0:
+              end = len(text)
+          block = text[run_start:end]
+          lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+          Path('/tmp/rc6-transform.sh').write_text('\n'.join(lines) + '\n')
+          PY
+          bash /tmp/rc6-transform.sh
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = p.read_text()
+          s = s.replace('this::checklistsScreen', 'this::toolsScreen')
+          p.write_text(s)
+          if 'this::checklistsScreen' in s:
+              raise SystemExit('stale checklistsScreen reference remains')
+          PY
+
+          grep -q "applicationId 'ch.clubvwsuisse.drivebox.v1'" /tmp/drivebox-src/app/build.gradle
+          grep -q 'versionCode 15' /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc6'" /tmp/drivebox-src/app/build.gradle
+          grep -q 'DriveBox 1.0.0 RC6' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify signature identity icon and archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='15'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc6'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          grep -q 'application-icon-' /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'ic_launcher.png'
+          unzip -l "$APK" | grep -q 'mipmap-anydpi-v26/ic_launcher.xml'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC6.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC6.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC6.apk.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC6-FINAL
+          path: |
+            DriveBox-1.0.0-RC6.apk
+            DriveBox-1.0.0-RC6.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7

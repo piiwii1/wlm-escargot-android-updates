@@ -1,0 +1,139 @@
+name: Build DriveBox RC22 Parking Cleanup
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/drivebox-rc22-parking-cleanup.yml'
+      - '.github/workflows/drivebox-rc21-parking-ergonomy.yml'
+      - '.github/workflows/drivebox-rc18-countries-compact.yml'
+      - 'drivebox-ci/rc20-part*.b64'
+      - 'drivebox-ci/rc21-parking-ergonomy.patch.gz.b64'
+      - 'drivebox-ci/rc22-part*.b64'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct validated RC18 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc18-countries-compact.yml').read_text()
+          def extract(step_name, out):
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('Reconstruct validated RC17 source', '/tmp/rc18-base.sh')
+          extract('Apply RC18 countries and compact motorway signs', '/tmp/rc18-apply.sh')
+          PY
+          bash /tmp/rc18-base.sh
+          bash /tmp/rc18-apply.sh
+
+      - name: Apply validated RC20 parking module
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat drivebox-ci/rc20-part{1..8}.b64 | tr -d '\r\n' | base64 -d | gzip -d > /tmp/rc20.patch
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc20.patch
+          printf 'android.useAndroidX=true\nandroid.enableJetifier=true\n' > gradle.properties
+
+      - name: Apply validated RC21 parking ergonomics
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d "$GITHUB_WORKSPACE/drivebox-ci/rc21-parking-ergonomy.patch.gz.b64" | gzip -d > /tmp/rc21.patch
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc21.patch
+          grep -q 'versionCode 30' app/build.gradle
+          grep -q "versionName '1.0.0-rc21'" app/build.gradle
+
+      - name: Apply RC22 parking cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "$GITHUB_WORKSPACE"/drivebox-ci/rc22-part{1..5}.b64 | tr -d '\r\n' | base64 -d | gzip -d > /tmp/rc22.patch
+          cd /tmp/drivebox-src
+          patch -p1 < /tmp/rc22.patch
+          JAVA=app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q 'versionCode 31' app/build.gradle
+          grep -q "versionName '1.0.0-rc22'" app/build.gradle
+          grep -q 'LOCALISER & DÉMARRER' "$JAVA"
+          grep -q 'PRENDRE PHOTO' "$JAVA"
+          grep -q 'DÉMARRER SANS GPS' "$JAVA"
+          grep -q 'addParkingPhotoInline' "$JAVA"
+          grep -q 'TEMPS & TARIF' "$JAVA"
+          grep -q 'GARÉ DEPUIS' "$JAVA"
+          if grep -q 'setParkingSetupPage(root)' "$JAVA"; then echo 'Floating bottom start button still used'; exit 1; fi
+          if grep -q 'addParkingPhotoSection(root, false, false)' "$JAVA"; then echo 'Separate photo block still used'; exit 1; fi
+          if grep -q 'android.permission.INTERNET' app/src/main/AndroidManifest.xml; then echo 'Unexpected INTERNET permission'; exit 1; fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC22
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC22
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='31'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc22'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_COARSE_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' /tmp/perms.txt
+          grep -q 'android.permission.POST_NOTIFICATIONS' /tmp/perms.txt
+          if grep -q 'android.permission.INTERNET' /tmp/perms.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'classes.dex'
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC22.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC22-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC22.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC22.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC22-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC22-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC22-PARKING-CLEANUP
+          path: |
+            DriveBox-1.0.0-RC22.apk
+            DriveBox-1.0.0-RC22.apk.sha256.txt
+            DriveBox-1.0.0-RC22-source.zip
+            DriveBox-1.0.0-RC22-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
