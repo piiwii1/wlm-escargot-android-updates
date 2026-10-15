@@ -16,5 +16,19 @@ public final class Gps extends Activity {
      }catch(Exception failed){Toast.makeText(c,"Aucun GPS disponible",Toast.LENGTH_LONG).show();}
    }
  }
+ public static void walkingToParking(Context c){
+   try{
+     String destination=URLEncoder.encode("Parking du Seyon, Rue du Seyon 38, 2000 Neuchâtel, Suisse","UTF-8");
+     Intent nav=new Intent(Intent.ACTION_VIEW,Uri.parse("google.navigation:q="+destination+"&mode=w"));
+     nav.setPackage("com.google.android.apps.maps");
+     nav.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);c.startActivity(nav);
+   }catch(Exception e){
+     try{
+       String destination=URLEncoder.encode("Parking du Seyon, Rue du Seyon 38, 2000 Neuchâtel, Suisse","UTF-8");
+       Intent fallback=new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.google.com/maps/dir/?api=1&destination="+destination+"&travelmode=walking"));
+       fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);c.startActivity(fallback);
+     }catch(Exception ignored){Toast.makeText(c,"GPS non disponible",Toast.LENGTH_LONG).show();}
+   }
+ }
  @Override protected void onCreate(Bundle b){super.onCreate(b);start(this,getIntent().getIntExtra("id",-1));finish();}
 }
