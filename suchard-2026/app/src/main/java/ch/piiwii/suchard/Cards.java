@@ -3,7 +3,7 @@ import android.app.Activity;import android.graphics.Color;import android.view.*;
 final class Cards {
  static void draw(Activity a,LinearLayout parent,int i,Runnable refresh){
  Route.Stop s=Route.ALL[i];SharedPreferences prefs=a.getSharedPreferences("suchard",0);boolean done=prefs.getBoolean("done"+i,false);
- LinearLayout card=new LinearLayout(a);card.setOrientation(1);card.setPadding(MainActivity.dp(a,13),MainActivity.dp(a,13),MainActivity.dp(a,13),MainActivity.dp(a,13));
+ LinearLayout card=new LinearLayout(a);card.setOrientation(1);card.setTag("stop_"+i);card.setPadding(MainActivity.dp(a,13),MainActivity.dp(a,13),MainActivity.dp(a,13),MainActivity.dp(a,13));
  card.setBackground(MainActivity.bg(a,done?0xfff2ece7:Color.WHITE,16));LinearLayout.LayoutParams wrap=new LinearLayout.LayoutParams(-1,-2);wrap.bottomMargin=MainActivity.dp(a,12);parent.addView(card,wrap);
  LinearLayout head=new LinearLayout(a);head.setGravity(Gravity.CENTER_VERTICAL);card.addView(head);
  TextView hour=MainActivity.txt(a,s.time,22,MainActivity.BROWN,true);head.addView(hour);
