@@ -1,0 +1,27 @@
+name: Suchard 2026 Android build
+on:
+  push:
+    branches:
+      - suchard-2026
+    paths:
+      - suchard-2026/**
+      - .github/workflows/suchard-android.yml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - run: gradle --no-daemon :app:assembleDebug
+        working-directory: suchard-2026
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Suchard-APK
+          path: suchard-2026/app/build/outputs/apk/debug/*.apk
