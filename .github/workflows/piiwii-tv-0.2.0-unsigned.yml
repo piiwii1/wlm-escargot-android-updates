@@ -1,4 +1,4 @@
-name: PiiWii TV 0.2.0 Unsigned Build
+name: Geek TV 0.7.0 Unsigned Build
 
 on:
   pull_request:
@@ -39,31 +39,56 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore source tree
+      - name: Restore Geek TV 0.6.0 base
         run: |
-          base64 -d piiwii-tv-0.2.0-ci/piiwii-tv-src.tar.gz.b64 > /tmp/piiwii-tv-src.tar.gz
-          tar -xzf /tmp/piiwii-tv-src.tar.gz
-          test -f piiwii-tv-0.2.0-ci-public/app/build.gradle
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-060-*.part | base64 -d > /tmp/geektv-060.tar.gz
+          gzip -t /tmp/geektv-060.tar.gz
+          tar -xzf /tmp/geektv-060.tar.gz
+          test -f geek-tv-0.6.0-ci-public/app/build.gradle
+
+      - name: Verify Geek TV 0.7.0 DVR overlay parts
+        run: |
+          set -e
+          sed -i 's/G3uxguw/G3+xguw/' piiwii-tv-0.2.0-ci/geektv-070-overlay-04.part
+          echo 'f9eb43442b098b6baa19b887bf1bf0024e439f82b7a4fbffbcc7796377da30b1  piiwii-tv-0.2.0-ci/geektv-070-overlay-00.part' | sha256sum -c -
+          echo 'a70e1d0dce8c4c515c8a6d9debe58ad6d5aa58e7ce683a726e25f96f899f53b0  piiwii-tv-0.2.0-ci/geektv-070-overlay-01.part' | sha256sum -c -
+          echo '94d69e35f4d38bddba3ff55ad4a63931e87738049554e1cb6ac0c8aa8678acb4  piiwii-tv-0.2.0-ci/geektv-070-overlay-02.part' | sha256sum -c -
+          echo '2b0820f8801da37343dc7f0771b3686b34cc9e03596aa0a16ebbef8cf424aafc  piiwii-tv-0.2.0-ci/geektv-070-overlay-03.part' | sha256sum -c -
+          echo 'f7ac7b5da0397a352a067fd8e189e3502bb11fcd89dd66865b930a9ebdb3fcee  piiwii-tv-0.2.0-ci/geektv-070-overlay-04.part' | sha256sum -c -
+          echo '87ecef885520d6dc95517fbb9c062901c6ae53efa89d60b848261624a09a8346  piiwii-tv-0.2.0-ci/geektv-070-overlay-05.part' | sha256sum -c -
+          echo '8c55d7aa989a61850437fb6dd216690a2f04c3747893796b2f2db79261150c2a  piiwii-tv-0.2.0-ci/geektv-070-overlay-06.part' | sha256sum -c -
+          echo '1aea990a34648d4c769615e0ad7690d2e2ccc7525ea35f91822fdc3a53a6055c  piiwii-tv-0.2.0-ci/geektv-070-overlay-07.part' | sha256sum -c -
+
+      - name: Apply Geek TV 0.7.0 DVR overlay
+        run: |
+          set -e
+          cat piiwii-tv-0.2.0-ci/geektv-070-overlay-*.part | base64 -d > /tmp/geektv-070-overlay.tar.gz
+          gzip -t /tmp/geektv-070-overlay.tar.gz
+          tar -xzf /tmp/geektv-070-overlay.tar.gz -C geek-tv-0.6.0-ci-public
+          grep -q "versionCode 7" geek-tv-0.6.0-ci-public/app/build.gradle
+          grep -q "versionName '0.7.0'" geek-tv-0.6.0-ci-public/app/build.gradle
+          test -f geek-tv-0.6.0-ci-public/app/src/main/java/ch/piiwii/tv/RecordingService.java
+          test -f geek-tv-0.6.0-ci-public/app/src/main/java/ch/piiwii/tv/HlsRecorder.java
+          sed -i '/signingConfig signingConfigs.release/d' geek-tv-0.6.0-ci-public/app/build.gradle
 
       - name: Build unsigned release APK
-        working-directory: piiwii-tv-0.2.0-ci-public
+        working-directory: geek-tv-0.6.0-ci-public
         run: gradle --no-daemon --stacktrace assembleRelease
 
       - name: Prepare output
         run: |
           set -e
-          APK="piiwii-tv-0.2.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
+          APK="geek-tv-0.6.0-ci-public/app/build/outputs/apk/release/app-release-unsigned.apk"
           test -f "$APK"
           mkdir -p out
-          cp "$APK" out/PiiWii-TV-0.2.0-unsigned.apk
+          cp "$APK" out/Geek-TV-0.7.0-unsigned.apk
           cp /usr/local/lib/android/sdk/build-tools/35.0.0/lib/apksigner.jar out/apksigner.jar
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-TV-0.2.0-unsigned
+          name: Geek-TV-0.7.0-unsigned
           path: out/*
           retention-days: 14
           if-no-files-found: error
-
-# trigger public PR
