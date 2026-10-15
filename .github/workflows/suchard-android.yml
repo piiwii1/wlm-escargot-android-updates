@@ -61,8 +61,6 @@ jobs:
           grep 'Signer #1 certificate SHA-256 digest:' delivery/SIGNATURE-1.1.0.txt > /tmp/cert-old.txt
           diff /tmp/cert-new.txt /tmp/cert-old.txt
           unzip -Z1 delivery/PiiWii-Suchard-2026-v1.5.0.apk > /tmp/apk-files.txt
-          grep 'icon_suchard_transparent' /tmp/apk-files.txt
-          grep 'res/drawable' /tmp/apk-files.txt | head -n 5 || true
           grep "package: name='ch.piiwii.suchard' versionCode='6' versionName='1.5.0'" delivery/APK-METADATA.txt
           cp suchard-2026/OFFICIAL-ASSETS.txt delivery/IMAGES-SOURCES.txt
           cd suchard-2026
