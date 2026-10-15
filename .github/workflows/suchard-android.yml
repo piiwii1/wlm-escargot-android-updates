@@ -25,7 +25,19 @@ jobs:
           gradle-version: '8.13'
       - run: gradle --no-daemon :app:assembleDebug
         working-directory: suchard-2026
+      - name: Verify and package deliverables
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          cp suchard-2026/app/build/outputs/apk/debug/app-debug.apk delivery/PiiWii-Suchard-2026-v1.0.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs delivery/PiiWii-Suchard-2026-v1.0.0.apk > delivery/SIGNATURE.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging delivery/PiiWii-Suchard-2026-v1.0.0.apk > delivery/BADGING.txt
+          sha256sum delivery/PiiWii-Suchard-2026-v1.0.0.apk > delivery/SHA256.txt
+          cd suchard-2026
+          zip -qr ../delivery/PiiWii-Suchard-2026-v1.0.0-SOURCES.zip app/src app/build.gradle build.gradle settings.gradle README.md
+          cd ..
+          unzip -t delivery/PiiWii-Suchard-2026-v1.0.0.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Suchard-APK
-          path: suchard-2026/app/build/outputs/apk/debug/*.apk
+          name: Suchard-APK-AND-SOURCES
+          path: delivery/*
