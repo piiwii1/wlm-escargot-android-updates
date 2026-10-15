@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'ch.piiwii.suchard'
  compileSdk 35
- defaultConfig { applicationId 'ch.piiwii.suchard'; minSdk 26; targetSdk 35; versionCode 5; versionName '1.4.0' }
+ defaultConfig { applicationId 'ch.piiwii.suchard'; minSdk 26; targetSdk 35; versionCode 6; versionName '1.5.0' }
  signingConfigs { release { storeFile file('suchard-release.jks'); storePassword (System.getenv('SUCHARD_SIGN_PASS') ?: 'missing-password'); keyAlias 'suchard'; keyPassword (System.getenv('SUCHARD_SIGN_PASS') ?: 'missing-password') } }
  buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
