@@ -1,38 +1,106 @@
 package ch.piiwii.suchard;
-import android.Manifest;import android.app.*;import android.content.*;import android.content.pm.PackageManager;import android.graphics.*;import android.graphics.drawable.*;import android.os.*;import android.view.*;import android.widget.*;
+import android.Manifest;
+import android.app.Activity;
+import android.content.*;
+import android.content.pm.PackageManager;
+import android.graphics.*;
+import android.graphics.drawable.GradientDrawable;
+import android.os.*;
+import android.view.*;
+import android.widget.*;
+
 public class MainActivity extends Activity {
  public static final int BROWN=0xff573226,PINK=0xffd05280,DARK=0xff302623,GRAY=0xff766c68,GOLD=0xffe9b971,CREAM=0xfffff8f2;
  private ScrollView scroll;
- public static int dp(Context c,int n){return (int)(c.getResources().getDisplayMetrics().density*n+0.5f);}
- public static TextView txt(Context c,String s,int size,int color,boolean bold){TextView v=new TextView(c);v.setText(s);v.setTextSize(size);v.setTextColor(color);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
- public static GradientDrawable bg(Context c,int col,int radius){GradientDrawable d=new GradientDrawable();d.setColor(col);d.setCornerRadius(dp(c,radius));return d;}
- public static TextView btn(Context c,String s,int col,int text){TextView b=txt(c,s,13,text,true);b.setGravity(Gravity.CENTER);b.setBackground(bg(c,col,12));b.setPadding(dp(c,12),dp(c,11),dp(c,12),dp(c,11));return b;}
- public static void gap(Context c,LinearLayout p,int h){View v=new View(c);p.addView(v,new LinearLayout.LayoutParams(1,dp(c,h)));}
- @Override public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(BROWN);getWindow().setNavigationBarColor(CREAM);Notify.init(this);Notify.schedule(this);render();if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},23);}
- @Override protected void onResume(){super.onResume();if(scroll!=null){Notify.schedule(this);}}
- int getNext(){
-   boolean[] done=new boolean[Route.ALL.length];for(int i=0;i<done.length;i++)done[i]=getSharedPreferences("suchard",0).getBoolean("done"+i,false);
-   java.util.Calendar now=java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zurich"));
-   int day=now.get(java.util.Calendar.DAY_OF_MONTH),month=now.get(java.util.Calendar.MONTH),year=now.get(java.util.Calendar.YEAR);
-   int todayMinutes=now.get(java.util.Calendar.HOUR_OF_DAY)*60+now.get(java.util.Calendar.MINUTE);
-   if(year!=2026||month!=java.util.Calendar.OCTOBER||day!=17){for(int i=0;i<done.length;i++)if(!done[i])return i;return -1;}
-   int first=0;for(int i=0;i<Route.ALL.length;i++){String[] p=Route.ALL[i].time.split(":");int at=Integer.parseInt(p[0])*60+Integer.parseInt(p[1]);if(at<=todayMinutes+7)first=i;}
-   for(int i=first;i<done.length;i++)if(!done[i])return i;return -1;
+ private boolean showAll=false;
+ public static int dp(Context c,int n){return (int)(c.getResources().getDisplayMetrics().density*n+.5f);}
+ public static TextView txt(Context c,String s,int size,int color,boolean bold){
+  TextView t=new TextView(c);t.setText(s);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;
+ }
+ public static GradientDrawable bg(Context c,int color,int radius){
+  GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(c,radius));return d;
+ }
+ public static TextView btn(Context c,String s,int color,int foreground){
+  TextView b=txt(c,s,14,foreground,true);b.setGravity(Gravity.CENTER);
+  b.setBackground(bg(c,color,14));b.setMinHeight(dp(c,48));b.setPadding(dp(c,14),dp(c,12),dp(c,14),dp(c,12));return b;
+ }
+ public static void gap(Context c,LinearLayout parent,int height){View v=new View(c);parent.addView(v,new LinearLayout.LayoutParams(1,dp(c,height)));}
+ @Override public void onCreate(Bundle b){
+  super.onCreate(b);
+  getWindow().setStatusBarColor(BROWN);getWindow().setNavigationBarColor(CREAM);
+  getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+  if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
+  Notify.init(this);Notify.schedule(this);render();
+  if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+   requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},23);
+ }
+ @Override protected void onResume(){super.onResume();Notify.schedule(this);}
+ private int getNext(){
+  boolean[] done=new boolean[Route.ALL.length];
+  for(int i=0;i<done.length;i++)done[i]=getSharedPreferences("suchard",0).getBoolean("done"+i,false);
+  java.util.Calendar now=java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zurich"));
+  if(now.get(java.util.Calendar.YEAR)!=2026||now.get(java.util.Calendar.MONTH)!=java.util.Calendar.OCTOBER||now.get(java.util.Calendar.DAY_OF_MONTH)!=17){
+   for(int i=0;i<done.length;i++)if(!done[i])return i;return -1;
+  }
+  int minute=now.get(java.util.Calendar.HOUR_OF_DAY)*60+now.get(java.util.Calendar.MINUTE),first=0;
+  for(int i=0;i<Route.ALL.length;i++){
+   String[] ts=Route.ALL[i].time.split(":");
+   if(Integer.parseInt(ts[0])*60+Integer.parseInt(ts[1])<=minute+5)first=i;
+  }
+  for(int i=first;i<done.length;i++)if(!done[i])return i;
+  return -1;
+ }
+ private void keepPosition(){
+  int y=scroll==null?0:scroll.getScrollY();render();
+  if(scroll!=null)scroll.post(()->scroll.scrollTo(0,y));
+ }
+ private void openProgramme(){
+  showAll=true;render();
+  ScrollView current=scroll;
+  current.post(()->{
+   View target=current.findViewWithTag("program");
+   if(target!=null){Rect r=new Rect();target.getDrawingRect(r);current.offsetDescendantRectToMyCoords(target,r);current.smoothScrollTo(0,Math.max(0,r.top-dp(this,8)));}
+  });
+ }
+ private void setupInsets(ScrollView view){
+  if(Build.VERSION.SDK_INT>=30){
+   view.setClipToPadding(false);
+   view.setOnApplyWindowInsetsListener((v,insets)->{
+    android.graphics.Insets upper=insets.getInsets(WindowInsets.Type.statusBars()|WindowInsets.Type.displayCutout());
+    android.graphics.Insets lower=insets.getInsets(WindowInsets.Type.navigationBars());
+    v.setPadding(0,Math.max(upper.top,dp(this,8)),0,Math.max(lower.bottom,dp(this,8)));
+    return insets;
+   });
+   view.requestApplyInsets();
+  }
  }
  public void render(){
-   scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(CREAM);
-   LinearLayout page=new LinearLayout(this);page.setOrientation(1);scroll.addView(page);setContentView(scroll);
-   Hero.draw(this,page,getNext());
-   LinearLayout body=new LinearLayout(this);body.setPadding(dp(this,16),dp(this,18),dp(this,16),dp(this,30));body.setOrientation(1);page.addView(body);
-   Tools.draw(this,body,()->render());
-   gap(this,body,18);
-   TextView title=txt(this,"TON PARCOURS DU SAMEDI",13,BROWN,true);body.addView(title);
-   gap(this,body,7);
-   body.addView(txt(this,"Appuie sur Y ALLER pour lancer le GPS. Chaque visite peut être cochée au fur et à mesure.",13,GRAY,false));
-   gap(this,body,13);
-   for(int i=0;i<Route.ALL.length;i++)Cards.draw(this,body,i,()->render());
-   int focus=getIntent().getIntExtra("focus_step",-1);
-   if(focus>=0&&focus<Route.ALL.length){View target=body.findViewWithTag("stop_"+focus);if(target!=null)scroll.post(()->{android.graphics.Rect rect=new android.graphics.Rect();target.getDrawingRect(rect);scroll.offsetDescendantRectToMyCoords(target,rect);scroll.smoothScrollTo(0,rect.top);});}
-   body.addView(txt(this,"Organisé pour le 17 octobre 2026 · horaires indicatifs hors rendez-vous officiels.\nVisites guidées complètes · Pas d'arrêt imposé à Boudry.\nImages : suchard2026.ch · Le Carac Rose",12,GRAY,false));
+  ScrollView s=new ScrollView(this);
+  s.setFillViewport(true);s.setBackgroundColor(CREAM);scroll=s;
+  LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);
+  s.addView(page);setContentView(s);setupInsets(s);
+  int next=getNext();
+  Hero.draw(this,page,next,()->openProgramme(),()->Tools.showDialog(this,()->keepPosition()));
+  LinearLayout body=new LinearLayout(this);
+  body.setPadding(dp(this,16),dp(this,14),dp(this,16),dp(this,30));
+  body.setOrientation(LinearLayout.VERTICAL);page.addView(body);
+  TextView section=txt(this,"LE PROGRAMME  •  SAMEDI 17 OCTOBRE",13,BROWN,true);section.setTag("program");body.addView(section);
+  gap(this,body,6);
+  int count=0;
+  if(showAll){
+   for(int i=0;i<Route.ALL.length;i++)Cards.draw(this,body,i,()->keepPosition());
+   TextView less=btn(this,"AFFICHER MOINS",0xfff5ebe7,BROWN);body.addView(less);
+   less.setOnClickListener(v->{showAll=false;render();});
+  }else{
+   int start=Math.max(0,next);
+   if(next<0)start=Math.max(0,Route.ALL.length-2);
+   for(int i=start;i<Route.ALL.length&&count<3;i++,count++)Cards.draw(this,body,i,()->keepPosition());
+   gap(this,body,4);
+   TextView more=btn(this,"VOIR LES 12 ÉTAPES  ↓",0xfff3e6df,BROWN);body.addView(more);
+   more.setOnClickListener(v->openProgramme());
+  }
+  gap(this,body,16);
+  TextView small=txt(this,"✓ Rappels et GPS conservés • Affiche et images hors ligne\nVisite de Boudry supprimée • Temps libre à 16h15",12,GRAY,false);
+  small.setLineSpacing(dp(this,4),1f);body.addView(small);
  }
 }
