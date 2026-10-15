@@ -1,0 +1,208 @@
+name: Build DriveBox RC12 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/rc12-trigger.txt'
+      - '.github/workflows/drivebox-rc12.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare RC11 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc11.yml').read_text()
+          def extract(step_name, out):
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('Prepare RC10 source', '/tmp/prepare-rc10.sh')
+          extract('Integrate supplied motorway tab images', '/tmp/integrate-tabs.sh')
+          PY
+          bash /tmp/prepare-rc10.sh
+          bash /tmp/integrate-tabs.sh
+          grep -q "DriveBox 1.0.0 RC11" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - name: Apply RC12 country improvements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+
+          def replace_method(src, signature_start, new_method):
+              a = src.index(signature_start)
+              brace = src.index('{', a)
+              depth = 0
+              i = brace
+              while i < len(src):
+                  if src[i] == '{': depth += 1
+                  elif src[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return src[:a] + new_method + src[i+1:]
+                  i += 1
+              raise RuntimeError('Unbalanced method: ' + signature_start)
+
+          s = s.replace('DriveBox 1.0.0 RC11', 'DriveBox 1.0.0 RC12')
+
+          country_card = r'''private View countryCard(String flag, String country, String colorName, String note, int signColor, Runnable action) {
+              LinearLayout c = row(Gravity.CENTER_VERTICAL);
+              c.setPadding(dp(14), dp(11), dp(14), dp(11));
+              c.setBackground(round(PANEL, 18));
+              c.setClickable(true);
+              c.setFocusable(true);
+              c.setOnClickListener(v -> action.run());
+
+              TextView f = text(flag, 28, TEXT, false);
+              f.setGravity(Gravity.CENTER);
+              c.addView(f, lp(dp(42), dp(54), 0, 0, 10, 0));
+
+              LinearLayout labels = column();
+              labels.addView(text(country, 17, TEXT, true));
+              labels.addView(text(note, 12, MUTED, false), lp(-2, -2, 0, 3, 0, 0));
+              c.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+
+              ImageView sign = new ImageView(this);
+              String normalizedColor = colorName == null ? "" : colorName.trim().toUpperCase(Locale.ROOT);
+              int resId = normalizedColor.contains("VERT") ? R.drawable.tab_motorway_green : R.drawable.tab_motorway_blue;
+              sign.setImageResource(resId);
+              sign.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+              sign.setAdjustViewBounds(true);
+              sign.setContentDescription("Panneau autoroute " + normalizedColor.toLowerCase(Locale.ROOT) + " - " + country);
+              c.addView(sign, lp(dp(76), dp(68), 10, 0, 0, 0));
+              return withMargins(c, 0, 0, 0, 10);
+          }'''
+          s = replace_method(s, 'private View countryCard(', country_card)
+
+          country_detail = r'''private void countryDetail(String flag, String country, int signColor, String signColorName,
+                                     String speed, String toll, String winter, String emergency) {
+              LinearLayout root = page(flag, country, "Fiche route rapide • voiture particulière", this::countriesScreen);
+              root.addView(countrySignCard(signColorName, signColor));
+              root.addView(sectionTitle("VITESSE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("km/h", speed, signColor));
+              root.addView(sectionTitle("AUTOROUTE / PÉAGE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("€", toll, BLUE));
+
+              if ("Suisse".equals(country)) {
+                  root.addView(infoStrip("✓", "E-vignette officielle : CHF 40 • valable immédiatement après l'achat et liée à la plaque.", GREEN), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(officialWebButton("Acheter l’e-vignette officielle", "https://www.e-vignette.ch/"), lp(-1, dp(48), 0, 8, 0, 0));
+              } else if ("Autriche".equals(country)) {
+                  root.addView(infoStrip("✓", "Vignette numérique officielle disponible en ligne : 1 jour, 10 jours, 2 mois ou annuelle.", GREEN), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(infoStrip("!", "Achat consommateur : les vignettes 1 jour et 10 jours peuvent être valables immédiatement. Les vignettes 2 mois et annuelle ne deviennent normalement valables qu'au 18e jour après l'achat en ligne.", ORANGE), lp(-1, -2, 0, 8, 0, 0));
+                  root.addView(officialWebButton("Acheter la vignette ASFINAG", "https://shop.asfinag.at/fr/produits/vignette-numerique/"), lp(-1, dp(48), 0, 8, 0, 0));
+              }
+
+              root.addView(sectionTitle("HIVER"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("❄", winter, ORANGE));
+              root.addView(sectionTitle("URGENCE"), lp(-1, -2, 0, 18, 0, 8));
+              root.addView(infoStrip("☎", emergency, RED));
+              root.addView(infoStrip("!", "Résumé pratique, pas un texte juridique. Avant un voyage, vérifiez les règles officielles et la signalisation locale, surtout pour les zones environnementales, pneus hiver et péages.", MUTED), lp(-1, -2, 0, 14, 0, 0));
+              setScrollablePage(root);
+          }'''
+          s = replace_method(s, 'private void countryDetail(', country_detail)
+
+          helper = r'''
+          private View officialWebButton(String label, String url) {
+              TextView b = text(label + "  ↗", 14, Color.WHITE, true);
+              b.setGravity(Gravity.CENTER);
+              b.setPadding(dp(14), 0, dp(14), 0);
+              b.setBackground(round(BLUE, 14));
+              b.setClickable(true);
+              b.setFocusable(true);
+              b.setContentDescription(label + ". Ouvre le site officiel dans le navigateur.");
+              b.setOnClickListener(v -> {
+                  try {
+                      android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+                      startActivity(intent);
+                  } catch (Exception ex) {
+                      android.widget.Toast.makeText(this, "Impossible d’ouvrir le navigateur.", android.widget.Toast.LENGTH_SHORT).show();
+                  }
+              });
+              return b;
+          }
+'''
+          insert_at = s.index('private View countrySignCard(')
+          s = s[:insert_at] + helper + '\n          ' + s[insert_at:]
+
+          java.write_text(s)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text()
+          g = g.replace('versionCode 20', 'versionCode 21')
+          g = g.replace("versionName '1.0.0-rc11'", "versionName '1.0.0-rc12'")
+          gradle.write_text(g)
+          PY
+
+          grep -q "versionCode 21" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc12'" /tmp/drivebox-src/app/build.gradle
+          grep -q "DriveBox 1.0.0 RC12" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "R.drawable.tab_motorway_green" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "e-vignette.ch" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          grep -q "shop.asfinag.at" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify RC12
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='21'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc12'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q "res/drawable-nodpi-v4/tab_motorway_blue.png"
+          unzip -l "$APK" | grep -q "res/drawable-nodpi-v4/tab_motorway_green.png"
+          for f in ch fr de it at; do unzip -l "$APK" | grep -q "res/drawable-nodpi-v4/motorway_${f}.png"; done
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC12.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC12.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC12.apk.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC12
+          path: |
+            DriveBox-1.0.0-RC12.apk
+            DriveBox-1.0.0-RC12.apk.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
