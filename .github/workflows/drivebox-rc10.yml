@@ -1,0 +1,72 @@
+name: Build DriveBox RC13 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/rc10-trigger.txt'
+      - '.github/workflows/drivebox-rc10.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare RC13 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('.github/workflows/drivebox-rc13.yml').read_text()
+          def extract(name,out):
+              marker='      - name: '+name+'\n'
+              a=text.index(marker)
+              r=text.index('        run: |\n',a)+len('        run: |\n')
+              e=text.find('\n      - ',r)
+              if e<0:e=len(text)
+              lines=[x[10:] if x.startswith('          ') else x for x in text[r:e].splitlines()]
+              Path(out).write_text('\n'.join(lines)+'\n')
+          extract('Prepare RC12 source','/tmp/prepare.sh')
+          extract('Apply RC13 simple color tabs','/tmp/rc13.sh')
+          PY
+          bash /tmp/prepare.sh
+          bash /tmp/rc13.sh
+          grep -q "DriveBox 1.0.0 RC13" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+      - name: Verify and stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='22'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc13'" /tmp/badging.txt
+          unzip -t "$APK"
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC13.apk.sha256.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC13
+          path: |
+            DriveBox-1.0.0-RC13.apk
+            DriveBox-1.0.0-RC13.apk.sha256.txt
+          retention-days: 7
