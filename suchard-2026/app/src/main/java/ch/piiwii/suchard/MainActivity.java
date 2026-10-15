@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
   getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
   if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
   Notify.init(this);Notify.schedule(this);render();
+  int focus=getIntent().getIntExtra("focus_step",-1);if(focus>=0)focusStep(focus);
   if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},23);
  }
@@ -62,6 +63,16 @@ public class MainActivity extends Activity {
    if(target!=null){Rect r=new Rect();target.getDrawingRect(r);current.offsetDescendantRectToMyCoords(target,r);current.smoothScrollTo(0,Math.max(0,r.top-dp(this,8)));}
   });
  }
+ private void focusStep(int id){
+  if(id<0||id>=Route.ALL.length)return;
+  showAll=true;render();
+  ScrollView current=scroll;
+  current.post(()->{
+   View card=current.findViewWithTag("stop_"+id);
+   if(card!=null){Rect r=new Rect();card.getDrawingRect(r);current.offsetDescendantRectToMyCoords(card,r);current.smoothScrollTo(0,Math.max(0,r.top-dp(this,8)));}
+  });
+ }
+ @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);focusStep(intent.getIntExtra("focus_step",-1));}
  private void setupInsets(ScrollView view){
   if(Build.VERSION.SDK_INT>=30){
    view.setClipToPadding(false);
