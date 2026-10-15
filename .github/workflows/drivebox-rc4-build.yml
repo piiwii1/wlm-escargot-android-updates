@@ -1,0 +1,166 @@
+name: Build DriveBox RC4 APK
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'drivebox-ci/rc4-trigger.txt'
+      - 'drivebox-ci/rc4-keystore.b64'
+      - 'drivebox-ci/rc3-icon-192.b64'
+      - '.github/workflows/drivebox-rc4-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct DriveBox base source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/drivebox-src
+          mkdir -p /tmp/drivebox-src
+          cat drivebox-ci/source.part*.b64 | tr -d '\r\n\t ' | base64 -d > /tmp/drivebox-source.zip
+          unzip -t /tmp/drivebox-source.zip
+          unzip -q /tmp/drivebox-source.zip -d /tmp/drivebox-src
+          test -f /tmp/drivebox-src/app/build.gradle
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          sed -i 's/@color\/drivebox_icon_bg/@color\/launcher_background/g' /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+      - name: Reuse verified RC2 cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/drivebox-build.yml')
+          text = p.read_text()
+          marker = '      - name: Apply DriveBox RC2 cleanup\n'
+          start = text.index(marker)
+          run_marker = '        run: |\n'
+          run_start = text.index(run_marker, start) + len(run_marker)
+          end = text.find('\n      - name:', run_start)
+          if end < 0:
+              end = len(text)
+          block = text[run_start:end]
+          lines = []
+          for line in block.splitlines():
+              lines.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/rc2-step.sh').write_text('\n'.join(lines) + '\n')
+          PY
+          bash /tmp/rc2-step.sh
+
+      - name: Apply RC4 cleanup, exact icon, stable signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          java = Path('/tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java')
+          s = java.read_text()
+          s = s.replace('Les infos et outils auto utiles, sans blabla.', 'Les infos et outils auto utiles, sans superflu.')
+          s = s.replace('Contrôles du quotidien', 'Mécanique & sécurité')
+          s = s.replace('Des contrôles simples, expliqués sans jargon.', 'Contrôles et diagnostics utiles.')
+          s = s.replace('DriveBox 1.0.0 RC2', 'DriveBox 1.0.0 RC4')
+
+          # Remove overly basic visible entries; methods may remain internally but are no longer presented.
+          s = re.sub(r'^\s*x\.add\(new CatalogItem\("💡", "Éclairage".*?\n', '', s, flags=re.M)
+          s = re.sub(r'^\s*x\.add\(new CatalogItem\("💧", "Essuie-glaces & lave-glace".*?\n', '', s, flags=re.M)
+          s = re.sub(r'^\s*x\.add\(new CatalogItem\("🌬", "Désembuage & climatisation".*?\n', '', s, flags=re.M)
+          s = re.sub(r'^\s*root\.addView\(wideCard\("💡", "Éclairage".*?\n', '', s, flags=re.M)
+          s = re.sub(r'^\s*root\.addView\(wideCard\("💧", "Essuie-glaces".*?\n', '', s, flags=re.M)
+          s = re.sub(r'^\s*root\.addView\(wideCard\("🌬", "Désembuage".*?\n', '', s, flags=re.M)
+
+          s = s.replace('String[] mech = {"Niveaux faits (huile, LDR, lave-glace)", "Pression des pneus (roue de secours incluse)", "Plein de carburant effectué", "Éclairage contrôlé (phares, clignotants)"};',
+                        'String[] mech = {"Niveaux moteur contrôlés", "Pression et état des pneus vérifiés", "Anomalies / voyants connus vérifiés", "Autonomie / assistance / itinéraire vérifiés"};')
+          s = s.replace('String[] mech = {"Niveaux faits (huile, LDR, lave-glace)", "Pression des pneus (roue de secours incluse)", "Plein de carburant effectué", "Autonomie / assistance / itinéraire vérifiés"};',
+                        'String[] mech = {"Niveaux moteur contrôlés", "Pression et état des pneus vérifiés", "Anomalies / voyants connus vérifiés", "Autonomie / assistance / itinéraire vérifiés"};')
+          s = s.replace('String[] log = {"Application Zello installée et connectée", "Téléphone chargé à 100% (+ câble auto)", "Vignette autoroutière valide", "Boissons et/ou pique-nique embarqués"};',
+                        'String[] log = {"Canal de communication du convoi prêt", "Ordre des véhicules et points de regroupement définis", "Vignettes / péages / zones prévus vérifiés", "Numéros d’assistance et contacts du convoi disponibles"};')
+          s = s.replace('String[] vehicle = {"Niveaux contrôlés (huile, refroidissement, lave-glace)", "Pression et état des pneus vérifiés", "Éclairage et essuie-glaces testés", "Carburant / autonomie suffisante pour le départ"};',
+                        'String[] vehicle = {"Niveaux moteur contrôlés", "Pression et état des pneus vérifiés", "État général et anomalies connues vérifiés", "Autonomie suffisante pour le trajet"};')
+          s = s.replace('String[] comfort = {"Itinéraire et pauses principales prévus", "Eau / boissons embarquées", "Médicaments et affaires personnelles indispensables", "Bagages fixés pour ne pas devenir des projectiles"};',
+                        'String[] comfort = {"Itinéraire et pauses principales prévus", "Restrictions / travaux principaux vérifiés", "Autonomie et ravitaillements anticipés", "Bagages lourds correctement arrimés"};')
+          java.write_text(s)
+
+          gradle = Path('/tmp/drivebox-src/app/build.gradle')
+          g = gradle.read_text().replace('versionCode 11', 'versionCode 13').replace("versionName '1.0.0-rc2'", "versionName '1.0.0-rc4'")
+          g = g.replace('android {\n', '''android {\n    signingConfigs {\n        driveboxDev {\n            storeFile file('../drivebox-dev.keystore')\n            storePassword 'DriveBoxDev2026'\n            keyAlias 'drivebox'\n            keyPassword 'DriveBoxDev2026'\n        }\n    }\n''', 1)
+          g = g.replace('    compileOptions {', '''    buildTypes {\n        debug {\n            signingConfig signingConfigs.driveboxDev\n        }\n    }\n\n    compileOptions {''')
+          gradle.write_text(g)
+          PY
+
+          # Exact full official icon: no adaptive foreground masking, no white outside the rounded square.
+          base64 -d drivebox-ci/rc3-icon-192.b64 > /tmp/drivebox-official.png
+          base64 -d drivebox-ci/rc4-keystore.b64 > /tmp/drivebox-src/drivebox-dev.keystore
+          rm -f /tmp/drivebox-src/app/src/main/res/drawable/ic_launcher_foreground.xml
+          rm -f /tmp/drivebox-src/app/src/main/res/drawable/drivebox_logo.xml
+          rm -f /tmp/drivebox-src/app/src/main/res/mipmap/ic_launcher.xml
+          rm -f /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          rm -f /tmp/drivebox-src/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          rm -rf /tmp/drivebox-src/app/src/main/res/mipmap-mdpi /tmp/drivebox-src/app/src/main/res/mipmap-hdpi /tmp/drivebox-src/app/src/main/res/mipmap-xhdpi /tmp/drivebox-src/app/src/main/res/mipmap-xxhdpi /tmp/drivebox-src/app/src/main/res/mipmap-xxxhdpi
+          mkdir -p /tmp/drivebox-src/app/src/main/res/drawable-nodpi /tmp/drivebox-src/app/src/main/res/mipmap-xxxhdpi
+          cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/drawable-nodpi/ic_launcher_foreground.png
+          cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/drawable-nodpi/drivebox_logo.png
+          cp /tmp/drivebox-official.png /tmp/drivebox-src/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          grep -q "versionCode 13" /tmp/drivebox-src/app/build.gradle
+          grep -q "versionName '1.0.0-rc4'" /tmp/drivebox-src/app/build.gradle
+          grep -q "DriveBox 1.0.0 RC4" /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          ! grep -q 'new CatalogItem("💡", "Éclairage"' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+          ! grep -q 'new CatalogItem("💧", "Essuie-glaces & lave-glace"' /tmp/drivebox-src/app/src/main/java/ch/clubvwsuisse/drivebox/MainActivity.java
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 35 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: /tmp/drivebox-src
+        shell: bash
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify signature, icon and stage APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/apksigner.txt
+          grep -q '66:99:B2:B6:B1:5B:5E:09:03:2B:4F:54:C5:C2:6B:BD:98:2A:41:DC:48:D5:A5:09:3D:15:01:03:6A:47:4A:1E' /tmp/apksigner.txt
+          unzip -l "$APK" | tee /tmp/apklist.txt
+          grep -q 'res/mipmap-xxxhdpi-v4/ic_launcher.png' /tmp/apklist.txt
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC4-debug.apk"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC4-debug.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC4-debug.apk.sha256.txt"
+          cp /tmp/drivebox-src/drivebox-dev.keystore "$GITHUB_WORKSPACE/drivebox-dev.keystore"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC4-APK
+          path: |
+            DriveBox-1.0.0-RC4-debug.apk
+            DriveBox-1.0.0-RC4-debug.apk.sha256.txt
+            drivebox-dev.keystore
+          if-no-files-found: error
+          retention-days: 7

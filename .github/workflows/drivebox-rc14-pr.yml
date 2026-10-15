@@ -1,0 +1,95 @@
+name: Build DriveBox RC14 APK (PR)
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/drivebox-rc14-pr.yml'
+      - '.github/workflows/drivebox-rc14-quick-tools.yml'
+      - 'drivebox-ci/rc14-trigger.txt'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare RC14 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('.github/workflows/drivebox-rc14-quick-tools.yml').read_text()
+          def extract(step_name, out):
+              marker = '      - name: ' + step_name + '\n'
+              start = text.index(marker)
+              run_start = text.index('        run: |\n', start) + len('        run: |\n')
+              end = text.find('\n      - ', run_start)
+              if end < 0: end = len(text)
+              block = text[run_start:end]
+              lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+              Path(out).write_text('\n'.join(lines) + '\n')
+          extract('Reconstruct verified RC13 source', '/tmp/reconstruct.sh')
+          extract('Apply RC14 quick tools favorites', '/tmp/rc14.sh')
+          PY
+          bash /tmp/reconstruct.sh
+          bash /tmp/rc14.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build RC14
+        working-directory: /tmp/drivebox-src
+        run: gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify and package RC14
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=/tmp/drivebox-src/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          grep -qi '6699b2b6b15b5e09032b4f54c5c26bbd982a41dc48d5a5093d1501036a474a1e' /tmp/cert.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee /tmp/badging.txt
+          grep -q "package: name='ch.clubvwsuisse.drivebox.v1'" /tmp/badging.txt
+          grep -q "versionCode='23'" /tmp/badging.txt
+          grep -q "versionName='1.0.0-rc14'" /tmp/badging.txt
+          grep -q "application-label:'DriveBox'" /tmp/badging.txt
+          unzip -t "$APK"
+          unzip -l "$APK" | grep -q 'resources.arsc'
+          unzip -l "$APK" | grep -q 'classes.dex'
+          for f in ch fr de it at; do unzip -l "$APK" | grep -q "res/drawable-nodpi-v4/motorway_${f}.png"; done
+          unzip -p "$APK" res/mipmap-xxxhdpi-v4/ic_launcher.webp > /tmp/icon.webp
+          test "$(sha256sum /tmp/icon.webp | awk '{print $1}')" = 'ab5bbd86c44f537aae43e60584c39c923cee3e7c855ae887332617158c0e8a05'
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | grep -q 'android.permission.INTERNET'; then echo 'Unexpected INTERNET permission'; exit 1; fi
+          cp "$APK" "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14.apk"
+          rm -rf /tmp/drivebox-src/app/build /tmp/drivebox-src/.gradle
+          (cd /tmp/drivebox-src && zip -qr "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14-source.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14.apk" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14.apk.sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14-source.zip" > "$GITHUB_WORKSPACE/DriveBox-1.0.0-RC14-source.zip.sha256.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-1.0.0-RC14-QUICK-TOOLS
+          path: |
+            DriveBox-1.0.0-RC14.apk
+            DriveBox-1.0.0-RC14.apk.sha256.txt
+            DriveBox-1.0.0-RC14-source.zip
+            DriveBox-1.0.0-RC14-source.zip.sha256.txt
+          if-no-files-found: error
+          retention-days: 7
