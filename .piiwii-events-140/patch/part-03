@@ -1,0 +1,175 @@
+Écran verrouillé").apply { setOnClickListener { showLockScreenHelp() } }
++        )
++        body.addView(widget)
++
++        val fc = UiFactory.card(this)
++        fc.addView(UiFactory.title(this, "FC Sion automatique", 18f))
++        fc.addView(UiFactory.muted(this, "Calendrier des matchs, durée après match, image et autorisations."))
++        fc.addView(UiFactory.body(this, "Après le match : ${formatPostMatchDuration(config.settings.fcSionPostMatchMinutes)}", 14f))
++        fc.addView(UiFactory.button(this, "Configurer FC Sion").apply { setOnClickListener { openSettings(SettingsSection.FC_SION) } })
++        body.addView(fc)
++
++        val organisation = UiFactory.card(this)
++        organisation.addView(UiFactory.title(this, "Organisation", 18f))
++        organisation.addView(UiFactory.muted(this, "Images et ordre de priorité des événements."))
++        UiFactory.addRowButtons(this, organisation,
++            UiFactory.secondaryButton(this, "Images").apply { setOnClickListener { openSettings(SettingsSection.IMAGES) } },
++            UiFactory.secondaryButton(this, "Priorités").apply { setOnClickListener { openSettings(SettingsSection.PRIORITIES) } }
++        )
++        body.addView(organisation)
++
++        val time = UiFactory.card(this)
++        time.addView(UiFactory.title(this, "Heure et déclenchement", 18f))
++        time.addView(UiFactory.muted(this, "Fuseau : ${repository.resolvedZoneId().id}"))
++        time.addView(UiFactory.secondaryButton(this, "Fuseau horaire").apply { setOnClickListener { showTimeZoneDialog() } })
++        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
++            !getSystemService(AlarmManager::class.java).canScheduleExactAlarms()) {
++            time.addView(UiFactory.button(this, "Autoriser les alarmes exactes").apply { setOnClickListener { requestExactAlarmAccess() } })
++        }
++        body.addView(time)
++
++        val data = UiFactory.card(this)
++        data.addView(UiFactory.title(this, "Sauvegarde", 18f))
++        data.addView(UiFactory.muted(this, "Sauvegarder ou restaurer les événements et leurs images."))
++        UiFactory.addRowButtons(this, data,
++            UiFactory.button(this, "Exporter").apply { setOnClickListener { exportBackup() } },
++            UiFactory.secondaryButton(this, "Importer").apply { setOnClickListener { importBackup() } }
++        )
++        body.addView(data)
++
++        val advanced = UiFactory.card(this)
++        advanced.addView(UiFactory.title(this, "Avancé", 18f))
++        advanced.addView(UiFactory.muted(this, "Tests, diagnostic et réglages Android. À utiliser surtout en cas de problème."))
++        advanced.addView(UiFactory.secondaryButton(this, "Ouvrir Avancé").apply { setOnClickListener { openSettings(SettingsSection.ADVANCED) } })
++        body.addView(advanced)
++
++        return page(body)
++    }
++
++    private fun fcSionSettingsPage(): View {
++        val body = UiFactory.vertical(this, 16)
++        body.addView(settingsBackCard("FC Sion automatique"))
++        val config = repository.load()
++        val event = config.events.firstOrNull { it.id == DefaultEvents.FC_SION_ID }
++        if (event == null) return page(body)
++
++        val main = UiFactory.card(this)
++        val header = UiFactory.horizontal(this)
++        val labels = UiFactory.vertical(this, 2)
++        labels.addView(UiFactory.title(this, "Détection automatique", 18f))
++        labels.addView(UiFactory.muted(this, "Source principale : football.ch / SFL"))
++        header.addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
++        header.addView(Switch(this).apply {
++            isChecked = event.enabled
++            setOnCheckedChangeListener { _, checked ->
++                val updated = repository.findEvent(event.id) ?: return@setOnCheckedChangeListener
++                updated.enabled = checked
++                repository.upsert(updated)
++                WidgetRenderer.updateAll(this@MainActivity, "fc_sion_toggle")
++            }
++        })
++        main.addView(header)
++        val active = config.settings.fcSionActiveSince <= System.currentTimeMillis() && config.settings.fcSionActiveUntil > System.currentTimeMillis()
++        main.addView(UiFactory.body(this, if (active) "Match actif jusqu’à ${formatMillis(config.settings.fcSionActiveUntil)}" else "Aucun match actif actuellement", 14f))
++        main.addView(UiFactory.muted(this, "Dernier signal : ${config.settings.fcSionLastSignal}"))
++        main.addView(UiFactory.button(this, "Synchroniser maintenant").apply {
++            setOnClickListener {
++                isEnabled = false
++                text = "Synchronisation…"
++                Thread {
++                    val result = FcSionOfficialSchedule.sync(this@MainActivity)
++                    runOnUiThread {
++                        toast(result.message)
++                        WidgetRenderer.updateAll(this@MainActivity, "fc_sion_manual_sync")
++                        showTab(3)
++                    }
++                }.start()
++            }
++        })
++        body.addView(main)
++
++        val display = UiFactory.card(this)
++        display.addView(UiFactory.title(this, "Affichage après le match", 18f))
++        display.addView(UiFactory.body(this, formatPostMatchDuration(config.settings.fcSionPostMatchMinutes), 16f))
++        display.addView(UiFactory.muted(this, "Durée pendant laquelle l’image FC Sion reste affichée après la fin détectée du match."))
++        display.addView(UiFactory.button(this, "Modifier la durée").apply { setOnClickListener { showFcSionPostMatchDialog() } })
++        body.addView(display)
++
++        val image = UiFactory.card(this)
++        image.addView(UiFactory.title(this, "Image FC Sion", 18f))
++        image.addView(imagePreview(event, 180))
++        UiFactory.addRowButtons(this, image,
++            UiFactory.button(this, "Choisir l’image").apply { setOnClickListener { chooseImageFor(event.id) } },
++            UiFactory.secondaryButton(this, "Tester").apply {
++                setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, event.id); toast("Image FC Sion affichée en mode test") }
++            }
++        )
++        body.addView(image)
++
++        val permissions = UiFactory.card(this)
++        permissions.addView(UiFactory.title(this, "Secours Google", 18f))
++        permissions.addView(UiFactory.muted(this, "Ces accès ne sont que des sources de secours si le calendrier officiel ne suffit pas."))
++        val access = notificationListenerAccessGranted()
++        val bubble = accessibilityBubbleAccessGranted()
++        permissions.addView(UiFactory.body(this, if (access) "✓ Notifications autorisées" else "Notifications non autorisées", 14f))
++        permissions.addView(UiFactory.body(this, if (bubble) "✓ Bulles Google autorisées" else "Bulles Google non autorisées", 14f))
++        UiFactory.addRowButtons(this, permissions,
++            UiFactory.secondaryButton(this, "Notifications", true).apply { setOnClickListener { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } },
++            UiFactory.secondaryButton(this, "Accessibilité", true).apply { setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } }
++        )
++        body.addView(permissions)
++        return page(body)
++    }
++
++    private fun settingsBackCard(title: String): View {
++        val card = UiFactory.card(this)
++        val row = UiFactory.horizontal(this)
++        row.addView(UiFactory.secondaryButton(this, "‹ Réglages", true).apply {
++            setOnClickListener { settingsSection = SettingsSection.ROOT; showTab(3) }
++        })
++        row.addView(UiFactory.title(this, title, 20f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
++            marginStart = UiFactory.dp(this@MainActivity, 10)
++        })
++        card.addView(row)
++        return card
++    }
++
+     private fun notificationListenerAccessGranted(): Boolean {
+         val raw = Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
+         return raw.split(':').mapNotNull { ComponentName.unflattenFromString(it) }.any { it.packageName == packageName }
+@@ -497,7 +673,7 @@ class MainActivity : Activity() {
+                 gravity = Gravity.CENTER_HORIZONTAL
+                 setPadding(UiFactory.dp(this@MainActivity, 6), UiFactory.dp(this@MainActivity, 6), UiFactory.dp(this@MainActivity, 6), UiFactory.dp(this@MainActivity, 6))
+                 background = UiFactory.rounded(if (hasCustomImage(event)) Color.rgb(232, 246, 237) else Color.rgb(241, 244, 247), 12f, this@MainActivity)
+-                setOnClickListener { selectedTab = 2; showTab(2) }
++                setOnClickListener { openSettings(SettingsSection.IMAGES) }
+             }
+             tile.addView(imagePreview(event, 82), LinearLayout.LayoutParams(UiFactory.dp(this, 96), UiFactory.dp(this, 82)))
+             tile.addView(UiFactory.body(this, event.name, 12f).apply {
+@@ -603,7 +779,7 @@ class MainActivity : Activity() {
+         event.imagePath = if (reset) imageStorage.resetToDefault(event) else ""
+         repository.upsert(event)
+         WidgetRenderer.updateAll(this, if (reset) "image_reset" else "image_removed")
+-        showTab(2)
++        showTab(selectedTab)
+     }
+ 
+     private fun showDayDetails(date: LocalDate, events: List<EventDefinition>) {
+@@ -623,7 +799,7 @@ class MainActivity : Activity() {
+         config.events = list
+         repository.save(config)
+         WidgetRenderer.updateAll(this, "priority_changed")
+-        showTab(4)
++        showTab(3)
+     }
+ 
+     private fun moveBefore(sourceId: String, targetId: String) {
+@@ -637,7 +813,7 @@ class MainActivity : Activity() {
+         config.events = list
+         repository.save(config)
+         WidgetRenderer.updateAll(this, "priority_dragged")
+-        showTab(4)
++        showTab(3)
+     }
+ 
+     private f

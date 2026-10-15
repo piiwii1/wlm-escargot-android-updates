@@ -1,0 +1,100 @@
+un resetPriorities() {
+@@ -649,7 +825,7 @@ class MainActivity : Activity() {
+         }
+         repository.save(config)
+         WidgetRenderer.updateAll(this, "priority_reset")
+-        showTab(4)
++        showTab(3)
+     }
+ 
+     private fun testNext(events: List<EventDefinition>, current: String?) {
+@@ -657,13 +833,13 @@ class MainActivity : Activity() {
+         val index = events.indexOfFirst { it.id == current }
+         val next = events[(index + 1).mod(events.size)]
+         WidgetRenderer.setTestEvent(this, next.id)
+-        showTab(5)
++        showTab(3)
+     }
+ 
+     private fun showLockScreenHelp() {
+         AlertDialog.Builder(this)
+             .setTitle("Ajouter sur l’écran verrouillé")
+-            .setMessage("PiiWii Événements est maintenant déclaré compatible avec l’écran verrouillé. Essayez d’abord Réglages > Écran de verrouillage > Widgets. Si l’application n’apparaît pas, utilisez l’application Samsung Good Lock, module LockStar : activez la modification de l’écran verrouillé, ajoutez un widget, puis choisissez PiiWii Événements.")
++            .setMessage("Live Event Widget est maintenant déclaré compatible avec l’écran verrouillé. Essayez d’abord Réglages > Écran de verrouillage > Widgets. Si l’application n’apparaît pas, utilisez l’application Samsung Good Lock, module LockStar : activez la modification de l’écran verrouillé, ajoutez un widget, puis choisissez Live Event Widget.")
+             .setNegativeButton("Fermer", null)
+             .setNeutralButton("Good Lock / LockStar") { _, _ -> openGoodLockStore() }
+             .setPositiveButton("Ouvrir les réglages") { _, _ -> openLockScreenSettings() }
+@@ -700,7 +876,7 @@ class MainActivity : Activity() {
+         if (manager.isRequestPinAppWidgetSupported) {
+             val callback = PendingIntent.getBroadcast(this, 9001, Intent(this, PiiWiiEventsWidgetProvider::class.java).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+             manager.requestPinAppWidget(provider, null, callback)
+-        } else toast("Ouvrez la liste des widgets du launcher et choisissez PiiWii Événements.")
++        } else toast("Ouvrez la liste des widgets du launcher et choisissez Live Event Widget.")
+     }
+ 
+     private fun requestExactAlarmAccess() {
+@@ -799,7 +975,7 @@ class MainActivity : Activity() {
+         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+             addCategory(Intent.CATEGORY_OPENABLE)
+             type = "application/zip"
+-            putExtra(Intent.EXTRA_TITLE, "piiwii-evenements-sauvegarde.zip")
++            putExtra(Intent.EXTRA_TITLE, "live-event-widget-sauvegarde.zip")
+         }, REQUEST_EXPORT)
+     }
+ 
+@@ -828,7 +1004,7 @@ class MainActivity : Activity() {
+                     event.imageHeight = stored.height
+                     repository.upsert(event)
+                     WidgetRenderer.updateAll(this, "image_selected")
+-                }.onSuccess { showTab(2) }.onFailure { toast(it.message ?: "Image invalide") }
++                }.onSuccess { showTab(selectedTab) }.onFailure { toast(it.message ?: "Image invalide") }
+             }
+             REQUEST_EXPORT -> data?.data?.let { uri ->
+                 toast("Export en cours…")
+diff --git a/app/src/main/java/ch/piiwii/events/ui/SetupWizardActivity.kt b/app/src/main/java/ch/piiwii/events/ui/SetupWizardActivity.kt
+index f90609b..0f98749 100644
+--- a/app/src/main/java/ch/piiwii/events/ui/SetupWizardActivity.kt
++++ b/app/src/main/java/ch/piiwii/events/ui/SetupWizardActivity.kt
+@@ -73,7 +73,7 @@ class SetupWizardActivity : Activity() {
+ 
+     private fun welcome() {
+         val card = UiFactory.card(this)
+-        card.addView(UiFactory.body(this, "PiiWii Événements change automatiquement l’image du widget selon vos dates, sans connexion Internet et sans accès aux notifications."))
++        card.addView(UiFactory.body(this, "Live Event Widget change automatiquement l’image du widget selon vos dates et événements. Les événements locaux fonctionnent hors ligne ; la détection automatique FC Sion utilise Internet et peut utiliser Google en secours."))
+         card.addView(UiFactory.muted(this, "Toutes les étapes peuvent être modifiées plus tard dans les six onglets de l’application."))
+         host.addView(card)
+     }
+@@ -154,7 +154,7 @@ class SetupWizardActivity : Activity() {
+ 
+     private fun widget() {
+         val card = UiFactory.card(this)
+-        card.addView(UiFactory.body(this, "Ajoutez maintenant le widget transparent PiiWii Événements. Il commence à 1 × 1 et peut être agrandi selon la grille de votre launcher."))
++        card.addView(UiFactory.body(this, "Ajoutez maintenant le widget transparent Live Event Widget. Il commence à 1 × 1 et peut être agrandi selon la grille de votre launcher."))
+         card.addView(UiFactory.button(this, "Ajouter sur l’écran d’accueil").apply { setOnClickListener { requestWidget() } })
+         card.addView(UiFactory.spacer(this, 8))
+         card.addView(UiFactory.secondaryButton(this, "Configurer l’écran verrouillé").apply { setOnClickListener { openLockScreenSettings() } })
+diff --git a/app/src/main/res/layout/widget_preview.xml b/app/src/main/res/layout/widget_preview.xml
+index 633fbf1..be66d8d 100644
+--- a/app/src/main/res/layout/widget_preview.xml
++++ b/app/src/main/res/layout/widget_preview.xml
+@@ -23,7 +23,7 @@
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:layout_marginTop="4dp"
+-            android:text="PiiWii Événements"
++            android:text="Live Event Widget"
+             android:textColor="#10243A"
+             android:textSize="12sp"
+             android:textStyle="bold" />
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index d44fa73..b2a4d58 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -1,5 +1,5 @@
+ <resources>
+-    <string name="app_name">PiiWii Événements</string>
+-    <string name="widget_description">Personnage transparent qui change selon les dates configurées</string>
++    <string name="app_name">Live Event Widget</string>
++    <string name="widget_description">Widget vivant qui change automatiquement selon vos événements et vos dates</string>
+     <string name="fc_sion_accessibility_description">Détecte uniquement les bulles de score de l’application Google afin d’activer automatiquement l’événement FC Sion. Aucun texte n’est enregistré.</string>
+ </resources>

@@ -1,0 +1,33 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -3,6 +3,16 @@
+     id("org.jetbrains.kotlin.android")
+ }
+ 
++
++// Live Event Widget icon generated for 1.4.0 icon refresh.
++// Decoded at configuration time so Android resources see the PNG before compilation.
++val liveEventIconSource = System.getenv("GITHUB_WORKSPACE")?.let { file("$it/.piiwii-events-141/icon.b64") }
++if (liveEventIconSource != null && liveEventIconSource.exists()) {
++    val liveEventIconOut = file("src/main/res/drawable-nodpi/ic_launcher_art.png")
++    liveEventIconOut.parentFile.mkdirs()
++    liveEventIconOut.writeBytes(java.util.Base64.getDecoder().decode(liveEventIconSource.readText().trim()))
++}
++
+ android {
+     namespace = "ch.piiwii.events"
+     compileSdk = 35
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -5,9 +5,9 @@
+ 
+     <application
+         android:allowBackup="false"
+-        android:icon="@mipmap/ic_launcher"
++        android:icon="@drawable/ic_launcher_art"
+         android:label="@string/app_name"
+-        android:roundIcon="@mipmap/ic_launcher_round"
++        android:roundIcon="@drawable/ic_launcher_art"
+         android:supportsRtl="true"
+         android:theme="@style/AppTheme">
+ 

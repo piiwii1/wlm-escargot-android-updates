@@ -1,0 +1,255 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -11,8 +11,8 @@
+         applicationId = "ch.piiwii.events"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 8
+-        versionName = "1.3.4"
++        versionCode = 9
++        versionName = "1.4.0"
+     }
+ 
+     signingConfigs {
+--- a/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
++++ b/app/src/main/java/ch/piiwii/events/ui/MainActivity.kt
+@@ -12,11 +12,13 @@
+ import android.graphics.Color
+ import android.net.Uri
+ import android.os.Bundle
++import android.os.Build
+ import android.provider.Settings
+ import android.view.DragEvent
+ import android.view.Gravity
+ import android.view.View
+ import android.view.ViewGroup
++import android.view.WindowInsets
+ import android.widget.ArrayAdapter
+ import android.widget.CheckBox
+ import android.widget.EditText
+@@ -53,7 +55,11 @@
+     private lateinit var imageStorage: ImageStorage
+     private lateinit var backupManager: BackupManager
+     private lateinit var contentHost: FrameLayout
+-    private var selectedTab = 0
++    private lateinit var pageTitle: TextView
++    private lateinit var bottomNavigation: LinearLayout
++    private val bottomNavItems = mutableListOf<LinearLayout>()
++    private var selectedTab = TAB_HOME
++    private var settingsSection: String? = null
+     private var calendarMonth: YearMonth = YearMonth.now()
+     private var pendingImageEventId: String? = null
+     private var eventFilter: String = "Tous"
+@@ -86,45 +92,168 @@
+         val root = LinearLayout(this).apply {
+             orientation = LinearLayout.VERTICAL
+             setBackgroundColor(UiFactory.SURFACE)
++            setOnApplyWindowInsetsListener { view, insets ->
++                val topInset: Int
++                val bottomInset: Int
++                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++                    topInset = insets.getInsets(WindowInsets.Type.statusBars()).top
++                    bottomInset = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
++                } else {
++                    @Suppress("DEPRECATION")
++                    topInset = insets.systemWindowInsetTop
++                    @Suppress("DEPRECATION")
++                    bottomInset = insets.systemWindowInsetBottom
++                }
++                view.setPadding(0, topInset, 0, bottomInset)
++                insets
++            }
+         }
+-        val top = LinearLayout(this).apply {
+-            orientation = LinearLayout.VERTICAL
+-            setPadding(UiFactory.dp(this@MainActivity, 16), UiFactory.dp(this@MainActivity, 12), UiFactory.dp(this@MainActivity, 16), UiFactory.dp(this@MainActivity, 8))
++
++        val header = LinearLayout(this).apply {
++            orientation = LinearLayout.HORIZONTAL
++            gravity = Gravity.CENTER_VERTICAL
++            setPadding(UiFactory.dp(this@MainActivity, 18), UiFactory.dp(this@MainActivity, 10), UiFactory.dp(this@MainActivity, 18), UiFactory.dp(this@MainActivity, 8))
+             setBackgroundColor(Color.WHITE)
+         }
+-        top.addView(UiFactory.title(this, "PiiWii Événements", 24f))
+-        val tabs = listOf("Accueil", "Événements", "Images", "Calendrier", "Priorités", "Tests")
+-        val tabRow = UiFactory.horizontal(this)
+-        tabs.forEachIndexed { index, label ->
+-            val button = UiFactory.secondaryButton(this, label, true)
+-            button.setOnClickListener { selectedTab = index; showTab(index) }
+-            tabRow.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+-                if (index > 0) marginStart = UiFactory.dp(this@MainActivity, 6)
+-            })
++        val brand = UiFactory.title(this, "Marmood", 22f).apply {
++            setPadding(0, 0, UiFactory.dp(this@MainActivity, 12), 0)
+         }
+-        val navScroll = HorizontalScrollView(this).apply {
+-            isHorizontalScrollBarEnabled = false
+-            addView(tabRow)
++        pageTitle = UiFactory.muted(this, "Accueil").apply {
++            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+         }
+-        top.addView(navScroll)
+-        root.addView(top, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
++        header.addView(brand)
++        header.addView(pageTitle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
++        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
++
+         contentHost = FrameLayout(this)
+         root.addView(contentHost, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
++
++        bottomNavigation = LinearLayout(this).apply {
++            orientation = LinearLayout.HORIZONTAL
++            gravity = Gravity.CENTER
++            setPadding(UiFactory.dp(this@MainActivity, 8), UiFactory.dp(this@MainActivity, 6), UiFactory.dp(this@MainActivity, 8), UiFactory.dp(this@MainActivity, 6))
++            setBackgroundColor(Color.WHITE)
++            elevation = UiFactory.dp(this@MainActivity, 10).toFloat()
++        }
++        listOf(
++            Triple(TAB_HOME, "Accueil", android.R.drawable.ic_menu_view),
++            Triple(TAB_EVENTS, "Événements", android.R.drawable.ic_menu_agenda),
++            Triple(TAB_CALENDAR, "Calendrier", android.R.drawable.ic_menu_my_calendar),
++            Triple(TAB_SETTINGS, "Réglages", android.R.drawable.ic_menu_manage)
++        ).forEach { (tab, label, icon) ->
++            val item = createBottomNavItem(tab, label, icon)
++            bottomNavItems.add(item)
++            bottomNavigation.addView(item, LinearLayout.LayoutParams(0, UiFactory.dp(this, 62), 1f))
++        }
++        root.addView(bottomNavigation, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
++
+         setContentView(root)
+-        showTab(0)
++        root.requestApplyInsets()
++        showTab(TAB_HOME)
++    }
++
++    private fun createBottomNavItem(tab: Int, label: String, iconRes: Int): LinearLayout = LinearLayout(this).apply {
++        orientation = LinearLayout.VERTICAL
++        gravity = Gravity.CENTER
++        isClickable = true
++        isFocusable = true
++        contentDescription = label
++        setPadding(UiFactory.dp(this@MainActivity, 4), UiFactory.dp(this@MainActivity, 5), UiFactory.dp(this@MainActivity, 4), UiFactory.dp(this@MainActivity, 4))
++        val icon = ImageView(this@MainActivity).apply {
++            setImageResource(iconRes)
++            tag = "icon"
++            scaleType = ImageView.ScaleType.CENTER_INSIDE
++        }
++        val text = TextView(this@MainActivity).apply {
++            this.text = label
++            tag = "label"
++            textSize = 11f
++            gravity = Gravity.CENTER
++        }
++        addView(icon, LinearLayout.LayoutParams(UiFactory.dp(this@MainActivity, 24), UiFactory.dp(this@MainActivity, 24)))
++        addView(text, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
++        setOnClickListener { navigateToTab(tab) }
++    }
++
++    private fun navigateToTab(index: Int) {
++        selectedTab = index
++        settingsSection = null
++        showTab(index)
+     }
+ 
+     private fun showTab(index: Int) {
++        selectedTab = index
+         contentHost.removeAllViews()
+-        val page = when (index) {
+-            0 -> homePage()
+-            1 -> eventsPage()
+-            2 -> imagesPage()
+-            3 -> calendarPage()
+-            4 -> prioritiesPage()
++        val title = when (index) {
++            TAB_HOME -> "Accueil"
++            TAB_EVENTS -> "Événements"
++            TAB_CALENDAR -> "Calendrier"
++            else -> if (settingsSection == null) "Réglages" else "Réglages"
++        }
++        pageTitle.text = title
++        val content = when (index) {
++            TAB_HOME -> homePage()
++            TAB_EVENTS -> eventsPage()
++            TAB_CALENDAR -> calendarPage()
++            else -> settingsSection?.let { settingsSubPage(it) } ?: settingsPage()
++        }
++        contentHost.addView(content)
++        updateBottomNavigation()
++    }
++
++    private fun updateBottomNavigation() {
++        bottomNavItems.forEachIndexed { index, item ->
++            val selected = index == selectedTab
++            val icon = item.findViewWithTag<ImageView>("icon")
++            val label = item.findViewWithTag<TextView>("label")
++            val color = if (selected) UiFactory.BLUE else UiFactory.MUTED
++            icon?.setColorFilter(color)
++            label?.setTextColor(color)
++            label?.setTypeface(label.typeface, if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
++            item.background = if (selected) UiFactory.rounded(Color.rgb(235, 244, 253), 14f, this) else null
++        }
++    }
++
++    private fun openSettingsSection(section: String) {
++        selectedTab = TAB_SETTINGS
++        settingsSection = section
++        showTab(TAB_SETTINGS)
++    }
++
++    private fun settingsSubPage(section: String): View {
++        val shell = LinearLayout(this).apply {
++            orientation = LinearLayout.VERTICAL
++            setBackgroundColor(UiFactory.SURFACE)
++        }
++        val back = UiFactory.horizontal(this, 10).apply {
++            setBackgroundColor(Color.WHITE)
++            addView(UiFactory.secondaryButton(this@MainActivity, "‹ Réglages", true).apply {
++                setOnClickListener { settingsSection = null; showTab(TAB_SETTINGS) }
++            })
++            addView(UiFactory.title(this@MainActivity, when (section) {
++                SETTINGS_IMAGES -> "Images"
++                SETTINGS_PRIORITIES -> "Priorités"
++                else -> "Tests et diagnostic"
++            }, 18f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = UiFactory.dp(this@MainActivity, 10) })
++        }
++        shell.addView(back, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
++        val child = when (section) {
++            SETTINGS_IMAGES -> imagesPage()
++            SETTINGS_PRIORITIES -> prioritiesPage()
+             else -> testsPage()
+         }
+-        contentHost.addView(page)
++        shell.addView(child, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
++        return shell
++    }
++
++    @Deprecated("Deprecated in Java")
++    override fun onBackPressed() {
++        if (selectedTab == TAB_SETTINGS && settingsSection != null) {
++            settingsSection = null
++            showTab(TAB_SETTINGS)
++        } else {
++            super.onBackPressed()
++        }
+     }
+ 
+     private fun page(content: LinearLayout): ScrollView = ScrollView(this).apply {
+@@ -141,100 +270,47 @@
+         val test = state.testMode
+ 
+         val status = UiFactory.card(this)
+-        status.addView(UiFactory.title(this, if (test) "Mode test" else "Événement actuel", 18f))
++        status.addView(UiFactory.muted(this, if (test) "MODE TEST" else "EN CE MOMENT"))
+         status.addView(UiFactory.title(this, state.selectedEvent.name, 26f))
+-        val preview = imagePreview(state.selectedEvent, 260)
+-        status.addView(preview)
++        status.addView(imagePreview(state.selectedEvent, 260))
+         val formatter = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy · HH:mm", Locale.FRENCH)
+         status.addView(UiFactory.body(this, now.format(formatter)))
+-        status.addView(UiFactory.muted(this, "Fuseau : ${zone.id}"))
+-        status.addView(UiFactory.muted(this, "Raison : ${state.reason}"))
+         status.addView(UiFactory.muted(this, "Prochain changement : ${formatDateTime(state.nextChange)}"))
+-        if (test) status.addView(UiFactory.dangerButton(this, "Revenir au mode automatique").apply {
+-            setOnClickListener { WidgetRenderer.setTestEvent(this@MainActivity, null); showTab(0) }
+-        })
++        if (test) {

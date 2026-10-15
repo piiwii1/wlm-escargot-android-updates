@@ -1,0 +1,195 @@
+         WidgetRenderer.updateAll(this, if (reset) "image_reset" else "image_removed")
+-        showTab(2)
++        openSettingsSection(SETTINGS_IMAGES)
+     }
+ 
+     private fun showDayDetails(date: LocalDate, events: List<EventDefinition>) {
+@@ -623,7 +824,7 @@
+         config.events = list
+         repository.save(config)
+         WidgetRenderer.updateAll(this, "priority_changed")
+-        showTab(4)
++        openSettingsSection(SETTINGS_PRIORITIES)
+     }
+ 
+     private fun moveBefore(sourceId: String, targetId: String) {
+@@ -637,7 +838,7 @@
+         config.events = list
+         repository.save(config)
+         WidgetRenderer.updateAll(this, "priority_dragged")
+-        showTab(4)
++        openSettingsSection(SETTINGS_PRIORITIES)
+     }
+ 
+     private fun resetPriorities() {
+@@ -649,7 +850,7 @@
+         }
+         repository.save(config)
+         WidgetRenderer.updateAll(this, "priority_reset")
+-        showTab(4)
++        openSettingsSection(SETTINGS_PRIORITIES)
+     }
+ 
+     private fun testNext(events: List<EventDefinition>, current: String?) {
+@@ -657,13 +858,13 @@
+         val index = events.indexOfFirst { it.id == current }
+         val next = events[(index + 1).mod(events.size)]
+         WidgetRenderer.setTestEvent(this, next.id)
+-        showTab(5)
++        openSettingsSection(SETTINGS_TESTS)
+     }
+ 
+     private fun showLockScreenHelp() {
+         AlertDialog.Builder(this)
+             .setTitle("Ajouter sur l’écran verrouillé")
+-            .setMessage("PiiWii Événements est maintenant déclaré compatible avec l’écran verrouillé. Essayez d’abord Réglages > Écran de verrouillage > Widgets. Si l’application n’apparaît pas, utilisez l’application Samsung Good Lock, module LockStar : activez la modification de l’écran verrouillé, ajoutez un widget, puis choisissez PiiWii Événements.")
++            .setMessage("Marmood est maintenant déclaré compatible avec l’écran verrouillé. Essayez d’abord Réglages > Écran de verrouillage > Widgets. Si l’application n’apparaît pas, utilisez l’application Samsung Good Lock, module LockStar : activez la modification de l’écran verrouillé, ajoutez un widget, puis choisissez Marmood.")
+             .setNegativeButton("Fermer", null)
+             .setNeutralButton("Good Lock / LockStar") { _, _ -> openGoodLockStore() }
+             .setPositiveButton("Ouvrir les réglages") { _, _ -> openLockScreenSettings() }
+@@ -700,7 +901,7 @@
+         if (manager.isRequestPinAppWidgetSupported) {
+             val callback = PendingIntent.getBroadcast(this, 9001, Intent(this, PiiWiiEventsWidgetProvider::class.java).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+             manager.requestPinAppWidget(provider, null, callback)
+-        } else toast("Ouvrez la liste des widgets du launcher et choisissez PiiWii Événements.")
++        } else toast("Ouvrez la liste des widgets du launcher et choisissez Marmood.")
+     }
+ 
+     private fun requestExactAlarmAccess() {
+@@ -799,7 +1000,7 @@
+         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+             addCategory(Intent.CATEGORY_OPENABLE)
+             type = "application/zip"
+-            putExtra(Intent.EXTRA_TITLE, "piiwii-evenements-sauvegarde.zip")
++            putExtra(Intent.EXTRA_TITLE, "marmood-sauvegarde.zip")
+         }, REQUEST_EXPORT)
+     }
+ 
+@@ -828,7 +1029,7 @@
+                     event.imageHeight = stored.height
+                     repository.upsert(event)
+                     WidgetRenderer.updateAll(this, "image_selected")
+-                }.onSuccess { showTab(2) }.onFailure { toast(it.message ?: "Image invalide") }
++                }.onSuccess { openSettingsSection(SETTINGS_IMAGES) }.onFailure { toast(it.message ?: "Image invalide") }
+             }
+             REQUEST_EXPORT -> data?.data?.let { uri ->
+                 toast("Export en cours…")
+@@ -878,6 +1079,14 @@
+     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+ 
+     companion object {
++        private const val TAB_HOME = 0
++        private const val TAB_EVENTS = 1
++        private const val TAB_CALENDAR = 2
++        private const val TAB_SETTINGS = 3
++        private const val SETTINGS_IMAGES = "images"
++        private const val SETTINGS_PRIORITIES = "priorities"
++        private const val SETTINGS_TESTS = "tests"
++
+         private const val REQUEST_IMAGE = 1001
+         private const val REQUEST_EXPORT = 2001
+         private const val REQUEST_IMPORT = 2002
+--- a/app/src/main/java/ch/piiwii/events/ui/SetupWizardActivity.kt
++++ b/app/src/main/java/ch/piiwii/events/ui/SetupWizardActivity.kt
+@@ -73,8 +73,8 @@
+ 
+     private fun welcome() {
+         val card = UiFactory.card(this)
+-        card.addView(UiFactory.body(this, "PiiWii Événements change automatiquement l’image du widget selon vos dates, sans connexion Internet et sans accès aux notifications."))
+-        card.addView(UiFactory.muted(this, "Toutes les étapes peuvent être modifiées plus tard dans les six onglets de l’application."))
++        card.addView(UiFactory.body(this, "Marmood change automatiquement l’image du widget selon vos événements. La synchronisation FC Sion utilise Internet uniquement si cette fonction est activée."))
++        card.addView(UiFactory.muted(this, "Toutes les étapes peuvent être modifiées plus tard dans Réglages."))
+         host.addView(card)
+     }
+ 
+@@ -154,7 +154,7 @@
+ 
+     private fun widget() {
+         val card = UiFactory.card(this)
+-        card.addView(UiFactory.body(this, "Ajoutez maintenant le widget transparent PiiWii Événements. Il commence à 1 × 1 et peut être agrandi selon la grille de votre launcher."))
++        card.addView(UiFactory.body(this, "Ajoutez maintenant le widget transparent Marmood. Il commence à 1 × 1 et peut être agrandi selon la grille de votre launcher."))
+         card.addView(UiFactory.button(this, "Ajouter sur l’écran d’accueil").apply { setOnClickListener { requestWidget() } })
+         card.addView(UiFactory.spacer(this, 8))
+         card.addView(UiFactory.secondaryButton(this, "Configurer l’écran verrouillé").apply { setOnClickListener { openLockScreenSettings() } })
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -22,7 +22,7 @@
+ 
+         <service
+             android:name=".service.FcSionNotificationListenerService"
+-            android:label="PiiWii Événements — FC Sion"
++            android:label="Marmood — FC Sion"
+             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+             android:exported="true">
+             <intent-filter>
+@@ -31,7 +31,7 @@
+         </service>
+         <service
+             android:name=".service.FcSionBubbleAccessibilityService"
+-            android:label="PiiWii Événements — bulles FC Sion"
++            android:label="Marmood — bulles FC Sion"
+             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+             android:exported="true">
+             <intent-filter>
+@@ -46,7 +46,7 @@
+         <receiver
+             android:name=".widget.PiiWiiEventsWidgetProvider"
+             android:exported="true"
+-            android:label="PiiWii Événements">
++            android:label="Marmood">
+             <intent-filter>
+                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                 <action android:name="ch.piiwii.events.ACTION_REFRESH_WIDGET" />
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -1,5 +1,5 @@
+ <resources>
+-    <string name="app_name">PiiWii Événements</string>
++    <string name="app_name">Marmood</string>
+     <string name="widget_description">Personnage transparent qui change selon les dates configurées</string>
+     <string name="fc_sion_accessibility_description">Détecte uniquement les bulles de score de l’application Google afin d’activer automatiquement l’événement FC Sion. Aucun texte n’est enregistré.</string>
+ </resources>
+--- a/app/src/main/res/layout/widget_preview.xml
++++ b/app/src/main/res/layout/widget_preview.xml
+@@ -23,7 +23,7 @@
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:layout_marginTop="4dp"
+-            android:text="PiiWii Événements"
++            android:text="Marmood"
+             android:textColor="#10243A"
+             android:textSize="12sp"
+             android:textStyle="bold" />
+--- a/CHANGELOG-1.4.0.md
++++ b/CHANGELOG-1.4.0.md
+@@ -0,0 +1,30 @@
++# Marmood 1.4.0
++
++## Réorganisation de l’application
++
++- Nouveau nom visible : **Marmood**.
++- Le package `ch.piiwii.events` est conservé pour permettre une mise à jour directe sans perte de configuration.
++- Navigation principale déplacée en bas : Accueil, Événements, Calendrier, Réglages.
++- Suppression de la rangée de six onglets en haut.
++- Gestion des barres système Android avec marges de sécurité pour éviter que la navigation de l’application soit recouverte par la barre de navigation Android.
++
++## Accueil simplifié
++
++- Événement actuel et aperçu du widget en premier.
++- Actions rapides uniquement.
++- FC Sion résumé dans une carte compacte.
++- Sauvegarde, écran verrouillé, fuseau, priorités, images, diagnostics et permissions retirés de l’accueil.
++
++## Réglages regroupés
++
++- FC Sion automatique : activation, temps après match, synchronisation, test image et sources Google de secours.
++- Widget et apparence : images, écran verrouillé et ajout du widget.
++- Comportement : priorités, fuseau horaire et alarmes exactes.
++- Outils : tests/diagnostic et réglages Android.
++- Sauvegarde : import/export.
++
++## Compatibilité
++
++- VersionCode : 9.
++- VersionName : 1.4.0.
++- Signature et package inchangés.

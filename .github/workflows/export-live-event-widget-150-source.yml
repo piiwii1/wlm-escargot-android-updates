@@ -1,0 +1,35 @@
+name: Export Live Event Widget 1.5.0 Source
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.piiwii-events-151/export-trigger-*'
+      - '.github/workflows/export-live-event-widget-150-source.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decode 1.5.0 source
+        run: |
+          set -euo pipefail
+          mkdir -p decoded
+          base64 -d .piiwii-events-150/MainActivity.kt.gz.b64 | gzip -d > decoded/MainActivity.kt
+          base64 -d .piiwii-events-150/UiFactory.kt.gz.b64 | gzip -d > decoded/UiFactory.kt
+          wc -c decoded/MainActivity.kt decoded/UiFactory.kt
+
+      - name: Upload decoded source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Live-Event-Widget-1.5.0-decoded-source
+          path: decoded/
+          retention-days: 2
+          if-no-files-found: error
