@@ -1,0 +1,336 @@
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 7d52252..a369a35 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -12,8 +12,8 @@ android {
+         applicationId = "ch.piiwii.streamradar"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 28
+-        versionName = "0.28.0"
++        versionCode = 29
++        versionName = "0.29.0"
+ 
+         buildConfigField("String", "STREAMRADAR_API_URL", "\"http://10.0.2.2:8000/\"")
+     }
+diff --git a/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt b/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+index c87ee73..f6acb00 100644
+--- a/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
++++ b/android/app/src/main/java/ch/piiwii/streamradar/StreamRadarApp.kt
+@@ -54,6 +54,7 @@ import coil.compose.AsyncImagePainter
+ import coil.request.CachePolicy
+ import coil.request.ImageRequest
+ import kotlinx.coroutines.launch
++import kotlinx.coroutines.delay
+ import java.time.LocalDate
+ import java.time.LocalDateTime
+ import java.time.YearMonth
+@@ -404,7 +405,20 @@ private fun HomeScreen(
+     val today = LocalDate.now()
+     fun parsed(r: Release) = r.releaseDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+     val upcoming = releases.filter { parsed(it)?.let { d -> !d.isBefore(today) } == true }.sortedBy { it.releaseDate }
+-    val hero = upcoming.firstOrNull { !it.backdropUrl.isNullOrBlank() || !it.posterUrl.isNullOrBlank() } ?: upcoming.firstOrNull() ?: releases.firstOrNull()
++    val heroCandidates = displayDistinct(
++        upcoming.filter { !it.backdropUrl.isNullOrBlank() || !it.posterUrl.isNullOrBlank() }
++    ).take(5).ifEmpty { displayDistinct(upcoming).take(5) }.ifEmpty { displayDistinct(releases).take(5) }
++    var heroIndex by remember(heroCandidates.map { it.id }) { mutableStateOf(0) }
++    val hero = heroCandidates.getOrNull(heroIndex.coerceIn(0, (heroCandidates.size - 1).coerceAtLeast(0)))
++    val alertCount = upcoming.count { release ->
++        release.id in prefs.followedIds && parsed(release)?.let { d -> !d.isAfter(today.plusDays(7)) } == true
++    }
++    LaunchedEffect(heroCandidates.size, heroIndex) {
++        if (heroCandidates.size > 1) {
++            delay(7000)
++            heroIndex = (heroIndex + 1) % heroCandidates.size
++        }
++    }
+     val week = displayDistinct(upcoming.filter { parsed(it)?.let { d -> !d.isAfter(today.plusDays(7)) } == true }).take(12)
+     val recommended = displayDistinct(releases.filter { it.voteAverage != null }.sortedByDescending { it.voteAverage }).take(12)
+         .ifEmpty { displayDistinct(releases.filter { !it.posterUrl.isNullOrBlank() }).take(12) }
+@@ -415,7 +429,7 @@ private fun HomeScreen(
+         contentPadding = PaddingValues(bottom = 20.dp),
+         verticalArrangement = Arrangement.spacedBy(4.dp)
+     ) {
+-        item { PremiumHomeHeader(syncing = syncing, onAlertsClick = { onOpenTab(Tab.FOLLOWED) }, profileImageUri = profileImageUri, onProfileClick = onProfileClick) }
++        item { PremiumHomeHeader(syncing = syncing, alertCount = alertCount, onAlertsClick = { onOpenTab(Tab.FOLLOWED) }, profileImageUri = profileImageUri, onProfileClick = onProfileClick) }
+         if (offlineFallback) item {
+             Surface(
+                 modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+@@ -429,7 +443,19 @@ private fun HomeScreen(
+                 }
+             }
+         }
+-        if (hero != null) item { HeroFeatureCard(hero, hero.id in prefs.followedIds, onFollow, onOpen) }
++        if (hero != null) item {
++            Column {
++                HeroFeatureCard(hero, hero.id in prefs.followedIds, onFollow, onOpen)
++                if (heroCandidates.size > 1) {
++                    HeroPagerControls(
++                        current = heroIndex,
++                        total = heroCandidates.size,
++                        onPrevious = { heroIndex = if (heroIndex <= 0) heroCandidates.lastIndex else heroIndex - 1 },
++                        onNext = { heroIndex = (heroIndex + 1) % heroCandidates.size }
++                    )
++                }
++            }
++        }
+         item {
+             Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+@@ -546,7 +572,7 @@ private fun ProfileEditorDialog(
+ }
+ 
+ @Composable
+-private fun PremiumHomeHeader(syncing: Boolean, onAlertsClick: () -> Unit, profileImageUri: String?, onProfileClick: () -> Unit) {
++private fun PremiumHomeHeader(syncing: Boolean, alertCount: Int, onAlertsClick: () -> Unit, profileImageUri: String?, onProfileClick: () -> Unit) {
+     Row(
+         Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 8.dp),
+         verticalAlignment = Alignment.CenterVertically
+@@ -567,7 +593,22 @@ private fun PremiumHomeHeader(syncing: Boolean, onAlertsClick: () -> Unit, profi
+                 if (syncing) CircularProgressIndicator(Modifier.size(21.dp), strokeWidth = 2.dp)
+                 else Icon(Icons.Default.NotificationsNone, contentDescription = "Ouvrir les suivis et alertes", tint = Color(0xFFE9EEF2), modifier = Modifier.size(27.dp))
+             }
+-            if (!syncing) Box(Modifier.padding(top = 8.dp, end = 8.dp).size(7.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50)))
++            if (!syncing && alertCount > 0) {
++                Surface(
++                    modifier = Modifier.padding(top = 3.dp, end = 2.dp),
++                    shape = RoundedCornerShape(50),
++                    color = MaterialTheme.colorScheme.primary,
++                    border = BorderStroke(1.dp, Color(0xFF062219))
++                ) {
++                    Text(
++                        if (alertCount > 9) "9+" else alertCount.toString(),
++                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
++                        color = MaterialTheme.colorScheme.onPrimary,
++                        fontWeight = FontWeight.Black,
++                        fontSize = 9.sp
++                    )
++                }
++            }
+         }
+         ProfileAvatar(
+             profileImageUri = profileImageUri,
+@@ -635,6 +676,35 @@ private fun HeroFeatureCard(release: Release, followed: Boolean, onFollow: (Stri
+     }
+ }
+ 
++@Composable
++private fun HeroPagerControls(current: Int, total: Int, onPrevious: () -> Unit, onNext: () -> Unit) {
++    Row(
++        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 1.dp),
++        verticalAlignment = Alignment.CenterVertically
++    ) {
++        IconButton(onClick = onPrevious, modifier = Modifier.size(34.dp)) {
++            Icon(Icons.Default.ChevronLeft, "Vedette précédente", tint = Color(0xFFB8C6D1), modifier = Modifier.size(20.dp))
++        }
++        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
++            repeat(total) { index ->
++                val active = index == current
++                Box(
++                    Modifier.padding(horizontal = 3.dp)
++                        .width(if (active) 22.dp else 7.dp)
++                        .height(7.dp)
++                        .background(
++                            if (active) MaterialTheme.colorScheme.primary else Color(0xFF385063),
++                            RoundedCornerShape(50)
++                        )
++                )
++            }
++        }
++        IconButton(onClick = onNext, modifier = Modifier.size(34.dp)) {
++            Icon(Icons.Default.ChevronRight, "Vedette suivante", tint = Color(0xFFB8C6D1), modifier = Modifier.size(20.dp))
++        }
++    }
++}
++
+ @Composable
+ private fun QuickShortcut(
+     icon: ImageVector,
+@@ -959,6 +1029,13 @@ private fun CalendarScreen(
+                     onSelectDate = { selectedDate = it }
+                 )
+             }
++            item {
++                CalendarSelectedDaySummary(
++                    date = selectedDate,
++                    count = filtered.count { it.first == selectedDate },
++                    isToday = selectedDate == today
++                )
++            }
+         }
+         item {
+             LazyRow(
+@@ -1089,8 +1166,15 @@ private fun CalendarMonthCard(
+                                     Text(day.toString(), color = if (date == today || active) Color.White else Color(0xFFE0E7EC), fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
+                                     Spacer(Modifier.height(2.dp))
+                                     if (hasRelease) {
+-                                        val accent = platformAccent(releaseDays[date]!!.first().second.platform)
+-                                        Box(Modifier.size(5.dp).background(accent, RoundedCornerShape(50)))
++                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
++                                            releaseDays[date].orEmpty()
++                                                .map { platformAccent(it.second.platform) }
++                                                .distinct()
++                                                .take(3)
++                                                .forEach { accent ->
++                                                    Box(Modifier.size(5.dp).background(accent, RoundedCornerShape(50)))
++                                                }
++                                        }
+                                     } else Spacer(Modifier.height(5.dp))
+                                 }
+                             }
+@@ -1104,6 +1188,44 @@ private fun CalendarMonthCard(
+     }
+ }
+ 
++@Composable
++private fun CalendarSelectedDaySummary(date: LocalDate, count: Int, isToday: Boolean) {
++    val label = date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)).replaceFirstChar { it.uppercase() }
++    Surface(
++        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 1.dp),
++        shape = RoundedCornerShape(18.dp),
++        color = Color(0xFF0A1825),
++        border = BorderStroke(1.dp, if (count > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.48f) else Color(0xFF2A3C4A))
++    ) {
++        Row(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
++            Box(
++                Modifier.size(38.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(13.dp)),
++                contentAlignment = Alignment.Center
++            ) {
++                Icon(if (isToday) Icons.Default.Today else Icons.Default.Event, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(21.dp))
++            }
++            Spacer(Modifier.width(11.dp))
++            Column(Modifier.weight(1f)) {
++                Text(if (isToday) "Aujourd’hui • $label" else label, fontWeight = FontWeight.Bold, fontSize = 14.sp)
++                Text(
++                    when (count) {
++                        0 -> "Aucune sortie connue ce jour"
++                        1 -> "1 sortie avec les filtres actuels"
++                        else -> "$count sorties avec les filtres actuels"
++                    },
++                    color = Color(0xFF9FB0BC),
++                    fontSize = 11.sp
++                )
++            }
++            if (count > 0) {
++                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)) {
++                    Text(count.toString(), modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black)
++                }
++            }
++        }
++    }
++}
++
+ @Composable
+ private fun CalendarAlertsCard(prefs: UserPreferences, onClick: () -> Unit) {
+     Surface(
+@@ -1269,6 +1391,13 @@ private fun SearchScreen(
+         )
+     }
+ 
++    val activeFilterCount = listOf(
++        typeFilter != "Tous",
++        platformFilter != null,
++        genreFilter != null,
++        yearFilter != null
++    ).count { it }
++
+     LazyColumn(
+         modifier = modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF05101A), Color(0xFF071421), Color(0xFF050C14)))),
+         contentPadding = PaddingValues(bottom = 22.dp)
+@@ -1378,6 +1507,29 @@ private fun SearchScreen(
+                 }
+             }
+         }
++        if (activeFilterCount > 0) {
++            item {
++                Surface(
++                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 6.dp),
++                    shape = RoundedCornerShape(16.dp),
++                    color = Color(0xFF0A1825),
++                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
++                ) {
++                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
++                        Icon(Icons.Default.FilterAlt, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
++                        Spacer(Modifier.width(8.dp))
++                        Text("$activeFilterCount filtre${if (activeFilterCount > 1) "s" else ""} actif${if (activeFilterCount > 1) "s" else ""}", modifier = Modifier.weight(1f), fontSize = 12.sp, color = Color(0xFFC6D2DB))
++                        TextButton(onClick = {
++                            typeFilter = "Tous"
++                            platformFilter = null
++                            genreFilter = null
++                            yearFilter = null
++                            extraPanel = null
++                        }) { Text("Réinitialiser") }
++                    }
++                }
++            }
++        }
+         if (recentSearches.isNotEmpty()) {
+             item {
+                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 10.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+@@ -1388,15 +1540,16 @@ private fun SearchScreen(
+                 }
+             }
+             item {
+-                LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                     items(recentSearches.take(6), key = { "recent-$it" }) { title ->
+-                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF0A1723), border = BorderStroke(1.dp, Color(0xFF2C3F50))) {
+-                            Row(Modifier.clickable { onQuery(title) }.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+-                                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 130.dp), style = MaterialTheme.typography.bodySmall)
+-                                Spacer(Modifier.width(8.dp))
+-                                Icon(Icons.Default.Close, "Supprimer", tint = Color(0xFFAAB6C0), modifier = Modifier.size(16.dp).clickable { onRemoveRecentSearch(title) })
+-                            }
+-                        }
++                        val match = searchReleases.firstOrNull { it.title.equals(title, ignoreCase = true) }
++                            ?: searchReleases.firstOrNull { it.title.contains(title, ignoreCase = true) || title.contains(it.title, ignoreCase = true) }
++                        RecentSearchVisualCard(
++                            title = title,
++                            release = match,
++                            onOpen = { onQuery(title) },
++                            onRemove = { onRemoveRecentSearch(title) }
++                        )
+                     }
+                 }
+             }
+@@ -1433,6 +1586,41 @@ private fun SearchScreen(
+     }
+ }
+ 
++@Composable
++private fun RecentSearchVisualCard(title: String, release: Release?, onOpen: () -> Unit, onRemove: () -> Unit) {
++    Surface(
++        modifier = Modifier.width(205.dp).height(68.dp).clip(RoundedCornerShape(18.dp)).clickable(onClick = onOpen),
++        shape = RoundedCornerShape(18.dp),
++        color = Color(0xFF0A1723),
++        border = BorderStroke(1.dp, Color(0xFF2C3F50))
++    ) {
++        Row(Modifier.fillMaxSize().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
++            if (release != null) {
++                Poster(
++                    release.posterUrl,
++                    release.type,
++                    Modifier.width(40.dp).fillMaxHeight(),
++                    titleHint = release.title,
++                    fallbackUrls = release.posterFallbackUrls
++                )
++                Spacer(Modifier.width(8.dp))
++            } else {
++                Box(Modifier.size(40.dp).background(Color(0xFF102332), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
++                    Icon(Icons.Default.History, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
++                }
++                Spacer(Modifier.width(8.dp))
++            }
++            Column(Modifier.weight(1f)) {
++                Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
++                if (release != null) Text(release.platform, maxLines = 1, overflow = TextOverflow.Ellipsis, color = platformAccent(release.platform), fontSize = 9.sp)
++            }
++            IconButton(onClick = onRemove, modifier = Modifier.size(30.dp)) {
++                Icon(Icons.Default.Close, "Supprimer", tint = Color(0xFFAAB6C0), modifier = Modifier.size(16.dp))
++            }
++        }
++    }
++}
++
+ @Composable
+ private fun PremiumSearchResultCard(release: Release, followed: Boolean, onFollow: (String) -> Unit, onOpen: () -> Unit) {
+     val year = (release.releaseDate ?: release.firstAirDate)?.take(4)
