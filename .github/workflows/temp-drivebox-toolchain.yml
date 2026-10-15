@@ -1,0 +1,72 @@
+name: Temp DriveBox RC81 Toolchain
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/temp-drivebox-toolchain.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Resolve dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/drivebox-deps
+          cat > /tmp/drivebox-deps/settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.PREFER_PROJECT); repositories { google(); mavenCentral() } }
+          rootProject.name = 'drivebox-deps'
+          EOF
+          cat > /tmp/drivebox-deps/build.gradle <<'EOF'
+          plugins { id 'java' }
+          repositories { google(); mavenCentral() }
+          configurations { drivebox }
+          dependencies {
+            drivebox 'androidx.core:core:1.15.0'
+            drivebox 'com.journeyapps:zxing-android-embedded:4.3.0'
+          }
+          tasks.register('copyDriveBoxDeps', Copy) {
+            from configurations.drivebox
+            into layout.buildDirectory.dir('deps')
+          }
+          EOF
+          cd /tmp/drivebox-deps
+          gradle --no-daemon --stacktrace copyDriveBoxDeps
+      - name: Collect
+        shell: bash
+        run: |
+          set -euxo pipefail
+          OUT=/tmp/drivebox-toolchain
+          mkdir -p "$OUT/sdk" "$OUT/deps"
+          cp "$ANDROID_HOME/platforms/android-35/android.jar" "$OUT/sdk/android.jar"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/d8.jar" "$OUT/sdk/d8.jar"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$OUT/sdk/apksigner.jar"
+          cp "$ANDROID_HOME/build-tools/35.0.0/aapt2" "$OUT/sdk/aapt2"
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" "$OUT/sdk/zipalign"
+          cp -a /tmp/drivebox-deps/build/deps/. "$OUT/deps/"
+          find "$OUT" -type f -printf '%P %s bytes\n' | sort | tee "$OUT/CONTENTS.txt"
+          sha256sum "$OUT"/sdk/* > "$OUT/SHA256.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveBox-RC81-toolchain
+          path: /tmp/drivebox-toolchain
+          retention-days: 1
+          if-no-files-found: error
