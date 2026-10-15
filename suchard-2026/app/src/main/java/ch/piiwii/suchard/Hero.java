@@ -10,7 +10,7 @@ final class Hero {
   hero.setOrientation(1);hero.setPadding(MainActivity.dp(a,18),MainActivity.dp(a,18),MainActivity.dp(a,18),MainActivity.dp(a,19));
   hero.setBackgroundColor(MainActivity.BROWN);page.addView(hero);
   LinearLayout header=new LinearLayout(a);header.setGravity(Gravity.CENTER_VERTICAL);hero.addView(header);
-  ImageView logo=new ImageView(a);logo.setImageResource(R.drawable.icon_suchard);
+  ImageView logo=new ImageView(a);logo.setImageResource(R.drawable.icon_suchard_transparent);
   logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
   header.addView(logo,new LinearLayout.LayoutParams(MainActivity.dp(a,60),MainActivity.dp(a,60)));
   LinearLayout name=new LinearLayout(a);name.setOrientation(1);
