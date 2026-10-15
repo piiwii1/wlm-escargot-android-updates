@@ -1,0 +1,64 @@
+name: Build StreamRadar 0.33.0 temp
+
+on:
+  push:
+    branches: [ streamradar-build-033 ]
+    paths:
+      - 'temp-streamradar-033/trigger.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Installer SDK 35
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Restaurer les sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/streamradar-src
+          cat temp-streamradar-033/source.b64.part* | tr -d '\n\r' | base64 -d > /tmp/streamradar-src/android.zip
+          unzip -t /tmp/streamradar-src/android.zip
+          unzip -q /tmp/streamradar-src/android.zip -d /tmp/streamradar-src
+          test -f /tmp/streamradar-src/android/app/build.gradle.kts
+
+      - name: Compiler release
+        working-directory: /tmp/streamradar-src/android
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleRelease
+          test -f app/build/outputs/apk/release/app-release-unsigned.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk /tmp/StreamRadar-0.33.0-unsigned.apk
+
+      - name: Publier artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreamRadar-0.33.0-unsigned
+          path: /tmp/StreamRadar-0.33.0-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
