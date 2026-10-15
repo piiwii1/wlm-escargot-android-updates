@@ -1,0 +1,1 @@
+StreamRadar 0.21.0: raccourci alertes dans Mes suivis, chargement des affiches renforcé, versionCode 21.
