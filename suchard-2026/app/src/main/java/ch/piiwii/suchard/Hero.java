@@ -52,6 +52,12 @@ final class Hero {
    MainActivity.gap(a,card,13);
    TextView gps=MainActivity.btn(a,step.destination.isEmpty()?"☀  TEMPS LIBRE":"↗  Y ALLER",MainActivity.PINK,Color.WHITE);
    card.addView(gps);
+   MainActivity.gap(a,card,6);
+   TextView finished=MainActivity.txt(a,"✓  Marquer cette étape terminée",12,MainActivity.GRAY,true);
+   finished.setGravity(Gravity.CENTER);
+   finished.setPadding(MainActivity.dp(a,9),MainActivity.dp(a,9),MainActivity.dp(a,9),MainActivity.dp(a,9));
+   card.addView(finished);
+   finished.setOnClickListener(v->{Notify.markDone(a,next,true);((MainActivity)a).render();});
    gps.setContentDescription("Ouvrir le GPS pour "+step.title);
    gps.setOnClickListener(v->{if(!step.destination.isEmpty())Gps.start(a,next);else Toast.makeText(a,"Promenade au volant libre, à votre rythme.",Toast.LENGTH_SHORT).show();});
   }else{
