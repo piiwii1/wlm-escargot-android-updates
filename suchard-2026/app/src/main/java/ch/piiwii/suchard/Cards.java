@@ -44,7 +44,7 @@ final class Cards {
   directions.setOnClickListener(v->{if(s.destination.isEmpty())Toast.makeText(a,"Promenade libre : aucun trajet imposé",Toast.LENGTH_SHORT).show();else Gps.start(a,i);});
   TextView completed=MainActivity.btn(a,done?"✓ FAIT":"○ TERMINÉ",0xfff2e6e2,MainActivity.BROWN);
   completed.setTextSize(12);actions.addView(completed,new LinearLayout.LayoutParams(0,MainActivity.dp(a,42),1));
-  completed.setOnClickListener(v->{pref.edit().putBoolean("done"+i,!done).apply();refresh.run();});
+  completed.setOnClickListener(v->{Notify.markDone(a,i,!done);refresh.run();});
  }
  static int photoFor(int i){
   switch(i){
