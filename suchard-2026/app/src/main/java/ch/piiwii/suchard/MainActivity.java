@@ -31,6 +31,8 @@ public class MainActivity extends Activity {
    body.addView(txt(this,"Appuie sur Y ALLER pour lancer le GPS. Chaque visite peut être cochée au fur et à mesure.",13,GRAY,false));
    gap(this,body,13);
    for(int i=0;i<Route.ALL.length;i++)Cards.draw(this,body,i,()->render());
+   int focus=getIntent().getIntExtra("focus_step",-1);
+   if(focus>=0&&focus<Route.ALL.length){View target=body.findViewWithTag("stop_"+focus);if(target!=null)scroll.post(()->{android.graphics.Rect rect=new android.graphics.Rect();target.getDrawingRect(rect);scroll.offsetDescendantRectToMyCoords(target,rect);scroll.smoothScrollTo(0,rect.top);});}
    body.addView(txt(this,"Organisé pour le 17 octobre 2026 · horaires indicatifs hors rendez-vous officiels.\nVisites guidées complètes · Pas d'arrêt imposé à Boudry.\nImages : suchard2026.ch · Le Carac Rose",12,GRAY,false));
  }
 }
