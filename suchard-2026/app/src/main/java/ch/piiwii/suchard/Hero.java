@@ -17,9 +17,10 @@ final class Hero {
   LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-2,1);np.leftMargin=MainActivity.dp(a,12);header.addView(name,np);
   name.addView(MainActivity.txt(a,"PIIWII  ·  17 OCTOBRE 2026",11,0xfff9d4bc,true));
   name.addView(MainActivity.txt(a,"Suchard 200 ans",23,Color.WHITE,true));
-  TextView poster=MainActivity.btn(a,"AFFICHE",0xff865748,Color.WHITE);
+  TextView poster=MainActivity.btn(a,"⋯",0xff865748,Color.WHITE);
+  poster.setContentDescription("Infos pratiques, checklist et affiche");
   poster.setTextSize(11);poster.setPadding(MainActivity.dp(a,9),MainActivity.dp(a,5),MainActivity.dp(a,9),MainActivity.dp(a,5));header.addView(poster);
-  poster.setOnClickListener(v->a.startActivity(new Intent(a,PosterActivity.class)));
+  poster.setOnClickListener(v->DayKit.menu(a));
   MainActivity.gap(a,hero,16);
   LinearLayout card=new LinearLayout(a);card.setOrientation(1);card.setPadding(MainActivity.dp(a,16),MainActivity.dp(a,15),MainActivity.dp(a,16),MainActivity.dp(a,16));
   card.setBackground(MainActivity.bg(a,0xfffff6ef,19));hero.addView(card);
@@ -43,9 +44,15 @@ final class Hero {
    card.addView(MainActivity.txt(a,step.emoji+"  "+step.title,21,MainActivity.DARK,true));
    MainActivity.gap(a,card,2);
    card.addView(MainActivity.txt(a,step.place,14,MainActivity.GRAY,false));
+   String remaining=untilStep(step);
+   if(remaining!=null){
+    MainActivity.gap(a,card,8);
+    card.addView(MainActivity.txt(a,remaining,12,MainActivity.BROWN,true));
+   }
    MainActivity.gap(a,card,13);
    TextView gps=MainActivity.btn(a,step.destination.isEmpty()?"☀  TEMPS LIBRE":"↗  Y ALLER",MainActivity.PINK,Color.WHITE);
    card.addView(gps);
+   gps.setContentDescription("Ouvrir le GPS pour "+step.title);
    gps.setOnClickListener(v->{if(!step.destination.isEmpty())Gps.start(a,next);else Toast.makeText(a,"Promenade au volant libre, à votre rythme.",Toast.LENGTH_SHORT).show();});
   }else{
    card.addView(MainActivity.txt(a,"🎉 Le parcours est terminé !",19,MainActivity.DARK,true));
@@ -60,4 +67,18 @@ final class Hero {
   ap.leftMargin=MainActivity.dp(a,8);quick.addView(alerts,ap);
   alerts.setOnClickListener(v->reminders.run());
  }
+ private static String untilStep(Route.Stop step){
+  java.util.Calendar now=java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zurich"));
+  if(now.get(java.util.Calendar.YEAR)!=2026||now.get(java.util.Calendar.MONTH)!=java.util.Calendar.OCTOBER||now.get(java.util.Calendar.DAY_OF_MONTH)!=17)return null;
+  String[] parts=step.time.split(":");
+  int when=Integer.parseInt(parts[0])*60+Integer.parseInt(parts[1]);
+  int current=now.get(java.util.Calendar.HOUR_OF_DAY)*60+now.get(java.util.Calendar.MINUTE);
+  int remaining=when-current;
+  if(remaining<0&&remaining>=-10)return "● C'est le moment";
+  if(remaining<0||remaining>180)return null;
+  if(remaining==0)return "● C'est maintenant";
+  if(remaining<60)return "⏱ Dans "+remaining+" min";
+  return "⏱ Dans "+(remaining/60)+" h"+(remaining%60>0?" "+(remaining%60)+" min":"");
+ }
+
 }
