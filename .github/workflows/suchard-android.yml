@@ -5,6 +5,9 @@ on:
     paths:
       - 'suchard-2026/**'
       - '.github/workflows/suchard-android.yml'
+permissions:
+  actions: read
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,16 +31,21 @@ jobs:
           python3 -m pip install -q --break-system-packages Pillow
           python3 assets.py
           cat OFFICIAL-ASSETS.txt
-      - name: Generate dedicated release key
-        working-directory: suchard-2026
+      - uses: actions/download-artifact@v4
+        with:
+          name: PiiWii-Suchard-2026-v1.1.0-APK-SOURCES-SIGNATURE
+          run-id: 38801054333
+          github-token: ${{ github.token }}
+          path: previous
+      - name: Reuse V1.1 certificate
         run: |
-          set -euo pipefail
-          mkdir -p ../delivery
-          pw=$(openssl rand -hex 16)
+          mkdir -p delivery
+          cp previous/Suchard-2026-SIGNATURE.jks suchard-2026/app/suchard-release.jks
+          cp previous/Suchard-2026-SIGNATURE.jks delivery/
+          cp previous/SIGNATURE-RECUPERATION.txt delivery/
+          pw=$(sed -n 's/^MOT DE PASSE: //p' previous/SIGNATURE-RECUPERATION.txt)
+          echo "::add-mask::$pw"
           echo "SUCHARD_SIGN_PASS=$pw" >> "$GITHUB_ENV"
-          keytool -genkeypair -noprompt -keystore app/suchard-release.jks -alias suchard -keyalg RSA -keysize 3072 -validity 10950 -storepass "$pw" -keypass "$pw" -dname "CN=PiiWii Suchard 2026,OU=PiiWii,O=PiiWii,L=Sion,C=CH"
-          cp app/suchard-release.jks ../delivery/Suchard-2026-SIGNATURE.jks
-          printf 'ALIAS: suchard\nMOT DE PASSE: %s\nNe pas perdre cette clé. Elle permet les futures mises à jour signées.\n' "$pw" > ../delivery/SIGNATURE-RECUPERATION.txt
       - name: Build release APK
         working-directory: suchard-2026
         run: gradle --no-daemon --stacktrace :app:assembleRelease
