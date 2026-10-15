@@ -1,7 +1,7 @@
-name: Suchard 2026 Android V1.1 release
+name: Suchard 2026 Android V1.2 release
 on:
   push:
-    branches: [suchard-v1.1]
+    branches: [suchard-v1.2]
     paths:
       - 'suchard-2026/**'
       - '.github/workflows/suchard-android.yml'
@@ -44,20 +44,20 @@ jobs:
       - name: Validate and pack
         run: |
           set -euo pipefail
-          cp suchard-2026/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Suchard-2026-v1.1.0.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs delivery/PiiWii-Suchard-2026-v1.1.0.apk > delivery/SIGNATURE-ANDROID.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging delivery/PiiWii-Suchard-2026-v1.1.0.apk > delivery/APK-METADATA.txt
-          unzip -t delivery/PiiWii-Suchard-2026-v1.1.0.apk > delivery/INTEGRITE.txt
+          cp suchard-2026/app/build/outputs/apk/release/app-release.apk delivery/PiiWii-Suchard-2026-v1.2.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs delivery/PiiWii-Suchard-2026-v1.2.0.apk > delivery/SIGNATURE-ANDROID.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging delivery/PiiWii-Suchard-2026-v1.2.0.apk > delivery/APK-METADATA.txt
+          unzip -t delivery/PiiWii-Suchard-2026-v1.2.0.apk > delivery/INTEGRITE.txt
           cp suchard-2026/OFFICIAL-ASSETS.txt delivery/IMAGES-SOURCES.txt
           cd suchard-2026
-          zip -qr ../delivery/PiiWii-Suchard-2026-v1.1.0-SOURCES.zip app/src app/build.gradle build.gradle settings.gradle assets.py OFFICIAL-ASSETS.txt README.md
+          zip -qr ../delivery/PiiWii-Suchard-2026-v1.2.0-SOURCES.zip app/src app/build.gradle build.gradle settings.gradle assets.py OFFICIAL-ASSETS.txt README.md
           cd ..
-          sha256sum delivery/PiiWii-Suchard-2026-v1.1.0.apk delivery/PiiWii-Suchard-2026-v1.1.0-SOURCES.zip > delivery/SHA256.txt
+          sha256sum delivery/PiiWii-Suchard-2026-v1.2.0.apk delivery/PiiWii-Suchard-2026-v1.2.0-SOURCES.zip > delivery/SHA256.txt
           grep -m 1 '^package:' delivery/APK-METADATA.txt
           tail -n 8 delivery/SIGNATURE-ANDROID.txt
           cat delivery/SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: PiiWii-Suchard-2026-v1.1.0-APK-SOURCES-SIGNATURE
+          name: PiiWii-Suchard-2026-v1.2.0-APK-SOURCES-SIGNATURE
           path: delivery/
           retention-days: 30
