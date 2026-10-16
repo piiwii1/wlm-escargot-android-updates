@@ -19,3 +19,12 @@ Itinéraire pour le samedi 17 octobre 2026 à Neuchâtel au départ de Sion.
 - Marges respectant les decoupes, le haut et la navigation gestuelle Android 16.
 - Marges identiques sur la page de l'affiche, contenus ne defilant plus sous les barres du systeme.
 - Mêmes fonctionnalites de trajet et rappel qu'en 1.4, signature de mise à jour conservée.
+
+
+## V1.6.0
+- Mode J-1 : affiche « demain » avant le 17 octobre, puis « aujourd'hui » durant l'événement.
+- Compte à rebours rafraîchi automatiquement toutes les minutes sans relancer l'app, avec un contrôleur de cycle de vie.
+- Liste courte « prochaines étapes » : saute les visites déjà cochées.
+- Menu pratique : partage du programme complet, adresses GPS incluses dans le texte local.
+- Rappels GPS, annulation des visites terminées, barre d'état Android 16 et navigation système conservés.
+- Signée avec la clé d'origine depuis V1.1.
