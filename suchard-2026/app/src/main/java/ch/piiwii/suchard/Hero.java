@@ -15,7 +15,7 @@ final class Hero {
   header.addView(logo,new LinearLayout.LayoutParams(MainActivity.dp(a,60),MainActivity.dp(a,60)));
   LinearLayout name=new LinearLayout(a);name.setOrientation(1);
   LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,-2,1);np.leftMargin=MainActivity.dp(a,12);header.addView(name,np);
-  name.addView(MainActivity.txt(a,"PIIWII  ·  17 OCTOBRE 2026",11,0xfff9d4bc,true));
+  name.addView(MainActivity.txt(a,dayLabel(),11,0xfff9d4bc,true));
   name.addView(MainActivity.txt(a,"Suchard 200 ans",23,Color.WHITE,true));
   TextView poster=MainActivity.btn(a,"⋯",0xff865748,Color.WHITE);
   poster.setContentDescription("Infos pratiques, checklist et affiche");
@@ -75,6 +75,8 @@ final class Hero {
  }
  private static String untilStep(Route.Stop step){
   java.util.Calendar now=java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zurich"));
+  if(now.get(java.util.Calendar.YEAR)==2026&&now.get(java.util.Calendar.MONTH)==java.util.Calendar.OCTOBER&&now.get(java.util.Calendar.DAY_OF_MONTH)==16)
+   return "📅 Départ demain à "+step.time;
   if(now.get(java.util.Calendar.YEAR)!=2026||now.get(java.util.Calendar.MONTH)!=java.util.Calendar.OCTOBER||now.get(java.util.Calendar.DAY_OF_MONTH)!=17)return null;
   String[] parts=step.time.split(":");
   int when=Integer.parseInt(parts[0])*60+Integer.parseInt(parts[1]);
@@ -85,6 +87,15 @@ final class Hero {
   if(remaining==0)return "● C'est maintenant";
   if(remaining<60)return "⏱ Dans "+remaining+" min";
   return "⏱ Dans "+(remaining/60)+" h"+(remaining%60>0?" "+(remaining%60)+" min":"");
+ }
+
+ private static String dayLabel(){
+  java.util.Calendar now=java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zurich"));
+  if(now.get(java.util.Calendar.YEAR)==2026&&now.get(java.util.Calendar.MONTH)==java.util.Calendar.OCTOBER){
+   if(now.get(java.util.Calendar.DAY_OF_MONTH)==16)return "PIIWII  ·  DEMAIN 17 OCTOBRE";
+   if(now.get(java.util.Calendar.DAY_OF_MONTH)==17)return "PIIWII  ·  AUJOURD'HUI 17 OCTOBRE";
+  }
+  return "PIIWII  ·  SAMEDI 17 OCTOBRE 2026";
  }
 
 }
