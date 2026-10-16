@@ -14,6 +14,8 @@ public class MainActivity extends Activity {
  private ScrollView scroll;
  private boolean showAll=false;
  private String lastRenderKey="";
+ private final Handler refreshHandler=new Handler(Looper.getMainLooper());
+ private final Runnable refreshTask=new Runnable(){@Override public void run(){if(scroll!=null&&!nowKey().equals(lastRenderKey))keepPosition();refreshHandler.postDelayed(this,15000);}};
  public static int dp(Context c,int n){return (int)(c.getResources().getDisplayMetrics().density*n+.5f);}
  public static TextView txt(Context c,String s,int size,int color,boolean bold){
   TextView t=new TextView(c);t.setText(s);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return t;
@@ -39,7 +41,8 @@ public class MainActivity extends Activity {
   if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},23);
  }
- @Override protected void onResume(){super.onResume();Notify.schedule(this);if(scroll!=null&&!nowKey().equals(lastRenderKey))keepPosition();}
+ @Override protected void onResume(){super.onResume();Notify.schedule(this);if(scroll!=null&&!nowKey().equals(lastRenderKey))keepPosition();refreshHandler.removeCallbacks(refreshTask);refreshHandler.postDelayed(refreshTask,15000);}
+ @Override protected void onPause(){refreshHandler.removeCallbacks(refreshTask);super.onPause();}
  @Override protected void onSaveInstanceState(Bundle out){out.putBoolean("expanded",showAll);super.onSaveInstanceState(out);}
  private String nowKey(){java.util.Calendar c=java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Europe/Zurich"));return c.get(java.util.Calendar.YEAR)+"/"+c.get(java.util.Calendar.DAY_OF_YEAR)+"/"+c.get(java.util.Calendar.HOUR_OF_DAY)+":"+c.get(java.util.Calendar.MINUTE);}
  private int getNext(){
@@ -114,8 +117,14 @@ public class MainActivity extends Activity {
    less.setOnClickListener(v->{showAll=false;render();});
   }else{
    int start=Math.max(0,next);
-   if(next<0)start=Math.max(0,Route.ALL.length-2);
-   for(int i=start;i<Route.ALL.length&&count<3;i++,count++)Cards.draw(this,body,i,()->keepPosition());
+   for(int i=start;i<Route.ALL.length&&count<3;i++){
+    if(getSharedPreferences("suchard",0).getBoolean("done"+i,false))continue;
+    Cards.draw(this,body,i,()->keepPosition());count++;
+   }
+   if(count==0){
+    TextView congrats=txt(this,"✓ Toutes les étapes sont terminées. Bravo !",14,BROWN,true);
+    congrats.setPadding(dp(this,9),dp(this,12),dp(this,9),dp(this,12));body.addView(congrats);
+   }
    gap(this,body,4);
    TextView more=btn(this,"VOIR LES 12 ÉTAPES  ↓",0xfff3e6df,BROWN);body.addView(more);
    more.setOnClickListener(v->openProgramme());
