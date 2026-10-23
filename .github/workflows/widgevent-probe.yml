@@ -1,0 +1,15 @@
+name: WidgEvent build runner probe
+on:
+  push:
+    branches: [widgevent-155-ci-probe]
+  pull_request:
+    branches: [main]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Android build tools availability
+        run: |
+          echo "CI server is running"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -d "/usr/local/lib/android/sdk"
