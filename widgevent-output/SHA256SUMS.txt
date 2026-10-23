@@ -1,0 +1,2 @@
+889d73ec4f7858c40fa3fe896e18034b76efd4abf61e6e73df9d1f8b26961715  widgevent-output/WidgEvent-1.5.5-PREVIEW.apk
+e5de5d0284a58c04a3e9aaa5ee3d48801656f79dd5a783337b16aea1da9e4ce1  widgevent-output/WidgEvent-1.5.5-UNSIGNED.apk
