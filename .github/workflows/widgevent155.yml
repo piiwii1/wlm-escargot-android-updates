@@ -1,0 +1,85 @@
+name: Build and sign WidgEvent 1.5.5
+on:
+  push:
+    branches: [widgevent-155-ci-probe]
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: widgevent-155-ci-probe
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reconstruct app project
+        run: |
+          cat wdg155/source.part* > /tmp/widgevent-155.zip
+          mkdir -p widgevent-src
+          unzip -q /tmp/widgevent-155.zip -d widgevent-src
+          chmod +x widgevent-src/gradlew
+          echo "sdk.dir=/usr/local/lib/android/sdk" > widgevent-src/local.properties
+          test -f widgevent-src/app/src/main/java/ch/piiwii/events/data/ThemeIconCatalog.kt
+          grep -q 'versionCode = 24' widgevent-src/app/build.gradle.kts
+      - name: Generate temporary public encryption key
+        run: |
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$RUNNER_TEMP/private.pem" 2>/dev/null
+          openssl pkey -in "$RUNNER_TEMP/private.pem" -pubout -out wdg155/public.pem
+          git config user.name "WidgEvent CI"
+          git config user.email "ci@users.noreply.github.com"
+          git add wdg155/public.pem
+          git commit -m "Temporary one-time encryption public key [skip ci]"
+          git push origin HEAD:widgevent-155-ci-probe
+      - name: Wait for encrypted historical signing package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 120); do
+            if curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/piiwii1/wlm-escargot-android-updates/contents/wdg155/envelope.json?ref=widgevent-155-ci-probe" -o "$RUNNER_TEMP/envelope.json"; then
+              if python3 -m json.tool "$RUNNER_TEMP/envelope.json" >/dev/null 2>&1; then exit 0; fi
+            fi
+            sleep 5
+          done
+          exit 1
+      - name: Decrypt secret in memory-local runner
+        run: |
+          python3 -m pip install -q cryptography
+          python3 - <<'PY'
+          import json,base64,os
+          from cryptography.hazmat.primitives import serialization,hashes
+          from cryptography.hazmat.primitives.asymmetric import padding
+          from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+          root=os.environ['RUNNER_TEMP']
+          obj=json.load(open(root+'/envelope.json'))
+          priv=serialization.load_pem_private_key(open(root+'/private.pem','rb').read(),password=None)
+          k=priv.decrypt(base64.b64decode(obj['wrapped_key']),padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+          blob=AESGCM(k).decrypt(base64.b64decode(obj['nonce']),base64.b64decode(obj['ciphertext']),None)
+          open(root+'/secrets.zip','wb').write(blob)
+          PY
+          unzip -qo "$RUNNER_TEMP/secrets.zip" -d "$RUNNER_TEMP"
+          echo "LIVE_EVENT_WIDGET_KEYSTORE=$RUNNER_TEMP/Swidget-1.4.2-CLE-SIGNATURE-BETA.p12" >> "$GITHUB_ENV"
+          export PASSWORD="$(sed -n 's/^Password PKCS12: //p' "$RUNNER_TEMP/MOT-DE-PASSE.txt" | tr -d '\r\n')"
+          echo "::add-mask::$PASSWORD"
+          echo "LIVE_EVENT_WIDGET_STORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+          echo "LIVE_EVENT_WIDGET_KEY_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+      - name: Build historical-key-signed APK
+        run: |
+          cd widgevent-src
+          ./gradlew --no-daemon :app:assembleRelease > ../build.log 2>&1 || (tail -n 180 ../build.log && exit 1)
+          test -s app/build/outputs/apk/release/app-release.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/release/app-release.apk | grep -m1 "^package:"
+      - name: Publish final signed APK to branch
+        run: |
+          mkdir -p release
+          cp widgevent-src/app/build/outputs/apk/release/app-release.apk release/WidgEvent-1.5.5.apk
+          (cd release && sha256sum WidgEvent-1.5.5.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          git fetch origin widgevent-155-ci-probe
+          git add -f release/WidgEvent-1.5.5.apk release/SHA256SUMS.txt
+          git commit -m "WidgEvent 1.5.5 signed installable APK [skip ci]"
+          git rebase origin/widgevent-155-ci-probe
+          git push origin HEAD:widgevent-155-ci-probe
