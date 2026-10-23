@@ -1,0 +1,44 @@
+name: Sign WidgEvent 1.5.5 with historical certificate offline
+on:
+  push:
+    branches: [widgevent-155-ci-probe]
+    paths:
+      - '.github/workflows/widgevent-offline-sign.yml'
+      - 'widgevent-signing/**'
+permissions:
+  contents: write
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: widgevent-155-ci-probe
+      - name: Prepare public-only signature exchange
+        run: |
+          mkdir -p widgevent-signing
+          cat widgevent-parts/*.b64 | base64 -d > /tmp/project.zip
+          unzip -p /tmp/project.zip tools/offline_v2_exchange.py > /tmp/v2.py
+          base64 -d widgevent-signing/historical-public-cert.der.b64 > /tmp/cert.der
+          openssl x509 -inform DER -in /tmp/cert.der -pubkey -noout | openssl pkey -pubin -outform DER > /tmp/spki.der
+          if [ ! -f widgevent-signing/signing-request.json ]; then
+            python3 /tmp/v2.py prepare --apk widgevent-output/WidgEvent-1.5.5-UNSIGNED.apk --cert /tmp/cert.der --request widgevent-signing/signing-request.json
+            git config user.email "ci@users.noreply.github.com"
+            git config user.name "WidgEvent CI"
+            git add widgevent-signing/signing-request.json
+            git commit -m "Unsigned 1.5.5 signature request [skip ci]"
+            git pull --rebase origin widgevent-155-ci-probe
+            git push origin HEAD:widgevent-155-ci-probe
+          elif [ -f widgevent-signing/signing-response.json ] && [ ! -f widgevent-output/WidgEvent-1.5.5.apk ]; then
+            python3 /tmp/v2.py assemble --apk widgevent-output/WidgEvent-1.5.5-UNSIGNED.apk --cert /tmp/cert.der --spki /tmp/spki.der --request widgevent-signing/signing-request.json --response widgevent-signing/signing-response.json --out widgevent-output/WidgEvent-1.5.5.apk
+            /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose --print-certs widgevent-output/WidgEvent-1.5.5.apk
+            /usr/local/lib/android/sdk/build-tools/35.0.0/aapt dump badging widgevent-output/WidgEvent-1.5.5.apk | grep -m1 "^package:"
+            sha256sum widgevent-output/WidgEvent-1.5.5.apk > widgevent-output/WidgEvent-1.5.5-SHA256.txt
+            git config user.email "ci@users.noreply.github.com"
+            git config user.name "WidgEvent CI"
+            git add -f widgevent-output/WidgEvent-1.5.5.apk widgevent-output/WidgEvent-1.5.5-SHA256.txt
+            git commit -m "Release WidgEvent 1.5.5 historically signed APK [skip ci]"
+            git pull --rebase origin widgevent-155-ci-probe
+            git push origin HEAD:widgevent-155-ci-probe
+          fi
