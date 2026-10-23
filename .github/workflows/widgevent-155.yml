@@ -1,0 +1,56 @@
+name: Compile WidgEvent 1.5.5 icon pack
+on:
+  push:
+    branches: [widgevent-155-ci-probe]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: widgevent-155-ci-probe
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Assemble source archive from numbered chunks
+        run: |
+          cat widgevent-parts/*.b64 | base64 -d > /tmp/widgevent-155.zip
+          echo "3974c92709677f7f182790e4d2de5e9fb70cd73224e7faf6596e54515eca81d5  /tmp/widgevent-155.zip" | sha256sum -c
+          mkdir appsource
+          unzip -q /tmp/widgevent-155.zip -d appsource
+          chmod +x appsource/gradlew
+          echo "sdk.dir=/usr/local/lib/android/sdk" > appsource/local.properties
+      - name: Compile release unsigned and debug preview
+        run: |
+          cd appsource
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/build.gradle.kts')
+          s=p.read_text()
+          s=s[:s.index('// A build not signed')]
+          s=s.replace('signingConfig = signingConfigs.getByName("betaRelease")','')
+          p.write_text(s)
+          PY
+          ./gradlew --no-daemon :app:assembleRelease :app:assembleDebug 2>&1 | tee ../build-155.log
+          test -s app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/release/app-release-unsigned.apk | grep -m1 "^package:"
+      - name: Verify signed debug preview
+        run: |
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose appsource/app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish compiled binaries to branch
+        run: |
+          mkdir -p widgevent-output
+          cp appsource/app/build/outputs/apk/release/app-release-unsigned.apk widgevent-output/WidgEvent-1.5.5-UNSIGNED.apk
+          cp appsource/app/build/outputs/apk/debug/app-debug.apk widgevent-output/WidgEvent-1.5.5-PREVIEW.apk
+          sha256sum widgevent-output/*.apk > widgevent-output/SHA256SUMS.txt
+          git config user.email "ci@users.noreply.github.com"
+          git config user.name "WidgEvent CI"
+          git add -f widgevent-output
+          git commit -m "WidgEvent APK output [skip ci]"
+          git pull --rebase origin widgevent-155-ci-probe
+          git push origin HEAD:widgevent-155-ci-probe
