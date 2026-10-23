@@ -1,0 +1,29 @@
+name: WidgEvent 1.5.5 sign and publish
+on:
+  push:
+    branches: [widgevent-155-ci-probe]
+    paths: [signing-response.json]
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: widgevent-155-ci-probe
+      - name: Verify offline signature and assemble APK
+        run: |
+          python3 -m pip install --quiet cryptography
+          python3 v2_signer.py assemble
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner verify --verbose release/WidgEvent-1.5.5.apk
+          /usr/local/lib/android/sdk/build-tools/35.0.0/aapt dump badging release/WidgEvent-1.5.5.apk | grep -m1 '^package:'
+          cat release/SHA256SUMS.txt
+      - name: Commit installable release
+        run: |
+          git config user.name "WidgEvent CI"
+          git config user.email "builds@users.noreply.github.com"
+          git add -f release/WidgEvent-1.5.5.apk release/SHA256SUMS.txt
+          git commit -m "Signed official WidgEvent 1.5.5 [skip ci]"
+          git push origin HEAD:widgevent-155-ci-probe

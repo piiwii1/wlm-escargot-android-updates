@@ -1,0 +1,56 @@
+name: WidgEvent 1.5.5 compile
+on:
+  push:
+    branches: [widgevent-155-ci-probe]
+    paths:
+      - 'widgevent155-src/**'
+      - '.github/workflows/widgevent-155-build.yml'
+      - 'signing-public-certificate.b64'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: widgevent-155-ci-probe
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Assemble original sources
+        run: |
+          mkdir -p widgevent-src
+          cat widgevent155-src/*.b64 | base64 -d > widgevent-src.zip
+          unzip -q widgevent-src.zip -d widgevent-src
+          chmod +x widgevent-src/gradlew
+          echo "sdk.dir=${ANDROID_HOME:-/usr/local/lib/android/sdk}" > widgevent-src/local.properties
+      - name: Set up unsigned CI signing isolation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('widgevent-src/app/build.gradle.kts')
+          s=p.read_text()
+          s=s.split('// A build not signed with the historical beta certificate')[0]
+          s=s.replace('signingConfig = signingConfigs.getByName("betaRelease")','')
+          p.write_text(s)
+          PY
+      - name: Compile Android
+        run: |
+          cd widgevent-src
+          ./gradlew --no-daemon :app:assembleRelease > ../gradle-build.log 2>&1 || (tail -n 170 ../gradle-build.log && exit 1)
+          tail -n 18 ../gradle-build.log
+          /usr/local/lib/android/sdk/build-tools/35.0.0/aapt dump badging app/build/outputs/apk/release/app-release-unsigned.apk | grep -m1 '^package:'
+      - name: Prepare offline signing request
+        run: |
+          mkdir -p release
+          cp widgevent-src/app/build/outputs/apk/release/app-release-unsigned.apk release/WidgEvent-1.5.5-UNSIGNED.apk
+          python3 -m pip install --quiet cryptography
+          python3 v2_signer.py prepare
+          git config user.name "WidgEvent CI"
+          git config user.email "builds@users.noreply.github.com"
+          git add -f release/WidgEvent-1.5.5-UNSIGNED.apk signing-request.json
+          git commit -m "Unsigned WidgEvent 1.5.5 and signature request [skip ci]"
+          git push origin HEAD:widgevent-155-ci-probe
