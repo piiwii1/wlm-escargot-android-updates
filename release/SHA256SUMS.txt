@@ -1,1 +1,1 @@
-89b584756f577cc3e050844a42c27f70aa005b1761a1ebf7c1df7909e5ae2cc0  WidgEvent-1.5.5.apk
+e8da9f5af60fcca2b78ba2abbe88393dbd5ea31b78f8339ceb2b9b27be6daeb7  WidgEvent-1.5.5.apk
