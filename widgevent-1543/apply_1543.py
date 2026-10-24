@@ -55,7 +55,7 @@ patch('ui/MainActivity.kt', '''        val list = repository.load().events.filte
             compareBy<EventDefinition> { nextOccurrenceById[it.id] ?: java.time.Instant.MAX }
                 .thenBy { it.name.lowercase(Locale.FRENCH) }
         )''', 'chronological sort')
-patch('ui/MainActivity.kt', '''        // Clearly surfaced FIRST and displayed once, not buried among old events.
+patch('ui/MainActivity.kt', '''        // Nine annual cards first; never duplicate them in the regular event list.
         addGroup("9 nouvelles dates annuelles (${annualNewEvents.size}/9)", annualNewEvents)
         addGroup("Affichage automatique", automaticEvents)
         addGroup("Événements programmés", scheduledEvents)''', '''        addGroup("Événements par date", scheduledEvents)
