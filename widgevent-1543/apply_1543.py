@@ -65,15 +65,15 @@ patch('data/DefaultEvents.kt', '''                    startMonth = month, startD
                     startMonth = month, startDay = day, endMonth = month, endDay = day,
                     startMinute = 0, endMinute = 1439)),''', 'new annual defaults')
 patch('data/EventRepository.kt','var version: Int = 7,','var version: Int = 8,','schema 8')
-patch('data/EventRepository.kt', '''                }.also { config -> ensureDefaults(config); migrate2026AnnualDates(config) }''', '''                }.also { config ->
+patch('data/EventRepository.kt', '''                }.also { config -> ensureDefaults(config); migrateAnnualEvents(config) }''', '''                }.also { config ->
                     ensureDefaults(config)
-                    migrate2026AnnualDates(config)
+                    migrateAnnualEvents(config)
                     cleanAnnualDatePlaceholders(config)
                 }''', 'migration on load')
 patch('data/EventRepository.kt','''        ensureDefaults(configuration)
-        migrate2026AnnualDates(configuration)
+        migrateAnnualEvents(configuration)
         // Only the edited event updates its timestamp.''','''        ensureDefaults(configuration)
-        migrate2026AnnualDates(configuration)
+        migrateAnnualEvents(configuration)
         cleanAnnualDatePlaceholders(configuration)
         // Only the edited event updates its timestamp.''','migration on save')
 patch('data/EventRepository.kt', '''    private fun saveInternal(configuration: Configuration) {''', '''    /** One-time safe cleanup: the historical Jan 1 string is unused for annual dates.
