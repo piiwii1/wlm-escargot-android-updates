@@ -111,7 +111,14 @@ replace('    /** Résumé horaire issu des périodes résolues, sans horaires in
         if (photo != null || iconRes != 0) {
             val img = ImageView(this).apply {
                 scaleType = if (photo != null) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
-                if (photo != null) setImageBitmap(photo) else setImageResource(iconRes)
+                if (photo != null) setImageBitmap(photo) else {
+                    val options = android.graphics.BitmapFactory.Options().apply {
+                        inSampleSize = 4
+                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                    }
+                    val thumb = android.graphics.BitmapFactory.decodeResource(resources, iconRes, options)
+                    if (thumb != null) setImageBitmap(thumb) else setImageResource(iconRes)
+                }
                 contentDescription = event?.name ?: "Illustration"
                 if (photo == null) setPadding(d(3), d(3), d(3), d(3))
             }
