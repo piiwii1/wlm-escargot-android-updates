@@ -33,10 +33,8 @@ old='''    private fun calendarEventArtwork(event: EventDefinition?, sizeDp: Int
 new='''    private fun calendarEventArtwork(event: EventDefinition?, sizeDp: Int,
                                      fitArtwork: Boolean = false): View {'''
 assert s.count(old)==1,('artwork-function',s.count(old));s=s.replace(old,new,1)
-old='''                scaleType = if (photo != null) ImageView.ScaleType.CENTER_CROP
-                    else ImageView.ScaleType.FIT_CENTER'''
-new='''                scaleType = if (photo != null && !fitArtwork) ImageView.ScaleType.CENTER_CROP
-                    else ImageView.ScaleType.FIT_CENTER'''
+old='''scaleType = if (photo != null) ImageView.ScaleType.CENTER_CROP'''
+new='''scaleType = if (photo != null && !fitArtwork) ImageView.ScaleType.CENTER_CROP'''
 assert s.count(old)==1,('scaleType',s.count(old));s=s.replace(old,new,1)
 main.write_text(s,encoding='utf-8')
 build=root/'app/build.gradle.kts';v=build.read_text(encoding='utf-8')
