@@ -9,11 +9,8 @@ def replace(relative, old, new, key):
     p.write_text(s.replace(old,new,1),encoding='utf-8')
 replace('data/EventRepository.kt','var version: Int = 6,','var version: Int = 7,','schema new')
 replace('data/EventRepository.kt',
-    '''        if (configuration.version >= 6) return
-        val newDefaults = DefaultEvents.create().filter { it.id in DefaultEvents.newAnnualIds }''',
-    '''        // One-time reconciliation of older configurations. Preserve existing events.
-        if (configuration.version >= 7) return
-        val newDefaults = DefaultEvents.create().filter { it.id in DefaultEvents.newAnnualIds }''',
+    '        if (configuration.version >= 6) return',
+    '        if (configuration.version >= 7) return',
     'schema guard')
 replace('data/EventRepository.kt','''        configuration.version = 6
         saveInternal(configuration)
