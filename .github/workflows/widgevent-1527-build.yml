@@ -1,0 +1,80 @@
+name: WidgEvent 1.5.27 Calendar APK Build
+
+on:
+  push:
+    branches: [ widgevent-1527-calendar-native ]
+    paths:
+      - 'widgevent-1527/parts/**'
+      - '.github/workflows/widgevent-1527-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Restore exact WidgEvent sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/widgevent"
+          cat widgevent-1527/parts/part-*.b64 | base64 -d > "$RUNNER_TEMP/widgevent/source.zip"
+          echo "c35a460e7a3663fa4f1c013d0a2d091d26d1d2872c3a1d744620c70c334600d1  $RUNNER_TEMP/widgevent/source.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/widgevent/source.zip" -d "$RUNNER_TEMP/widgevent/project"
+          test -f "$RUNNER_TEMP/widgevent/project/app/build.gradle.kts"
+          grep -q 'versionCode = 45' "$RUNNER_TEMP/widgevent/project/app/build.gradle.kts"
+          grep -q 'versionName = "1.5.27"' "$RUNNER_TEMP/widgevent/project/app/build.gradle.kts"
+      - name: Disable signing on remote CI (historical signing key stays local)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp') 
+          import os
+          p=Path(os.environ['RUNNER_TEMP'])/'widgevent/project/app/build.gradle.kts'
+          s=p.read_text()
+          s=s.replace('signingConfig = signingConfigs.getByName("betaRelease")', '// signed with historical certificate locally after artifact download')
+          pos=s.find('gradle.taskGraph.whenReady {')
+          if pos!=-1: s=s[:pos]
+          p.write_text(s)
+          PY
+      - name: Compile unsigned release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/widgevent/project"
+          gradle --no-daemon --stacktrace :app:assembleRelease
+          find app/build/outputs/apk/release -type f -name '*.apk' -ls
+      - name: Align and package APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/widgevent-1527/output"
+          APK=$(find "$RUNNER_TEMP/widgevent/project/app/build/outputs/apk/release" -maxdepth 1 -type f -name '*.apk' | head -1)
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "$APK" "$GITHUB_WORKSPACE/widgevent-1527/output/WidgEvent-1.5.27-UNSIGNED-ALIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -p 4 "$GITHUB_WORKSPACE/widgevent-1527/output/WidgEvent-1.5.27-UNSIGNED-ALIGNED.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$GITHUB_WORKSPACE/widgevent-1527/output/WidgEvent-1.5.27-UNSIGNED-ALIGNED.apk" | head -n 5 > "$GITHUB_WORKSPACE/widgevent-1527/output/badging.txt"
+          cat "$GITHUB_WORKSPACE/widgevent-1527/output/badging.txt"
+          sha256sum "$GITHUB_WORKSPACE/widgevent-1527/output/WidgEvent-1.5.27-UNSIGNED-ALIGNED.apk" > "$GITHUB_WORKSPACE/widgevent-1527/output/SHA256SUMS.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WidgEvent-1.5.27-UNSIGNED
+          path: widgevent-1527/output/*
+          retention-days: 7
+          if-no-files-found: error
