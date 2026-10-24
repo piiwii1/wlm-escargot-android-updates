@@ -63,7 +63,7 @@ change('data/EventRepository.kt',[
         if (configuration.version >= 6) return
         fun normalized(value: String): String = java.text.Normalizer
             .normalize(value, java.text.Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
+            .replace(Regex("\\\\p{M}+"), "")
             .lowercase(java.util.Locale.ROOT)
             .replace(Regex("[^a-z0-9]+"), " ").trim()
         val ids = configuration.events.map { it.id }.toMutableSet()
