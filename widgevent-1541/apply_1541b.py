@@ -94,7 +94,7 @@ change('ui/EventEditorActivity.kt',[
  ('''        imageStorage.deleteUserImage(event)
         event.imagePath = ""''','''        // Removing a photo is committed only on Save; Cancel must preserve it.
         event.imagePath = ""'''),
- ('''            "Aucune photo personnalisée — ''','''            "Illustration par défaut : personnalise l’icône ou importe une photo. " + ''')
+ (('            "Aucune photo personnalisée — ' + chr(36) + '{event.defaultFileName} est utilisé."'),'''            "Illustration par défaut : choisis une icône ou importe une photo pour le widget."''')
 ])
 change('ui/MainActivity.kt',[
  ('''        addGroup("Événements programmés", scheduledEvents)
