@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <application android:label="PiiWii Notification Widget" android:icon="@drawable/ic_launcher" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false">
+  <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+  <receiver android:name=".WidgetProvider" android:exported="true">
+   <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/><action android:name="android.intent.action.ACTION_POWER_CONNECTED"/><action android:name="android.intent.action.ACTION_POWER_DISCONNECTED"/><action android:name="android.intent.action.BATTERY_LOW"/><action android:name="android.intent.action.BATTERY_OKAY"/></intent-filter>
+   <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info"/>
+  </receiver>
+  <service android:name=".NotificationMonitor" android:exported="true" android:label="PiiWii Notification Widget" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+   <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
+  </service>
+ </application>
+</manifest>
