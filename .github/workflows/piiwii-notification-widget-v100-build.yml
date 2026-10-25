@@ -30,16 +30,16 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Compile release APK
-        run: gradle -p piwii-notification-widget-v100 --no-daemon --stacktrace assembleRelease
+        run: gradle -p piiwii-notification-widget-v100 --no-daemon --stacktrace assembleRelease
       - name: Package output and signer
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
           BT="${ANDROID_HOME}/build-tools/35.0.0"
-          "$BT/zipalign" -f -p 4 piwii-notification-widget-v100/app/build/outputs/apk/release/app-release-unsigned.apk out/PiiWii-Notification-Widget-1.0.0-UNSIGNED.apk
+          "$BT/zipalign" -f -p 4 piiwii-notification-widget-v100/app/build/outputs/apk/release/app-release-unsigned.apk out/PiiWii-Notification-Widget-1.0.0-UNSIGNED.apk
           cp "$BT/lib/apksigner.jar" out/apksigner.jar
-          zip -q -r out/PiiWii-Notification-Widget-1.0.0-SOURCES.zip piwii-notification-widget-v100 -x '*/build/*' '*/.gradle/*'
+          zip -q -r out/PiiWii-Notification-Widget-1.0.0-SOURCES.zip piiwii-notification-widget-v100 -x '*/build/*' '*/.gradle/*'
           sha256sum out/PiiWii-Notification-Widget-1.0.0-UNSIGNED.apk out/PiiWii-Notification-Widget-1.0.0-SOURCES.zip > out/SHA256-BUILD.txt
       - name: Upload deliverable
         uses: actions/upload-artifact@v4
