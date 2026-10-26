@@ -82,7 +82,7 @@ jobs:
           mkdir -p /tmp/delta110
           tar -xJf /tmp/delta110.tar.xz -C /tmp/delta110
           patch --batch -p1 --directory=piiwii-notification-widget-v110 < /tmp/delta110/delta110.diff
-          grep -q 'versionCode 11' piiwii-notification-widget-v111/app/build.gradle
+          grep -q 'versionCode 11' piiwii-notification-widget-v110/app/build.gradle
           grep -q 'BatteryRules.parse' piiwii-notification-widget-v110/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
           grep -q 'ACTION_BATTERY_CHANGED' piiwii-notification-widget-v110/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java
           cp -a piiwii-notification-widget-v110 piiwii-notification-widget-v111
