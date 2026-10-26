@@ -3,7 +3,9 @@ root=Path('piiwii-notification-widget-v105')
 f=root/'app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java'
 s=f.read_text(encoding='utf-8')
 old_start='    LinearLayout navbar=row();'
-old_end='    // Android 15/16 enforce edge-to-edge with targetSdk 35.'
+old_end='    // Place all interactive content outside the Android status and navigation bars.'
+if old_end not in s:
+  old_end='    // Android 15/16 enforce edge-to-edge with targetSdk 35.'
 assert s.count(old_start)==1 and s.count(old_end)==1
 start=s.index(old_start);end=s.index(old_end,start)
 new_nav='''    // Modern, elevated bottom bar with accessible vector icons and active capsule.
