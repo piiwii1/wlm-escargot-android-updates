@@ -104,7 +104,7 @@ jobs:
           echo "695c993f9b09d98e092536db31a5595846f99a0cdca8204c424e4c6a106adbcd  /tmp/widget113.diff.xz" | sha256sum -c -
           xz -dc /tmp/widget113.diff.xz > /tmp/widget113.diff
           # The last added test file had no final newline; patch requires a newline terminator.
-          printf '\\n' >> /tmp/widget113.diff
+          printf '\n' >> /tmp/widget113.diff
           patch --batch -p1 --directory=piiwii-notification-widget-v113 < /tmp/widget113.diff
           grep -q 'versionCode 14' piiwii-notification-widget-v113/app/build.gradle
           grep -q 'void showAppsCard()' piiwii-notification-widget-v113/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
