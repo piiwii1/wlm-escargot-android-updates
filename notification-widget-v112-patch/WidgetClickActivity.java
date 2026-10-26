@@ -81,7 +81,7 @@ public final class WidgetClickActivity extends Activity {
     String outcome=p.getString("last_tap_result","");
     String label="notification".equals(outcome)?"Notification ouverte":
       ("application".equals(outcome)?"Application ouverte":
-      ("settings".equals(outcome)?"Réglages ouverts":"Aucun essai");
+      ("settings".equals(outcome)?"Réglages ouverts":"Aucun essai"));
     return "Touchers du widget : "+p.getLong("widget_taps",0)+
       "\nDernier résultat : "+label+
       "\nAucun texte de notification n'est enregistré.";
