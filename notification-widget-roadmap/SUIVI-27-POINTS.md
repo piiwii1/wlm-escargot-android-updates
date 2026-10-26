@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.16** (versionCode 17). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.17** (versionCode 18). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.16** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.17** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -112,6 +112,19 @@ L'utilisateur a demandé de simplifier la personnalisation : identifier immédia
 - GitHub Actions **40365867320** : tests historiques réussis et compilation release Android réussie ; APK signée avec certificat historique SHA-256 `f61b854fb859b6a9843824dedf582939d33d34c12c41772cf37b3bbf212e5b25`. Fonctionnement sur Samsung **à confirmer**.
 
 **Suivi honnête : 11 codés / 15 partiels / 1 absent, 0 validés sur Samsung.** La nouvelle interface améliore les points 16 (galerie), 20 (ergonomie), 24 (sécurité d'enregistrement) sans augmenter artificiellement le total. **16 points techniquement incomplets**, plus les tests physiques du reste.
+
+## Correction ergonomique 1.0.17 — Fenêtres uniques
+
+Après examen des captures Samsung de la version 1.0.16, la priorité était de **supprimer l'empilement des boîtes de dialogue**, non d'ajouter encore un éditeur.
+
+- Dans Apparence, « Personnaliser mes 30 pictogrammes » ouvre **une seule fenêtre** avec recherche, icône actuelle et bouton « Changer » sur chaque réaction.
+- Toucher « Changer » **déplie le choix Graphiques/Emojis/Ma photo dans la même fenêtre**, ainsi que l'aperçu de remplacement et les commandes Enregistrer/Annuler/Par défaut.
+- Plus de fenêtre de transition « Catégorie du pictogramme ». L'import d'une photo passe seulement par le sélecteur de fichiers du système Android (nécessaire pour accéder à la galerie du téléphone).
+- Dans Mes widgets indépendants, les réglages catégorie/couleur/taille apparaissent **ensemble dans une seule fenêtre**, avec recherche de catégorie, boutons visuels de couleur et taille et confirmation explicite. Aucun sous-menu Android intermédiaire.
+- Les choix sont préparés **sans modifier les préférences** avant Enregistrer ; Annuler n'écrase pas l'ancien choix ; les anciennes personnalisations restent intactes.
+- Code, navigation 4 pages, mode Priorité/Éphémère, Spotify, 30 catégories, 24 pictogrammes, 3 formats de widget conservés.
+- Compilation réussie GitHub Actions `40372985855`, signatures v2/v3 valides, certificat historique préservé. Tests de régression existants réussis.
+- **Bilan inchangé : 11 codés / 15 partiels / 1 absent / 0 validé réellement sur Galaxy S23 Ultra**. Les points 16, 20, 23 et 24 sont concernés sans promotion artificielle. **16 points partiels ou absents**.
 
 ## Détail
 
