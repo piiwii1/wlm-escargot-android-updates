@@ -40,7 +40,7 @@ jobs:
           cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v103
           python3 notification-widget-v103-ui/patch.py
           cp -a piiwii-notification-widget-v103/. piiwii-notification-widget-v104/
-          cp notification-widget-v104-patch/EphemeralEvents.java piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/
+          cp notification-widget-v104-patch/EphemeralEvents.java piiwii-notification-widget-v104/app/src/main/java/ch/piiwii/notificationwidget/
           python3 notification-widget-v104-patch/engine.py
           python3 notification-widget-v104-patch/ui.py
           cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v105
