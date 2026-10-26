@@ -73,7 +73,7 @@ jobs:
           cp /tmp/delta109/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java piiwii-notification-widget-v109/app/src/main/java/ch/piiwii/notificationwidget/
           mkdir -p piiwii-notification-widget-v109/tests
           cp /tmp/delta109/tests/ClassifierRegression.java piiwii-notification-widget-v109/tests/
-          grep -q "versionCode 10" piiwii-notification-widget-v110/app/build.gradle
+          grep -q "versionCode 10" piiwii-notification-widget-v109/app/build.gradle
           grep -q "void showHome()" piiwii-notification-widget-v109/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
           grep -q "void showTests()" piiwii-notification-widget-v109/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
           cp -a piiwii-notification-widget-v109 piiwii-notification-widget-v110
