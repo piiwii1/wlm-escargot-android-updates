@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.23** (versionCode 24). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.24** (versionCode 25). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.23** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.24** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -213,6 +213,18 @@ Suite au retour de l'utilisateur sur le rendu de la 1.0.22, correction limitée 
 - Remplacement des **valeurs par défaut uniquement** : si l'utilisateur a enregistré manuellement une icône pour ces catégories, son choix reste en priorité et doit être remis à « Par défaut » pour afficher les nouveaux dessins.
 - Contrôle XML, compilation et signature release ; compatibilité du certificat. Vérification effective du rendu sur Galaxy S23 Ultra toujours à réaliser.
 - Suivi : **11 codés / 15 partiels / 1 absent, 0 validés sur Samsung, 16 points partiels ou absents**. Amélioration qualitative du point 16, aucun point déclaré terminé sur simple compilation.
+
+## 1.0.24 — Galerie plus rapide et personnalisation de l'état vide
+
+- **38 réactions personnalisables** (37 précédentes + **Aucune notification**). L'icône d'attente / état au repos devient éditable par la même fenêtre que toutes les autres : graphique, emoji, photo, Enregistrer/Annuler/Par défaut.
+- Suppression de l'ancien comportement qui forçait le tiret comme symbole d'état vide et ignorait donc toute sélection emoji personnalisée.
+- Le gestionnaire de réactions ne construit plus les 38 lignes et toutes les images au premier affichage. **12 catégories visibles initialement**, puis « Afficher 12 réactions supplémentaires » ; recherche instantanée sur les 38, compteur visible.
+- La galerie graphique et les emojis chargent les choix par lots de **16**, avec accès aux suivants dans la même fenêtre, pour réduire le coût de rendu initial sur Galaxy.
+- Pour les états ayant un logo dédié, bouton **« Utiliser le dessin conseillé »** : prévisualisation WhatsApp/Facebook/Messenger/TikTok/induction/état vide sans écraser les préférences tant qu'Enregistrer n'est pas touché.
+- Les nouvelles icônes WhatsApp/induction de 1.0.23 et les 3 modèles Classique/Duo/Trio restent inchangés.
+- **Les 4 pages, l'onglet Apparence protégé, les 32 pictogrammes vectoriels et les anciens réglages sont conservés.**
+- Compilation et vérifications automatisées réalisées ; validation tactile sur Samsung reste à faire.
+- **11 codés, 15 partiels, 1 absent, 0 confirmé sur Samsung ; 16 points incomplets** (amélioration qualitative des points 16, 20 et 24, sans déclarer de nouvelle validation matériel).
 
 ## Détail
 
