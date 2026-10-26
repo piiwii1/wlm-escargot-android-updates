@@ -1,0 +1,14 @@
+PiiWii Notification Widget 1.0.10 - PASSE 1/6 (fiabilite)
+
+A) Corrections de cette passe:
+01 Recharge: écoute dynamique de ACTION_BATTERY_CHANGED via NotificationListenerService et dans l'activité, complétant la gestion POWER_CONNECTED/DISCONNECTED. Le service doit être autorisé et actif pour l'immédiateté.
+02 Batterie pleine: pourcentage entier sans arrondi prématuré, seuil 100% exact; lecture inconnue = -1; 12 cas automatisés.
+07 Rafraîchissements: enregistre dernier rafraîchissement, événement batterie et rebind; nettoie le timer de prévisualisation si aucun widget.
+08 Reprise: rebind demandé à l'installation du premier widget, après reboot et lors du remplacement APK, plus contrôle de santé 20 minutes existant; efface les événements éphémères périmés au redémarrage.
+4 pages conservées et modes Priorité/Éphémère, Spotify, 30 catégories préservés.
+
+B) Tests: javac BatteryRegression 12 scénarios et ClassifierRegression 41 assertions + compilation Android + signature originale. Ces tests NE prouvent pas la fiabilité en veille profonde sur Samsung.
+
+C) 27 points: 8 codés / 15 partiels / 4 absents. Statuts non augmentés sans validation réelle des dispositifs. 0 points certifiés Samsung. 19 points à finaliser dans le code. 5 passes restantes sur le plan de 6, sujet à tests.
+
+D) Guide essais terrain: brancher/débrancher téléphone, mettre en charge jusqu'à 100%, redémarrer, vérifier widget et l'onglet Tests après 20min et en veille; vérifier les 4 pages et Spotify.
