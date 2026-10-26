@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.22** (versionCode 23). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.23** (versionCode 24). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.22** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.23** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -201,6 +201,18 @@ Après examen des captures Samsung de la version 1.0.16, la priorité était de 
 - Vérifications statiques : 4 pages, 3 widgets, 37 réactions, 32 vecteurs, 107 tests de non-régression hérités. Compilation APK indépendante. Test tactile réel de l'onglet sur Galaxy S23 Ultra **encore nécessaire**.
 
 **Statut inchangé** : 11 codés, 15 partiels, 1 absent, **0/27 fonctions certifiées sur Samsung**. 16 points demeurent incomplets ; la fermeture de l'onglet est un bug de qualité urgent distinct des 27 fonctionnalités du tableau.
+
+## 1.0.23 — Refondre WhatsApp et la recharge par induction
+
+Suite au retour de l'utilisateur sur le rendu de la 1.0.22, correction limitée **aux trois dessins vectoriels** suivants :
+
+- WhatsApp : tuile verte à coins arrondis, **bulle blanche entourant un combiné téléphonique**, reconnaissable en petit format ; le simple rond vert de l'ancien pictogramme est abandonné.
+- Induction normale : **téléphone sur un socle de recharge**, éclair cyan dans l'écran ; plus de forme rappelant le Wi-Fi.
+- Induction rapide : même téléphone et socle, mais éclair doré et signal distinct.
+- Modèles classiques/Duo/Trio et onglet Apparence protégés ; conservation de toutes les autres catégories, icônes et préférences existantes.
+- Remplacement des **valeurs par défaut uniquement** : si l'utilisateur a enregistré manuellement une icône pour ces catégories, son choix reste en priorité et doit être remis à « Par défaut » pour afficher les nouveaux dessins.
+- Contrôle XML, compilation et signature release ; compatibilité du certificat. Vérification effective du rendu sur Galaxy S23 Ultra toujours à réaliser.
+- Suivi : **11 codés / 15 partiels / 1 absent, 0 validés sur Samsung, 16 points partiels ou absents**. Amélioration qualitative du point 16, aucun point déclaré terminé sur simple compilation.
 
 ## Détail
 
