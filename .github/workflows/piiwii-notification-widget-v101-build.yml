@@ -1,0 +1,50 @@
+name: PiiWii Notification Widget 1.0.1 public build
+on:
+  push:
+    branches: [chatgpt/piiwii-notification-widget-101]
+    paths:
+      - 'piiwii-notification-widget-v101/**'
+      - '.github/workflows/piiwii-notification-widget-v101-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Android SDK
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile release APK
+        run: gradle -p piiwii-notification-widget-v101 --no-daemon --stacktrace assembleRelease
+      - name: Package output and signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          BT="${ANDROID_HOME}/build-tools/35.0.0"
+          "$BT/zipalign" -f -p 4 piiwii-notification-widget-v101/app/build/outputs/apk/release/app-release-unsigned.apk out/PiiWii-Notification-Widget-1.0.1-UNSIGNED.apk
+          cp "$BT/lib/apksigner.jar" out/apksigner.jar
+          zip -q -r out/PiiWii-Notification-Widget-1.0.1-SOURCES.zip piiwii-notification-widget-v101 -x '*/build/*' '*/.gradle/*'
+          sha256sum out/PiiWii-Notification-Widget-1.0.1-UNSIGNED.apk out/PiiWii-Notification-Widget-1.0.1-SOURCES.zip > out/SHA256-BUILD.txt
+      - name: Upload deliverable
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Notification-Widget-1.0.1-build
+          path: out/*
+          retention-days: 15
+          if-no-files-found: error
