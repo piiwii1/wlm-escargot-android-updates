@@ -185,6 +185,7 @@ jobs:
           echo "a4a0336546fe770ff11a9304bcb92ede34c262af7db5133ee4e94245ff786d2b  /tmp/delta118.diff.xz" | sha256sum -c -
           xz -dc /tmp/delta118.diff.xz > /tmp/delta118.diff
           patch --batch -p1 --directory=piiwii-notification-widget-v118 < /tmp/delta118.diff
+          python3 notification-widget-v118-patch/fix118.py
           grep -q 'versionCode 19' piiwii-notification-widget-v118/app/build.gradle
           grep -q 'ChargeRules.choose' piiwii-notification-widget-v118/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
           python3 - <<'PY'
