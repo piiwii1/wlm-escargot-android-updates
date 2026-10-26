@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.14** (versionCode 15). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.15** (versionCode 16). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.14** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.15** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -80,6 +80,23 @@ Les nouveaux tests de format et filtrage sont ajoutés aux 72 vérifications exi
 - **Nouveau bilan : 11 codés, 15 partiels, 1 absent, 0/27 confirmés fonctionnels sur Galaxy S23 Ultra.**
 - **Passe 5/6 achevée ; passe 6/6 planifiée restante.** Les retours de test réel peuvent nécessiter des corrections supplémentaires.
 
+## Passe 6/6 — Contrôle final de la phase et préparation de bêta (1.0.15)
+
+**Correctifs de l'APK :**
+- Batterie inconnue (niveau `-1`) : ne provoque plus la fausse icône « batterie faible » dans le mode éphémère et l'aperçu.
+- Spotify : conserve la recherche de MediaSession même lorsque Android retourne une liste de notifications nulle.
+- Onglet Tests : ajout d'un **rapport partageable sur action de l'utilisateur** et d'une checklist des essais sur Galaxy S23 Ultra; le rapport exclut le contenu des messages et les identifiants de comptes.
+- 4 pages, 30 catégories, 24 vecteurs, trois formats de widget, clic sur notification, modes Priorité/Éphémère et menu bas préservés.
+
+**Vérifications de la phase :**
+- Reconstruction de l'APK signée sur GitHub Actions, tests Java récurrents (54 classification, 12 batterie, 6 clics, 12 formats : 84 au total), analyse des 24 XML vectoriels et contrôle des 4 branches de navigation.
+- La compilation et les signatures ne remplacent pas une validation de comportement sur Samsung, notamment sous One UI en veille.
+- **Statut : 11 codés / 15 partiels / 1 absent / 0 confirmé sur appareil**, donc **16 points encore partiels ou absents**.
+- **Le plan de six passes de développement est achevé**, mais **le produit n'est PAS finalisé à 27/27**. Les corrections de terrain et les fonctions partielles nécessitent des passes supplémentaires.
+- **PiiWii Store bêta (point 25) : non publié**. Cette APK est une candidate à test manuel, pas une publication de boutique.
+
+**Essais à réaliser :** afficher chaque page, brancher/débrancher, vérifier l'affichage à 100 %, appels/messages/bancaires, lecture/pause Spotify, redimensionner plusieurs widgets, toucher une notification, mise en veille et redémarrage. Ouvrir Tests → Rapport et tests de la bêta pour partager les résultats. Ne passer « validé » qu'après tests réels.
+
 ## Détail
 
 | # | Point | État | Reste à faire / preuve attendue |
@@ -93,7 +110,7 @@ Les nouveaux tests de format et filtrage sont ajoutés aux 72 vérifications exi
 | 07 | Rafraîchissements/simulations | Partiel | Timers et processus en veille à valider |
 | 08 | Restauration après redémarrage | Partiel | Contrôle périodique toutes les 20 min et demande de reconnexion ajoutés ; vérifier en veille et après redémarrage |
 | 09 | Priorités personnalisables | Codé | Réglage présent; test appareil restant |
-| 10 | Détection automatique apps installées | Partiel | Non implémenté |
+| 10 | Détection automatique apps installées | Partiel | Liste des apps Android installées visible; association aux catégories encore manuelle |
 | 11 | Messages privés Instagram/Facebook | Partiel | 1.0.9 : catégorie message et canaux direct/chat ; comportement des applis réelles à valider |
 | 12 | Colis/agenda/réveils/minuteurs | Partiel | 1.0.9 : Swiss Post, canaux timer, rappels et anniversaires améliorés ; non exhaustif |
 | 13 | Plus de banques et transactions | Partiel | 1.0.9 : carte/virement distingués en FR/DE/IT/EN ; à valider sur alertes bancaires réelles |
@@ -102,14 +119,14 @@ Les nouveaux tests de format et filtrage sont ajoutés aux 72 vérifications exi
 | 16 | Galerie pictogrammes | Codé | 24 pictogrammes Android vectoriels, sélecteur Graphiques/Emojis, prévisualisation, rendu sur widget ; validation Samsung à faire |
 | 17 | Couleurs/transparence/contours | Codé | Réglages présents; test appareil restant |
 | 18 | Taille adaptative | Codé | Limites de rendu selon launcher |
-| 19 | Autres formats widgets 2x1/2x2 | Codé | Non implémenté |
+| 19 | Autres formats widgets 2x1/2x2 | Codé | Variantes Compact/Wide/Large implémentées dans 3 layouts; dimensions exactes à confirmer avec le lanceur Samsung |
 | 20 | Interface et navigation basse | Codé | Menu moderne; toutes pages à revalider sur appareil |
 | 21 | Recherche et catégories de réglages | Codé | Recherche par nom et catégorie ajoutée à Notifications, validation Samsung attendue |
 | 22 | Aperçu/simulation tous les états | Codé | Les 30 catégories sont testables via l'onglet Tests, validation Samsung attendue |
-| 23 | Plusieurs widgets indépendants | Partiel | Pas de profils indépendants par widget |
-| 24 | Sécurité/diagnostic/tests | Partiel | 1.0.9 : diagnostic éphémère des catégories reconnues + 41 tests de régression ; essais Android nécessaires |
+| 23 | Plusieurs widgets indépendants | Partiel | Filtre de catégorie, couleur et taille indépendants par widget; mode Priorité/Éphémère encore global |
+| 24 | Sécurité/diagnostic/tests | Partiel | 1.0.15 : rapport de diagnostic partageable sans contenu des notifications, checklist Samsung, 84 tests Java précédents; tests appareil et sécurité approfondie manquants |
 | 25 | PiiWii Store Bêta | Absent | Aucune publication configurée |
-| 26 | Détection Spotify réelle | Partiel | MediaSession ajoutée en 1.0.7, appareil non testé |
+| 26 | Détection Spotify réelle | Partiel | MediaSession et actualisations intégrées; 1.0.15 garde la lecture musicale même si la liste des notifications est indisponible; Samsung non testé |
 | 27 | Pages de l'application : nombre et fonctionnement | Partiel | 4 pages : Accueil / Notifications / Apparence / Tests; code présent, vérifier que toutes sont visibles et utilisables sur téléphone |
 
 ## Format de compte rendu obligatoire des prochaines versions
