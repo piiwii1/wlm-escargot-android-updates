@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.20** (versionCode 21). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.21** (versionCode 22). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.20** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.21** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -170,6 +170,21 @@ Après examen des captures Samsung de la version 1.0.16, la priorité était de 
 - **Validation Samsung réelle à effectuer** : comportements en veille, dimensions One UI, touchers simultanés et affichage réel sur écran d'accueil.
 
 **Décompte inchangé : 11 codés / 15 partiels / 1 absent. 16 points restent partiels ou absents, 0/27 validés physiquement.** Cette mise à jour améliore surtout les points 19 et 23 sans considérer les tests automatiques comme une certification sur téléphone.
+
+## 1.0.21 — Pictogrammes par défaut reconnaissables
+
+- WhatsApp : forme de bulle et combiné du logo WhatsApp ; pas un disque vert sans indication.
+- Messenger : pictogramme officiel de bulle avec éclair, en bleu.
+- Facebook : forme « f » Facebook, en bleu (sans pouce levé).
+- Messages privés Facebook : pictogramme Facebook avec une petite bulle de conversation, sans cœur.
+- TikTok : symbole TikTok reconnaissable, en blanc avec décalages cyan et rose (pas une simple note de musique).
+- Charge par induction / induction rapide : téléphone sur son socle de recharge avec bobine/éclair, distinct du symbole Wi-Fi.
+- Aucun événement : cloche discrète barrée en gris, au lieu du cercle blanc ; les emplacements Duo/Trio inoccupés affichent des traits discrets, pas un anneau.
+- Le rendu « couleurs de marque » ne subit plus la recoloration monochrome par défaut.
+- Ces pictogrammes deviennent les **valeurs par défaut**, uniquement si aucun réglage utilisateur n'existe. Les choix de pictogrammes, images importées et préférences précédentes sont conservés.
+- Galerie graphique : **32 pictogrammes vectoriels** (24 précédents + 8 nouveaux). Les **37 catégories**, 4 pages et 3 types de widgets restent.
+- Tests : validation XML et compilation GitHub Actions. **Aucune validation réelle sur Samsung pour l'instant**.
+- Statuts inchangés : **11 codés, 15 partiels, 1 absent, 0 validé Samsung ; 16 points techniques à finaliser.** Les points 16 (bibliothèque graphique) et 20 (ergonomie) ont progressé, sans inventer une validation matérielle.
 
 ## Détail
 
