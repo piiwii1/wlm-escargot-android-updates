@@ -45,7 +45,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             adb install -r /tmp/widget-smoke.apk
             adb logcat -c
             adb shell am start -n ch.piiwii.notificationwidget/.MainActivity
