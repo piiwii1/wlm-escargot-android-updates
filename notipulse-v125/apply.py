@@ -1,6 +1,5 @@
 from pathlib import Path
 from xml.etree import ElementTree as ET
-import base64
 root=Path("piiwii-notification-widget-v125")
 main=root/"app/src/main"
 pkg=main/"java/ch/piiwii/notificationwidget"
@@ -35,8 +34,8 @@ for f in (main/"res/layout").glob("*.xml"):
  if "PiiWii" in s:f.write_text(s.replace("PiiWii","NotiPulse"),encoding="utf-8")
 settings=root/"settings.gradle"
 settings.write_text(settings.read_text().replace("rootProject.name='PiiWiiNotificationWidget'","rootProject.name='NotiPulse'"))
-src=Path("notipulse-v125/icon.webp.b64")
-raw=base64.b64decode(src.read_text().strip(),validate=True)
+src=Path("notipulse-v125/logo.webp")
+raw=src.read_bytes()
 assert raw[:4]==b'RIFF' and raw[8:12]==b'WEBP'
 assert len(raw)==9324,len(raw)
 target=main/"res/drawable/notipulse_logo.webp";target.write_bytes(raw)
