@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.13** (versionCode 14). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.14** (versionCode 15). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -14,10 +14,10 @@
 ## Résumé
 
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
-- **10 codés**, **16 partiels**, **1 absent**.
+- **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.13** : Accueil, Notifications, Apparence, Tests.
-- **17/27 non entièrement implémentés** (partiels ou absents); les 10 autres restent à valider sur appareil.
+- **4 pages en 1.0.14** : Accueil, Notifications, Apparence, Tests.
+- **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
 
@@ -69,6 +69,17 @@
 Les nouveaux tests de format et filtrage sont ajoutés aux 72 vérifications existantes pour un total de **84 tests automatisés**.
 **Deux passes prévues restent** sur le plan de six. L'absence de validation réelle sur Samsung ne permet pas de prétendre à une finition complète.
 
+## Passe 5/6 — Galerie graphique native (1.0.14)
+
+- 24 pictogrammes vectoriels distincts (fichiers VectorDrawable Android), scalables sans dégradation d'une image bitmap étirée.
+- Interface de choix avec deux onglets Graphiques / Emojis, sélection mise en évidence, légendes et accès depuis Notifications et Apparence.
+- Les symboles/emojis et importations personnelles PNG/JPG/WebP restent disponibles.
+- Le choix d'une icône vectorielle utilise la préférence existante `icon_<category>` préfixée `vector:`; aucune migration destructive.
+- Les quatre pages (Accueil, Notifications, Apparence, Tests), le menu inférieur flottant, Spotify, les 30 catégories et les modes Priorité/Éphémère sont conservés.
+- Tests GitHub Actions `40361310137` : **84/84 scénarios Java existants réussis**, **24 ressources XML vérifiées**, Gradle release et signature v2/v3 conformes. Certificat identique à la 1.0.13.
+- **Nouveau bilan : 11 codés, 15 partiels, 1 absent, 0/27 confirmés fonctionnels sur Galaxy S23 Ultra.**
+- **Passe 5/6 achevée ; passe 6/6 planifiée restante.** Les retours de test réel peuvent nécessiter des corrections supplémentaires.
+
 ## Détail
 
 | # | Point | État | Reste à faire / preuve attendue |
@@ -88,7 +99,7 @@ Les nouveaux tests de format et filtrage sont ajoutés aux 72 vérifications exi
 | 13 | Plus de banques et transactions | Partiel | 1.0.9 : carte/virement distingués en FR/DE/IT/EN ; à valider sur alertes bancaires réelles |
 | 14 | Mode éphémère durée et retour | Codé | Fonction présente; test en veille restant |
 | 15 | Importer icônes PNG/JPG/WebP | Codé | Fonction présente; test appareil restant |
-| 16 | Galerie pictogrammes | Partiel | Emojis/symboles, pas vraie bibliothèque graphique |
+| 16 | Galerie pictogrammes | Codé | 24 pictogrammes Android vectoriels, sélecteur Graphiques/Emojis, prévisualisation, rendu sur widget ; validation Samsung à faire |
 | 17 | Couleurs/transparence/contours | Codé | Réglages présents; test appareil restant |
 | 18 | Taille adaptative | Codé | Limites de rendu selon launcher |
 | 19 | Autres formats widgets 2x1/2x2 | Codé | Non implémenté |
