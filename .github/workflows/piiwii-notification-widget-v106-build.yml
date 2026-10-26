@@ -45,7 +45,7 @@ jobs:
           python3 notification-widget-v104-patch/ui.py
           cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v105
           python3 notification-widget-v105/patch_nav.py
-          grep -q "versionCode 6" piiwii-notification-widget-v106/app/build.gradle
+          grep -q "versionCode 6" piiwii-notification-widget-v105/app/build.gradle
           grep -q "R.drawable.nav_home" piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
           grep -q "void showDisplayModeCard" piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
           cp -a piiwii-notification-widget-v105 piiwii-notification-widget-v106
