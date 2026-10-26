@@ -4,5 +4,5 @@
  <path android:pathData="M11.7,3.6 L10.1,8.4 L12.5,8.4 L11.6,12.9 L15.4,6.6 L12.6,6.6 L13.3,3.6 Z" android:fillColor="#44DDE2"/>
  <path android:pathData="M1.7,19.5 C1.7,16.7 6.2,15.2 12,15.2 C17.8,15.2 22.3,16.7 22.3,19.5 C22.3,22.2 17.8,23.5 12,23.5 C6.2,23.5 1.7,22.2 1.7,19.5 Z" android:fillColor="#00000000" android:strokeColor="#6CCBFF" android:strokeWidth="1.65"/>
  <path android:pathData="M6.8,19.5 C6.8,18.8 9,18.2 12,18.2 C15,18.2 17.2,18.8 17.2,19.5 C17.2,20.2 15,20.8 12,20.8 C9,20.8 6.8,20.2 6.8,19.5 Z" android:fillColor="#2FAEF0"/>
- <path android:pathData="M9.7,19.4 L14.3,19.4" android:strokeColor="#071C33" android:strokeWidth="1.4" android:strokeLineCap="round"/>
+ <path android:fillColor="#00000000" android:pathData="M9.7,19.4 L14.3,19.4" android:strokeColor="#071C33" android:strokeWidth="1.4" android:strokeLineCap="round"/>
 </vector>
