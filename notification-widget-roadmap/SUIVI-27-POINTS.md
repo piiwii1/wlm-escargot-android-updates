@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.15** (versionCode 16). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.16** (versionCode 17). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.15** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.16** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -96,6 +96,22 @@ Les nouveaux tests de format et filtrage sont ajoutés aux 72 vérifications exi
 - **PiiWii Store bêta (point 25) : non publié**. Cette APK est une candidate à test manuel, pas une publication de boutique.
 
 **Essais à réaliser :** afficher chaque page, brancher/débrancher, vérifier l'affichage à 100 %, appels/messages/bancaires, lecture/pause Spotify, redimensionner plusieurs widgets, toucher une notification, mise en veille et redémarrage. Ouvrir Tests → Rapport et tests de la bêta pour partager les résultats. Ne passer « validé » qu'après tests réels.
+
+## Amélioration 1.0.16 — Éditeur visuel des icônes de réaction
+
+L'utilisateur a demandé de simplifier la personnalisation : identifier immédiatement l'icône d'origine de chaque réaction, et attribuer une icône personnalisée distincte à chacun des 30 types d'alertes.
+
+**Modifications vérifiées dans le code :**
+- Chaque ligne de catégorie affiche la grande icône actuelle, le nom clair de la réaction, le type de personnalisation et le bouton visible **Changer l'icône**.
+- Un seul éditeur visuel présente **Actuelle → Nouvelle** et les choix **Graphiques / Emojis / Ma photo**.
+- Le nouveau choix reste en **aperçu provisoire** ; il n'est appliqué qu'en appuyant sur **Enregistrer**.
+- **Annuler** conserve l'ancienne icône ; **Par défaut** prépare le retour au pictogramme d'origine (puis Enregistrer).
+- Les photos importées restent provisoires, en fichier privé temporaire, jusqu'à la validation ; en cas d'annulation, le fichier provisoire est supprimé.
+- Les clés historiques `icon_<id>` et `custom_icon_<id>` sont conservées ; personnalisation **indépendante par catégorie** et autres réglages préservés.
+- Quatre pages et barre inférieure conservées ; application, versionCode **17**.
+- GitHub Actions **40365867320** : tests historiques réussis et compilation release Android réussie ; APK signée avec certificat historique SHA-256 `f61b854fb859b6a9843824dedf582939d33d34c12c41772cf37b3bbf212e5b25`. Fonctionnement sur Samsung **à confirmer**.
+
+**Suivi honnête : 11 codés / 15 partiels / 1 absent, 0 validés sur Samsung.** La nouvelle interface améliore les points 16 (galerie), 20 (ergonomie), 24 (sécurité d'enregistrement) sans augmenter artificiellement le total. **16 points techniquement incomplets**, plus les tests physiques du reste.
 
 ## Détail
 
