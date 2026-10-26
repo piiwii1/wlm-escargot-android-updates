@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.21** (versionCode 22). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.22** (versionCode 23). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.21** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.22** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -185,6 +185,22 @@ Après examen des captures Samsung de la version 1.0.16, la priorité était de 
 - Galerie graphique : **32 pictogrammes vectoriels** (24 précédents + 8 nouveaux). Les **37 catégories**, 4 pages et 3 types de widgets restent.
 - Tests : validation XML et compilation GitHub Actions. **Aucune validation réelle sur Samsung pour l'instant**.
 - Statuts inchangés : **11 codés, 15 partiels, 1 absent, 0 validé Samsung ; 16 points techniques à finaliser.** Les points 16 (bibliothèque graphique) et 20 (ergonomie) ont progressé, sans inventer une validation matérielle.
+
+## Correction urgente 1.0.22 — fermeture de l'onglet Apparence
+
+**Signalement réel sur Galaxy S23 Ultra** : l'utilisateur rapporte que l'application se ferme quand il touche **Apparence** après la version 1.0.21. Il s'agit d'une **régression utilisateur**, pas d'un test passé.
+
+**Code audité :** le rendu de cinq aperçus vectoriels nouveaux en 1.0.21 était appelé synchroniquement et sans protection dans showAppearance(). Le chargement ou dessin d'un VectorDrawable défaillant peut provoquer une RuntimeException et interrompre l'activité. **Cette hypothèse est plausible ; sans trace logcat, la cause exacte n'est pas démontrée.**
+
+**Correctifs livrés dans le code 1.0.22 :**
+- Chargement/dessin de chaque icône entouré d'une protection RuntimeException + pictogramme alternatif lisible ; une icône défectueuse ne peut plus faire fermer toute la page.
+- Protection secondaire de l'écran Apparence avec interface de secours qui maintient la navigation et l'éditeur de pictogrammes accessibles si une autre sous-section échoue.
+- Aperçus de galerie et de recharge isolés ; taille maximale des bitmaps de galerie limitée pour éviter des allocations excessives liées à la densité d'écran.
+- Enregistrement de l'identifiant du pictogramme et du type d'exception, **sans données privées des notifications**, dans le rapport de l'onglet Tests.
+- Aucune suppression de préférences, de fichiers personnels, ou des logos ajoutés en 1.0.21.
+- Vérifications statiques : 4 pages, 3 widgets, 37 réactions, 32 vecteurs, 107 tests de non-régression hérités. Compilation APK indépendante. Test tactile réel de l'onglet sur Galaxy S23 Ultra **encore nécessaire**.
+
+**Statut inchangé** : 11 codés, 15 partiels, 1 absent, **0/27 fonctions certifiées sur Samsung**. 16 points demeurent incomplets ; la fermeture de l'onglet est un bug de qualité urgent distinct des 27 fonctionnalités du tableau.
 
 ## Détail
 
