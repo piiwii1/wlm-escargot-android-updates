@@ -33,16 +33,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp -a piiwii-notification-widget-v101 piiwii-notification-widget-v105
+          cp -a piiwii-notification-widget-v101 piiwii-notification-widget-v104
           cat notification-widget-v102-patch/part-* | base64 -d > /tmp/widget102.tar.xz
           echo "74fe74bb99e989af513a435892931a3c36324c5392604222df33bef3503f8b90  /tmp/widget102.tar.xz" | sha256sum -c -
-          tar -xJf /tmp/widget102.tar.xz -C piiwii-notification-widget-v105
-          cp -a piiwii-notification-widget-v105 piiwii-notification-widget-v103
+          tar -xJf /tmp/widget102.tar.xz -C piiwii-notification-widget-v104
+          cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v103
           python3 notification-widget-v103-ui/patch.py
-          cp -a piiwii-notification-widget-v103/. piiwii-notification-widget-v105/
+          cp -a piiwii-notification-widget-v103/. piiwii-notification-widget-v104/
           cp notification-widget-v104-patch/EphemeralEvents.java piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/
           python3 notification-widget-v104-patch/engine.py
           python3 notification-widget-v104-patch/ui.py
+          cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v105
           python3 notification-widget-v105/patch_nav.py
           grep -q "versionCode 6" piiwii-notification-widget-v105/app/build.gradle
           grep -q "R.drawable.nav_home" piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
