@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.9** (versionCode 10). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.10** (versionCode 11). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,8 +16,21 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **8 codés**, **15 partiels**, **4 absents**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.9** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.10** : Accueil, Notifications, Apparence, Tests.
 - **19/27 non entièrement implémentés** (partiels ou absents); les 8 autres restent à valider sur appareil.
+
+## Passe 1/6 — Fiabilité générale (1.0.10)
+
+**Travail codé :**
+- (01) ACTION_BATTERY_CHANGED écouté dynamiquement par le service de notifications et l'activité. La réception immédiate dépend du service Android et de son autorisation.
+- (02) Niveau exact, seuil de 100 % sans arrondi; gestion des informations de batterie manquantes; 12 cas de régression automatisés.
+- (07) Statistiques locales du dernier rafraîchissement et des événements batterie; annulation des alarmes temporaires quand aucun widget n'est actif.
+- (08) Demande de reconnexion du listener après redémarrage, mise à jour d'APK et activation du premier widget; nettoyage des alertes éphémères périmées.
+- (27) Toujours **4/4 pages dans le code**.
+
+**Résultat des vérifications :** 41 tests de classification existants + 12 tests de batterie; compilation Android et signature vérifiées séparément avant diffusion de l'APK. Aucun test réel Samsung: donc **8 codés / 15 partiels / 4 absents / 0 confirmés sur appareil**.
+
+**Plan de livraison : passe 1 sur 6 effectuée en code, 5 passes de développement restantes**. Le nombre de passes pourrait augmenter si les essais révèlent une régression.
 
 ## Détail
 
