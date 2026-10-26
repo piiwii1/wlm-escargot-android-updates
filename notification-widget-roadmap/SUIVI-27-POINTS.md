@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.8** (versionCode 8). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.9** (versionCode 10). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **8 codés**, **15 partiels**, **4 absents**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.7** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.9** : Accueil, Notifications, Apparence, Tests.
 - **19/27 non entièrement implémentés** (partiels ou absents); les 8 autres restent à valider sur appareil.
 
 ## Détail
@@ -25,17 +25,17 @@
 |---|---|---|---|
 | 01 | Recharge/débranchement fiable | Partiel | Vérifier comportement en veille et reprise système |
 | 02 | Batterie pleine à 100 % | Partiel | Seuil non arrondi corrigé et état BATTERY_STATUS_FULL reconnu ; validation Samsung requise |
-| 03 | Appels entrants vs manqués | Partiel | Validation multi-application téléphone |
-| 04 | Banques suisses | Partiel | Couverture packages et langues incomplète |
+| 03 | Appels entrants vs manqués | Partiel | 1.0.9 : catégories Android call/missed_call et filtrage de répondeur ; test sur Samsung manquant |
+| 04 | Banques suisses | Partiel | 1.0.9 : détection enrichie et normalisation multilingue ; validation des applications réelles requise |
 | 05 | Ouvrir notification au toucher | Partiel | Cas PendingIntent indisponible à fiabiliser |
 | 06 | Anciennes notifications vs récentes | Codé | Déclassement par âge; test appareil restant |
 | 07 | Rafraîchissements/simulations | Partiel | Timers et processus en veille à valider |
 | 08 | Restauration après redémarrage | Partiel | Contrôle périodique toutes les 20 min et demande de reconnexion ajoutés ; vérifier en veille et après redémarrage |
 | 09 | Priorités personnalisables | Codé | Réglage présent; test appareil restant |
 | 10 | Détection automatique apps installées | Absent | Non implémenté |
-| 11 | Messages privés Instagram/Facebook | Partiel | Reconnaissance heuristique |
-| 12 | Colis/agenda/réveils/minuteurs | Partiel | Reconnaissance limitée à certaines apps |
-| 13 | Plus de banques et transactions | Partiel | Classification par mots-clés |
+| 11 | Messages privés Instagram/Facebook | Partiel | 1.0.9 : catégorie message et canaux direct/chat ; comportement des applis réelles à valider |
+| 12 | Colis/agenda/réveils/minuteurs | Partiel | 1.0.9 : Swiss Post, canaux timer, rappels et anniversaires améliorés ; non exhaustif |
+| 13 | Plus de banques et transactions | Partiel | 1.0.9 : carte/virement distingués en FR/DE/IT/EN ; à valider sur alertes bancaires réelles |
 | 14 | Mode éphémère durée et retour | Codé | Fonction présente; test en veille restant |
 | 15 | Importer icônes PNG/JPG/WebP | Codé | Fonction présente; test appareil restant |
 | 16 | Galerie pictogrammes | Partiel | Emojis/symboles, pas vraie bibliothèque graphique |
@@ -46,7 +46,7 @@
 | 21 | Recherche et catégories de réglages | Codé | Recherche par nom et catégorie ajoutée à Notifications, validation Samsung attendue |
 | 22 | Aperçu/simulation tous les états | Codé | Les 30 catégories sont testables via l'onglet Tests, validation Samsung attendue |
 | 23 | Plusieurs widgets indépendants | Absent | Pas de profils indépendants par widget |
-| 24 | Sécurité/diagnostic/tests | Partiel | Diagnostic pages/serveur/widgets et actualisation manuelle ajoutés ; essais Android nécessaires |
+| 24 | Sécurité/diagnostic/tests | Partiel | 1.0.9 : diagnostic éphémère des catégories reconnues + 41 tests de régression ; essais Android nécessaires |
 | 25 | PiiWii Store Bêta | Absent | Aucune publication configurée |
 | 26 | Détection Spotify réelle | Partiel | MediaSession ajoutée en 1.0.7, appareil non testé |
 | 27 | Pages de l'application : nombre et fonctionnement | Partiel | 4 pages : Accueil / Notifications / Apparence / Tests; code présent, vérifier que toutes sont visibles et utilisables sur téléphone |
@@ -64,3 +64,12 @@ Mettre à jour ce fichier **après chaque nouvelle APK**, en s'appuyant sur le c
 - Toujours **4 pages** : Accueil / Notifications / Apparence / Tests. Contrôle statique automatisé pour éviter une disparition des pages.
 - **8 codés, 15 partiels, 4 absents, 0 validés sur Samsung**. 19 points restent techniquement à finaliser, plus les validations matérielles des 8 codés.
 - Les délais de rafraîchissement dépendent des optimisations Android/One UI et ne peuvent être garantis sans essai réel.
+
+## Livraison 1.0.9 (27 points)
+
+- **8 codés, 15 partiels, 4 absents, 0 confirmés sur Samsung** : aucun point partialisé n'est promu à tort en « terminé ».
+- Les points **03, 04, 11, 12, 13 et 24** sont améliorés sans casser les priorités, les 30 catégories ou Spotify.
+- Classification indépendante testée par **41 scénarios automatisés Java**, passés localement et dans l'action GitHub `40343772513`.
+- Nouvelle rubrique de diagnostic : total des notifications observées/classées, dernier package/catégorie uniquement en mémoire, sans conservation du contenu.
+- **Pages toujours 4/4 dans les sources** : Accueil, Notifications, Apparence, Tests.
+- APK 1.0.9 compilée, signée avec le même certificat que la 1.0.8, signatures v2/v3 vérifiées. Test Samsung S23 Ultra non effectué.
