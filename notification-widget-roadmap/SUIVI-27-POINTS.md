@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.12** (versionCode 13). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.13** (versionCode 14). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -14,10 +14,10 @@
 ## Résumé
 
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
-- **8 codés**, **15 partiels**, **4 absents**.
+- **10 codés**, **16 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.12** : Accueil, Notifications, Apparence, Tests.
-- **19/27 non entièrement implémentés** (partiels ou absents); les 8 autres restent à valider sur appareil.
+- **4 pages en 1.0.13** : Accueil, Notifications, Apparence, Tests.
+- **17/27 non entièrement implémentés** (partiels ou absents); les 10 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
 
@@ -56,6 +56,19 @@
 
 **Décompte honnête inchangé :** 8 points codés, 15 partiels, 4 absents, 0/27 confirmés sur Samsung ; 19 points partiels ou absents à finaliser ; **3 passes prévues restantes** (fonctionnalités avancées, finitions visuelles, validation/publication conditionnelle).
 
+## Passe 4/6 — Widgets avancés (1.0.13)
+
+**Réalisations réellement codées :**
+- **10 — PARTIEL :** inventaire des applications visibles dans le lanceur Android et association manuelle à une catégorie ; ce n'est pas une reconnaissance universelle automatique.
+- **18 — CODÉ :** taille de rendu adaptée aux dimensions du widget, réglage propre à chaque exemplaire.
+- **19 — CODÉ :** trois mises en page : 1×1 (icône), 2×1 (icône et texte), 2×2 (icône et libellé), sélectionnées selon les dimensions transmises par Android.
+- **23 — PARTIEL :** chaque widget a maintenant son filtre de notifications, sa couleur et sa taille d'icône ; le choix Priorité/Éphémère et la durée restent globaux.
+- **27 — PARTIEL :** toujours quatre pages dans le code et le menu inférieur inchangé. Test physique à réaliser.
+
+**Bilan en code : 10 codés / 16 partiels / 1 absent. 0/27 validés physiquement.**
+Les nouveaux tests de format et filtrage sont ajoutés aux 72 vérifications existantes pour un total de **84 tests automatisés**.
+**Deux passes prévues restent** sur le plan de six. L'absence de validation réelle sur Samsung ne permet pas de prétendre à une finition complète.
+
 ## Détail
 
 | # | Point | État | Reste à faire / preuve attendue |
@@ -69,7 +82,7 @@
 | 07 | Rafraîchissements/simulations | Partiel | Timers et processus en veille à valider |
 | 08 | Restauration après redémarrage | Partiel | Contrôle périodique toutes les 20 min et demande de reconnexion ajoutés ; vérifier en veille et après redémarrage |
 | 09 | Priorités personnalisables | Codé | Réglage présent; test appareil restant |
-| 10 | Détection automatique apps installées | Absent | Non implémenté |
+| 10 | Détection automatique apps installées | Partiel | Non implémenté |
 | 11 | Messages privés Instagram/Facebook | Partiel | 1.0.9 : catégorie message et canaux direct/chat ; comportement des applis réelles à valider |
 | 12 | Colis/agenda/réveils/minuteurs | Partiel | 1.0.9 : Swiss Post, canaux timer, rappels et anniversaires améliorés ; non exhaustif |
 | 13 | Plus de banques et transactions | Partiel | 1.0.9 : carte/virement distingués en FR/DE/IT/EN ; à valider sur alertes bancaires réelles |
@@ -77,12 +90,12 @@
 | 15 | Importer icônes PNG/JPG/WebP | Codé | Fonction présente; test appareil restant |
 | 16 | Galerie pictogrammes | Partiel | Emojis/symboles, pas vraie bibliothèque graphique |
 | 17 | Couleurs/transparence/contours | Codé | Réglages présents; test appareil restant |
-| 18 | Taille adaptative | Partiel | Limites de rendu selon launcher |
-| 19 | Autres formats widgets 2x1/2x2 | Absent | Non implémenté |
+| 18 | Taille adaptative | Codé | Limites de rendu selon launcher |
+| 19 | Autres formats widgets 2x1/2x2 | Codé | Non implémenté |
 | 20 | Interface et navigation basse | Codé | Menu moderne; toutes pages à revalider sur appareil |
 | 21 | Recherche et catégories de réglages | Codé | Recherche par nom et catégorie ajoutée à Notifications, validation Samsung attendue |
 | 22 | Aperçu/simulation tous les états | Codé | Les 30 catégories sont testables via l'onglet Tests, validation Samsung attendue |
-| 23 | Plusieurs widgets indépendants | Absent | Pas de profils indépendants par widget |
+| 23 | Plusieurs widgets indépendants | Partiel | Pas de profils indépendants par widget |
 | 24 | Sécurité/diagnostic/tests | Partiel | 1.0.9 : diagnostic éphémère des catégories reconnues + 41 tests de régression ; essais Android nécessaires |
 | 25 | PiiWii Store Bêta | Absent | Aucune publication configurée |
 | 26 | Détection Spotify réelle | Partiel | MediaSession ajoutée en 1.0.7, appareil non testé |
