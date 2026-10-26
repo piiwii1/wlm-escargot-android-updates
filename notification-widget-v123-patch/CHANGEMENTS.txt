@@ -1,0 +1,14 @@
+PiiWii Notification Widget 1.0.23 – Pictogrammes WhatsApp et induction
+
+Base: 1.0.22, comprenant le correctif et les protections de l'onglet Apparence.
+
+Changements strictement ciblés:
+- WhatsApp: bulle de discussion blanche + téléphone sur fond vert, contrastes renforcés aux petites tailles. Plus de cercle vert indistinct.
+- Induction: téléphone vertical sur un socle de recharge cyan, avec éclair dans l'écran, et sans arcs rappelant du Wi-Fi.
+- Induction rapide: même socle + éclair jaune, distinction visuelle de l'induction ordinaire.
+
+Aucun changement aux autres pictogrammes, pages, gestion des notifications, trois modèles de widget, ni aux clés de préférence. Les icônes déjà définies manuellement restent prioritaires. Pour appliquer les nouveaux dessins sur un réglage personnalisé ancien, choisir Par défaut puis Enregistrer.
+
+Tests: validation XML et compilation Android; test d'ouverture d'Apparence via émulateur pour 1.0.22; vérifier 1.0.23 également. Le Galaxy S23 Ultra nécessite validation réelle.
+
+Statuts de la feuille de route: 11 codés / 15 partiels / 1 absent, 0 validés physiquement sur Samsung, 16 points à finaliser.
