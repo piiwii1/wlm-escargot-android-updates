@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.19** (versionCode 20). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.20** (versionCode 21). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.19** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.20** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -157,6 +157,19 @@ Après examen des captures Samsung de la version 1.0.16, la priorité était de 
 **Vérifications :** GitHub Actions `40379446400` : compilation `assembleRelease` réussie, description XML des 3 fournisseurs vérifiée, navigation contrôlée, 8 tests de répartition simultanée + 87 autres assertions Java (12 formats, 41 classification, 12 batterie, 6 clic, 16 charge), soit **95 cas de test Java passés**. APK signée par la même clé que la 1.0.18 (certificat SHA-256 `f61b854fb859b6a9843824dedf582939d33d34c12c41772cf37b3bbf212e5b25`). **Aucun test réel Samsung n'a été effectué par l'assistant.**
 
 **Statuts inchangés : 11 codés, 15 partiels, 1 absent, 0 fonction certifiée sur appareil.** 16 points nécessitent encore développement ou validation de l'implémentation. Pour les nouveaux widgets, les essais physiques et les tests de clics restent indispensables.
+
+## Amélioration 1.0.20 — Duo et Trio plus lisibles et fiables
+
+**Corrigé dans le code / APK :**
+- Les 2 ou 3 cases sont toujours présentes même si moins d'alertes sont actives. Les cases libres affichent un pictogramme discret et restent cliquables pour ouvrir les réglages, au lieu de disparaître et de déplacer les autres.
+- Les petits formats n'affichent que les icônes si leurs libellés seraient illisibles. Les libellés restent visibles quand la taille est suffisante, dans les dispositions horizontales et verticales.
+- Les appels actifs passent d'abord. Les autres notifications sont triées de la plus récente à la plus ancienne, tandis que **Spotify, média ambiant**, remplit seulement un emplacement disponible après les alertes ; la recharge reste un emplacement indépendant.
+- Quand un aperçu teste une catégorie déjà présente en notification active, la catégorie n'est plus affichée deux fois dans deux cases.
+- Conservés : widget classique 1 information, Duo 2, Trio 3, 37 catégories de pictogrammes, 4 pages et menu du bas, personnalisation par widget, charge câblée/induction et réglages historiques.
+- **107 tests Java de régression réussis** dans l'Action GitHub `40381723838`, dont **20 scénarios MultiSlot** (8 anciens + 12 nouveaux) ; compilation Android release OK ; signature v2/v3 avec certificat historique.
+- **Validation Samsung réelle à effectuer** : comportements en veille, dimensions One UI, touchers simultanés et affichage réel sur écran d'accueil.
+
+**Décompte inchangé : 11 codés / 15 partiels / 1 absent. 16 points restent partiels ou absents, 0/27 validés physiquement.** Cette mise à jour améliore surtout les points 19 et 23 sans considérer les tests automatiques comme une certification sur téléphone.
 
 ## Détail
 
