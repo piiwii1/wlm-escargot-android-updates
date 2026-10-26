@@ -208,6 +208,7 @@ jobs:
           tar -xJf /tmp/scripts119.tar.xz -C /tmp/scripts119
           python3 /tmp/scripts119/implement119.py
           python3 /tmp/scripts119/adjust119.py
+          python3 notification-widget-v119-patch/fix119.py
           grep -q "versionCode 20" piiwii-notification-widget-v119/app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
@@ -219,7 +220,7 @@ jobs:
           widget=(root/'java/ch/piiwii/notificationwidget/WidgetProvider.java').read_text()
           assert all(n in widget for n in ('MultiSlotPolicy.compose','renderMulti','R.id.slot_1','R.id.slot_2','R.id.slot_3','allWidgetIds(c)'))
           for n in (2,3):
-            assert (root/'xml'/f'widget_{n}_info.xml').is_file()
+            assert (root/'res/xml'/f'widget_{n}_info.xml').is_file()
             for orientation in ('horizontal','vertical'):
               assert (root/'res/layout'/f'widget_{n}_{orientation}.xml').is_file()
           home=(root/'java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
