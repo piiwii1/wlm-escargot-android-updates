@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.18** (versionCode 19). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.19** (versionCode 20). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.18** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.19** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -138,6 +138,26 @@ Après examen des captures Samsung de la version 1.0.16, la priorité était de 
 - Les quatre pages et les modes Priorité/Éphémère sont conservés. Tests Java de charge **16/16** réussis en local et dans le workflow. La classification Samsung en situation réelle reste à confirmer.
 - **Statuts : 11 codés / 15 partiels / 1 absent, 0 validés sur Samsung**. Cela améliore le point 01 sans promouvoir une estimation en détection certifiée. 16 points du plan restent partiels ou absents.
 
+## Nouveaux modèles 1, 2 ou 3 informations (1.0.19)
+
+**Besoin exprimé :** afficher simultanément la recharge et les notifications sans priorité exclusive entre leurs emplacements. Préserver le widget actuel et permettre jusqu'à trois informations à l'écran.
+
+**Implémentation :**
+- Trois entrées distinctes dans le sélecteur de widgets Android :
+  1. **Widget classique (1 information)** : ancien fonctionnement Priorité/Éphémère inchangé.
+  2. **Widget duo (2 informations)** : charge + une alerte, ou deux alertes si pas en charge.
+  3. **Widget trio (3 informations)** : charge + deux alertes, ou jusqu'à trois alertes si pas en charge.
+- Le slot de recharge reste visible pendant que les autres cases affichent les événements. La classification/priorité des notifications ne peut plus masquer la charge sur les nouveaux modèles.
+- Les cases vides se replient ; quand aucune information n'est active, l'icône de repos personnalisée est affichée.
+- Les zones de clic sont distinctes par case ; chaque zone transmet l'action de sa notification à WidgetClickActivity.
+- Deux dispositions par widget multi (horizontale/verticale) selon les dimensions remontées par le lanceur.
+- Anciens widgets toujours installables ; profils par widget et pictogrammes déjà personnalisés conservés.
+- Les quatre pages (Accueil, Notifications, Apparence, Tests), 37 catégories, modes Priorité/Éphémère et galerie restent présentes.
+
+**Vérifications :** GitHub Actions `40379446400` : compilation `assembleRelease` réussie, description XML des 3 fournisseurs vérifiée, navigation contrôlée, 8 tests de répartition simultanée + 87 autres assertions Java (12 formats, 41 classification, 12 batterie, 6 clic, 16 charge), soit **95 cas de test Java passés**. APK signée par la même clé que la 1.0.18 (certificat SHA-256 `f61b854fb859b6a9843824dedf582939d33d34c12c41772cf37b3bbf212e5b25`). **Aucun test réel Samsung n'a été effectué par l'assistant.**
+
+**Statuts inchangés : 11 codés, 15 partiels, 1 absent, 0 fonction certifiée sur appareil.** 16 points nécessitent encore développement ou validation de l'implémentation. Pour les nouveaux widgets, les essais physiques et les tests de clics restent indispensables.
+
 ## Détail
 
 | # | Point | État | Reste à faire / preuve attendue |
@@ -160,11 +180,11 @@ Après examen des captures Samsung de la version 1.0.16, la priorité était de 
 | 16 | Galerie pictogrammes | Codé | 24 pictogrammes Android vectoriels, sélecteur Graphiques/Emojis, prévisualisation, rendu sur widget ; validation Samsung à faire |
 | 17 | Couleurs/transparence/contours | Codé | Réglages présents; test appareil restant |
 | 18 | Taille adaptative | Codé | Limites de rendu selon launcher |
-| 19 | Autres formats widgets 2x1/2x2 | Codé | Variantes Compact/Wide/Large implémentées dans 3 layouts; dimensions exactes à confirmer avec le lanceur Samsung |
+| 19 | Modèles de widgets, formats et affichage simultané | Codé | 3 entrées installables distinctes (1/2/3 informations), recharge sur sa propre case et jusqu'à 2 autres notifications, orientations adaptatives ; validation Samsung manquante |
 | 20 | Interface et navigation basse | Codé | Menu moderne; toutes pages à revalider sur appareil |
 | 21 | Recherche et catégories de réglages | Codé | Recherche par nom et catégorie ajoutée à Notifications, validation Samsung attendue |
 | 22 | Aperçu/simulation tous les états | Codé | Les 30 catégories sont testables via l'onglet Tests, validation Samsung attendue |
-| 23 | Plusieurs widgets indépendants | Partiel | Filtre de catégorie, couleur et taille indépendants par widget; mode Priorité/Éphémère encore global |
+| 23 | Plusieurs widgets indépendants | Partiel | Chaque identifiant de widget a un filtre, une couleur et une taille ; les variantes à 1, 2 ou 3 emplacements peuvent coexister, mais les réglages Priorité/Éphémère restent globaux |
 | 24 | Sécurité/diagnostic/tests | Partiel | 1.0.15 : rapport de diagnostic partageable sans contenu des notifications, checklist Samsung, 84 tests Java précédents; tests appareil et sécurité approfondie manquants |
 | 25 | PiiWii Store Bêta | Absent | Aucune publication configurée |
 | 26 | Détection Spotify réelle | Partiel | MediaSession et actualisations intégrées; 1.0.15 garde la lecture musicale même si la liste des notifications est indisponible; Samsung non testé |
