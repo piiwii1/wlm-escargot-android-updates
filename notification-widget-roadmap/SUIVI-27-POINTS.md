@@ -1,6 +1,6 @@
-# PiiWii Notification Widget — Suivi vivant des améliorations
+# NotiPulse — Suivi vivant des améliorations
 
-**Référence : version 1.0.24** (versionCode 25). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.25** (versionCode 26). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.24** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.25** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -225,6 +225,15 @@ Suite au retour de l'utilisateur sur le rendu de la 1.0.22, correction limitée 
 - **Les 4 pages, l'onglet Apparence protégé, les 32 pictogrammes vectoriels et les anciens réglages sont conservés.**
 - Compilation et vérifications automatisées réalisées ; validation tactile sur Samsung reste à faire.
 - **11 codés, 15 partiels, 1 absent, 0 confirmé sur Samsung ; 16 points incomplets** (amélioration qualitative des points 16, 20 et 24, sans déclarer de nouvelle validation matériel).
+
+## Identité NotiPulse — Version 1.0.25
+
+- Nouveau nom **NotiPulse** dans le lanceur Android, l'interface interne, les trois entrées de widget et le service de notifications.
+- Nouvelle icône choisie par l'utilisateur : image bleue avec notifications, **fond transparent**, intégrée comme icône adaptative et à l'en-tête de l'application.
+- L'identifiant `ch.piiwii.notificationwidget`, la signature historique et les préférences `piiwii_notification_widget` sont conservés. Mise à jour installable sans désinstallation.
+- Les quatre pages, les 3 variantes (1/2/3 informations), les 38 catégories personnalisables, Spotify et les réactions existantes restent inchangés.
+- Build GitHub Actions **40397739416** et tests automatiques réussis; signatures APK v2/v3 vérifiées localement. Tests réels sur Samsung Android 16 encore à effectuer.
+- **Statut fonctionnel conservateur inchangé : 11 codés / 15 partiels / 1 absent / 0 totalement validés sur appareil**. Les **16** points techniquement inachevés restent à traiter.
 
 ## Détail
 
