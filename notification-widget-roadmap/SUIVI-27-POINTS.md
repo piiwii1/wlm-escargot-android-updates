@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.10** (versionCode 11). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.11** (versionCode 12). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **8 codés**, **15 partiels**, **4 absents**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.10** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.11** : Accueil, Notifications, Apparence, Tests.
 - **19/27 non entièrement implémentés** (partiels ou absents); les 8 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -31,6 +31,18 @@
 **Résultat des vérifications :** 41 tests de classification existants + 12 tests de batterie; compilation Android et signature vérifiées séparément avant diffusion de l'APK. Aucun test réel Samsung: donc **8 codés / 15 partiels / 4 absents / 0 confirmés sur appareil**.
 
 **Plan de livraison : passe 1 sur 6 effectuée en code, 5 passes de développement restantes**. Le nombre de passes pourrait augmenter si les essais révèlent une régression.
+
+## Passe 2/6 — Reconnaissance des notifications (1.0.11)
+
+**Changements effectivement codés :**
+- (03) Ajout de formulations d'appels entrants et appels manqués, notamment allemandes.
+- (04, 13) Reconnaissance complémentaire de banques cantonales par identifiant d'application ; plus de formulations de paiement et de virement.
+- (11) Distinction des canaux de messages privés et des commentaires/réactions Instagram/Facebook afin de diminuer les faux positifs.
+- (26) Spotify : réconciliation des sessions multimédias lors des événements de notification et d'un contrôle de santé, suivi par jeton de session, effacement de l'icône éphémère de Spotify lorsqu'une lecture s'arrête.
+- (27) Les quatre pages et le menu bas sont toujours présents dans les sources.
+- 54 tests de classification + 12 cas de batterie passés; tests de fonctionnement Samsung toujours non réalisés.
+
+**Statuts sans promotion artificielle :** 8 codés, 15 partiels, 4 absents, **0 validé sur appareil**. Il reste 19 points partiels ou absents à finaliser. **Passe 2/6 accomplie en code ; 4 passes planifiées restantes**, hors éventuelles corrections signalées pendant les tests.
 
 ## Détail
 
