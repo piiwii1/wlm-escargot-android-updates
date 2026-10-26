@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.17** (versionCode 18). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.18** (versionCode 19). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **11 codés**, **15 partiels**, **1 absent**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.17** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.18** : Accueil, Notifications, Apparence, Tests.
 - **16/27 non entièrement implémentés** (partiels ou absents); les 11 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -126,11 +126,23 @@ Après examen des captures Samsung de la version 1.0.16, la priorité était de 
 - Compilation réussie GitHub Actions `40372985855`, signatures v2/v3 valides, certificat historique préservé. Tests de régression existants réussis.
 - **Bilan inchangé : 11 codés / 15 partiels / 1 absent / 0 validé réellement sur Galaxy S23 Ultra**. Les points 16, 20, 23 et 24 sont concernés sans promotion artificielle. **16 points partiels ou absents**.
 
+## Extension des états de charge 1.0.18
+
+À la demande de l'utilisateur, le point **01 — Recharge** comprend désormais la détection du **type de source (câble/induction)** et des **niveaux de vitesse estimés**.
+
+- Détection fiable du branchement, débranchement, charge complète et source **filaire vs induction** par les indicateurs BatteryManager Android.
+- Sept nouveaux états indépendants et personnalisables dans la galerie visuelle : **charge lente, normale, rapide, super rapide, ultra rapide, induction, induction rapide**. L'état historique « En charge » reste comme repli lorsque le courant est inconnu ; la catégorie « Batterie pleine » reste prioritaire.
+- **Attention technique : les cinq vitesses filaires et l'induction rapide sont uniquement des estimations côté batterie**, à partir du courant et de la tension communiqués par Android. Elles ne prouvent PAS le protocole Samsung 25W/45W, surtout quand la batterie est presque pleine. L'application affiche alors un état générique plutôt qu'un faux mode ultra-rapide.
+- Total des catégories personnalisables et simulables : **37** (anciennement 30), sans changer les clés de personnalisation existantes.
+- La sélection de chaque icône dans la fenêtre unique (version 1.0.17) reste disponible, y compris pour les nouveaux états.
+- Les quatre pages et les modes Priorité/Éphémère sont conservés. Tests Java de charge **16/16** réussis en local et dans le workflow. La classification Samsung en situation réelle reste à confirmer.
+- **Statuts : 11 codés / 15 partiels / 1 absent, 0 validés sur Samsung**. Cela améliore le point 01 sans promouvoir une estimation en détection certifiée. 16 points du plan restent partiels ou absents.
+
 ## Détail
 
 | # | Point | État | Reste à faire / preuve attendue |
 |---|---|---|---|
-| 01 | Recharge/débranchement fiable | Partiel | Vérifier comportement en veille et reprise système |
+| 01 | Recharge/débranchement fiable | Partiel | Câble/induction détectés ; 7 états supplémentaires dont vitesses estimées côté batterie (pas certification Samsung) ; test en veille et sur plusieurs chargeurs à réaliser |
 | 02 | Batterie pleine à 100 % | Partiel | Seuil non arrondi corrigé et état BATTERY_STATUS_FULL reconnu ; validation Samsung requise |
 | 03 | Appels entrants vs manqués | Partiel | 1.0.9 : catégories Android call/missed_call et filtrage de répondeur ; test sur Samsung manquant |
 | 04 | Banques suisses | Partiel | 1.0.9 : détection enrichie et normalisation multilingue ; validation des applications réelles requise |
