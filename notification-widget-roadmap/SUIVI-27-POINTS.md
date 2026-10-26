@@ -1,6 +1,6 @@
 # PiiWii Notification Widget — Suivi vivant des améliorations
 
-**Référence : version 1.0.11** (versionCode 12). **Évaluation : 26 octobre 2026**.
+**Référence : version 1.0.12** (versionCode 13). **Évaluation : 26 octobre 2026**.
 
 ## Règles de suivi
 
@@ -16,7 +16,7 @@
 - **27 points suivis** : 25 historiques + Spotify (26) + pages de l'application (27).
 - **8 codés**, **15 partiels**, **4 absents**.
 - **0/27 confirmés fonctionnels sur appareil**. La validation réelle doit être remontée par l'utilisateur.
-- **4 pages en 1.0.11** : Accueil, Notifications, Apparence, Tests.
+- **4 pages en 1.0.12** : Accueil, Notifications, Apparence, Tests.
 - **19/27 non entièrement implémentés** (partiels ou absents); les 8 autres restent à valider sur appareil.
 
 ## Passe 1/6 — Fiabilité générale (1.0.10)
@@ -43,6 +43,18 @@
 - 54 tests de classification + 12 cas de batterie passés; tests de fonctionnement Samsung toujours non réalisés.
 
 **Statuts sans promotion artificielle :** 8 codés, 15 partiels, 4 absents, **0 validé sur appareil**. Il reste 19 points partiels ou absents à finaliser. **Passe 2/6 accomplie en code ; 4 passes planifiées restantes**, hors éventuelles corrections signalées pendant les tests.
+
+## Passe 3/6 — Clics et diagnostics (1.0.12)
+
+**Résultats de code :**
+- (05) **Partiel, amélioré** : une activité transparente non exportée gère le toucher du widget. Elle récupère l'action d'une notification encore active et tente le PendingIntent d'origine, puis ouvre l'application source en cas d'annulation/absence et, en dernier recours, PiiWii.
+- (24) **Partiel, amélioré** : diagnostic local du nombre de touchers et de l'ouverture (notification/app/réglages), sans enregistrer de texte privé. Six nouveaux tests logiques du clic.
+- (27) **Partiel, inchangé dans le code** : dispatch des quatre pages vérifié (Accueil, Notifications, Apparence, Tests). Test réel sur Samsung nécessaire pour déclarer fonctionnel.
+- Pas de modification des modes Priorité/Éphémère, de la recharge, de la détection Spotify, des 30 catégories ni du menu inférieur.
+
+**Vérifications :** GitHub Actions 40355101441, build Android réussi après correction de syntaxe ; 54 tests de classification + 12 tests de batterie + 6 tests de routage = 72 tests ; APK signée v2/v3 avec certificat précédent ; SHA-256 APK `b6728cf97f1e273af24fcd174a3071df36243a6e88bb084a3b9a1b3726d9bd57`.
+
+**Décompte honnête inchangé :** 8 points codés, 15 partiels, 4 absents, 0/27 confirmés sur Samsung ; 19 points partiels ou absents à finaliser ; **3 passes prévues restantes** (fonctionnalités avancées, finitions visuelles, validation/publication conditionnelle).
 
 ## Détail
 
