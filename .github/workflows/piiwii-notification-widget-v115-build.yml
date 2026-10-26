@@ -181,7 +181,7 @@ jobs:
           "$BT/zipalign" -f -p 4 piiwii-notification-widget-v115/app/build/outputs/apk/release/app-release-unsigned.apk out/PiiWii-Notification-Widget-1.0.15-UNSIGNED.apk
           cp "$BT/lib/apksigner.jar" out/apksigner.jar
           zip -q -r out/PiiWii-Notification-Widget-1.0.15-SOURCES.zip piiwii-notification-widget-v115 -x '*/build/*' '*/.gradle/*'
-          sha256sum out/PiiWii-Notification-Widget-1.0.14-UNSIGNED.apk out/PiiWii-Notification-Widget-1.0.15-SOURCES.zip > out/SHA256-BUILD.txt
+          sha256sum out/PiiWii-Notification-Widget-1.0.15-UNSIGNED.apk out/PiiWii-Notification-Widget-1.0.15-SOURCES.zip > out/SHA256-BUILD.txt
       - name: Upload APK build and sources
         uses: actions/upload-artifact@v4
         with:
