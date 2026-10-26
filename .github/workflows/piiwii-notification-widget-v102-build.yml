@@ -36,7 +36,7 @@ jobs:
           set -euo pipefail
           cp -a piiwii-notification-widget-v101 piiwii-notification-widget-v102
           cat notification-widget-v102-patch/part-* | base64 -d > /tmp/widget102.tar.xz
-          echo "f61300e54d1068680fce99ddbf484598dcf292d2fe4339d276ffdc496d552b91  /tmp/widget102.tar.xz" | sha256sum -c -
+          echo "74fe74bb99e989af513a435892931a3c36324c5392604222df33bef3503f8b90  /tmp/widget102.tar.xz" | sha256sum -c -
           tar -xJf /tmp/widget102.tar.xz -C piiwii-notification-widget-v102
           grep -q "versionCode 3" piiwii-notification-widget-v102/app/build.gradle
           grep -q "versionName '1.0.2'" piiwii-notification-widget-v102/app/build.gradle
