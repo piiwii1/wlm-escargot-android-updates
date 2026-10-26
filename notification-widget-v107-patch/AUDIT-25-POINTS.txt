@@ -1,0 +1,32 @@
+PiiWii Notification Widget 1.0.6 - Audit des 25 points
+Date: 2026-10-26
+Définitions: FAIT = fonction présente dans les sources, PARTIEL = fonction présente mais incomplète/non garantie, ABSENT = non codée.
+01 PARTIEL Recharge et débranchement, listeners mais OS peut différer notifications.
+02 PARTIEL Batterie pleine, logique pct>=100 seulement.
+03 PARTIEL Appel manqué/entrant, heuristique sur texte.
+04 PARTIEL Banques suisses, correspondance limitée de package/texte.
+05 PARTIEL Clic notification, contentIntent sinon ouverture app.
+06 FAIT Déclassement par âge des notifications.
+07 PARTIEL Rafraîchissement et temporisateurs, délais système.
+08 PARTIEL Boot/reprise, pas de supervision robuste des listeners.
+09 FAIT Priorités réglables sur chaque catégorie.
+10 ABSENT Détection auto des applis installées.
+11 PARTIEL DM Instagram et Facebook, heuristiques.
+12 PARTIEL Colis/agenda/minuteurs, liste limitée d'apps et mots.
+13 PARTIEL Classification transactions et nouvelles banques, heuristiques.
+14 FAIT Mode notification éphémère.
+15 FAIT Import PNG, JPG, WebP via Android Storage Access Framework.
+16 PARTIEL Galerie d'emojis/symboles, pas de bibliothèque graphique.
+17 FAIT Couleur, transparence, bordures et rayons.
+18 PARTIEL Taille selon widget, limitations sur le rendu.
+19 ABSENT Modes d'affichage distincts 2x1 et 2x2.
+20 FAIT Nouvelle interface quatre pages et menu bas premium.
+21 PARTIEL Catégories regroupées, pas de recherche.
+22 PARTIEL Aperçu et 16 simulations, pas toutes les catégories.
+23 ABSENT Réglages indépendants par widget.
+24 PARTIEL Pas de réseau, mais diagnostic/tests de fiabilité manquants.
+25 ABSENT Publication PiiWii Store.
+TOTALS 6 FAIT / 15 PARTIEL / 4 ABSENT.
+Spotify 1.0.6 : uniquement recherche de notifications par nom de package, sans écoute de MediaSession et sans repli musical en mode éphémère.
+Correctif 1.0.7 : écoute media session et callbacks, affichage lecture musicale, diagnostic Spotify.
+Ce rapport est un audit statique des sources, pas une certification de fonctionnement sur Samsung.

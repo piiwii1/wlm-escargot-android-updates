@@ -1,0 +1,77 @@
+name: PiiWii Notification Widget 1.0.7 - Spotify MediaSession fix
+on:
+  push:
+    branches: [chatgpt/piiwii-notification-widget-107]
+    paths:
+      - 'notification-widget-v107-patch/**'
+      - '.github/workflows/piiwii-notification-widget-v107-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Android SDK
+        run: |
+          export ANDROID_HOME="/usr/local/lib/android/sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Restore 1.0.4 source exactly then apply new bottom navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a piiwii-notification-widget-v101 piiwii-notification-widget-v104
+          cat notification-widget-v102-patch/part-* | base64 -d > /tmp/widget102.tar.xz
+          echo "74fe74bb99e989af513a435892931a3c36324c5392604222df33bef3503f8b90  /tmp/widget102.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/widget102.tar.xz -C piiwii-notification-widget-v104
+          cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v103
+          python3 notification-widget-v103-ui/patch.py
+          cp -a piiwii-notification-widget-v103/. piiwii-notification-widget-v104/
+          cp notification-widget-v104-patch/EphemeralEvents.java piiwii-notification-widget-v104/app/src/main/java/ch/piiwii/notificationwidget/
+          python3 notification-widget-v104-patch/engine.py
+          python3 notification-widget-v104-patch/ui.py
+          cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v105
+          python3 notification-widget-v105/patch_nav.py
+          grep -q "versionCode 6" piiwii-notification-widget-v105/app/build.gradle
+          grep -q "R.drawable.nav_home" piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q "void showDisplayModeCard" piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          cp -a piiwii-notification-widget-v105 piiwii-notification-widget-v106
+          python3 notification-widget-v106-fix/repair106.py
+          cp -a piiwii-notification-widget-v106 piiwii-notification-widget-v107
+          cp notification-widget-v107-patch/SpotifyMedia.java piiwii-notification-widget-v107/app/src/main/java/ch/piiwii/notificationwidget/SpotifyMedia.java
+          python3 notification-widget-v107-patch/apply.py
+          grep -q 'versionCode 8' piiwii-notification-widget-v107/app/build.gradle
+          grep -q 'SpotifyMedia.start' piiwii-notification-widget-v107/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java
+          grep -q 'SpotifyMedia.playingPick' piiwii-notification-widget-v107/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+      - name: Compile APK
+        run: gradle -p piiwii-notification-widget-v107 --no-daemon --stacktrace assembleRelease
+      - name: Package unsigned APK, apksigner and sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/zipalign" -f -p 4 piiwii-notification-widget-v107/app/build/outputs/apk/release/app-release-unsigned.apk out/PiiWii-Notification-Widget-1.0.7-UNSIGNED.apk
+          cp "$BT/lib/apksigner.jar" out/apksigner.jar
+          zip -q -r out/PiiWii-Notification-Widget-1.0.7-SOURCES.zip piiwii-notification-widget-v107 -x '*/build/*' '*/.gradle/*'
+          sha256sum out/PiiWii-Notification-Widget-1.0.7-UNSIGNED.apk out/PiiWii-Notification-Widget-1.0.7-SOURCES.zip > out/SHA256-BUILD.txt
+      - name: Upload APK build and sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Notification-Widget-1.0.7-build
+          path: out/*
+          retention-days: 15
+          if-no-files-found: error
