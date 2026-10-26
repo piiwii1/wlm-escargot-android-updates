@@ -232,7 +232,7 @@ Suite au retour de l'utilisateur sur le rendu de la 1.0.22, correction limitée 
 - Nouvelle icône choisie par l'utilisateur : image bleue avec notifications, **fond transparent**, intégrée comme icône adaptative et à l'en-tête de l'application.
 - L'identifiant `ch.piiwii.notificationwidget`, la signature historique et les préférences `piiwii_notification_widget` sont conservés. Mise à jour installable sans désinstallation.
 - Les quatre pages, les 3 variantes (1/2/3 informations), les 38 catégories personnalisables, Spotify et les réactions existantes restent inchangés.
-- Build GitHub Actions **40397739416** et tests automatiques réussis; signatures APK v2/v3 vérifiées localement. Tests réels sur Samsung Android 16 encore à effectuer.
+- Build GitHub Actions **40397739416** et tests automatiques réussis; signatures APK v2/v3 vérifiées localement. Test sur émulateur Android 15 **40398667018 réussi** (nom visible, Apparence et éditeur de pictogrammes). Tests réels sur Samsung Android 16 encore à effectuer.
 - **Statut fonctionnel conservateur inchangé : 11 codés / 15 partiels / 1 absent / 0 totalement validés sur appareil**. Les **16** points techniquement inachevés restent à traiter.
 
 ## Détail
