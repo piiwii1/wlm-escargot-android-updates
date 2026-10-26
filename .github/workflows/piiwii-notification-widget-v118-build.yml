@@ -193,7 +193,7 @@ jobs:
           root=Path('piiwii-notification-widget-v118')
           cats=(root/'app/src/main/java/ch/piiwii/notificationwidget/Categories.java').read_text()
           block=cats.split('static final String[][] ALL = {',1)[1].split('};',1)[0]
-          assert len(re.findall(r'\\{"',block))==37
+          assert block.count('{"')==37
           main=(root/'app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
           for token in ['if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();','root.addView(navSurface,navPosition)','void showInlineIconManager()']:
               assert token in main,token
