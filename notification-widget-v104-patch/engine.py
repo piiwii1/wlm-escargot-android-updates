@@ -37,6 +37,9 @@ s=s.replace(needle,"""  static PendingIntent intentForKey(String key){
     return null;
   }
 """+needle)
+# A fresh power connection becomes the persistent base immediately.
+s=s.replace('      @Override public void onReceive(Context c,Intent i){ WidgetProvider.refresh(c); }',
+ '      @Override public void onReceive(Context c,Intent i){ if(Intent.ACTION_POWER_CONNECTED.equals(i.getAction()))EphemeralEvents.clear(c); WidgetProvider.refresh(c); }')
 p.write_text(s,encoding="utf-8")
 p=base/"WidgetProvider.java"
 s=p.read_text(encoding="utf-8")
@@ -84,6 +87,8 @@ s=s[:a]+"""    boolean ephemeral=EphemeralEvents.enabled(c);
       }
     }
 """+s[b:]
+s=s.replace('if(action!=null&&action.equals(Intent.ACTION_BOOT_COMPLETED))EphemeralEvents.clear(c);',
+ 'if(action!=null&&(action.equals(Intent.ACTION_BOOT_COMPLETED)||action.equals(Intent.ACTION_POWER_CONNECTED)))EphemeralEvents.clear(c);')
 assert "private static void scheduleRefresh" in s
 s=s.replace("private static void scheduleRefresh", "static void scheduleRefresh")
 p.write_text(s,encoding="utf-8")
