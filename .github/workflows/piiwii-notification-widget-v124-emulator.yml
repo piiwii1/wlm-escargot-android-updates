@@ -1,0 +1,47 @@
+name: PiiWii 1.0.24 Appearance and Editor Android Emulator Test
+on:
+  push:
+    branches: [chatgpt/piiwii-notification-widget-124]
+    paths:
+      - '.github/workflows/piiwii-notification-widget-v124-emulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  android-ui-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download compiled 1.0.24 release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PiiWii-Notification-Widget-1.0.24-build
+          run-id: 40391443688
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: out
+      - name: Prepare installation signature for emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -keystore /tmp/widget-smoke.jks -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 30 -dname "CN=Android UI Smoke"
+          java -jar out/apksigner.jar sign --ks /tmp/widget-smoke.jks --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out /tmp/widget-smoke.apk out/PiiWii-Notification-Widget-1.0.24-UNSIGNED.apk
+          java -jar out/apksigner.jar verify --min-sdk-version 26 /tmp/widget-smoke.apk
+      - name: Grant emulator KVM permissions
+        run: |
+          if test -e /dev/kvm; then sudo chmod 666 /dev/kvm; fi
+      - name: Launch emulator and tap Appearance
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          script: bash notification-widget-v124-patch/emulator_smoke.sh
