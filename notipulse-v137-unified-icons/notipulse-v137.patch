@@ -1,0 +1,697 @@
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -1,5 +1,5 @@
+ plugins { id 'com.android.application' }
+ android { namespace 'ch.piiwii.notificationwidget'; compileSdk 35
+- defaultConfig { applicationId 'ch.piiwii.notificationwidget'; minSdk 26; targetSdk 35; versionCode 37; versionName '1.0.36' }
++ defaultConfig { applicationId 'ch.piiwii.notificationwidget'; minSdk 26; targetSdk 35; versionCode 38; versionName '1.0.37' }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+ }
+--- a/app/src/main/java/ch/piiwii/notificationwidget/AudioIconPolicy.java
++++ b/app/src/main/java/ch/piiwii/notificationwidget/AudioIconPolicy.java
+@@ -6,10 +6,10 @@
+   private AudioIconPolicy(){}
+   static final String[][] OUTPUTS={
+     {"phone","Haut-parleur du téléphone","output_phone"},
+-    {"wired_earbuds","Écouteurs filaires","output_earbuds"},
+-    {"wired_headphones","Casque filaire / USB","headphones"},
++    {"wired_earbuds","Écouteurs filaires","output_earbuds_wired"},
++    {"wired_headphones","Casque filaire / USB","output_headphones_wired"},
+     {"earbuds","Écouteurs Bluetooth","output_earbuds"},
+-    {"headphones","Casque Bluetooth","headphones"},
++    {"headphones","Casque Bluetooth","output_headphones"},
+     {"speaker","Enceinte / haut-parleur","output_speaker"},
+     {"portable_speaker","Enceinte portable (JBL, Bose…)","output_portable_speaker"},
+     {"bluetooth","Bluetooth non identifié","output_bluetooth"},
+--- a/app/src/main/java/ch/piiwii/notificationwidget/GraphicIcons.java
++++ b/app/src/main/java/ch/piiwii/notificationwidget/GraphicIcons.java
+@@ -27,6 +27,11 @@
+     {"music_pulse","Musique moderne · pulsation"},
+     {"music_equalizer","Musique · égaliseur"},
+     {"music_vinyl","Musique · vinyle"},
++    {"music_wave","Musique · Onde lumineuse"},
++    {"music_orbit","Musique · Orbite"},
++    {"output_headphones","Casque Bluetooth"},
++    {"output_headphones_wired","Casque filaire"},
++    {"output_earbuds_wired","Écouteurs filaires"},
+     {"headphones","Casque"},
+     {"camera","Appareil photo"},
+     {"location","Position"},
+@@ -75,6 +80,11 @@
+       case "music_pulse":return R.drawable.pic_music_pulse;
+       case "music_equalizer":return R.drawable.pic_music_equalizer;
+       case "music_vinyl":return R.drawable.pic_music_vinyl;
++      case "music_wave":return R.drawable.pic_music_wave;
++      case "music_orbit":return R.drawable.pic_music_orbit;
++      case "output_headphones":return R.drawable.pic_output_headphones;
++      case "output_headphones_wired":return R.drawable.pic_output_headphones_wired;
++      case "output_earbuds_wired":return R.drawable.pic_output_earbuds_wired;
+       case "headphones": return R.drawable.pic_headphones;
+       case "camera": return R.drawable.pic_camera;
+       case "location": return R.drawable.pic_location;
+@@ -125,7 +135,10 @@
+     switch(key){
+       case "whatsapp":case "messenger":case "facebook":case "facebook_dm":
+       case "tiktok":case "induction":case "induction_fast":case "quiet":
+-      case "music_pulse":case "music_equalizer":case "music_vinyl":case "music":case "output_portable_speaker":
++      case "music_pulse":case "music_equalizer":case "music_vinyl":case "music_wave":case "music_orbit":case "music":
++      case "output_phone":case "output_speaker":case "output_portable_speaker":
++      case "output_earbuds":case "output_earbuds_wired":case "output_headphones":case "output_headphones_wired":
++      case "output_car":case "output_bluetooth":case "output_cast":case "output_tv":case "output_unknown":
+         return true;
+       default:return false;
+     }
+--- a/app/src/main/java/ch/piiwii/notificationwidget/IconRenderer.java
++++ b/app/src/main/java/ch/piiwii/notificationwidget/IconRenderer.java
+@@ -20,6 +20,9 @@
+   static int clamp(int x,int lo,int hi){return Math.max(lo,Math.min(hi,x));}
+   static Bitmap render(Context c,String id,int size){return render(c,id,size,-1);}
+   static Bitmap render(Context c,String id,int size,int widgetId){
++    if("spotify".equals(id)&&Categories.prefs(c).getBoolean("music_unified_icon",false)){
++      return renderChoice(c,"spotify_audio_unified",size,widgetId,null,null,false);
++    }
+     if("spotify".equals(id)&&Categories.prefs(c).getBoolean("spotify_auto_audio_icon",true)){
+       try{
+         String routedId=SpotifyAudioIcons.routeIconId(c,SpotifyMedia.outputRoute(c));
+--- a/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
++++ b/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+@@ -62,6 +62,11 @@
+   private String pendingImageId;
+   private IconDraft editingIcon;
+   private boolean registered=false;
++  // Audio configuration is a native, themed page, not an Android AlertDialog.
++  private int audioPage=0;
++  private String audioEditorId;
++  private IconDraft audioDraft;
++  private int audioGalleryTab=0;
+   private String categoryQuery="";
+   private final BroadcastReceiver powerUpdates=new BroadcastReceiver(){
+     @Override public void onReceive(Context c,Intent i){
+@@ -187,7 +192,7 @@
+     brand.addView(mark,new LinearLayout.LayoutParams(d(45),d(46)));
+     LinearLayout info=column();brand.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+     info.addView(label("NotiPulse",21,white,true));
+-    info.addView(label("WIDGET  ·  1.0.35",11,muted,true));
++    info.addView(label("WIDGET  ·  1.0.37",11,muted,true));
+     addText(screen,"Un pictogramme, la bonne notification.",13,muted,20);
+     // Modern, elevated bottom bar with accessible vector icons and active capsule.
+     LinearLayout navSurface=row();
+@@ -236,11 +241,17 @@
+       LinearLayout.LayoutParams width=new LinearLayout.LayoutParams(0,-1,1);
+       width.setMargins(d(2),0,d(2),0);
+       navSurface.addView(item,width);
+-      item.setOnClickListener(v->{if(tab!=destination){tab=destination;renderScreen();}});
++      item.setOnClickListener(v->{
++        if(tab!=destination||audioPage!=0){
++          if(audioPage!=0)closeAudioPage();
++          tab=destination;renderScreen();
++        }
++      });
+     }
+ 
+     // Restore the page renderer accidentally removed in version 1.0.5.
+-    if(tab==0)showHome();
++    if(audioPage!=0)showAudioPage();
++    else if(tab==0)showHome();
+     else if(tab==1)showCategories();
+     else if(tab==2)showAppearanceGuarded();
+     else showTestsGuarded();
+@@ -1198,6 +1209,7 @@
+     });
+   }
+   private String audioEditorTitle(String id){
++    if("spotify_audio_unified".equals(id))return "Une seule icône pour toute la musique";
+     if(id.startsWith("spotify_audio_"))
+       return AudioIconPolicy.label(id.substring("spotify_audio_".length()));
+     if(id.startsWith("spotify_device_"))return SpotifyAudioIcons.nameForId(this,id);
+@@ -1213,117 +1225,270 @@
+     addText(audio,"Sortie actuelle : "+AudioRoutePolicy.label(route.kind)
+       +(route.name.isEmpty()?"":" · "+route.name),12,muted,0);
+   }
+-  private void editAudioPicture(android.app.AlertDialog parent,String id){
+-    parent.dismiss();iconDialog(id);
+-  }
+-  private void addAudioIconRow(LinearLayout parent,AlertDialog dialog,
+-                               String id,String title,String description){
+-    LinearLayout line=row();line.setPadding(d(2),d(6),d(2),d(6));parent.addView(line,lp(5));
+-    ImageView icon=new ImageView(this);
+-    icon.setImageBitmap(IconRenderer.render(this,id,d(48)));
+-    icon.setBackground(shape(secondary,10));
+-    LinearLayout.LayoutParams imageParams=new LinearLayout.LayoutParams(d(55),d(55));
+-    imageParams.rightMargin=d(10);line.addView(icon,imageParams);
+-    LinearLayout text=column();line.addView(text,new LinearLayout.LayoutParams(0,-2,1));
+-    text.addView(label(title,13,white,true));
+-    text.addView(label(SpotifyAudioIcons.customized(this,id)?"Icône personnalisée":description,11,muted,false));
+-    Button edit=button("Choisir",false);
+-    line.addView(edit,new LinearLayout.LayoutParams(d(88),d(45)));
+-    edit.setOnClickListener(v->editAudioPicture(dialog,id));
+-    line.setOnClickListener(v->editAudioPicture(dialog,id));
++  private GradientDrawable audioPanel(int radius){
++    GradientDrawable result=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
++      new int[]{Color.rgb(27,44,69),Color.rgb(17,28,46)});
++    result.setCornerRadius(d(radius));result.setStroke(d(1),Color.rgb(50,82,121));
++    return result;
++  }
++  private LinearLayout audioCard(){
++    LinearLayout box=column();box.setPadding(d(15),d(15),d(15),d(15));
++    box.setBackground(audioPanel(19));return box;
++  }
++  private TextView audioSection(String text){
++    TextView title=label(text,12,blue,true);
++    title.setLetterSpacing(.09f);return title;
++  }
++  private void closeAudioPage(){
++    if(audioDraft!=null){forgetTemporary(audioDraft);if(editingIcon==audioDraft)editingIcon=null;audioDraft=null;}
++    audioPage=0;audioEditorId=null;
++  }
++  @Override public void onBackPressed(){
++    if(audioPage==2){
++      if(audioDraft!=null){forgetTemporary(audioDraft);if(editingIcon==audioDraft)editingIcon=null;audioDraft=null;}
++      audioPage=1;renderScreen();return;
++    }
++    if(audioPage>1){audioPage=1;renderScreen();return;}
++    if(audioPage==1){closeAudioPage();renderScreen();return;}
++    super.onBackPressed();
++  }
++  private void audioNavigate(int page){
++    if(audioPage==2&&audioDraft!=null){forgetTemporary(audioDraft);if(editingIcon==audioDraft)editingIcon=null;audioDraft=null;}
++    audioPage=page;renderScreen();
+   }
+   void showAudioIconsSettings(){
+     AudioOutputRoute.Route route=SpotifyMedia.outputRoute(this);
+     if(!route.name.isEmpty()&&!"phone".equals(route.transport)&&!"remote".equals(route.transport))
+       SpotifyAudioIcons.remember(this,route.name,AudioIconPolicy.category(route.transport,route.kind));
+-    ScrollView scroll=new ScrollView(this);
+-    LinearLayout list=column();list.setPadding(d(14),d(12),d(14),d(4));scroll.addView(list);
+-    AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Audio et musique — Mes icônes")
+-      .setView(scroll).setNegativeButton("Fermer",null).create();
+-    Switch enable=new Switch(this);enable.setText("Adapter les icônes à la sortie audio");
+-    enable.setTextColor(white);
+-    enable.setChecked(Categories.prefs(this).getBoolean("spotify_auto_audio_icon",true));
+-    list.addView(enable,lp(10));
+-    enable.setOnCheckedChangeListener((b,checked)->{
+-      Categories.prefs(this).edit().putBoolean("spotify_auto_audio_icon",checked).apply();
+-      WidgetProvider.refresh(this);
++    audioNavigate(1);
++  }
++  private void addAudioIconRow(LinearLayout root,String id,String title,String description){
++    LinearLayout tile=row();tile.setPadding(d(10),d(10),d(10),d(10));
++    tile.setBackground(audioPanel(15));root.addView(tile,lp(9));
++    ImageView image=new ImageView(this);
++    try{image.setImageBitmap(IconRenderer.render(this,id,d(56)));}
++    catch(RuntimeException issue){AppDiagnostics.record(this,"Aperçu audio "+id,issue);}
++    image.setBackground(shape(Color.rgb(13,28,48),13));
++    image.setPadding(d(4),d(4),d(4),d(4));
++    LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(d(60),d(60));iconParams.rightMargin=d(12);
++    tile.addView(image,iconParams);
++    LinearLayout details=column();tile.addView(details,new LinearLayout.LayoutParams(0,-2,1));
++    details.addView(label(title,14,white,true),lp(5));
++    TextView hint=label(SpotifyAudioIcons.customized(this,id)?"Pictogramme personnalisé":description,11,muted,false);
++    hint.setMaxLines(2);details.addView(hint);
++    TextView arrow=label("›",28,blue,true);arrow.setGravity(Gravity.CENTER);
++    tile.addView(arrow,new LinearLayout.LayoutParams(d(24),d(50)));
++    tile.setContentDescription("Choisir l'icône : "+title);
++    tile.setOnClickListener(v->openAudioIconEditor(id));
++  }
++  void showAudioPage(){
++    LinearLayout heading=row();screen.addView(heading,lp(15));
++    Button back=button("‹ Retour",false);heading.addView(back,new LinearLayout.LayoutParams(d(105),d(43)));
++    back.setOnClickListener(v->{
++      if(audioPage==2){if(audioDraft!=null){forgetTemporary(audioDraft);if(editingIcon==audioDraft)editingIcon=null;audioDraft=null;}audioPage=1;}
++      else audioPage=0;
++      renderScreen();
+     });
+-    addText(list,"Chaque ligne a son pictogramme indépendant. Choisis un graphique, un emoji ou une photo.",12,muted,12);
+-    list.addView(label("TYPES DE SORTIE",12,blue,true),lp(9));
+-    for(String[] type:AudioIconPolicy.OUTPUTS)
+-      addAudioIconRow(list,dialog,AudioIconPolicy.iconId(type[0]),type[1],"Par défaut · "+type[1]);
+-    list.addView(label("MES APPAREILS NOMMÉS",12,blue,true),lp(9));
+-    addText(list,"Ex. JBL Flip 6, Galaxy Buds, VW Polo. Le réglage exact de l'appareil prime sur sa catégorie.",12,muted,10);
+-    for(String name:SpotifyAudioIcons.devices(this)){
+-      String id=AudioIconPolicy.deviceId(name);
+-      addAudioIconRow(list,dialog,id,name,"Type : "+AudioIconPolicy.label(
+-        Categories.prefs(this).getString("spotify_device_kind_"+AudioIconPolicy.deviceKey(name),"bluetooth")));
+-    }
+-    Button add=button("Ajouter un appareil par son nom",false);list.addView(add,lp(12));
+-    add.setOnClickListener(v->{dialog.dismiss();addNamedAudioDevice();});
+-    if(!route.name.isEmpty()){
+-      addText(list,"Actuellement détecté : "+route.name,12,blue,10);
+-    }
+-    Button correct=button("Corriger le type Bluetooth détecté",false);list.addView(correct,lp(11));
+-    correct.setOnClickListener(v->{dialog.dismiss();chooseAudioOutputType();});
+-    addText(list,"La diffusion distante peut ne pas révéler le modèle. Si Android n'identifie pas la sortie, l'icône Musique générique est utilisée.",11,muted,6);
+-    dialog.show();
+-    if(dialog.getWindow()!=null)
+-      dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-d(18),-2);
+-  }
+-  void addNamedAudioDevice(){
+-    final EditText input=new EditText(this);
+-    input.setSingleLine(true);input.setHint("Ex. JBL Flip 6");
++    TextView pageTitle=label(audioPage==1?"Audio et musique":audioPage==2?"Choisir une icône":audioPage==3?"Ajouter un appareil":audioPage==4?"Type Bluetooth":"Diagnostic audio",20,white,true);
++    LinearLayout.LayoutParams titlePosition=new LinearLayout.LayoutParams(0,-2,1);titlePosition.leftMargin=d(12);
++    heading.addView(pageTitle,titlePosition);
++    if(audioPage==1)showAudioDashboard();
++    else if(audioPage==2)showAudioIconEditor();
++    else if(audioPage==3)showAudioAddDevice();
++    else if(audioPage==4)showAudioDeviceType();
++    else showAudioDiagnostics();
++  }
++  private void showAudioDashboard(){
++    AudioOutputRoute.Route route=SpotifyMedia.outputRoute(this);
++    LinearLayout now=audioCard();screen.addView(now,lp(14));
++    subtitle(now,"♫  Musique · sortie actuelle","Spotify, YouTube Music, Deezer, VLC et autres lecteurs Android");
++    addAudioIconRow(now,AudioIconPolicy.iconId(AudioIconPolicy.category(route.transport,route.kind)),
++      AudioRoutePolicy.label(route.kind),route.name.isEmpty()?"Aucun nom d'appareil fourni par Android":route.name);
++    addText(now,"L’appareil affiché correspond aux informations accessibles à Android ; certains appareils distants ne sont pas identifiables.",11,muted,0);
++
++    LinearLayout harmony=audioCard();screen.addView(harmony,lp(14));
++    subtitle(harmony,"Harmoniser les icônes","Une seule icône, peu importe que le son sorte du téléphone, d'un casque, d'une JBL ou de la voiture.");
++    Switch unify=new Switch(this);
++    unify.setText("Utiliser une seule icône pour toute la musique");unify.setTextColor(white);
++    unify.setChecked(Categories.prefs(this).getBoolean("music_unified_icon",false));
++    harmony.addView(unify,lp(10));
++    addAudioIconRow(harmony,"spotify_audio_unified","Choisir l'icône commune","Appliquée à toutes les sorties lorsque l'harmonisation est activée");
++    unify.setOnCheckedChangeListener((v,enabled)->{
++      Categories.prefs(this).edit().putBoolean("music_unified_icon",enabled).apply();
++      WidgetProvider.refresh(this);renderScreen();
++    });
++    if(unify.isChecked()){
++      addText(harmony,"Mode harmonisé ACTIF : les icônes individuelles sont conservées mais mises en veille.",12,blue,0);
++    }
++    LinearLayout adapt=audioCard();screen.addView(adapt,lp(14));
++    subtitle(adapt,"Différencier les sorties","Désactive l'harmonisation pour retrouver une icône spécifique par type d'appareil.");
++    Switch automatic=new Switch(this);automatic.setText("Reconnaître automatiquement la sortie audio");
++    automatic.setTextColor(white);
++    automatic.setChecked(Categories.prefs(this).getBoolean("spotify_auto_audio_icon",true));
++    adapt.addView(automatic,lp(5));
++    automatic.setEnabled(!unify.isChecked());automatic.setAlpha(unify.isChecked()?.5f:1f);
++    automatic.setOnCheckedChangeListener((v,enabled)->{
++      Categories.prefs(this).edit().putBoolean("spotify_auto_audio_icon",enabled).apply();WidgetProvider.refresh(this);
++    });
++    if(!unify.isChecked()){
++      adapt.addView(audioSection("ICÔNES PAR SORTIE"),lp(9));
++      for(String[] type:AudioIconPolicy.OUTPUTS)
++        addAudioIconRow(adapt,AudioIconPolicy.iconId(type[0]),type[1],"Modifier cette icône uniquement");
++      adapt.addView(audioSection("MES APPAREILS RECONNUS"),lp(8));
++      addText(adapt,"Une JBL ou des Galaxy Buds peuvent avoir leur propre icône, prioritaire sur leur catégorie.",12,muted,10);
++      for(String name:SpotifyAudioIcons.devices(this)){
++        String id=AudioIconPolicy.deviceId(name);
++        addAudioIconRow(adapt,id,name,"Personnaliser l'icône de cet appareil Bluetooth");
++      }
++      Button add=button("+ Ajouter un appareil par son nom",true);adapt.addView(add,lp(9));
++      add.setOnClickListener(v->audioNavigate(3));
++      Button adjust=button("Reconnaître / corriger le type Bluetooth",false);adapt.addView(adjust,lp(4));
++      adjust.setOnClickListener(v->audioNavigate(4));
++    }else{
++      addText(adapt,"Les icônes par appareil pourront être retrouvées sans perte en désactivant Harmoniser.",12,muted,4);
++    }
++    Button diagnostic=button("Voir la détection audio et le diagnostic",false);
++    screen.addView(diagnostic,lp(12));diagnostic.setOnClickListener(v->audioNavigate(5));
++  }
++  private static final String[][] MUSIC_GRAPHICS={
++    {"music_wave","Onde musicale"},{"music_pulse","Notes modernes"},
++    {"music_orbit","Orbite musicale"},{"music_equalizer","Égaliseur"},
++    {"music_vinyl","Vinyle"},{"music","Note classique"},
++    {"output_phone","Téléphone"},{"output_speaker","Enceinte"},
++    {"output_portable_speaker","JBL portable"},{"output_earbuds","Écouteurs Bluetooth"},
++    {"output_earbuds_wired","Écouteurs filaires"},{"output_headphones","Casque Bluetooth"},
++    {"output_headphones_wired","Casque filaire"},{"output_car","Voiture"},
++    {"output_bluetooth","Bluetooth"},{"output_tv","Télévision"},
++    {"output_cast","Cast"},{"output_unknown","Sortie inconnue"}
++  };
++  private void openAudioIconEditor(String id){
++    if(audioDraft!=null){forgetTemporary(audioDraft);if(editingIcon==audioDraft)editingIcon=null;}
++    audioEditorId=id;audioDraft=new IconDraft(id);editingIcon=audioDraft;
++    audioDraft.choice=Categories.prefs(this).getString("icon_"+id,null);
++    audioDraft.photo=Categories.prefs(this).getString("custom_icon_"+id,null);
++    audioGalleryTab=audioDraft.photo!=null?2:(audioDraft.choice!=null&&!audioDraft.choice.startsWith("vector:")?1:0);
++    audioDraft.mode=audioGalleryTab;audioPage=2;renderScreen();
++  }
++  private void fillAudioGalleryChoices(IconDraft draft,LinearLayout dest){
++    dest.removeAllViews();
++    if(audioGalleryTab!=0){draft.mode=audioGalleryTab;fillEditorChoices(draft,dest);return;}
++    GridLayout grid=new GridLayout(this);grid.setColumnCount(3);dest.addView(grid);
++    for(String[] entry:MUSIC_GRAPHICS){
++      String val="vector:"+entry[0];
++      boolean selected=val.equals(draft.choice)&&draft.photo==null;
++      LinearLayout cell=column();cell.setPadding(d(5),d(10),d(5),d(7));cell.setGravity(Gravity.CENTER);
++      GradientDrawable background=audioPanel(14);
++      if(selected)background.setStroke(d(2),Color.rgb(85,204,255));
++      cell.setBackground(background);
++      ImageView visual=new ImageView(this);
++      visual.setImageBitmap(GraphicIcons.preview(this,entry[0],d(58)));
++      LinearLayout.LayoutParams previewPosition=new LinearLayout.LayoutParams(d(66),d(66));
++      previewPosition.gravity=Gravity.CENTER;cell.addView(visual,previewPosition);
++      TextView text=label(entry[1],11,white,selected);
++      text.setGravity(Gravity.CENTER);text.setMaxLines(2);
++      cell.addView(text,lp(0));
++      GridLayout.LayoutParams gp=new GridLayout.LayoutParams();
++      gp.width=d(102);gp.height=d(116);gp.setMargins(d(3),d(3),d(3),d(3));grid.addView(cell,gp);
++      cell.setOnClickListener(v->{draft.choice=val;draft.photo=null;previewDraft(draft);fillAudioGalleryChoices(draft,dest);});
++    }
++  }
++  private void showAudioIconEditor(){
++    if(audioDraft==null||audioEditorId==null){audioPage=1;showAudioDashboard();return;}
++    IconDraft draft=audioDraft;
++    LinearLayout hero=audioCard();screen.addView(hero,lp(13));
++    subtitle(hero,audioEditorTitle(audioEditorId),"Prévisualise avant d'enregistrer. Tes autres icônes ne seront pas modifiées.");
++    LinearLayout beforeAfter=row();hero.addView(beforeAfter,lp(10));
++    LinearLayout previous=column();previous.setGravity(Gravity.CENTER);
++    beforeAfter.addView(previous,new LinearLayout.LayoutParams(0,-2,1));
++    previous.addView(label("ACTUELLE",11,muted,true),lp(5));
++    ImageView oldIcon=new ImageView(this);
++    oldIcon.setBackground(shape(Color.rgb(12,27,47),15));
++    oldIcon.setImageBitmap(IconRenderer.render(this,audioEditorId,d(100)));
++    previous.addView(oldIcon,new LinearLayout.LayoutParams(d(104),d(104)));
++    TextView arrow=label("→",27,blue,true);arrow.setGravity(Gravity.CENTER);
++    beforeAfter.addView(arrow,new LinearLayout.LayoutParams(d(34),d(98)));
++    LinearLayout proposed=column();proposed.setGravity(Gravity.CENTER);
++    beforeAfter.addView(proposed,new LinearLayout.LayoutParams(0,-2,1));
++    proposed.addView(label("NOUVELLE",11,blue,true),lp(5));
++    draft.proposed=new ImageView(this);
++    draft.proposed.setBackground(shape(Color.rgb(12,27,47),15));
++    proposed.addView(draft.proposed,new LinearLayout.LayoutParams(d(104),d(104)));
++    previewDraft(draft);
++    LinearLayout tabs=row();hero.addView(tabs,lp(12));
++    String[] names={"Graphiques","Emojis","Photo"};
++    LinearLayout choices=column();
++    for(int i=0;i<3;i++){
++      final int idx=i;Button t=button(names[i],audioGalleryTab==i);
++      LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,d(42),1);p.setMargins(d(2),0,d(2),0);
++      tabs.addView(t,p);
++      t.setOnClickListener(v->{audioGalleryTab=idx;draft.mode=idx;renderScreen();});
++    }
++    screen.addView(audioSection(audioGalleryTab==0?"BIBLIOTHÈQUE MUSICALE":audioGalleryTab==1?"CHOISIR UN EMOJI":"IMPORTER UNE IMAGE"),lp(8));
++    screen.addView(choices,lp(12));
++    fillAudioGalleryChoices(draft,choices);
++    LinearLayout buttons=row();screen.addView(buttons,lp(14));
++    Button reset=button("Par défaut",false);buttons.addView(reset,new LinearLayout.LayoutParams(0,d(46),1));
++    Button save=button("Enregistrer",true);
++    LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,d(46),1);p.leftMargin=d(9);buttons.addView(save,p);
++    reset.setOnClickListener(v->{draft.choice=null;draft.photo=null;previewDraft(draft);fillAudioGalleryChoices(draft,choices);});
++    save.setOnClickListener(v->{
++      if(commitIconDraft(draft)){
++        audioDraft=null;if(editingIcon==draft)editingIcon=null;
++        audioPage=1;renderScreen();
++      }
++    });
++  }
++  private void showAudioAddDevice(){
++    LinearLayout box=audioCard();screen.addView(box,lp(14));
++    subtitle(box,"Nouvel appareil audio","Le nom doit correspondre à celui affiché dans les paramètres Bluetooth du téléphone.");
++    EditText input=new EditText(this);input.setSingleLine(true);input.setHint("Ex. JBL Flip 6");
+     input.setTextColor(white);input.setHintTextColor(muted);
+-    LinearLayout layout=column();layout.setPadding(d(20),d(8),d(20),d(8));
+-    layout.addView(input);
+-    new AlertDialog.Builder(this).setTitle("Ajouter mon appareil")
+-      .setMessage("Saisis le nom exactement tel qu'il apparaît dans les réglages Bluetooth Android.")
+-      .setView(layout)
+-      .setPositiveButton("Ajouter",(dlg,which)->{
+-        String name=input.getText().toString().trim();
+-        if(name.isEmpty()||name.length()>70){
+-          android.widget.Toast.makeText(this,"Nom de 1 à 70 caractères requis",android.widget.Toast.LENGTH_SHORT).show();
+-          return;
+-        }
+-        SpotifyAudioIcons.remember(this,name,"bluetooth");showAudioIconsSettings();
+-      }).setNegativeButton("Annuler",(dlg,which)->showAudioIconsSettings()).show();
+-  }
+-  void chooseAudioOutputType(){
++    input.setBackground(shape(secondary,12));input.setPadding(d(13),d(12),d(13),d(12));
++    box.addView(input,lp(12));
++    Button save=button("Enregistrer cet appareil",true);box.addView(save,lp(6));
++    save.setOnClickListener(v->{
++      String name=input.getText().toString().trim();
++      if(name.isEmpty()||name.length()>70){input.setError("Entre 1 et 70 caractères");return;}
++      SpotifyAudioIcons.remember(this,name,"bluetooth");audioPage=1;renderScreen();
++    });
++  }
++  private void showAudioDeviceType(){
+     AudioOutputRoute.Route route=SpotifyMedia.outputRoute(this);
++    LinearLayout box=audioCard();screen.addView(box,lp(12));
++    subtitle(box,"Identifier l'appareil Bluetooth",route.name.isEmpty()?"Aucun appareil nommé détecté actuellement.":route.name);
+     if(route.name.isEmpty()||"phone".equals(route.transport)||"remote".equals(route.transport)){
+-      new AlertDialog.Builder(this).setTitle("Appareil audio")
+-        .setMessage("Démarre Spotify sur ton casque, enceinte ou autoradio Bluetooth pour détecter son nom.\n\nSortie actuelle : "+AudioRoutePolicy.label(route.kind))
+-        .setPositiveButton("OK",null).show();return;
+-    }
+-    final String[] names={"Automatique", "Enceinte", "Écouteurs", "Casque", "Voiture", "Bluetooth", "Téléviseur"};
+-    final String[] kinds={"", "speaker", "earbuds", "headphones", "car", "bluetooth", "tv"};
++      addText(box,"Démarre la musique sur une enceinte, un casque ou un autoradio Bluetooth, puis actualise.",13,muted,12);
++      Button retry=button("Actualiser la détection",true);box.addView(retry);
++      retry.setOnClickListener(v->renderScreen());return;
++    }
++    String[] names={"Automatique","Enceinte","Écouteurs","Casque","Voiture","Bluetooth générique","Télévision"};
++    String[] kinds={"","speaker","earbuds","headphones","car","bluetooth","tv"};
++    final String key=AudioOutputRoute.key(route.name);
++    String value=Categories.prefs(this).getString(key,"");
+     SpotifyAudioIcons.remember(this,route.name,AudioIconPolicy.category(route.transport,route.kind));
+-    String key=AudioOutputRoute.key(route.name);
+-    String current=Categories.prefs(this).getString(key,"");
+-    int checked=0;
+-    for(int i=1;i<kinds.length;i++)if(kinds[i].equals(current)){checked=i;break;}
+-    new AlertDialog.Builder(this).setTitle("Appareil : "+route.name)
+-      .setSingleChoiceItems(names,checked,(dialog,which)->{
++    for(int i=0;i<names.length;i++){
++      final String kind=kinds[i];
++      Button choice=button((value.equals(kind)?"✓  ":"")+names[i],value.equals(kind));
++      box.addView(choice,lp(7));
++      choice.setOnClickListener(v->{
+         android.content.SharedPreferences.Editor e=Categories.prefs(this).edit();
+-        if(which==0)e.remove(key);else e.putString(key,kinds[which]);
+-        e.apply();dialog.dismiss();
+-        SpotifyAudioIcons.remember(this,route.name,kinds[which].isEmpty()?AudioIconPolicy.category(route.transport,route.kind):kinds[which]);
+-        WidgetProvider.refresh(this);renderScreen();
+-      }).setNegativeButton("Annuler",null).show();
+-  }
+-  void spotifyDiagnosticDialog(){
+-    new AlertDialog.Builder(this)
+-      .setTitle("Diagnostic musical")
+-      .setMessage(SpotifyMedia.description(this)+"\n\n"+
+-        "Ce test lit les sessions multimédias locales (Spotify, Deezer et autres). Il ne dépend pas " +
+-        "d'une nouvelle notification. Un morceau joué sur un autre appareil " +
+-        "sur un appareil distant peut ne pas apparaître sur ce téléphone.\n\n"+
+-        "En mode Priorité, une alerte plus importante peut masquer la musique. " +
+-        "En mode Éphémère, elle revient quand la notification temporaire disparaît.")
+-      .setPositiveButton("Actualiser",(dialog,index)->spotifyDiagnosticDialog())
+-      .setNegativeButton("Fermer",null).show();
+-  }
++        if(kind.isEmpty())e.remove(key);else e.putString(key,kind);e.apply();
++        SpotifyAudioIcons.remember(this,route.name,kind.isEmpty()?AudioIconPolicy.category(route.transport,route.kind):kind);
++        WidgetProvider.refresh(this);audioPage=1;renderScreen();
++      });
++    }
++  }
++  private void showAudioDiagnostics(){
++    LinearLayout box=audioCard();screen.addView(box,lp(14));
++    subtitle(box,"Détection musicale","Diagnostics sur la lecture et la route de sortie réellement accessibles à Android.");
++    addText(box,SpotifyMedia.description(this),13,white,14);
++    addText(box,"Spotify Connect sur un appareil distant peut ne pas transmettre le modèle à Android. Le pictogramme inconnu sera alors utilisé.",12,muted,12);
++    Button refresh=button("Actualiser le diagnostic",true);box.addView(refresh,lp(8));
++    refresh.setOnClickListener(v->renderScreen());
++  }
++  void addNamedAudioDevice(){audioNavigate(3);}
++  void chooseAudioOutputType(){audioNavigate(4);}
++  void spotifyDiagnosticDialog(){audioNavigate(5);}
+   String batterySummary(){
+     WidgetProvider.BatteryState b=WidgetProvider.readBattery(this);
+     String pct=b.percent<0?"indisponible":b.percent+" %";
+@@ -1348,7 +1513,7 @@
+   String integrationReport(){
+     android.content.SharedPreferences prefs=Categories.prefs(this);
+     int count=WidgetProvider.allWidgetIds(this).length;
+-    return "NotiPulse 1.0.36 — Diagnostic\n"+
++    return "NotiPulse 1.0.37 — Diagnostic\n"+
+       "Pages déclarées : "+tabs.length+"/4\n"+
+       "Widgets installés : "+count+"\n"+
+       "Catégories : "+Categories.ALL.length+"\n"+
+@@ -1375,7 +1540,7 @@
+       "Aucun texte privé de notification n'est inclus.";
+   }
+   void showIntegrationReport(){
+-    new AlertDialog.Builder(this).setTitle("Diagnostic NotiPulse — 1.0.36")
++    new AlertDialog.Builder(this).setTitle("Diagnostic NotiPulse — 1.0.37")
+       .setMessage(integrationReport())
+       .setPositiveButton("Partager",(dialog,which)->{
+         Intent send=new Intent(Intent.ACTION_SEND);
+@@ -1454,6 +1619,9 @@
+     automatic.setTextColor(white);
+     automatic.setChecked(Categories.prefs(this).getBoolean("spotify_auto_audio_icon",true));
+     spotifyCheck.addView(automatic,lp(10));
++    boolean harmonized=Categories.prefs(this).getBoolean("music_unified_icon",false);
++    automatic.setEnabled(!harmonized);
++    if(harmonized)addText(spotifyCheck,"Harmonisation activée : toutes les sorties utilisent une seule icône. Réglage disponible dans Audio et musique.",12,blue,8);
+     automatic.setOnCheckedChangeListener((b,checked)->{
+       Categories.prefs(this).edit().putBoolean("spotify_auto_audio_icon",checked).apply();
+       WidgetProvider.refresh(this);
+@@ -1464,7 +1632,7 @@
+     Button outputType=button("Corriger le type de mon appareil Bluetooth",false);
+     spotifyCheck.addView(outputType,lp(10));
+     outputType.setOnClickListener(v->chooseAudioOutputType());
+-    addText(spotifyCheck,"Mode automatique : l'icône de chaque sortie audio ou appareil nommé est prioritaire. Désactivé : icône Musique générale.",12,muted,10);
++    addText(spotifyCheck,"Harmoniser activé : une seule icône pour toute la musique. Sinon, l'icône propre à chaque sortie ou appareil nommé est utilisée.",12,muted,10);
+     addText(spotifyCheck,"Test réel : lance Spotify, YouTube Music, Deezer ou un autre lecteur puis change de sortie. La diffusion distante peut ne pas fournir son nom exact.",12,muted,10);
+     Button spotifyButton=button("Vérifier la musique en cours",true);
+     spotifyCheck.addView(spotifyButton);
+--- a/app/src/main/java/ch/piiwii/notificationwidget/SpotifyAudioIcons.java
++++ b/app/src/main/java/ch/piiwii/notificationwidget/SpotifyAudioIcons.java
+@@ -27,6 +27,7 @@
+     return AudioIconPolicy.iconId(kind);
+   }
+   static String recommended(Context c,String id){
++    if("spotify_audio_unified".equals(id))return "vector:music_wave";
+     if(id.startsWith("spotify_audio_"))
+       return AudioIconPolicy.defaultVector(id.substring("spotify_audio_".length()));
+     if(id.startsWith("spotify_device_")){
+--- a/app/src/main/res/drawable/pic_music_equalizer.xml
++++ b/app/src/main/res/drawable/pic_music_equalizer.xml
+@@ -1,8 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M4,10 L4,15" android:strokeColor="#69D6FF" android:strokeWidth="3.0" android:strokeLineCap="round"/>
+-  <path android:pathData="M8,5 L8,20" android:strokeColor="#FFFFFF" android:strokeWidth="3.0" android:strokeLineCap="round"/>
+-  <path android:pathData="M12,8 L12,17" android:strokeColor="#69D6FF" android:strokeWidth="3.0" android:strokeLineCap="round"/>
+-  <path android:pathData="M16,3.5 L16,21" android:strokeColor="#FFFFFF" android:strokeWidth="3.0" android:strokeLineCap="round"/>
+-  <path android:pathData="M20,10 L20,15" android:strokeColor="#69D6FF" android:strokeWidth="3.0" android:strokeLineCap="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M10,27 L10,20 M17,34 L17,13 M24,41 L24,7 M31,34 L31,13 M38,27 L38,20" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="4.2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M17,23 L17,17 M24,30 L24,14 M31,27 L31,20" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- /dev/null
++++ b/app/src/main/res/drawable/pic_music_orbit.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M23,7 A17,17 0,1 1 23,41 A17,17 0,1 1 23,7 Z" android:fillColor="#132C52" /><path android:pathData="M23,7 A17,17 0,1 1 23,41 A17,17 0,1 1 23,7 Z" android:fillColor="#00000000" android:strokeColor="#3298FF" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M9,28 Q22,7 41,17 M7,20 Q25,37 40,29" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,14 L34,11 L34,30" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="2.7" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M34,30 C34,36 25,38 23,34 C21,30 28,27 34,30 Z" android:fillColor="#5EDBFF" /><path android:pathData="M40,15 A2.5,2.5 0,1 1 40,20 A2.5,2.5 0,1 1 40,15 Z" android:fillColor="#AAA2FF" /></vector>
+--- a/app/src/main/res/drawable/pic_music_pulse.xml
++++ b/app/src/main/res/drawable/pic_music_pulse.xml
+@@ -1,8 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M11,5 L19,3 L19,15" android:strokeColor="#F7FBFF" android:strokeWidth="2.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+-  <path android:pathData="M11,5 L11,18.1" android:strokeColor="#F7FBFF" android:strokeWidth="2.3" android:strokeLineCap="round" android:fillColor="#00000000"/>
+-  <path android:pathData="M11,18 C11,20 9.6,21.3 7.6,21.3 C5.7,21.3 4.5,20.4 4.5,19 C4.5,17.6 6,16.5 8,16.5 C9.9,16.5 11,17.1 11,18 Z" android:fillColor="#F7FBFF"/>
+-  <path android:pathData="M19,15 C19,16.9 17.6,18.2 15.6,18.2 C13.7,18.2 12.4,17.3 12.4,15.9 C12.4,14.5 14,13.4 16,13.4 C17.9,13.4 19,14 19,15 Z" android:fillColor="#58CCFF"/>
+-  <path android:pathData="M3.4,9.2 L3.4,12.8 M21.2,7.6 L21.2,11.5" android:strokeColor="#58CCFF" android:strokeWidth="1.6" android:strokeLineCap="round" android:fillColor="#00000000"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M19,10 L36,6 L36,29" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="3.6" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M19,12 L19,36" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="3.4" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M19,36 C19,42 9,43 8,38 C7,33 12,30 19,32 Z" android:fillColor="#5EDBFF" /><path android:pathData="M36,29 C36,35 27,37 25,32 C23,28 29,24 36,25 Z" android:fillColor="#3298FF" /><path android:pathData="M10,18 L13,18 M39,18 L42,18" android:fillColor="#00000000" android:strokeColor="#AAA2FF" android:strokeWidth="2.2" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- a/app/src/main/res/drawable/pic_music_vinyl.xml
++++ b/app/src/main/res/drawable/pic_music_vinyl.xml
+@@ -1,7 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M12,2.5 A9.5,9.5 0,1 1 11.99,2.5" android:fillColor="#142538" android:strokeColor="#F7FBFF" android:strokeWidth="1.5"/>
+-  <path android:pathData="M12,6.5 A5.5,5.5 0,1 1 11.99,6.5" android:fillColor="#00000000" android:strokeColor="#8BBDF9" android:strokeWidth="1"/>
+-  <path android:pathData="M12,9 A3,3 0,1 1 11.99,9" android:fillColor="#57CCFF"/>
+-  <path android:pathData="M12,11 A1,1 0,1 1 11.99,11" android:fillColor="#F7FBFF"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,7 A17,17 0,1 1 24,41 A17,17 0,1 1 24,7 Z" android:fillColor="#10233E" /><path android:pathData="M24,8 A16,16 0,1 1 24,40 A16,16 0,1 1 24,8 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,13 A11,11 0,1 1 24,35 A11,11 0,1 1 24,13 Z" android:fillColor="#00000000" android:strokeColor="#3298FF" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,17 A7,7 0,1 1 24,31 A7,7 0,1 1 24,17 Z" android:fillColor="#AAA2FF" /><path android:pathData="M24,22 A2,2 0,1 1 24,26 A2,2 0,1 1 24,22 Z" android:fillColor="#F9FDFF" /><path android:pathData="M34,9 L41,11 L35,18" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- /dev/null
++++ b/app/src/main/res/drawable/pic_music_wave.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M7,28 L7,20 M13,35 L13,13 M19,40 L19,8 M25,33 L25,15 M31,38 L31,10 M37,31 L37,17 M43,27 L43,21" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="3.6" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M7,26 L7,22 M13,28 L13,20 M19,35 L19,14 M25,25 L25,22 M31,31 L31,17 M37,26 L37,22 M43,25 L43,23" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="1.4" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M19,6 A2,2 0,1 1 19,10 A2,2 0,1 1 19,6 Z" android:fillColor="#AAA2FF" /></vector>
+--- a/app/src/main/res/drawable/pic_output_bluetooth.xml
++++ b/app/src/main/res/drawable/pic_output_bluetooth.xml
+@@ -1,6 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M12,2 L18,7 L6,17" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M12,22 L18,17 L6,7" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M12,2 L12,22" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M22,5 L22,43 L35,31 L14,14 M14,34 L35,16 L22,5" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M22,5 L35,16 L28,23 M22,43 L35,31 L28,24" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="1.4" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M22,24 A2.5,2.5 0,1 1 22,29 A2.5,2.5 0,1 1 22,24 Z" android:fillColor="#AAA2FF" /></vector>
+--- a/app/src/main/res/drawable/pic_output_car.xml
++++ b/app/src/main/res/drawable/pic_output_car.xml
+@@ -1,9 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M5,9 L7,4 L17,4 L19,9" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M3,9 L21,9 L21,18 L3,18 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M5,18 L5,21 L8,21 L8,18" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M16,18 L16,21 L19,21 L19,18" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M6,13 L9,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M15,13 L18,13" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M13,18 L17,10 Q18,8 20,8 L28,8 Q30,8 31,10 L35,18 L39,22 L39,34 Q39,36 36,36 L12,36 Q9,36 9,34 L9,22 Z" android:fillColor="#132C52" /><path android:pathData="M13,18 L17,10 Q18,8 20,8 L28,8 Q30,8 31,10 L35,18 L39,22 L39,34 Q39,36 36,36 L12,36 Q9,36 9,34 L9,22 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M18,12 L30,12 L33,20 L15,20 Z" android:fillColor="#3298FF" /><path android:pathData="M12,27 L18,27 L18,30 L12,30 Z" android:fillColor="#F9FDFF" /><path android:pathData="M30,27 L36,27 L36,30 L30,30 Z" android:fillColor="#F9FDFF" /><path android:pathData="M13,34 L13,40 M35,34 L35,40" android:fillColor="#00000000" android:strokeColor="#91D3FF" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M19,25 L29,25" android:fillColor="#00000000" android:strokeColor="#6FFFD4" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- a/app/src/main/res/drawable/pic_output_cast.xml
++++ b/app/src/main/res/drawable/pic_output_cast.xml
+@@ -1,7 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M3,4 L21,4 L21,19 L16,19" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M3,20 Q3,15 8,15" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M3,14 Q3,10 10,10" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M3,8 Q3,5 14,5" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M8,12 Q8,9 12,9 L38,9 Q41,9 41,12 L41,34 L19,34" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M9,25 Q19,25 19,35 M9,18 Q26,18 26,35" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M11,32 A3,3 0,1 1 11,38 A3,3 0,1 1 11,32 Z" android:fillColor="#3298FF" /><path android:pathData="M29,41 L38,41" android:fillColor="#00000000" android:strokeColor="#AAA2FF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- a/app/src/main/res/drawable/pic_output_earbuds.xml
++++ b/app/src/main/res/drawable/pic_output_earbuds.xml
+@@ -1,5 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M7,3 C3,3 3,8 4,10 C5,12 6,13 7,13 L7,20 Q7,22 9,22 Q11,22 11,20 L11,9 C11,5 10,3 7,3 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M17,3 C21,3 21,8 20,10 C19,12 18,13 17,13 L17,20 Q17,22 15,22 Q13,22 13,20 L13,9 C13,5 14,3 17,3 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M15,10 C9,9 7,14 10,19 C11,22 14,23 17,22 L18,36 Q19,39 22,38 L22,20 Q25,17 23,13 Q21,9 15,10 Z" android:fillColor="#F9FDFF" /><path android:pathData="M33,10 C39,9 41,14 38,19 C37,22 34,23 31,22 L30,36 Q29,39 26,38 L26,20 Q23,17 25,13 Q27,9 33,10 Z" android:fillColor="#5EDBFF" /><path android:pathData="M15,10 C13,16 15,18 18,19" android:fillColor="#00000000" android:strokeColor="#3298FF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M33,10 C35,16 33,18 30,19" android:fillColor="#00000000" android:strokeColor="#3298FF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M17,24 L19,24 M29,24 L31,24" android:fillColor="#00000000" android:strokeColor="#10233E" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M15,14 A1,1 0,1 1 15,16 A1,1 0,1 1 15,14 Z" android:fillColor="#3298FF" /><path android:pathData="M33,14 A1,1 0,1 1 33,16 A1,1 0,1 1 33,14 Z" android:fillColor="#F9FDFF" /></vector>
+--- /dev/null
++++ b/app/src/main/res/drawable/pic_output_earbuds_wired.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M15,9 C10,9 8,13 9,18 C10,21 13,23 16,22 L19,20 L19,31 Q19,36 23,37" android:fillColor="#F9FDFF" /><path android:pathData="M33,9 C38,9 40,13 39,18 C38,21 35,23 32,22 L29,20 L29,31 Q29,36 25,37" android:fillColor="#5EDBFF" /><path android:pathData="M15,10 Q14,15 16,18" android:fillColor="#00000000" android:strokeColor="#3298FF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M33,10 Q34,15 32,18" android:fillColor="#00000000" android:strokeColor="#3298FF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M23,37 L23,43 M25,37 L25,43" android:fillColor="#00000000" android:strokeColor="#AAA2FF" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- /dev/null
++++ b/app/src/main/res/drawable/pic_output_headphones.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M10,26 L10,22 C10,2 38,2 38,22 L38,27" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M14,20 C14,6 34,6 34,20" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M7,24 Q7,20 11,20 L13,20 Q16,20 16,24 L16,35 Q16,40 11,40 Q7,40 7,35 Z" android:fillColor="#3298FF" /><path android:pathData="M41,24 Q41,20 37,20 L35,20 Q32,20 32,24 L32,35 Q32,40 37,40 Q41,40 41,35 Z" android:fillColor="#5EDBFF" /><path android:pathData="M12,25 L12,35 M36,25 L36,35" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="2.5" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M16,30 Q24,37 32,30" android:fillColor="#00000000" android:strokeColor="#AAA2FF" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- /dev/null
++++ b/app/src/main/res/drawable/pic_output_headphones_wired.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M10,24 L10,21 C10,3 38,3 38,21 L38,24" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M7,23 Q7,21 11,21 L13,21 Q16,21 16,25 L16,34 Q16,39 11,39 Q7,39 7,34 Z" android:fillColor="#5EDBFF" /><path android:pathData="M41,23 Q41,21 37,21 L35,21 Q32,21 32,25 L32,34 Q32,39 37,39 Q41,39 41,34 Z" android:fillColor="#3298FF" /><path android:pathData="M12,26 L12,35 M36,26 L36,35" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M11,39 L11,45 L27,45 L27,41" android:fillColor="#00000000" android:strokeColor="#6FFFD4" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- a/app/src/main/res/drawable/pic_output_phone.xml
++++ b/app/src/main/res/drawable/pic_output_phone.xml
+@@ -1,5 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M7,2 L17,2 Q19,2 19,4 L19,20 Q19,22 17,22 L7,22 Q5,22 5,20 L5,4 Q5,2 7,2 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M10,19 L14,19" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M16,7 L32,7 Q35,7 35,10 L35,38 Q35,41 32,41 L16,41 Q13,41 13,38 L13,10 Q13,7 16,7 Z" android:fillColor="#132C52" /><path android:pathData="M17,8 L31,8 Q34,8 34,11 L34,37 Q34,40 31,40 L17,40 Q14,40 14,37 L14,11 Q14,8 17,8 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M17,13 L31,13 L31,32 L17,32 Z" android:fillColor="#10233E" /><path android:pathData="M19,17 L21,17 L24,14 L24,30 L21,27 L19,27 Z" android:fillColor="#F9FDFF" /><path android:pathData="M27,19 Q32,22 27,25" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M29,16 Q38,22 29,28" android:fillColor="#00000000" android:strokeColor="#3298FF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M22.5,36 A1.5,1.5 0,1 1 22.5,39 A1.5,1.5 0,1 1 22.5,36 Z" android:fillColor="#F9FDFF" /></vector>
+--- a/app/src/main/res/drawable/pic_output_portable_speaker.xml
++++ b/app/src/main/res/drawable/pic_output_portable_speaker.xml
+@@ -1,7 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M6,3.5 L18,3.5 Q20,3.5 20,6 L20,18 Q20,20.5 18,20.5 L6,20.5 Q4,20.5 4,18 L4,6 Q4,3.5 6,3.5 Z" android:strokeColor="#F7FBFF" android:strokeWidth="1.7" android:fillColor="#172E4F"/>
+-  <path android:pathData="M12,8 A3.5,3.5 0,1 1 11.99,8" android:fillColor="#00000000" android:strokeColor="#58CCFF" android:strokeWidth="1.9"/>
+-  <path android:pathData="M12,10.6 A0.9,0.9 0,1 1 11.99,10.6" android:fillColor="#FFFFFF"/>
+-  <path android:pathData="M9,18 L15,18" android:strokeColor="#FFFFFF" android:strokeWidth="1.3" android:strokeLineCap="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M12,11 Q12,8 16,8 L32,8 Q36,8 36,12 L36,36 Q36,40 32,40 L16,40 Q12,40 12,36 Z" android:fillColor="#132C52" /><path android:pathData="M16,9.8 L32,9.8 Q34,9.8 34,13 L34,35 Q34,38 31,38 L17,38 Q14,38 14,35 L14,13 Q14,9.8 16,9.8 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,18 A9,9 0,1 1 24,36 A9,9 0,1 1 24,18 Z" android:fillColor="#10233E" /><path android:pathData="M24,20 A7,7 0,1 1 24,34 A7,7 0,1 1 24,20 Z" android:fillColor="#00000000" android:strokeColor="#AAA2FF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,23.8 A3.2,3.2 0,1 1 24,30.2 A3.2,3.2 0,1 1 24,23.8 Z" android:fillColor="#5EDBFF" /><path android:pathData="M19,13 L29,13" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M17.2,11.8 A1,1 0,1 1 17.2,13.8 A1,1 0,1 1 17.2,11.8 Z" android:fillColor="#6FFFD4" /></vector>
+--- a/app/src/main/res/drawable/pic_output_speaker.xml
++++ b/app/src/main/res/drawable/pic_output_speaker.xml
+@@ -1,6 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M3,9 L7,9 L12,5 L12,19 L7,15 L3,15 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M16,9 Q19,12 16,15" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M19,6 Q24,12 19,18" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M15,7 L33,7 Q37,7 37,12 L37,37 Q37,41 33,41 L15,41 Q11,41 11,37 L11,12 Q11,7 15,7 Z" android:fillColor="#132C52" /><path android:pathData="M15,8.5 L33,8.5 Q35.5,8.5 35.5,12 L35.5,37 Q35.5,39.5 33,39.5 L15,39.5 Q12.5,39.5 12.5,37 L12.5,12 Q12.5,8.5 15,8.5 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,14 A3.1,3.1 0,1 1 24,20.2 A3.1,3.1 0,1 1 24,14 Z" android:fillColor="#3298FF" /><path android:pathData="M24,23 A8.3,8.3 0,1 1 24,39.6 A8.3,8.3 0,1 1 24,23 Z" android:fillColor="#10233E" /><path android:pathData="M24,24.2 A7,7 0,1 1 24,38.2 A7,7 0,1 1 24,24.2 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,28.7 A3.4,3.4 0,1 1 24,35.5 A3.4,3.4 0,1 1 24,28.7 Z" android:fillColor="#91D3FF" /><path android:pathData="M24,30.7 A1.4,1.4 0,1 1 24,33.5 A1.4,1.4 0,1 1 24,30.7 Z" android:fillColor="#F9FDFF" /></vector>
+--- a/app/src/main/res/drawable/pic_output_tv.xml
++++ b/app/src/main/res/drawable/pic_output_tv.xml
+@@ -1,6 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M3,5 L21,5 L21,18 L3,18 Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M9,21 L15,21" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M12,18 L12,21" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M8,10 L40,10 Q42,10 42,13 L42,33 Q42,36 40,36 L8,36 Q6,36 6,33 L6,13 Q6,10 8,10 Z" android:fillColor="#132C52" /><path android:pathData="M9,11 L39,11 Q41,11 41,13 L41,33 Q41,35 39,35 L9,35 Q7,35 7,33 L7,13 Q7,11 9,11 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M11,15 L37,15 L37,30 L11,30 Z" android:fillColor="#3298FF" /><path android:pathData="M20,37 L20,41 M28,37 L28,41 M16,42 L32,42" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M13,28 L19,22 L24,26 L33,17" android:fillColor="#00000000" android:strokeColor="#6FFFD4" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /></vector>
+--- a/app/src/main/res/drawable/pic_output_unknown.xml
++++ b/app/src/main/res/drawable/pic_output_unknown.xml
+@@ -1,6 +1,2 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+-  <path android:pathData="M12,2 A10,10 0,1 1 11.99,2" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M12,16 L12,17" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-  <path android:pathData="M9.5,10 A2.5,2.5 0,1 1 12,12.5 L12,14" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.75" android:fillColor="#00000000" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+-</vector>
++<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48"><path android:pathData="M24,3 A21,21 0,1 1 24,45 A21,21 0,1 1 24,3 Z" android:fillColor="#202E9EF0" /><path android:pathData="M7,17 A19,19 0,0 1 16,7" android:fillColor="#00000000" android:strokeColor="#324F8ABD" android:strokeWidth="1.3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,9 A15,15 0,1 1 24,39 A15,15 0,1 1 24,9 Z" android:fillColor="#132C52" /><path android:pathData="M24,9 A15,15 0,1 1 24,39 A15,15 0,1 1 24,9 Z" android:fillColor="#00000000" android:strokeColor="#5EDBFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M18,18 Q18,12 24,12 Q30,12 30,18 Q30,23 24,25 L24,29" android:fillColor="#00000000" android:strokeColor="#F9FDFF" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M24,33 A2.2,2.2 0,1 1 24,37.4 A2.2,2.2 0,1 1 24,33 Z" android:fillColor="#3298FF" /></vector>
