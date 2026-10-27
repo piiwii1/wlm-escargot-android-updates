@@ -1,0 +1,477 @@
+name: NotiPulse 1.0.32 - Optional Rest Icon on All Widgets
+on:
+  push:
+    branches: [chatgpt/notipulse-v132-rest-all]
+    paths:
+      - 'notipulse-v132-rest-all/**'
+      - '.github/workflows/notipulse-v132-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Android SDK
+        run: |
+          export ANDROID_HOME="/usr/local/lib/android/sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Restore 1.0.4 source exactly then apply new bottom navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a piiwii-notification-widget-v101 piiwii-notification-widget-v104
+          cat notification-widget-v102-patch/part-* | base64 -d > /tmp/widget102.tar.xz
+          echo "74fe74bb99e989af513a435892931a3c36324c5392604222df33bef3503f8b90  /tmp/widget102.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/widget102.tar.xz -C piiwii-notification-widget-v104
+          cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v103
+          python3 notification-widget-v103-ui/patch.py
+          cp -a piiwii-notification-widget-v103/. piiwii-notification-widget-v104/
+          cp notification-widget-v104-patch/EphemeralEvents.java piiwii-notification-widget-v104/app/src/main/java/ch/piiwii/notificationwidget/
+          python3 notification-widget-v104-patch/engine.py
+          python3 notification-widget-v104-patch/ui.py
+          cp -a piiwii-notification-widget-v104 piiwii-notification-widget-v105
+          python3 notification-widget-v105/patch_nav.py
+          grep -q "versionCode 6" piiwii-notification-widget-v105/app/build.gradle
+          grep -q "R.drawable.nav_home" piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q "void showDisplayModeCard" piiwii-notification-widget-v105/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          cp -a piiwii-notification-widget-v105 piiwii-notification-widget-v106
+          python3 notification-widget-v106-fix/repair106.py
+          cp -a piiwii-notification-widget-v106 piiwii-notification-widget-v107
+          cp notification-widget-v107-patch/SpotifyMedia.java piiwii-notification-widget-v107/app/src/main/java/ch/piiwii/notificationwidget/SpotifyMedia.java
+          python3 notification-widget-v107-patch/apply.py
+          grep -q 'versionCode 8' piiwii-notification-widget-v107/app/build.gradle
+          grep -q 'SpotifyMedia.start' piiwii-notification-widget-v107/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java
+          grep -q 'SpotifyMedia.playingPick' piiwii-notification-widget-v107/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          cp -a piiwii-notification-widget-v107 piiwii-notification-widget-v108
+          base64 -d notification-widget-v108-patch/patch108.b64 > /tmp/patch108.tar.xz
+          echo "769f3048504c4d22ce16fda64b7935ddbe5e626b3ad350225e810e4a3d2987ec  /tmp/patch108.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/widget108
+          tar -xJf /tmp/patch108.tar.xz -C /tmp/widget108
+          patch -p1 --directory=piiwii-notification-widget-v108 < /tmp/widget108/patch108.diff
+          cp /tmp/widget108/verify_features.py piiwii-notification-widget-v108/verify_features.py
+          python3 piiwii-notification-widget-v108/verify_features.py
+          cp -a piiwii-notification-widget-v108 piiwii-notification-widget-v109
+          base64 -d notification-widget-v109-patch/delta109.b64 > /tmp/delta109.tar.xz
+          echo "f42880facc7ea04c7081213a02ebad861e53cce500125a878cf630b844fca906  /tmp/delta109.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/delta109
+          tar -xJf /tmp/delta109.tar.xz -C /tmp/delta109
+          patch -p1 --directory=piiwii-notification-widget-v109 < /tmp/delta109/delta109.diff
+          cp /tmp/delta109/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java piiwii-notification-widget-v109/app/src/main/java/ch/piiwii/notificationwidget/
+          mkdir -p piiwii-notification-widget-v109/tests
+          cp /tmp/delta109/tests/ClassifierRegression.java piiwii-notification-widget-v109/tests/
+          grep -q "versionCode 10" piiwii-notification-widget-v109/app/build.gradle
+          grep -q "void showHome()" piiwii-notification-widget-v109/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q "void showTests()" piiwii-notification-widget-v109/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          cp -a piiwii-notification-widget-v109 piiwii-notification-widget-v110
+          base64 -d notification-widget-v110-patch/delta110.b64 > /tmp/delta110.tar.xz
+          echo "fb8351b9c30001c9f590d7a627df11c72c823ff2134e6ea33702d5a10fc2f416  /tmp/delta110.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/delta110
+          tar -xJf /tmp/delta110.tar.xz -C /tmp/delta110
+          patch --batch -p1 --directory=piiwii-notification-widget-v110 < /tmp/delta110/delta110.diff
+          grep -q 'versionCode 11' piiwii-notification-widget-v110/app/build.gradle
+          grep -q 'BatteryRules.parse' piiwii-notification-widget-v110/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          grep -q 'ACTION_BATTERY_CHANGED' piiwii-notification-widget-v110/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java
+          cp -a piiwii-notification-widget-v110 piiwii-notification-widget-v111
+          base64 -d notification-widget-v111-patch/delta111.b64 > /tmp/delta111.diff.xz
+          echo "d9a2ac950c6339846ec6bf6f57af4c57913d87b0a777b76dea4dc0c34b9fd5de  /tmp/delta111.diff.xz" | sha256sum -c -
+          xz -dc /tmp/delta111.diff.xz > /tmp/delta111.diff
+          patch --batch -p1 --directory=piiwii-notification-widget-v111 < /tmp/delta111.diff
+          grep -q 'versionCode 12' piiwii-notification-widget-v111/app/build.gradle
+          grep -q 'refreshSessions' piiwii-notification-widget-v111/app/src/main/java/ch/piiwii/notificationwidget/SpotifyMedia.java
+          grep -q 'messageChannel' piiwii-notification-widget-v111/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java
+          cp -a piiwii-notification-widget-v111 piiwii-notification-widget-v112
+          cp notification-widget-v112-patch/WidgetClickActivity.java piiwii-notification-widget-v112/app/src/main/java/ch/piiwii/notificationwidget/
+          cp notification-widget-v112-patch/ClickPolicy.java piiwii-notification-widget-v112/app/src/main/java/ch/piiwii/notificationwidget/
+          cp notification-widget-v112-patch/ClickPolicyRegression.java piiwii-notification-widget-v112/tests/
+          python3 notification-widget-v112-patch/apply.py
+          grep -q 'versionCode 13' piiwii-notification-widget-v112/app/build.gradle
+          cp -a piiwii-notification-widget-v112 piiwii-notification-widget-v113
+          cat notification-widget-v113-patch/part-* | base64 -d > /tmp/widget113.diff.xz
+          echo "695c993f9b09d98e092536db31a5595846f99a0cdca8204c424e4c6a106adbcd  /tmp/widget113.diff.xz" | sha256sum -c -
+          xz -dc /tmp/widget113.diff.xz > /tmp/widget113.diff
+          # The last added test file had no final newline; patch requires a newline terminator.
+          printf '\n' >> /tmp/widget113.diff
+          patch --batch -p1 --directory=piiwii-notification-widget-v113 < /tmp/widget113.diff
+          # Legacy unified diff joins a /dev/null header to the two XML closing tags.
+          # Remove that exact patch artifact, and parse both XMLs before compilation.
+          for layout in widget_large widget_wide; do
+            sed -i 's@</LinearLayout>--- /dev/null@</LinearLayout>@' "piiwii-notification-widget-v113/app/src/main/res/layout/$layout.xml"
+            python3 -c 'import sys,xml.etree.ElementTree as e;e.parse(sys.argv[1])' "piiwii-notification-widget-v113/app/src/main/res/layout/$layout.xml"
+          done
+          grep -q 'versionCode 14' piiwii-notification-widget-v113/app/build.gradle
+          grep -q 'void showAppsCard()' piiwii-notification-widget-v113/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q 'void showWidgetProfilesCard()' piiwii-notification-widget-v113/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          for layout in widget widget_wide widget_large; do test -s piiwii-notification-widget-v113/app/src/main/res/layout/$layout.xml; done
+          cp -a piiwii-notification-widget-v113 piiwii-notification-widget-v114
+          base64 -d notification-widget-v114-patch/delta114.b64 > /tmp/delta114.diff.xz
+          echo "91d0cf020b81a34d63e55e96d9a8c06f1bdfa59c8862fba52812b76bd5423014  /tmp/delta114.diff.xz" | sha256sum -c -
+          xz -dc /tmp/delta114.diff.xz > /tmp/delta114.diff
+          patch --batch -p1 --directory=piiwii-notification-widget-v114 < /tmp/delta114.diff
+          grep -q "versionCode 15" piiwii-notification-widget-v114/app/build.gradle
+          grep -q "void fillGalleryGrid(" piiwii-notification-widget-v114/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q "GraphicIcons.draw" piiwii-notification-widget-v114/app/src/main/java/ch/piiwii/notificationwidget/IconRenderer.java
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          root=Path('piiwii-notification-widget-v114/app/src/main/res/drawable')
+          files=list(root.glob('pic_*.xml'))
+          assert len(files)==24, len(files)
+          for f in files: ET.parse(f)
+          java=Path('piiwii-notification-widget-v114/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
+          assert all(token in java for token in ('if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();','root.addView(navSurface,navPosition)'))
+          print('24 native graphics and 4/4 page dispatch verified')
+          PY
+          cp -a piiwii-notification-widget-v114 piiwii-notification-widget-v115
+          python3 notification-widget-v115-patch/apply.py
+          grep -q 'versionCode 16' piiwii-notification-widget-v115/app/build.gradle
+          grep -q 'void showIntegrationReport' piiwii-notification-widget-v115/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q 'battery.percent>=0' piiwii-notification-widget-v115/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          cp -a piiwii-notification-widget-v115 piiwii-notification-widget-v116
+          base64 -d notification-widget-v116-patch/icon-editor.b64 > /tmp/icon-editor-v116.patch.xz
+          echo "d96089898ce21561fe3c126cb5ce1779e8c95ba0d6d4504bfebe76c6b575bcba  /tmp/icon-editor-v116.patch.xz" | sha256sum -c -
+          xz -dc /tmp/icon-editor-v116.patch.xz > /tmp/icon-editor-v116.patch
+          patch --batch -p1 --directory=piiwii-notification-widget-v116 < /tmp/icon-editor-v116.patch
+          grep -q "versionCode 17" piiwii-notification-widget-v116/app/build.gradle
+          grep -q "void saveIconDraft(IconDraft draft)" piiwii-notification-widget-v116/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q "static Bitmap previewChoice(" piiwii-notification-widget-v116/app/src/main/java/ch/piiwii/notificationwidget/IconRenderer.java
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('piiwii-notification-widget-v116/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
+          expected=['if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();',
+                    'root.addView(navSurface,navPosition)','private void saveIconDraft(IconDraft draft)',
+                    'iconDialog(Categories.ALL[which][0])','putString("icon_"+draft.id,draft.choice)',
+                    'new File(getFilesDir(),draft.tempPhoto).delete()','setPositiveButton("Enregistrer",null)',
+                    'setNegativeButton("Annuler"','setNeutralButton("Par défaut",null)']
+          for item in expected:assert item in main,item
+          assert 'void showGallery(' not in main
+          print('PASS: 30-category icon editor, draft preview, save/cancel/reset and preserved four screens')
+          PY
+          cp -a piiwii-notification-widget-v116 piiwii-notification-widget-v117
+          base64 -d notification-widget-v117-patch/ui117.b64 > /tmp/ui117.patch.xz
+          echo "264b54cf3be278084a50f722c5f33b49c24b4df8524f87cacbeb375e6a4cd6fb  /tmp/ui117.patch.xz" | sha256sum -c -
+          xz -dc /tmp/ui117.patch.xz > /tmp/ui117.patch
+          patch --batch -p1 --directory=piiwii-notification-widget-v117 < /tmp/ui117.patch
+          grep -q 'versionCode 18' piiwii-notification-widget-v117/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('piiwii-notification-widget-v117/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java')
+          main=p.read_text()
+          assert 'void showInlineIconManager()' in main
+          assert 'openGallery.setOnClickListener(v->showInlineIconManager())' in main
+          assert 'new AlertDialog.Builder(this).setTitle("Catégorie du pictogramme")' not in main
+          profile=main.split('void chooseWidgetProfile(int widgetId){',1)[1].split('void showInlineIconManager(){',1)[0]
+          assert '.setItems(' not in profile
+          assert 'save.setOnClickListener' in profile and 'cancel.setOnClickListener' in profile
+          for token in ['if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();','root.addView(navSurface,navPosition)','private boolean commitIconDraft(IconDraft draft)']:
+              assert token in main,token
+          print('PASS: single-window gallery, in-place category edit, full widget settings, drafts, 4 page navigation')
+          PY
+          cp -a piiwii-notification-widget-v117 piiwii-notification-widget-v118
+          base64 -d notification-widget-v118-patch/delta118.b64 > /tmp/delta118.diff.xz
+          echo "a4a0336546fe770ff11a9304bcb92ede34c262af7db5133ee4e94245ff786d2b  /tmp/delta118.diff.xz" | sha256sum -c -
+          xz -dc /tmp/delta118.diff.xz > /tmp/delta118.diff
+          patch --batch -p1 --directory=piiwii-notification-widget-v118 < /tmp/delta118.diff
+          python3 notification-widget-v118-patch/fix118.py
+          grep -q 'versionCode 19' piiwii-notification-widget-v118/app/build.gradle
+          grep -q 'ChargeRules.choose' piiwii-notification-widget-v118/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          root=Path('piiwii-notification-widget-v118')
+          cats=(root/'app/src/main/java/ch/piiwii/notificationwidget/Categories.java').read_text()
+          block=cats.split('static final String[][] ALL = {',1)[1].split('};',1)[0]
+          assert block.count('{"')==37
+          main=(root/'app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
+          for token in ['if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();','root.addView(navSurface,navPosition)','void showInlineIconManager()']:
+              assert token in main,token
+          assert 'ChargeRules.explanation' in main
+          print('PASS: 37 customizable states and preserved 4-page UI')
+          PY
+          cp -a piiwii-notification-widget-v118 piiwii-notification-widget-v119
+          base64 -d notification-widget-v119-patch/scripts119.b64 > /tmp/scripts119.tar.xz
+          echo "638a7b9132b6d3dbe3f231e2fcac8c3bfc0ea0c667d1b3472e8ae28f5799bc4d  /tmp/scripts119.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/scripts119
+          tar -xJf /tmp/scripts119.tar.xz -C /tmp/scripts119
+          python3 /tmp/scripts119/implement119.py
+          python3 /tmp/scripts119/adjust119.py
+          python3 notification-widget-v119-patch/fix119.py
+          grep -q "versionCode 20" piiwii-notification-widget-v119/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          root=Path('piiwii-notification-widget-v119/app/src/main')
+          for xml in root.rglob('*.xml'): ET.parse(xml)
+          mf=(root/'AndroidManifest.xml').read_text()
+          assert all(n in mf for n in ('WidgetProvider2','WidgetProvider3','WidgetProvider'))
+          widget=(root/'java/ch/piiwii/notificationwidget/WidgetProvider.java').read_text()
+          assert all(n in widget for n in ('MultiSlotPolicy.compose','renderMulti','R.id.slot_1','R.id.slot_2','R.id.slot_3','allWidgetIds(c)'))
+          for n in (2,3):
+            assert (root/'res/xml'/f'widget_{n}_info.xml').is_file()
+            for orientation in ('horizontal','vertical'):
+              assert (root/'res/layout'/f'widget_{n}_{orientation}.xml').is_file()
+          home=(root/'java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
+          for n in ('if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();','root.addView(navSurface,navPosition)','void showInlineIconManager()'):
+            assert n in home,n
+          print('PASS: 3 picker entries, separate slot tap areas, 4 screens and all XMLs')
+          PY
+          cp -a piiwii-notification-widget-v119 piiwii-notification-widget-v120
+          base64 -d notification-widget-v120-patch/delta120.b64 > /tmp/delta120.diff.xz
+          echo "cb2d53f03948514e664c521270a27a28277d51713476683e119334fa3feb3d5f  /tmp/delta120.diff.xz" | sha256sum -c -
+          xz -dc /tmp/delta120.diff.xz > /tmp/delta120.diff
+          patch --batch -p1 --directory=piiwii-notification-widget-v120 < /tmp/delta120.diff
+          grep -q 'versionCode 21' piiwii-notification-widget-v120/app/build.gradle
+          grep -q 'MultiSlotPolicy.showLabels' piiwii-notification-widget-v120/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          grep -q 'MultiSlotPolicy.compare' piiwii-notification-widget-v120/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java
+          grep -q 'R.drawable.widget_slot_empty_icon' piiwii-notification-widget-v120/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          cp -a piiwii-notification-widget-v120 piiwii-notification-widget-v121
+          python3 notification-widget-v121-patch/apply.py
+          grep -q 'versionCode 22' piiwii-notification-widget-v121/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('piiwii-notification-widget-v121/app/src/main')
+          d=root/'res/drawable'
+          for f in (Path('notification-widget-v121-patch/drawable')).glob('*.xml'):ET.parse(f)
+          for f in d.glob('pic_*.xml'):ET.parse(f)
+          assert len(list(d.glob('pic_*.xml')))==32
+          texts={f.name:f.read_text() for f in d.glob('pic_*.xml')}
+          for name in ['pic_brand_whatsapp.xml','pic_brand_messenger.xml','pic_brand_facebook.xml',
+                       'pic_brand_facebook_dm.xml','pic_brand_tiktok.xml','pic_charge_induction.xml','pic_charge_induction_fast.xml','pic_idle_quiet.xml']:
+            assert name in texts,name
+          for name,keyword in [('pic_brand_whatsapp.xml','#25D366'),('pic_brand_facebook.xml','#1877F2'),
+                               ('pic_brand_tiktok.xml','#FE2C55'),('pic_charge_induction.xml','#6CCBFF')]:
+            assert keyword in texts[name],name
+          icon=(root/'java/ch/piiwii/notificationwidget/IconRenderer.java').read_text()
+          assert 'GraphicIcons.defaultFor(id)' in icon
+          assert 'Categories.prefs(c).getString("icon_"+id,null)' in icon
+          main=(root/'java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
+          assert all(t in main for t in ['if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();','void showInlineIconManager()'])
+          ET.parse(d/'widget_slot_empty_icon.xml')
+          print('PASS: 32 vector pictograms, distinct brand art, silent empty state and 4 pages')
+          PY
+          cp -a piiwii-notification-widget-v121 piiwii-notification-widget-v122
+          base64 -d notification-widget-v122-patch/delta122.b64 > /tmp/delta122.diff.xz
+          echo "fcb34a7a0eee54d23286228b5c7b661feaa0cba6e61f3b8c6fd5fa446259d960  /tmp/delta122.diff.xz" | sha256sum -c -
+          xz -dc /tmp/delta122.diff.xz > /tmp/delta122.diff
+          patch --batch -p1 --directory=piiwii-notification-widget-v122 < /tmp/delta122.diff
+          grep -q 'versionCode 23' piiwii-notification-widget-v122/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('piiwii-notification-widget-v122/app/src/main/java/ch/piiwii/notificationwidget')
+          main=(root/'MainActivity.java').read_text()
+          icons=(root/'GraphicIcons.java').read_text()
+          renderer=(root/'IconRenderer.java').read_text()
+          assert 'else if(tab==2)showAppearanceGuarded();' in main
+          assert 'void showAppearanceGuarded()' in main
+          assert 'void showInlineIconManager()' in main
+          assert 'Dernière erreur Apparence' in main
+          assert 'if(!draw(c,canvas,key,0,0,safeSize,Color.WHITE))' in icons
+          assert 'catch(RuntimeException failure)' in icons
+          assert 'last_pictogram_error' in icons
+          assert 'GraphicIcons.defaultFor(id)' in renderer
+          assert all(n in main for n in ('if(tab==0)showHome();','else if(tab==1)showCategories();','else showTests();'))
+          print('PASS: protected appearance, per-icon fallback, 4 screen navigation, no preference wipe')
+          PY
+          cp -a piiwii-notification-widget-v122 piiwii-notification-widget-v123
+          python3 notification-widget-v123-patch/apply.py
+          grep -q "versionCode 24" piiwii-notification-widget-v123/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          root=Path('piiwii-notification-widget-v123/app/src/main/res/drawable')
+          names=['pic_brand_whatsapp.xml','pic_charge_induction.xml','pic_charge_induction_fast.xml']
+          for n in names:
+            d=(root/n).read_text()
+            ET.fromstring(d)
+            assert 'android:viewportWidth="24"' in d
+            assert '#00000000' in d or n==names[0]
+            assert ('#24C863' in d if n==names[0] else '#D6FAFF' in d)
+          assert len(list(root.glob('pic_*.xml')))==32
+          print('PASS: 3 improved vector icons, original 32-icon gallery intact, no source code change')
+          PY
+          cp -a piiwii-notification-widget-v123 piiwii-notification-widget-v124
+          base64 -d notification-widget-v124-patch/ui124.b64 > /tmp/ui124.diff.xz
+          echo "be25e061ceeaeac375819ae11c80d4e8cf90ede51fc528bdce204791129b3c91  /tmp/ui124.diff.xz" | sha256sum -c -
+          xz -dc /tmp/ui124.diff.xz > /tmp/ui124.diff
+          patch --batch -p1 --directory=piiwii-notification-widget-v124 < /tmp/ui124.diff
+          grep -q "versionCode 25" piiwii-notification-widget-v124/app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('piiwii-notification-widget-v124/app/src/main/java/ch/piiwii/notificationwidget')
+          cats=(root/'Categories.java').read_text()
+          body=cats.split('static final String[][] ALL = {',1)[1].split('};',1)[0]
+          assert body.count('{"')==38
+          assert '{"rest","Aucune notification","🔕","Services et système"}' in cats
+          main=(root/'MainActivity.java').read_text()
+          renderer=(root/'IconRenderer.java').read_text()
+          assert 'final int[] displayed={12};' in main
+          assert 'int mode=0,shown=16;' in main
+          assert 'Utiliser le dessin conseillé' in main
+          assert 'Afficher ' in main and ' réactions supplémentaires' in main
+          assert 'String glyph=draft?' in renderer
+          for marker in ('if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearanceGuarded();','else showTests();','void showInlineIconManager()'):
+            assert marker in main, marker
+          print('PASS: 38 independently editable states, progressive choices, four-page navigation and safe Appearance')
+          PY
+      - name: Widget responsive and filter regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/widget113-tests
+          javac -encoding UTF-8 -d /tmp/widget113-tests piiwii-notification-widget-v113/app/src/main/java/ch/piiwii/notificationwidget/WidgetVariantRules.java piiwii-notification-widget-v113/tests/WidgetVariantRegression.java
+          java -cp /tmp/widget113-tests ch.piiwii.notificationwidget.WidgetVariantRegression
+      - name: Test notification classifier with Java 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/widget109tests
+          javac -encoding UTF-8 -d /tmp/widget109tests piiwii-notification-widget-v109/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java piiwii-notification-widget-v109/tests/ClassifierRegression.java
+          java -cp /tmp/widget109tests ch.piiwii.notificationwidget.ClassifierRegression
+      - name: Battery reliability regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/widget110-tests
+          javac -encoding UTF-8 -d /tmp/widget110-tests piiwii-notification-widget-v112/app/src/main/java/ch/piiwii/notificationwidget/BatteryRules.java piiwii-notification-widget-v112/tests/BatteryRegression.java
+          java -cp /tmp/widget110-tests ch.piiwii.notificationwidget.BatteryRegression
+      - name: Test click routing decisions and full page dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/click-tests
+          javac -encoding UTF-8 -d /tmp/click-tests piiwii-notification-widget-v112/app/src/main/java/ch/piiwii/notificationwidget/ClickPolicy.java piiwii-notification-widget-v112/tests/ClickPolicyRegression.java
+          java -cp /tmp/click-tests ch.piiwii.notificationwidget.ClickPolicyRegression
+          grep -q 'WidgetClickActivity' piiwii-notification-widget-v112/app/src/main/AndroidManifest.xml
+          grep -q 'void showTests()' piiwii-notification-widget-v112/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+      - name: Charging source and charging tier tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/widget118-charge
+          javac -encoding UTF-8 -d /tmp/widget118-charge piiwii-notification-widget-v118/app/src/main/java/ch/piiwii/notificationwidget/ChargeRules.java piiwii-notification-widget-v118/tests/ChargeRulesRegression.java
+          java -cp /tmp/widget118-charge ch.piiwii.notificationwidget.ChargeRulesRegression
+      - name: Validate independent simultaneous slots
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/widget119-tests
+          javac -encoding UTF-8 -d /tmp/widget119-tests piiwii-notification-widget-v119/app/src/main/java/ch/piiwii/notificationwidget/MultiSlotPolicy.java piiwii-notification-widget-v119/tests/MultiSlotRegression.java
+          java -cp /tmp/widget119-tests ch.piiwii.notificationwidget.MultiSlotRegression
+      - name: Test improved multi-slot prioritization and responsive layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/widget120-tests
+          javac -encoding UTF-8 -d /tmp/widget120-tests piiwii-notification-widget-v120/app/src/main/java/ch/piiwii/notificationwidget/MultiSlotPolicy.java piiwii-notification-widget-v120/tests/MultiSlotRegression.java
+          java -cp /tmp/widget120-tests ch.piiwii.notificationwidget.MultiSlotRegression
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('piiwii-notification-widget-v120/app/src/main')
+          ET.parse(root/'res/drawable/widget_slot_empty_icon.xml')
+          for n in (2,3):
+            for o in ('horizontal','vertical'):
+              ET.parse(root/f'res/layout/widget_{n}_{o}.xml')
+          main=(root/'java/ch/piiwii/notificationwidget/MainActivity.java').read_text()
+          assert all(s in main for s in ('if(tab==0)showHome();','else if(tab==1)showCategories();','else if(tab==2)showAppearance();','else showTests();'))
+          manifest=(root/'AndroidManifest.xml').read_text()
+          assert 'WidgetProvider2' in manifest and 'WidgetProvider3' in manifest
+          print('Validated multi layouts and preserved four pages')
+          PY
+      - name: Rename application and replace launcher icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a piiwii-notification-widget-v124 piiwii-notification-widget-v125
+          python3 notipulse-rebrand/apply.py
+          grep -q 'android:label="NotiPulse"' piiwii-notification-widget-v125/app/src/main/AndroidManifest.xml
+          grep -q "versionCode 26" piiwii-notification-widget-v125/app/build.gradle
+      - name: Apply reviewed NotiPulse 1.0.29 full-source overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a piiwii-notification-widget-v125 piiwii-notification-widget-v129
+          base64 -d notipulse-v129-overlay/source-overlay.tar.gz.b64 > /tmp/notipulse-129-overlay.tar.gz
+          echo "2d73f01ced68febca3dcfa607704dae8b31c2851806ad3b4a646c2141439ccd5  /tmp/notipulse-129-overlay.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/notipulse-129-overlay.tar.gz -C piiwii-notification-widget-v129
+          grep -q 'versionCode 30' piiwii-notification-widget-v129/app/build.gradle
+          grep -q "versionName '1.0.29'" piiwii-notification-widget-v129/app/build.gradle
+          test -s piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/ReminderEngine.java
+          test -s piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/TapModePolicy.java
+          mkdir -p /tmp/notipulse-129-test-classes
+          javac -encoding UTF-8 -d /tmp/notipulse-129-test-classes \
+            piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/ReminderPolicy.java \
+            piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/TapModePolicy.java \
+            piiwii-notification-widget-v129/tests/ReminderPolicyRegression.java \
+            piiwii-notification-widget-v129/tests/TapModePolicyRegression.java
+          java -cp /tmp/notipulse-129-test-classes ch.piiwii.notificationwidget.ReminderPolicyRegression
+          java -cp /tmp/notipulse-129-test-classes ch.piiwii.notificationwidget.TapModePolicyRegression
+      - name: Fix shared notification state and rotation across all widget sizes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a piiwii-notification-widget-v129 piiwii-notification-widget-v130
+          python3 notipulse-v130-sync/fix.py piiwii-notification-widget-v130
+          grep -q "versionCode 31" piiwii-notification-widget-v130/app/build.gradle
+          grep -q "shared_rotation_anchor" piiwii-notification-widget-v130/app/src/main/java/ch/piiwii/notificationwidget/WidgetProfiles.java
+          grep -q "firstForWidget(c,widgetId)" piiwii-notification-widget-v130/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          grep -q 'alerts.size()>1&&available>0' piiwii-notification-widget-v130/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('piiwii-notification-widget-v130/app/src/main/java/ch/piiwii/notificationwidget')
+          s=(p/'WidgetProvider.java').read_text()
+          assert s.count('ArrayList<NotificationMonitor.Pick> unique=new ArrayList<>();')==1
+          assert 'NotificationMonitor.Pick active=firstForWidget(c,widgetId);' in s
+          assert 'Connexion' in s or 'Accès aux notifications indisponible' in s
+          print('PASS: unified 1/2/3 widgets, active fallback, synchronous rotation')
+          PY
+      - name: Apply NotiPulse 1.0.31 transparent empty slots
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a piiwii-notification-widget-v130 piiwii-notification-widget-v131
+          python3 notipulse-v131-empty/fix.py piiwii-notification-widget-v131
+          grep -q 'versionCode 32' piiwii-notification-widget-v131/app/build.gradle
+          grep -q 'show_idle_icon' piiwii-notification-widget-v131/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+          grep -q 'View.INVISIBLE' piiwii-notification-widget-v131/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+      - name: Make rest icon optional on all 1, 2 and 3-slot widget models
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a piiwii-notification-widget-v131 piiwii-notification-widget-v132
+          python3 notipulse-v132-rest-all/fix.py piiwii-notification-widget-v132
+          grep -q 'versionCode 33' piiwii-notification-widget-v132/app/build.gradle
+          grep -q 'slots.isEmpty()&&WidgetProfiles.showIdleIcon(c,widgetId)' piiwii-notification-widget-v132/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+      - name: Compile NotiPulse 1.0.32 release APK
+        run: gradle -p piiwii-notification-widget-v132 --no-daemon --stacktrace assembleRelease
+      - name: Package unsigned APK, apksigner and sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/zipalign" -f -p 4 piiwii-notification-widget-v132/app/build/outputs/apk/release/app-release-unsigned.apk out/NotiPulse-1.0.32-UNSIGNED.apk
+          cp "$BT/lib/apksigner.jar" out/apksigner.jar
+          zip -q -r out/NotiPulse-1.0.32-SOURCES.zip piiwii-notification-widget-v132 -x '*/build/*' '*/.gradle/*'
+          sha256sum out/NotiPulse-1.0.32-UNSIGNED.apk out/NotiPulse-1.0.32-SOURCES.zip > out/SHA256-BUILD.txt
+      - name: Upload APK build and sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotiPulse-1.0.32-build
+          path: out/*
+          retention-days: 15
+          if-no-files-found: error
