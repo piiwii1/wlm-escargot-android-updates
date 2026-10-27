@@ -42,14 +42,14 @@ change('MainActivity.java',
     }
     catch(RuntimeException failure){''')
 change('MainActivity.java',
-'''    return "NotiPulse 1.0.37 — Diagnostic\n"+''',
-'''    String version="1.0.41";
+r'''    return "NotiPulse 1.0.37 — Diagnostic\n"+''',
+r'''    String version="1.0.41";
     try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}
     catch(Exception ignored){}
     return "NotiPulse "+version+" — Diagnostic\n"+''')
 change('MainActivity.java',
-'''"Pictogrammes vectoriels : "+GraphicIcons.ALL.length+"\n"+''',
-'''"Pictogrammes disponibles : "+GraphicIcons.ALL.length+"\n"+''')
+r'''"Pictogrammes vectoriels : "+GraphicIcons.ALL.length+"\n"+''',
+r'''"Pictogrammes disponibles : "+GraphicIcons.ALL.length+"\n"+''')
 change('GraphicIcons.java',
 '''      try{Categories.prefs(c).edit().putString("last_pictogram_error",
           key+" ("+failure.getClass().getSimpleName()+")").apply();}catch(RuntimeException ignored){}
