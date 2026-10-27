@@ -23,8 +23,8 @@ change('WidgetProvider.java',
 
 # MainActivity changed only in the widget editor; apply to the exact CI baseline
 p=java/'MainActivity.java'; m=p.read_text()
-start='    final Switch[] idleChoice={null};\\n'
-end='    addText(body,"",8,muted,7);\\n'
+start='    final Switch[] idleChoice={null};'+chr(10)
+end='    addText(body,"",8,muted,7);'+chr(10)
 assert m.count(start)==1 and end in m
 before,tail=m.split(start,1)
 segment,after=tail.split(end,1)
