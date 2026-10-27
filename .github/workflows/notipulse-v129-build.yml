@@ -412,7 +412,14 @@ jobs:
           grep -q "versionName '1.0.29'" piiwii-notification-widget-v129/app/build.gradle
           test -s piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/ReminderEngine.java
           test -s piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/TapModePolicy.java
-          bash piiwii-notification-widget-v129/RUN-SOURCE-TESTS.sh
+          mkdir -p /tmp/notipulse-129-test-classes
+          javac -encoding UTF-8 -d /tmp/notipulse-129-test-classes \
+            piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/ReminderPolicy.java \
+            piiwii-notification-widget-v129/app/src/main/java/ch/piiwii/notificationwidget/TapModePolicy.java \
+            piiwii-notification-widget-v129/tests/ReminderPolicyRegression.java \
+            piiwii-notification-widget-v129/tests/TapModePolicyRegression.java
+          java -cp /tmp/notipulse-129-test-classes ch.piiwii.notificationwidget.ReminderPolicyRegression
+          java -cp /tmp/notipulse-129-test-classes ch.piiwii.notificationwidget.TapModePolicyRegression
       - name: Compile NotiPulse 1.0.29 release APK
         run: gradle -p piiwii-notification-widget-v129 --no-daemon --stacktrace assembleRelease
       - name: Package unsigned APK, apksigner and sources
