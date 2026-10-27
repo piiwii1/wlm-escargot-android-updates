@@ -524,6 +524,9 @@ jobs:
           set -euo pipefail
           cp -a piiwii-notification-widget-v136 piiwii-notification-widget-v137
           patch --batch --fuzz=0 -p1 --directory=piiwii-notification-widget-v137 < notipulse-v137-unified-icons/notipulse-v137.patch
+          # The legacy headphones drawable mapping is superseded by the new artwork.
+          sed -i '/case "output_headphones":return R.drawable.pic_headphones;/d' piiwii-notification-widget-v137/app/src/main/java/ch/piiwii/notificationwidget/GraphicIcons.java
+          grep -q 'case "output_headphones":return R.drawable.pic_output_headphones;' piiwii-notification-widget-v137/app/src/main/java/ch/piiwii/notificationwidget/GraphicIcons.java
           grep -q "versionCode 38" piiwii-notification-widget-v137/app/build.gradle
           grep -q 'music_unified_icon' piiwii-notification-widget-v137/app/src/main/java/ch/piiwii/notificationwidget/IconRenderer.java
           grep -q 'showAudioDashboard' piiwii-notification-widget-v137/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
