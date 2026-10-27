@@ -648,7 +648,7 @@ jobs:
           assert 'iconDialog("rest")' in ui
           assert '!"rest".equals(entry[0])' in ui
           assert '"Aucune image · transparent"' in (r/'MainActivity.java').read_text()
-          assert '&& !IconRenderer.restEmpty(c)' in (r/'WidgetProvider.java').read_text()
+          assert '&&!IconRenderer.restEmpty(c)' in (r/'WidgetProvider.java').read_text()
           print('PASS: quick idle choice at top; global transparency on widgets 1,2,3')
           PY
       - name: Compile NotiPulse 1.0.42 release APK
