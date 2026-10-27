@@ -8,14 +8,8 @@ def change(file,old,new):
     path.write_text(s.replace(old,new),encoding='utf8')
 
 change('WidgetProfiles.java',
-'''  /** Only a single-slot widget offers a visible rest pictogram. Default preserves the old preference. */
-  static boolean showIdleIcon(Context c,int widgetId){
-    return Categories.prefs(c).getBoolean(key(widgetId,"show_idle_icon"),Categories.enabled(c,"rest"));
-  }''',
-'''  /** All widget models may show a rest pictogram; each widget has its own preference. */
-  static boolean showIdleIcon(Context c,int widgetId){
-    return Categories.prefs(c).getBoolean(key(widgetId,"show_idle_icon"),true);
-  }''')
+'''    return Categories.prefs(c).getBoolean(key(widgetId,"show_idle_icon"),Categories.enabled(c,"rest"));''',
+'''    return Categories.prefs(c).getBoolean(key(widgetId,"show_idle_icon"),true);''')
 
 change('WidgetProvider.java',
 '''    List<NotificationMonitor.Pick> slots=MultiSlotPolicy.compose(capacity,charging,alerts);
@@ -27,36 +21,30 @@ change('WidgetProvider.java',
       slots.add(new NotificationMonitor.Pick("rest",null,0,0,null,"idle"));
     Bundle options=manager.getAppWidgetOptions(widgetId);''')
 
-change('MainActivity.java',
-'''    final Switch[] idleChoice={null};
-    if(WidgetProvider.slotsFor(this,widgetId)==1){
-      sectionTitle(body,"Quand il n'y a aucune notification",
-        "Choisis si ton widget simple affiche l'icône de repos ou reste totalement transparent.");
-      Switch idleSwitch=new Switch(this);
-      idleSwitch.setText("Afficher l'icône de repos");idleSwitch.setTextColor(white);
-      idleSwitch.setChecked(draft.showIdleIcon);body.addView(idleSwitch,lp(12));
-      idleSwitch.setOnCheckedChangeListener((buttonView,checked)->draft.showIdleIcon=checked);
-      idleChoice[0]=idleSwitch;
-    }else{
-      addText(body,"Les emplacements sans notification restent toujours transparents, sans icône ni texte Libre.",12,muted,12);
-    }''',
-'''    sectionTitle(body,"Quand il n'y a aucune notification",
-      "Afficher l'icône de repos dans la première case de ce widget. Les autres cases restent transparentes.");
+# MainActivity changed only in the widget editor; apply to the exact CI baseline
+p=java/'MainActivity.java'; m=p.read_text()
+start='    final Switch[] idleChoice={null};\\n'
+end='    addText(body,"",8,muted,7);\\n'
+assert m.count(start)==1 and end in m
+before,tail=m.split(start,1)
+segment,after=tail.split(end,1)
+assert 'WidgetProvider.slotsFor(this,widgetId)==1' in segment
+replacement='''    sectionTitle(body,"Quand il n'y a aucune notification",
+      "L'icône de repos s'affiche dans la première case. Les autres cases restent transparentes.");
     final Switch idleSwitch=new Switch(this);
     idleSwitch.setText("Afficher l'icône de repos");idleSwitch.setTextColor(white);
     idleSwitch.setChecked(draft.showIdleIcon);body.addView(idleSwitch,lp(12));
-    idleSwitch.setOnCheckedChangeListener((buttonView,checked)->draft.showIdleIcon=checked);''')
-
-change('MainActivity.java',
-'''       draft.showIdleIcon=true;
-       if(idleChoice[0]!=null)idleChoice[0].setChecked(true);''',
-'''       draft.showIdleIcon=true;
-       idleSwitch.setChecked(true);''')
-
-change('MainActivity.java',
-'''      if(WidgetProvider.slotsFor(this,widgetId)==1)
-        editor.putBoolean(WidgetProfiles.key(widgetId,"show_idle_icon"),draft.showIdleIcon);''',
-'''      editor.putBoolean(WidgetProfiles.key(widgetId,"show_idle_icon"),draft.showIdleIcon);''')
+    idleSwitch.setOnCheckedChangeListener((buttonView,checked)->draft.showIdleIcon=checked);
+'''
+m=before+replacement+end+after
+old='draft.showIdleIcon=true;if(idleChoice[0]!=null)idleChoice[0].setChecked(true);'
+assert m.count(old)==1
+m=m.replace(old,'draft.showIdleIcon=true;idleSwitch.setChecked(true);')
+old='''      if(WidgetProvider.slotsFor(this,widgetId)==1)
+        editor.putBoolean(WidgetProfiles.key(widgetId,"show_idle_icon"),draft.showIdleIcon);'''
+assert m.count(old)==1
+m=m.replace(old,'''      editor.putBoolean(WidgetProfiles.key(widgetId,"show_idle_icon"),draft.showIdleIcon);''')
+p.write_text(m)
 
 change('app/build.gradle',"versionCode 32; versionName '1.0.31'","versionCode 33; versionName '1.0.32'")
 widget=(java/'WidgetProvider.java').read_text()
