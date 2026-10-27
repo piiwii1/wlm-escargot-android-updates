@@ -1,0 +1,529 @@
+diff -ruN piiwii-notification-widget-v135/app/build.gradle piiwii-notification-widget-v136/app/build.gradle
+--- piiwii-notification-widget-v135/app/build.gradle	2026-10-27 11:52:56.000000000 +0000
++++ piiwii-notification-widget-v136/app/build.gradle	2026-10-27 18:20:29.491240346 +0000
+@@ -1,5 +1,5 @@
+ plugins { id 'com.android.application' }
+ android { namespace 'ch.piiwii.notificationwidget'; compileSdk 35
+- defaultConfig { applicationId 'ch.piiwii.notificationwidget'; minSdk 26; targetSdk 35; versionCode 36; versionName '1.0.35' }
++ defaultConfig { applicationId 'ch.piiwii.notificationwidget'; minSdk 26; targetSdk 35; versionCode 37; versionName '1.0.36' }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+ }
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/AudioIconPolicy.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/AudioIconPolicy.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/AudioIconPolicy.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/AudioIconPolicy.java	2026-10-27 18:18:07.311140985 +0000
+@@ -15,7 +15,7 @@
+     {"bluetooth","Bluetooth non identifié","output_bluetooth"},
+     {"car","Voiture / autoradio","output_car"},
+     {"tv","Téléviseur / HDMI","output_tv"},
+-    {"cast","Spotify Connect / Cast","output_cast"},
++    {"cast","Diffusion externe / Cast","output_cast"},
+     {"unknown","Musique / sortie inconnue","music_pulse"}
+   };
+   static String iconId(String kind){return "spotify_audio_"+(valid(kind)?kind:"unknown");}
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/AudioOutputRoute.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/AudioOutputRoute.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/AudioOutputRoute.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/AudioOutputRoute.java	2026-10-27 18:18:07.310349277 +0000
+@@ -20,8 +20,8 @@
+     String fingerprint(){return kind+"|"+name+"|"+transport;}
+     String caption(){
+       if(name!=null&&!name.isEmpty()&&!"phone".equals(transport)&&!"remote".equals(transport))
+-        return "Spotify · "+name;
+-      return "Spotify · "+AudioRoutePolicy.label(kind);
++        return "Musique · "+name;
++      return "Musique · "+AudioRoutePolicy.label(kind);
+     }
+   }
+   private static String safeName(AudioDeviceInfo device){
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/Categories.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/Categories.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/Categories.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/Categories.java	2026-10-27 18:18:07.312704315 +0000
+@@ -38,9 +38,9 @@
+       {"charge_wireless_fast","Induction rapide (est.)","🌀","Services et système"},
+       {"full","Batterie pleine","🔋","Services et système"},
+       {"rest","Aucune notification","🔕","Services et système"},
+-      {"spotify","Spotify / musique","🎧","Services et système"}
++      {"spotify","Musique · tous les lecteurs","🎧","Audio et musique"}
+     };
+-    static final String[] GROUPS = {"Messages","Finances","Réseaux sociaux","E-mails et agenda","Services et système"};
++    static final String[] GROUPS = {"Messages","Finances","Réseaux sociaux","E-mails et agenda","Audio et musique","Services et système"};
+     static SharedPreferences prefs(Context c) { return c.getSharedPreferences("piiwii_notification_widget", Context.MODE_PRIVATE); }
+     static String label(String id){for(String[] row: ALL) if(row[0].equals(id))return row[1];return "Notification";}
+     static String glyph(Context c,String id){String fallback="⚪";for(String[] row:ALL)if(row[0].equals(id)){fallback=row[2];break;}return prefs(c).getString("icon_"+id,fallback);}
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/MainActivity.java	2026-10-27 18:21:59.024958277 +0000
+@@ -33,6 +33,7 @@
+ import android.widget.ScrollView;
+ import android.widget.SeekBar;
+ import android.widget.TextView;
++import android.widget.Toast;
+ import android.text.Editable;
+ import android.text.TextWatcher;
+ import java.util.ArrayList;
+@@ -242,7 +243,7 @@
+     if(tab==0)showHome();
+     else if(tab==1)showCategories();
+     else if(tab==2)showAppearanceGuarded();
+-    else showTests();
++    else showTestsGuarded();
+     addText(screen,"Sans publicité • Pas de connexion Internet • Réglages conservés après mise à jour",11,muted,0);
+ 
+     // Place all interactive content outside the Android status and navigation bars.
+@@ -273,6 +274,12 @@
+     LinearLayout.LayoutParams pic=new LinearLayout.LayoutParams(d(146),d(146));pic.gravity=Gravity.CENTER_HORIZONTAL;pic.bottomMargin=d(12);hero.addView(preview,pic);
+     hero.addView(label(EphemeralEvents.enabled(this)?"Dernière alerte temporaire":"Notification prioritaire",12,muted,false),lp(5));
+     showDisplayModeCard();
++    LinearLayout audioEntry=card();screen.addView(audioEntry,lp(14));
++    subtitle(audioEntry,"🎵  Musique · tous les lecteurs","Spotify, YouTube Music, Deezer, VLC et autres sessions audio Android.");
++    Button audioPrefs=button("Configurer les icônes et appareils audio",true);
++    audioEntry.addView(audioPrefs,lp(7));audioPrefs.setOnClickListener(v->showAudioIconsSettings());
++    Button audioTests=button("Tester une icône musicale",false);audioEntry.addView(audioTests);
++    audioTests.setOnClickListener(v->{tab=3;renderScreen();});
+     LinearLayout state=card();screen.addView(state,lp(16));
+     state.addView(label("⚡  Recharge prioritaire",17,white,true),lp(7));
+     addText(state,"Câble / induction détectés automatiquement. Vitesses estimées si Android fournit le courant. Une estimation ne confirme pas le protocole Samsung 25 W / 45 W.",12,muted,8);
+@@ -306,6 +313,8 @@
+     customize.setOnClickListener(v->{tab=1;renderScreen();});
+   }
+   String currentId(){
++    String test=Categories.prefs(this).getString("preview_id","");
++    if(!test.isEmpty()&&System.currentTimeMillis()<Categories.prefs(this).getLong("preview_until",0))return test;
+     WidgetProvider.BatteryState b=WidgetProvider.readBattery(this);
+     if(EphemeralEvents.enabled(this)){
+       String demo=Categories.prefs(this).getString("preview_id","");
+@@ -381,6 +390,18 @@
+     if(preview!=null){preview.setImageBitmap(IconRenderer.render(this,currentId(),d(160)));}
+   }
+   void showCategories(){
++    LinearLayout music=card();screen.addView(music,lp(14));
++    subtitle(music,"🎵  Notifications de musique","Spotify, YouTube Music, Deezer, Apple Music, VLC et autres lecteurs actifs.");
++    Switch musicEnabled=new Switch(this);musicEnabled.setText("Afficher la musique dans mes widgets");
++    musicEnabled.setTextColor(white);musicEnabled.setChecked(Categories.enabled(this,"spotify"));
++    music.addView(musicEnabled,lp(8));
++    musicEnabled.setOnCheckedChangeListener((view,checked)->{
++      Categories.prefs(this).edit().putBoolean("enabled_spotify",checked).apply();WidgetProvider.refresh(this);
++    });
++    Button audioSetup=button("Configurer les icônes audio et Bluetooth",true);music.addView(audioSetup,lp(8));
++    audioSetup.setOnClickListener(v->showAudioIconsSettings());
++    Button audioCheck=button("Tester la détection musicale",false);music.addView(audioCheck);
++    audioCheck.setOnClickListener(v->spotifyDiagnosticDialog());
+     showAppsCard();
+     subtitle(screen,"Personnaliser les notifications","Alertes et niveaux de recharge personnalisables séparément.");
+     LinearLayout switcher=card();screen.addView(switcher,lp(14));
+@@ -1184,7 +1205,7 @@
+   }
+   void showAudioSettingsCard(){
+     LinearLayout audio=card();screen.addView(audio,lp(14));
+-    subtitle(audio,"Audio et musique · Icônes personnalisées",
++    subtitle(audio,"Musique · Toutes les applications audio",
+       "Choisis une icône différente pour téléphone, Bluetooth, enceinte, écouteurs, voiture, JBL et chaque appareil.");
+     Button edit=button("Configurer mes icônes audio",true);
+     audio.addView(edit,lp(9));edit.setOnClickListener(v->showAudioIconsSettings());
+@@ -1245,7 +1266,7 @@
+     }
+     Button correct=button("Corriger le type Bluetooth détecté",false);list.addView(correct,lp(11));
+     correct.setOnClickListener(v->{dialog.dismiss();chooseAudioOutputType();});
+-    addText(list,"Spotify Connect distant peut ne pas dévoiler le modèle. Si Android n'identifie pas la sortie, l'icône Musique est utilisée.",11,muted,6);
++    addText(list,"La diffusion distante peut ne pas révéler le modèle. Si Android n'identifie pas la sortie, l'icône Musique générique est utilisée.",11,muted,6);
+     dialog.show();
+     if(dialog.getWindow()!=null)
+       dialog.getWindow().setLayout(getResources().getDisplayMetrics().widthPixels-d(18),-2);
+@@ -1293,11 +1314,11 @@
+   }
+   void spotifyDiagnosticDialog(){
+     new AlertDialog.Builder(this)
+-      .setTitle("Diagnostic Spotify")
++      .setTitle("Diagnostic musical")
+       .setMessage(SpotifyMedia.description(this)+"\n\n"+
+-        "Ce test lit la session multimédia locale de Spotify. Il ne dépend pas " +
++        "Ce test lit les sessions multimédias locales (Spotify, Deezer et autres). Il ne dépend pas " +
+         "d'une nouvelle notification. Un morceau joué sur un autre appareil " +
+-        "via Spotify Connect peut ne pas apparaître sur ce téléphone.\n\n"+
++        "sur un appareil distant peut ne pas apparaître sur ce téléphone.\n\n"+
+         "En mode Priorité, une alerte plus importante peut masquer la musique. " +
+         "En mode Éphémère, elle revient quand la notification temporaire disparaît.")
+       .setPositiveButton("Actualiser",(dialog,index)->spotifyDiagnosticDialog())
+@@ -1327,7 +1348,7 @@
+   String integrationReport(){
+     android.content.SharedPreferences prefs=Categories.prefs(this);
+     int count=WidgetProvider.allWidgetIds(this).length;
+-    return "NotiPulse 1.0.26 — Diagnostic\n"+
++    return "NotiPulse 1.0.36 — Diagnostic\n"+
+       "Pages déclarées : "+tabs.length+"/4\n"+
+       "Widgets installés : "+count+"\n"+
+       "Catégories : "+Categories.ALL.length+"\n"+
+@@ -1338,7 +1359,7 @@
+       "Mode : "+(EphemeralEvents.enabled(this)?"Éphémère":"Priorité")+"\n"+
+       "Batterie : "+batterySummary()+"\n"+
+       "Surveillance Android : "+(NotificationMonitor.instance!=null?"connectée":"déconnectée")+"\n"+
+-      "Spotify : "+SpotifyMedia.description(this)+"\n"+
++      "Musique : "+SpotifyMedia.description(this)+"\n"+
+       "Rafraîchissement : "+formattedAgo(prefs.getLong("last_widget_refresh",0))+"\n"+
+       "Demande de reconnexion : "+formattedAgo(prefs.getLong("last_rebind_attempt",0))+"\n"+
+       "Dernier toucher : "+prefs.getString("last_tap_result","aucun essai")+"\n\n"+
+@@ -1347,14 +1368,14 @@
+       "[ ] Brancher/débrancher le chargeur\n"+
+       "[ ] Tester la batterie à 100 %\n"+
+       "[ ] Recevoir appel et message privé\n"+
+-      "[ ] Spotify : lecture, pause, arrêt\n"+
++      "[ ] Musique : lecture, pause, arrêt\n"+
+       "[ ] Widget 1×1, 2×1 et 2×2\n"+
+       "[ ] Toucher une vraie notification\n"+
+       "[ ] Tester en veille et après redémarrage\n\n"+
+       "Aucun texte privé de notification n'est inclus.";
+   }
+   void showIntegrationReport(){
+-    new AlertDialog.Builder(this).setTitle("Diagnostic NotiPulse — 1.0.26")
++    new AlertDialog.Builder(this).setTitle("Diagnostic NotiPulse — 1.0.36")
+       .setMessage(integrationReport())
+       .setPositiveButton("Partager",(dialog,which)->{
+         Intent send=new Intent(Intent.ACTION_SEND);
+@@ -1365,18 +1386,71 @@
+       })
+       .setNegativeButton("Fermer",null).show();
+   }
++  void showTestsGuarded(){
++    try{showTests();}
++    catch(RuntimeException failure){
++      AppDiagnostics.record(this,"Écran de tests",failure);
++      screen.removeAllViews();
++      subtitle(screen,"Tests · mode de secours","Le diagnostic a rencontré une erreur, mais les widgets restent actifs.");
++      Button retry=button("Réessayer les tests",true);screen.addView(retry,lp(10));
++      retry.setOnClickListener(v->renderScreen());
++      Button check=button("Afficher le diagnostic",false);screen.addView(check);
++      check.setOnClickListener(v->showIntegrationReport());
++    }
++  }
++  private ImageView testIcon;
++  private TextView testLabel;
++  void showTestStatus(String id){
++    if(testIcon!=null)try{testIcon.setImageBitmap(IconRenderer.render(this,id,d(86)));}
++      catch(RuntimeException issue){AppDiagnostics.record(this,"Aperçu du test",issue);}
++    if(testLabel!=null)testLabel.setText("Simulation affichée : "+Categories.label(id));
++  }
++  void startNotificationTest(String id){
++    int seconds=EphemeralEvents.enabled(this)?EphemeralEvents.duration(this):15;
++    long expires=System.currentTimeMillis()+seconds*1000L;
++    Categories.prefs(this).edit().putString("preview_id",id)
++      .putLong("preview_until",expires).apply();
++    showTestStatus(id);
++    WidgetProvider.refresh(this);
++    Toast.makeText(this,"Simulation : "+Categories.label(id)+" · "+seconds+" s",Toast.LENGTH_SHORT).show();
++    handler.postDelayed(()->{
++      if(Categories.prefs(this).getLong("preview_until",0)<=System.currentTimeMillis()){
++        Categories.prefs(this).edit().remove("preview_id").remove("preview_until").apply();
++        WidgetProvider.refresh(this);
++        if(testLabel!=null)testLabel.setText("Test terminé — affichage réel rétabli.");
++      }
++    },seconds*1000L+500);
++  }
++  void stopNotificationTest(){
++    Categories.prefs(this).edit().remove("preview_id").remove("preview_until").apply();
++    WidgetProvider.refresh(this);
++    if(testLabel!=null)testLabel.setText("Simulation arrêtée — affichage réel rétabli.");
++  }
+   void showTests(){
+-    subtitle(screen,"Simulation des états","Teste les icônes et leur priorité sans recevoir de vraie notification.");
++    subtitle(screen,"Mode Test · aperçu immédiat","Choisis une icône : elle apparaît ici et sur tes widgets pendant 15 secondes, même sans vraie notification.");
++    LinearLayout live=card();screen.addView(live,lp(14));
++    subtitle(live,"Aperçu de la simulation","Le mode Test ne modifie pas tes paramètres permanents.");
++    testIcon=new ImageView(this);
++    try{testIcon.setImageBitmap(IconRenderer.render(this,currentId(),d(86)));}
++    catch(RuntimeException error){AppDiagnostics.record(this,"Icône de démarrage du test",error);}
++    LinearLayout.LayoutParams testImageParams=new LinearLayout.LayoutParams(d(92),d(92));
++    testImageParams.gravity=Gravity.CENTER_HORIZONTAL;live.addView(testIcon,testImageParams);
++    testLabel=label("Choisis une notification ci-dessous pour commencer.",13,blue,true);
++    live.addView(testLabel,lp(10));
++    Button musicTest=button("▶  Tester une icône de musique maintenant",true);
++    live.addView(musicTest,lp(8));musicTest.setOnClickListener(v->startNotificationTest("spotify"));
++    Button stopTest=button("Arrêter la simulation",false);live.addView(stopTest);
++    stopTest.setOnClickListener(v->stopNotificationTest());
+     addText(screen,"Recharge : induction distinguée du câble. Les 5 niveaux filaires et l'induction rapide sont des ESTIMATIONS, pas des modes Samsung confirmés.",12,muted,10);
+     addText(screen,EphemeralEvents.enabled(this)?
+-      "En mode éphémère, les tests utilisent la durée choisie. Pendant la charge, les tests s'affichent temporairement puis l'icône de charge revient.":
+-      "Chaque test dure 10 secondes et se termine automatiquement. La recharge réelle reste prioritaire.",13,muted,15);
++      "En mode éphémère, la simulation dure le délai choisi, puis les vraies notifications reviennent.":
++      "Chaque simulation dure 15 secondes en mode Priorité. Elle remplace temporairement l'icône du widget, même pendant la recharge ; les vraies alertes reviennent ensuite.",13,muted,15);
+     LinearLayout spotifyCheck=card();screen.addView(spotifyCheck,lp(14));
+-    subtitle(spotifyCheck,"Spotify — lecture réelle","Diagnostic séparé de la simulation.");
++    subtitle(spotifyCheck,"Musique · lecture réelle","Toutes les applications avec une session multimédia Android active.");
+     addText(spotifyCheck,SpotifyMedia.description(this),13,muted,10);
+     addText(spotifyCheck,"L'icône peut distinguer enceinte, casque, écouteurs, voiture, téléphone et Cast. Pour le Bluetooth classique inconnu, l'icône Bluetooth est utilisée sans inventer un type.",12,muted,10);
+     Switch automatic=new Switch(this);
+-    automatic.setText("Icône Spotify selon la sortie audio");
++    automatic.setText("Adapter l'icône musique selon la sortie audio");
+     automatic.setTextColor(white);
+     automatic.setChecked(Categories.prefs(this).getBoolean("spotify_auto_audio_icon",true));
+     spotifyCheck.addView(automatic,lp(10));
+@@ -1390,9 +1464,9 @@
+     Button outputType=button("Corriger le type de mon appareil Bluetooth",false);
+     spotifyCheck.addView(outputType,lp(10));
+     outputType.setOnClickListener(v->chooseAudioOutputType());
+-    addText(spotifyCheck,"Mode automatique : les icônes par sortie audio et par appareil sont prioritaires. Si tu désactives le mode, l'icône Spotify générale est utilisée.",12,muted,10);
+-    addText(spotifyCheck,"Test réel : lance Spotify et change de sortie audio dans le téléphone. Spotify Connect distant peut ne pas fournir le modèle exact.",12,muted,10);
+-    Button spotifyButton=button("Vérifier la session Spotify",true);
++    addText(spotifyCheck,"Mode automatique : l'icône de chaque sortie audio ou appareil nommé est prioritaire. Désactivé : icône Musique générale.",12,muted,10);
++    addText(spotifyCheck,"Test réel : lance Spotify, YouTube Music, Deezer ou un autre lecteur puis change de sortie. La diffusion distante peut ne pas fournir son nom exact.",12,muted,10);
++    Button spotifyButton=button("Vérifier la musique en cours",true);
+     spotifyCheck.addView(spotifyButton);
+     spotifyButton.setOnClickListener(v->spotifyDiagnosticDialog());
+     LinearLayout health=card();screen.addView(health,lp(14));
+@@ -1432,22 +1506,16 @@
+     force.setOnClickListener(v->{WidgetProvider.refresh(this);new AlertDialog.Builder(this)
+       .setMessage("Le rafraîchissement du widget a été demandé à Android.")
+       .setPositiveButton("OK",null).show();});
+-    addText(screen,"Simulations disponibles — une pour chaque catégorie.",14,blue,12);
++    addText(screen,"Simulations disponibles — une pour chaque catégorie. Le résultat est visible directement dans l'aperçu ci-dessus.",14,blue,12);
+     for(String[] entry:Categories.ALL){
+       LinearLayout item=row();item.setPadding(d(10),d(7),d(10),d(7));item.setBackground(shape(panel,14));screen.addView(item,lp(7));
+-      ImageView image=new ImageView(this);image.setImageBitmap(IconRenderer.render(this,entry[0],d(48)));
++      ImageView image=new ImageView(this);
++      try{image.setImageBitmap(IconRenderer.render(this,entry[0],d(48)));}
++      catch(RuntimeException error){AppDiagnostics.record(this,"Icône du test "+entry[0],error);}
+       LinearLayout.LayoutParams iconLp=new LinearLayout.LayoutParams(d(48),d(48));iconLp.rightMargin=d(10);item.addView(image,iconLp);
+       item.addView(label(entry[1],14,white,true),new LinearLayout.LayoutParams(0,-2,1));
+       Button run=button("Tester",false);item.addView(run,new LinearLayout.LayoutParams(d(86),d(40)));
+-      run.setOnClickListener(v->{
+-        int seconds=EphemeralEvents.enabled(this)?EphemeralEvents.duration(this):10;
+-        long milliseconds=seconds*1000L;
+-        Categories.prefs(this).edit().putString("preview_id",entry[0])
+-          .putLong("preview_until",System.currentTimeMillis()+milliseconds).apply();
+-        WidgetProvider.refresh(this);
+-        handler.postDelayed(()->WidgetProvider.refresh(this),milliseconds+300);
+-        new AlertDialog.Builder(this).setMessage("Test « "+entry[1]+" » activé pendant "+seconds+" secondes. Regarde ton widget.").setPositiveButton("OK",null).show();
+-      });
++      run.setOnClickListener(v->startNotificationTest(entry[0]));
+     }
+     addText(screen,"Diagnostic : aucune notification privée n'est enregistrée ou transmise. Une classification bancaire dépend toujours du texte visible fourni par la banque.",12,muted,5);
+   }
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/MediaSourcePolicy.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/MediaSourcePolicy.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/MediaSourcePolicy.java	1970-01-01 00:00:00.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/MediaSourcePolicy.java	2026-10-27 18:18:07.303028218 +0000
+@@ -0,0 +1,44 @@
++package ch.piiwii.notificationwidget;
++import java.util.Locale;
++
++/** Generic Android media-session classification, keeping the saved category id 'spotify'. */
++final class MediaSourcePolicy {
++  private MediaSourcePolicy(){}
++  static boolean known(String pkg){
++    if(pkg==null)return false;
++    String p=pkg.toLowerCase(Locale.ROOT);
++    return p.contains("spotify")||p.contains("youtube.music")||p.contains("deezer")||
++      p.contains("apple.android.music")||p.contains("amazon.mp3")||p.contains("soundcloud")||
++      p.contains("tidal")||p.contains("pandora")||p.contains("qobuz")||
++      p.contains("music")||p.contains("audio")||p.contains("poweramp")||
++      p.contains("vlc")||p.contains("podcast")||p.contains("audiobook")||
++      p.contains("radio")||p.contains("plexamp")||p.contains("foobar2000");
++  }
++  static boolean ignored(String pkg){
++    if(pkg==null||pkg.isEmpty())return true;
++    String p=pkg.toLowerCase(Locale.ROOT);
++    return p.contains("incallui")||p.contains("dialer")||p.contains("telecom")||
++      p.contains("android.phone")||p.equals("android")||p.contains("systemui");
++  }
++  /** A playing media session always wins over a stopped/paused session. */
++  static int score(String pkg,boolean playing){
++    if(ignored(pkg))return -1;
++    if(playing)return known(pkg)?200:100;
++    return known(pkg)?20:-1;
++  }
++  static String label(String pkg){
++    String p=pkg==null?"":pkg.toLowerCase(Locale.ROOT);
++    if(p.contains("spotify"))return "Spotify";
++    if(p.contains("youtube.music"))return "YouTube Music";
++    if(p.contains("deezer"))return "Deezer";
++    if(p.contains("apple.android.music"))return "Apple Music";
++    if(p.contains("amazon.mp3"))return "Amazon Music";
++    if(p.contains("soundcloud"))return "SoundCloud";
++    if(p.contains("tidal"))return "TIDAL";
++    if(p.contains("qobuz"))return "Qobuz";
++    if(p.contains("pandora"))return "Pandora";
++    if(p.contains("vlc"))return "VLC";
++    if(p.contains("poweramp"))return "Poweramp";
++    return "Lecteur multimédia";
++  }
++}
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/NotificationMonitor.java	2026-10-27 18:18:07.314612352 +0000
+@@ -97,7 +97,9 @@
+         lastClass=Categories.classify(this,s);
+         if(lastClass!=null)classified++;
+       }
+-      if(s!=null&&s.getPackageName()!=null&&s.getPackageName().contains("spotify"))
++      if(s!=null&&s.getPackageName()!=null&&
++          (MediaSourcePolicy.known(s.getPackageName())||
++           (s.getNotification()!=null&&Notification.CATEGORY_TRANSPORT.equals(s.getNotification().category))))
+         SpotifyMedia.refreshSessions();
+       EphemeralEvents.onPosted(this,s);
+     }catch(RuntimeException error){AppDiagnostics.record(this,"Notification reçue",error);}
+@@ -115,7 +117,9 @@
+     try{if(s!=null)ReminderEngine.removed(this,s);}
+     catch(RuntimeException error){AppDiagnostics.record(this,"Arrêt du rappel",error);}
+     try{
+-      if(s!=null&&s.getPackageName()!=null&&s.getPackageName().contains("spotify"))
++      if(s!=null&&s.getPackageName()!=null&&
++          (MediaSourcePolicy.known(s.getPackageName())||
++           (s.getNotification()!=null&&Notification.CATEGORY_TRANSPORT.equals(s.getNotification().category))))
+         SpotifyMedia.refreshSessions();
+     }catch(RuntimeException error){AppDiagnostics.record(this,"Notification retirée",error);}
+     WidgetProvider.refresh(this);
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/NotificationRules.java	2026-10-27 18:18:07.313488686 +0000
+@@ -90,7 +90,7 @@
+     if(has(pkg,"outlook"))return "outlook";
+     if(has(pkg,"email","protonmail","k9mail","k9.mail","thunderbird","mail"))return "mail";
+     if(has(pkg,"messaging","sms","google.android.apps.messaging","samsung.android.messaging"))return "sms";
+-    if(has(pkg,"spotify"))return "spotify";
++    if(MediaSourcePolicy.known(pkg)||"transport".equals(cat))return "spotify";
+     if(has(pkg,"waze","google.android.apps.maps","here.app.maps"))return "maps";
+     if(has(pkg,"parking","easypark","paybyphone","parkmobile","parkingpay"))return "parking";
+     if(has(pkg,"post.ch","ch.post.app","postapp","swisspost","dhl","dpd","ups.mobile","fedex","parcel","colissimo","mondialrelay"))return "parcel";
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/SpotifyAudioIcons.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/SpotifyAudioIcons.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/SpotifyAudioIcons.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/SpotifyAudioIcons.java	2026-10-27 18:18:07.315226456 +0000
+@@ -65,6 +65,6 @@
+   }
+   static String nameForId(Context c,String id){
+     for(String name:devices(c))if(AudioIconPolicy.deviceId(name).equals(id))return name;
+-    return "Appareil Bluetooth";
++    return "Appareil audio Bluetooth";
+   }
+ }
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/SpotifyMedia.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/SpotifyMedia.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/SpotifyMedia.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/SpotifyMedia.java	2026-10-27 18:18:07.314761555 +0000
+@@ -111,9 +111,10 @@
+     playbackCallback=null;
+   }
+ 
+-  private static boolean isSpotify(MediaController c){
+-    return c!=null&&c.getPackageName()!=null&&
+-      c.getPackageName().toLowerCase(Locale.ROOT).contains("spotify");
++  private static boolean isAudioSession(MediaController c){
++    if(c==null)return false;
++    try{return !MediaSourcePolicy.ignored(c.getPackageName());}
++    catch(RuntimeException ex){return false;}
+   }
+ 
+   private static boolean isPlaying(MediaController c){
+@@ -127,11 +128,13 @@
+ 
+   private static void select(List<MediaController> sessions){
+     MediaController chosen=null;
++    int high=-1;
+     if(sessions!=null)for(MediaController item:sessions){
+-      if(isSpotify(item)){
+-        chosen=item;
+-        if(isPlaying(item))break;
+-      }
++      if(!isAudioSession(item))continue;
++      try{
++        int score=MediaSourcePolicy.score(item.getPackageName(),isPlaying(item));
++        if(score>high){high=score;chosen=item;}
++      }catch(RuntimeException ignored){}
+     }
+     if(!sameSession(controller,chosen)){
+       clearController();
+@@ -189,7 +192,7 @@
+       EphemeralEvents.onMediaStarted(listener);
+     }
+     if(!now&&wasPlaying&&listener!=null){
+-      // A stopped Spotify session must not leave the music glyph as an
++      // A stopped audio session must not leave the music glyph as an
+       // ephemeral overlay until the full user-selected timeout.
+       EphemeralEvents.clearMediaIfStopped(listener);
+     }
+@@ -223,8 +226,8 @@
+   }
+ 
+   static synchronized NotificationMonitor.Pick playingPick(Context c){
+-    if(!Categories.enabled(c,"spotify")||!Categories.appEnabled(c,"com.spotify.music"))return null;
+-    if(controller==null || !isPlaying(controller))return null;
++    if(!Categories.enabled(c,"spotify")||controller==null||!isPlaying(controller))return null;
++    if(!Categories.appEnabled(c,controller.getPackageName()))return null;
+     PendingIntent intent=null;
+     try{intent=controller.getSessionActivity();}catch(RuntimeException ignored){}
+     return new NotificationMonitor.Pick("spotify",controller.getPackageName(),
+@@ -232,18 +235,21 @@
+   }
+ 
+   static synchronized boolean hasSession(){return controller!=null;}
++  static synchronized String appName(){
++    return controller==null?"Aucune application":MediaSourcePolicy.label(controller.getPackageName());
++  }
+   static synchronized String description(Context c){
+-    if(!Categories.enabled(c,"spotify"))return "Désactivé : coche Spotify dans Notifications.";
++    if(!Categories.enabled(c,"spotify"))return "Désactivé : active Musique dans Notifications.";
+     if(NotificationMonitor.instance==null)return "Accès aux notifications absent ou service déconnecté.";
+     if(!allowed)return "Accès aux sessions multimédias indisponible. Vérifie l'autorisation Android.";
+-    if(controller==null)return "Aucune session Spotify locale trouvée. Lance un morceau sur ce téléphone.";
++    if(controller==null)return "Aucune session musicale locale trouvée. Lance un lecteur audio sur ce téléphone.";
+     if(isPlaying(controller)){
+       AudioOutputRoute.Route route=outputRoute(c);
+-      return "Spotify détecté : lecture active (session Android)."+
++      return MediaSourcePolicy.label(controller.getPackageName())+" : lecture active (session Android)."+
+         "\nSortie média : "+AudioRoutePolicy.label(route.kind)+
+         (route.name.isEmpty()?"":" — "+route.name)+
+         (route.confirmed?"":" (information de routage limitée)");
+     }
+-    return "Spotify détecté, mais la lecture est en pause ou arrêtée.";
++    return MediaSourcePolicy.label(controller.getPackageName())+" : lecture en pause ou arrêtée.";
+   }
+ }
+diff -ruN piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java
+--- piiwii-notification-widget-v135/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java	2026-10-27 11:52:58.000000000 +0000
++++ piiwii-notification-widget-v136/app/src/main/java/ch/piiwii/notificationwidget/WidgetProvider.java	2026-10-27 18:18:07.317476631 +0000
+@@ -193,6 +193,7 @@
+     long previewEnd=Categories.prefs(c).getLong("preview_until",0L);
+     String preview=Categories.prefs(c).getString("preview_id","");
+     boolean activePreview=!preview.isEmpty()&&System.currentTimeMillis()<previewEnd;
++    if(activePreview)scheduleRefresh(c,previewEnd);
+     if(!activePreview&&!preview.isEmpty())
+       Categories.prefs(c).edit().remove("preview_id").remove("preview_until").apply();
+ 
+@@ -295,6 +296,9 @@
+         selected=due.id;sourcePkg=due.packageName;sourceKey=due.key;sourceIntent=due.intent;
+         reminded=true;
+       }
++      // A user-triggered test is deliberately visible even when charging,
++      // filtering or disabling a category would hide a real notification.
++      if(activePreview){selected=preview;sourcePkg=null;sourceKey=null;sourceIntent=null;reminded=false;}
+       Bundle options=manager.getAppWidgetOptions(widgetId);
+       int width=options==null?64:options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,64);
+       int height=options==null?64:options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,64);
+@@ -345,7 +349,7 @@
+     NotificationMonitor.Pick charging=charge==null?null:
+       new NotificationMonitor.Pick(charge,null,System.currentTimeMillis(),0,null,"power");
+     ArrayList<NotificationMonitor.Pick> alerts=new ArrayList<>();
+-    if(activePreview&&Categories.enabled(c,preview)&&WidgetProfiles.accepts(c,widgetId,preview)){
++    if(activePreview){
+       alerts.add(new NotificationMonitor.Pick(preview,null,System.currentTimeMillis(),999,null,"preview"));
+       scheduleRefresh(c,previewEnd);
+     }else if(ephemeral){
+diff -ruN piiwii-notification-widget-v135/tests/MediaSourcePolicyRegression.java piiwii-notification-widget-v136/tests/MediaSourcePolicyRegression.java
+--- piiwii-notification-widget-v135/tests/MediaSourcePolicyRegression.java	1970-01-01 00:00:00.000000000 +0000
++++ piiwii-notification-widget-v136/tests/MediaSourcePolicyRegression.java	2026-10-27 18:21:59.495675126 +0000
+@@ -0,0 +1,20 @@
++package ch.piiwii.notificationwidget;
++public class MediaSourcePolicyRegression {
++  static int assertions=0;
++  static void check(boolean b,String s){assertions++;if(!b)throw new AssertionError(s);}
++  public static void main(String[] args){
++    check(MediaSourcePolicy.known("com.spotify.music"),"Spotify");
++    check(MediaSourcePolicy.known("com.google.android.apps.youtube.music"),"YouTube Music");
++    check(MediaSourcePolicy.known("deezer.android.app"),"Deezer");
++    check(MediaSourcePolicy.known("org.videolan.vlc"),"VLC");
++    check(MediaSourcePolicy.known("com.apple.android.music"),"Apple Music");
++    check(!MediaSourcePolicy.known("com.whatsapp"),"Message non musical");
++    check(MediaSourcePolicy.ignored("com.android.incallui"),"Pas les appels");
++    check(MediaSourcePolicy.score("com.spotify.music",true)>MediaSourcePolicy.score("org.videolan.vlc",false),"Lecture prioritaire");
++    check(MediaSourcePolicy.score("unknown.audio_player",true)>MediaSourcePolicy.score("com.spotify.music",false),"Lecteur actif préféré");
++    check(MediaSourcePolicy.score("com.android.incallui",true)<0,"Ignorer appels");
++    check("YouTube Music".equals(MediaSourcePolicy.label("com.google.android.apps.youtube.music")),"Libellé source");
++    check("Lecteur multimédia".equals(MediaSourcePolicy.label("com.unknown.package")),"Libellé neutre");
++    System.out.println("PASS "+assertions+" contrôles de source média");
++  }
++}
