@@ -1,0 +1,142 @@
+name: PiiWii Sony Accueil 1.0.0 Public Build
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/piiwii_sony_home_build.yml' ]
+  workflow_dispatch:
+  pull_request:
+    paths: [ '.github/workflows/piiwii_sony_home_build.yml' ]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Restore PiiWii Android 7 project
+        shell: bash
+        run: |
+          mkdir -p sony-launcher
+          cat <<'ARCHIVE' | base64 --decode | tar xzf - -C sony-launcher
+          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
+          CJgAeAAA
+          ARCHIVE
+      - name: Build Sony Android 7 launcher
+        working-directory: sony-launcher
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../build-output/piiwii-sony-home-1.0.0
+          gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee ../build-output/piiwii-sony-home-1.0.0/gradle.log
+      - name: Create APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=sony-launcher/app/build/outputs/apk/debug/app-debug.apk
+          OUT=sony-launcher-output/v1.0.0
+          mkdir -p "$OUT"
+          if [ ! -f "$APK" ]; then
+            mkdir -p build-output/piiwii-sony-home-1.0.0
+            echo BUILD_FAILED > build-output/piiwii-sony-home-1.0.0/STATUS.txt
+            exit 0
+          fi
+          cp "$APK" "$OUT/PiiWii-Sony-Accueil-1.0.0.apk"
+          sha256sum "$OUT/PiiWii-Sony-Accueil-1.0.0.apk" > "$OUT/SHA256.txt"
+          mkdir -p build-output/piiwii-sony-home-1.0.0
+          base64 -w0 "$APK" | fold -w 4000 | split -d -a 3 -l 1 - build-output/piiwii-sony-home-1.0.0/apk_
+          cp "$OUT/SHA256.txt" build-output/piiwii-sony-home-1.0.0/SHA256.txt
+          echo 'BUILD_OK' > build-output/piiwii-sony-home-1.0.0/STATUS.txt
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('sony-launcher-output/v1.0.0/*.apk') != ''
+        with:
+          name: PiiWii-Sony-Accueil-1.0.0
+          path: sony-launcher-output/v1.0.0/
+          if-no-files-found: error
+      - name: Publish APK chunks in private build repository
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add build-output/piiwii-sony-home-1.0.0/
+          git diff --cached --quiet && exit 0
+          git commit -m 'Deliver PiiWii Sony Home 1.0.0 APK for Android 7'
+          git push
