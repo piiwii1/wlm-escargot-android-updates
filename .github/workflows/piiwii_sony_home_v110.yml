@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tr -d '\\r\\n ' < build-input/piiwii-sony-home-1.1.0/project.b64 | base64 --decode | tar xzf -
+          base64 --decode build-input/piiwii-sony-home-1.1.0/project.b64 | tar xzf -
           test -s piiwii_sony_home_1_1_0/app/src/main/java/ch/piiwii/sony/home/HomeActivity.java
           test -s piiwii_sony_home_1_1_0/app/src/main/res/drawable-nodpi/panorama_alpes.webp
       - name: Compile launcher APK for Android 7
