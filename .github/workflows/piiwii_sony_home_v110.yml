@@ -6,6 +6,9 @@ on:
       - '.github/workflows/piiwii_sony_home_v110.yml'
       - 'build-input/piiwii-sony-home-1.1.0/project.b64'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/piiwii_sony_home_v110.yml'
 permissions:
   contents: read
 jobs:
