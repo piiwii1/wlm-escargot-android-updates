@@ -1,0 +1,50 @@
+name: PiiWii Sony Accueil 1.1.0
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/piiwii_sony_home_v110.yml'
+      - 'build-input/piiwii-sony-home-1.1.0/project.b64'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Decode Android TV 7 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\\r\\n ' < build-input/piiwii-sony-home-1.1.0/project.b64 | base64 --decode | tar xzf -
+          test -s piiwii_sony_home_1_1_0/app/src/main/java/ch/piiwii/sony/home/HomeActivity.java
+          test -s piiwii_sony_home_1_1_0/app/src/main/res/drawable-nodpi/panorama_alpes.webp
+      - name: Compile launcher APK for Android 7
+        shell: bash
+        working-directory: piiwii_sony_home_1_1_0
+        run: |
+          set -euo pipefail
+          gradle --no-daemon assembleDebug --stacktrace
+      - name: Prepare delivery and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          cp piiwii_sony_home_1_1_0/app/build/outputs/apk/debug/app-debug.apk delivery/PiiWii-Sony-Accueil-1.1.0.apk
+          sha256sum delivery/*.apk > delivery/SHA256.txt
+          printf 'PiiWii Sony Accueil 1.1.0 | versionCode 110 | minSdk 24 | Android TV 7\n' > delivery/VERSION.txt
+          unzip -t delivery/*.apk | tail -1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PiiWii-Sony-Accueil-1.1.0-APK
+          path: delivery/
+          if-no-files-found: error
