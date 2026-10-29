@@ -51,3 +51,5 @@ jobs:
           name: PiiWii-Sony-Accueil-1.1.0-APK
           path: delivery/
           if-no-files-found: error
+
+# Test Android 7 build of PiiWii TV visual launcher 1.1.0
