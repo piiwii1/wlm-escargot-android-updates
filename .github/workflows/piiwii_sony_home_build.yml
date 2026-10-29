@@ -103,10 +103,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gradle --no-daemon assembleRelease
+          gradle --no-daemon assembleDebug
           mkdir -p ../delivery
-          find app/build/outputs/apk/release -type f -name '*.apk' -print
-          APK=$(find app/build/outputs/apk/release -type f -name '*.apk' -print -quit)
+          find app/build/outputs/apk/debug -type f -name '*.apk' -print
+          APK=$(find app/build/outputs/apk/debug -type f -name '*.apk' -print -quit)
           test -s "$APK"
           cp "$APK" ../delivery/PiiWii-Sony-Accueil-1.5.0-UNSIGNED.apk
       - uses: actions/upload-artifact@v4
