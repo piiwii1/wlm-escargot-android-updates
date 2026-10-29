@@ -41,15 +41,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p delivery
-          cp piiwii_sony_home_1_1_0/app/build/outputs/apk/debug/app-debug.apk delivery/PiiWii-Sony-Accueil-1.1.0.apk
-          sha256sum delivery/*.apk > delivery/SHA256.txt
-          printf 'PiiWii Sony Accueil 1.1.0 | versionCode 110 | minSdk 24 | Android TV 7\n' > delivery/VERSION.txt
-          unzip -t delivery/*.apk | tail -1
+          mkdir -p piiwii-sony-delivery
+          cp piiwii_sony_home_1_1_0/app/build/outputs/apk/debug/app-debug.apk piiwii-sony-delivery/PiiWii-Sony-Accueil-1.1.0.apk
+          sha256sum piiwii-sony-delivery/PiiWii-Sony-Accueil-1.1.0.apk > piiwii-sony-delivery/SHA256.txt
+          printf 'PiiWii Sony Accueil 1.1.0 | versionCode 110 | minSdk 24 | Android TV 7\n' > piiwii-sony-delivery/VERSION.txt
+          unzip -t piiwii-sony-delivery/PiiWii-Sony-Accueil-1.1.0.apk | tail -1
       - uses: actions/upload-artifact@v4
         with:
           name: PiiWii-Sony-Accueil-1.1.0-APK
-          path: delivery/
+          path: piiwii-sony-delivery/
           if-no-files-found: error
 
 # Test Android 7 build of PiiWii TV visual launcher 1.1.0
