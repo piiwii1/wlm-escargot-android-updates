@@ -1,0 +1,4 @@
+versionName=1.3.0
+versionCode=130
+minSdk=24
+package=ch.piiwii.sony.home
