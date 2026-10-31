@@ -19,7 +19,7 @@ jobs:
       - name: Download and pack official Android SDK parts
         run: |
           set -euxo pipefail
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          /usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
           mkdir -p exported/platforms exported/build-tools
           cp -a "$ANDROID_HOME/platforms/android-35" exported/platforms/
           cp -a "$ANDROID_HOME/build-tools/35.0.0" exported/build-tools/
