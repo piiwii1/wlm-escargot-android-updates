@@ -1,0 +1,32 @@
+name: Android SDK build tools export
+on:
+  push:
+    branches: [spooklink-toolchain-228]
+    paths:
+      - '.github/workflows/spooklink-toolchain-228.yml'
+permissions:
+  contents: read
+jobs:
+  sdk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Download and pack official Android SDK parts
+        run: |
+          set -euxo pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          mkdir -p exported/platforms exported/build-tools
+          cp -a "$ANDROID_HOME/platforms/android-35" exported/platforms/
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" exported/build-tools/
+          du -sh exported/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-sdk-35-build-tools-35
+          path: exported/
+          retention-days: 1
