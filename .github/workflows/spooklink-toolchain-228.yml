@@ -19,7 +19,14 @@ jobs:
       - name: Download and pack official Android SDK parts
         run: |
           set -euxo pipefail
-          /usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          export ANDROID_HOME="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/cmdtools.zip" "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          mkdir -p "$RUNNER_TEMP/cmdextract"
+          unzip -q "$RUNNER_TEMP/cmdtools.zip" -d "$RUNNER_TEMP/cmdextract"
+          mv "$RUNNER_TEMP/cmdextract/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" 'platforms;android-35' 'build-tools;35.0.0'
           mkdir -p exported/platforms exported/build-tools
           cp -a "$ANDROID_HOME/platforms/android-35" exported/platforms/
           cp -a "$ANDROID_HOME/build-tools/35.0.0" exported/build-tools/
