@@ -1,0 +1,1 @@
+Mon Garage Auto v1.0.0 / versionCode 10. APK beta de test Android. Package ch.piiwii.mongarageauto. SHA-256: 85e6f03142c6fe655c693f64846746369d05a4182e90bc8ba89abca48852bbd6. APK uniquement; code source et cle de signature conserves dans le projet prive. Ne pas installer sur des appareils sans sauvegarde prealable.
