@@ -1,0 +1,6 @@
+Mon Garage Auto v1.0.2 (versionCode 12)
+Application ID: ch.piiwii.mongarageauto
+SHA-256 APK: e4afca40f0ddb8378e5b92cde2cfb7ebd366e48440acfa4fba106c697b2e5f8c
+Signature: same BETA test signing identity as v1.0.0 and v1.0.1
+New: encrypted backup .mga (password protected, AES-256-GCM framed authentication), previous ZIP restore retained.
+Important: password cannot be recovered; do not uninstall with unsaved data. Private project source and signing key are not in this public distribution.
