@@ -1,0 +1,6 @@
+Mon Garage Auto - Bêta corrective Android 1.0.1 (versionCode 11)
+Paquet: ch.piiwii.mongarageauto
+SHA-256 APK: aa9e3e19439bc7e5d6cfe32a8d7e0758e7b3d7636bf08d32718d90c10922c0f6
+APK de test. Signé avec la même clé de test que la V1.0.0 de ce projet.
+Corrections: ZIP asynchrone, chargement progressif des photos, alertes entretien, garde-fou doublons dépenses.
+Ne jamais désinstaller une version contenant des données sans export ZIP préalable. ZIP non chiffré.
