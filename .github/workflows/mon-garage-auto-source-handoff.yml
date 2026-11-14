@@ -1,0 +1,23 @@
+name: Mon Garage Auto 1.0.4 - Encrypted Sources Transfer
+on:
+  push:
+    branches: [mon-garage-auto-v1.0.4-apk]
+    paths:
+      - '.github/workflows/mon-garage-auto-source-handoff.yml'
+  workflow_dispatch:
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm nonempty encrypted envelope
+        run: test -s MonGarageAuto-v1.0.4-Sources.zip.enc
+      - name: Transfer encrypted sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonGarageAuto-1.0.4-Sources-Encrypted
+          path: MonGarageAuto-v1.0.4-Sources.zip.enc
+          retention-days: 1
+          if-no-files-found: error
