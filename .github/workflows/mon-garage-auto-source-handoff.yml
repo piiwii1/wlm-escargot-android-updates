@@ -1,0 +1,25 @@
+name: Mon Garage Auto 1.0.3 - Encrypted Sources Handoff
+on:
+  push:
+    branches: [mon-garage-auto-v1.0.3-apk]
+    paths:
+      - '.github/workflows/mon-garage-auto-source-handoff.yml'
+  workflow_dispatch:
+jobs:
+  artifact:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm encrypted source envelope
+        run: |
+          test -s MonGarageAuto-v1.0.3-Sources.zip.enc
+          file MonGarageAuto-v1.0.3-Sources.zip.enc
+      - name: Temporarily transfer encrypted source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonGarageAuto-1.0.3-Sources-Encrypted
+          path: MonGarageAuto-v1.0.3-Sources.zip.enc
+          retention-days: 1
+          if-no-files-found: error
