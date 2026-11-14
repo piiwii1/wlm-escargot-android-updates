@@ -1,0 +1,6 @@
+Mon Garage Auto bêta V1.0.3, versionCode 13
+Package: ch.piiwii.mongarageauto
+Signature: same stable test key as V1.0.0–V1.0.2
+SHA-256: 97a7d0b926adabc665ca78003241eea1430c92e633c4d2a8b48e71a7e56c3a1d
+Fixes: backups export only referenced media (including widgets and archives); self-contained archive validation; cleanup of incomplete export.
+Sources and signing key remain private. Back up before uninstalling.

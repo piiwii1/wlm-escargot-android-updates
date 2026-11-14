@@ -1,0 +1,24 @@
+name: Mon Garage Auto 1.0.3 - APK Artifact Delivery
+on:
+  push:
+    branches: [mon-garage-auto-v1.0.3-apk]
+    paths:
+      - '.github/workflows/mon-garage-auto-delivery.yml'
+  workflow_dispatch:
+jobs:
+  artifact:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify binary identity
+        run: |
+          echo '97a7d0b926adabc665ca78003241eea1430c92e633c4d2a8b48e71a7e56c3a1d  MonGarageAuto-v1.0.3-debug.apk' | sha256sum -c -
+      - name: Deliver installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonGarageAuto-1.0.3-APK
+          path: MonGarageAuto-v1.0.3-debug.apk
+          retention-days: 7
+          if-no-files-found: error
