@@ -1,0 +1,3 @@
+Mon Garage Auto Bêta 1.0.4 / versionCode 14
+Package: ch.piiwii.mongarageauto
+Notifications diagnostics, reminders reboot/reschedule, widget photo stability. Signed with same TEST key as earlier 1.0.x builds. Save a backup before uninstalling. Production signing not configured.
